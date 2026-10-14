@@ -5,10 +5,16 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- The startup project of dotnet ef for the agent database (migrations live in Agent.Core). -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.13">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
     <PackageReference Include="MudBlazor" Version="9.11.0" />
   </ItemGroup>
 
   <PropertyGroup>
+    <UserSecretsId>2caa1826-0a12-43da-8479-d86df1b92e41</UserSecretsId>
     <BlazorDisableThrowNavigationException>true</BlazorDisableThrowNavigationException>
   </PropertyGroup>
 

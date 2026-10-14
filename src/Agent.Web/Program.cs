@@ -1,4 +1,8 @@
+using Agent.Core;
+using Agent.Core.Data;
 using Agent.Web.Components;
+using Microsoft.Data.SqlClient;
+using Microsoft.EntityFrameworkCore;
 using MudBlazor.Services;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -7,8 +11,33 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 builder.Services.AddMudServices();
+builder.Services.AddAgentCore(builder.Configuration);
 
 var app = builder.Build();
+
+// "migrate": apply the agent database's migrations, report and exit.
+if (args is ["migrate", ..])
+{
+    try
+    {
+        using var scope = app.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AgentDbContext>();
+        db.Database.Migrate();
+        Console.WriteLine("Agent database ready");
+        return 0;
+    }
+    catch (SqlException ex)
+    {
+        Console.Error.WriteLine($"Cannot reach SQL Server using connection string '{AgentConnection.ConnectionStringName}': {ex.Message} See README, section Database.");
+        return 1;
+    }
+    catch (InvalidOperationException ex)
+    {
+        // A missing connection string (AgentConnection.MissingConnectionStringMessage).
+        Console.Error.WriteLine(ex.Message);
+        return 1;
+    }
+}
 
 // Configure the HTTP request pipeline.
 if (!app.Environment.IsDevelopment())
@@ -27,3 +56,4 @@ app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
 
 app.Run();
+return 0;

@@ -35,8 +35,26 @@ public sealed class WalletApiFixture : IAsyncLifetime
     private WebApplicationFactory<Program>? factory;
     private HttpClient? client;
 
-    /// <summary>The connection string of the test database: <c>ConnectionStrings__WalletTest</c> or the default.</summary>
-    public string TestConnectionString { get; } = ReadTestConnectionString();
+    public WalletApiFixture()
+        : this(databaseName: null)
+    {
+    }
+
+    /// <summary>
+    /// A fixture on its own test database, <paramref name="databaseName"/> on the same server, so that another
+    /// collection (the agent's) can run in parallel with this one without dropping its database. Null keeps the
+    /// database of <c>ConnectionStrings__WalletTest</c> or the default.
+    /// </summary>
+    internal WalletApiFixture(string? databaseName)
+    {
+        var connection = new SqlConnectionStringBuilder(ReadTestConnectionString());
+        if (databaseName is not null)
+            connection.InitialCatalog = databaseName;
+        TestConnectionString = connection.ConnectionString;
+    }
+
+    /// <summary>The connection string of the test database: <c>ConnectionStrings__WalletTest</c> or the default, with the database name given.</summary>
+    public string TestConnectionString { get; }
 
     public bool DatabaseAvailable { get; private set; }
 

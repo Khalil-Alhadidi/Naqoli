@@ -63,6 +63,22 @@ $env:ConnectionStrings__Wallet = 'Server=localhost,1433;Database=ZainCashWallet;
 
 Never commit a password. Keep it in user secrets or the environment.
 
+### The agent database
+
+The agent (`Agent.Web`, through `Agent.Core`) keeps its pending payments and audit trail in a database of its own, on the same server. Its connection string is named `Agent`; the default, in `src/Agent.Web/appsettings.Development.json`, is the local default instance with the database `ZainCashAgent`:
+
+```text
+Server=localhost;Database=ZainCashAgent;Trusted_Connection=True;TrustServerCertificate=True
+```
+
+On route A or B, set it the same way as the wallet's, with `--project src/Agent.Web` and the name `Agent` (or the `ConnectionStrings__Agent` environment variable), for example:
+
+```powershell
+dotnet user-secrets set "ConnectionStrings:Agent" "Server=(localdb)\MSSQLLocalDB;Database=ZainCashAgent;Trusted_Connection=True;TrustServerCertificate=True" --project src/Agent.Web
+```
+
+Create it with `dotnet run --project src/Agent.Web -- migrate`, which applies the agent's migrations, prints `Agent database ready` and exits 0. The agent reaches the wallet at `Agent:WalletBaseUrl` (`http://localhost:5276` in Development) and starts without the wallet running.
+
 ## Commands
 
 Run every command from the repository root. The solution file is `ZainCashAgent.slnx`.
@@ -76,7 +92,9 @@ Run every command from the repository root. The solution file is `ZainCashAgent.
 | Test, one class | `dotnet test tests/Agent.Core.Tests -- --filter-class "Agent.Core.Tests.Wallet.HealthTests"` |
 | Database tests, required (PowerShell) | `$env:ZAINCASH_TEST_SQL='1'; dotnet test tests/Agent.Core.Tests` |
 | Create and seed the database | `dotnet run --project src/Wallet.MockApi -- migrate` |
+| Create the agent database | `dotnet run --project src/Agent.Web -- migrate` |
 | Add a migration | `dotnet ef migrations add <Name> --project src/Wallet.MockApi` |
+| Add an agent migration | `dotnet ef migrations add <Name> --project src/Agent.Core --startup-project src/Agent.Web --output-dir Data/Migrations` |
 | Run the mock wallet API | `dotnet run --project src/Wallet.MockApi` |
 | Run the web app | `dotnet run --project src/Agent.Web` |
 | Run the eval console | `dotnet run --project src/Agent.Eval` |
@@ -86,6 +104,7 @@ Notes:
 
 - The tests use xunit.v3 on Microsoft Testing Platform, selected in the root `global.json`, so test filters go after `--` as shown.
 - The database tests (collection `wallet-api`, fixture `WalletApiFixture`) probe the test server once, with a 3-second timeout. If it answers, they recreate the test database, apply the migrations and the seed, and run the API in process against it. If it does not, every database test reports Skipped with "SQL Server not reachable at <server>; set ConnectionStrings__WalletTest or start SQL Server"; with `ZAINCASH_TEST_SQL=1` set they fail instead. They never read the `Wallet` connection string. By default they use the local default instance with Windows authentication and the database `ZainCashWallet_Test`. On route A or B, set the `ConnectionStrings__WalletTest` environment variable to a connection string whose database name ends in `_Test`; the fixture refuses any other name, because it drops the database at the start of the run. In PowerShell, `ZAINCASH_TEST_SQL` stays set for the rest of the session; clear it with `Remove-Item Env:ZAINCASH_TEST_SQL`.
+- The agent tests (collection `agent`, fixture `AgentHost`) host their own mock wallet on the database `ZainCashWalletAgent_Test` (same server as `ConnectionStrings__WalletTest`), so they run in parallel with the `wallet-api` collection, and recreate the agent's test database: `ConnectionStrings__AgentTest` or, by default, `ZainCashAgent_Test` on the local default instance. Both names must end in `_Test`. They skip and fail under the same rules as the wallet tests.
 - `migrate` applies the migrations and the synthetic seed, prints `Database ready: 5 users, 42 accounts, 34 contacts, 86 transactions` and exits 0. It is safe to run twice. The seed comes from the test-set files in `data/seed/*.json`; a missing or invalid file is printed with its name and exits 1. Without a connection string it prints `No connection string 'Wallet'. Set ConnectionStrings:Wallet in appsettings, user secrets or the ConnectionStrings__Wallet environment variable.` and exits 1.
 - `seed-hash` (`dotnet run --project src/Wallet.MockApi --no-launch-profile -- seed-hash`) prints the hash of the seed files, the value kept in `data/seed/seed-hash.txt`, and exits 0. It needs no database. The hash is the last line printed (without `--no-launch-profile`, `dotnet run` may print other lines first). See [data/seed/README.md](data/seed/README.md).
 - The database tests (`SeedApplyTests.ResetRestoresIdentitiesFromOne`) also check that `SeedReset.ResetAsync` restores the seed with identity values from 1.
@@ -101,7 +120,7 @@ The mock wallet is a minimal API on http://localhost:5276 with read endpoints fo
 
 The full contract (every route, field, error code, the idempotency, PIN and balance-floor rules, the fault modes, the reset and the admin key) is in [docs/wallet-api.md](docs/wallet-api.md). Ready-made requests against the seed are in `src/Wallet.MockApi/Wallet.MockApi.http`.
 
-Every request except `GET /health` carries the `X-Wallet-Client-Key` header. In Development with no `Wallet:ClientKey` set, any non-empty value is accepted. Outside Development both apps (the wallet and the agent) need `Wallet:ClientKey`, at least 16 characters, in user secrets or the environment: `dotnet user-secrets set "Wallet:ClientKey" "<value>" --project src/Wallet.MockApi` (the agent side comes in milestone 3, task 2). Never commit it.
+Every request except `GET /health` carries the `X-Wallet-Client-Key` header. In Development with no `Wallet:ClientKey` set, any non-empty value is accepted. Outside Development both apps (the wallet and the agent) need `Wallet:ClientKey`, at least 16 characters, in user secrets or the environment: `dotnet user-secrets set "Wallet:ClientKey" "<value>" --project src/Wallet.MockApi` for the wallet, and the same value for the agent with `dotnet user-secrets set "Agent:WalletClientKey" "<value>" --project src/Agent.Web` (or `Agent__WalletClientKey`). In Development with no `Agent:WalletClientKey`, the agent sends `dev`; outside Development it refuses to start without one. Never commit it.
 
 Every `/admin` request also carries the `X-Wallet-Admin-Key` header. In Development with no `Wallet:AdminKey` set, any non-empty value is accepted (the header makes a browser preflight, so a web page cannot reset the wallet). Outside Development, set a key of at least 16 characters in user secrets or the `Wallet__AdminKey` environment variable and send it in that header; never commit it.
 

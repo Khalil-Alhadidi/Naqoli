@@ -18,6 +18,13 @@ Every model, tool, library, data source and AI coding assistant used in this ent
 - Microsoft.AspNetCore.Mvc.Testing 10.0.13 (in-process API tests).
 - Microsoft.EntityFrameworkCore.SqlServer 10.0.13 and Microsoft.EntityFrameworkCore.Design 10.0.13 (data access, migrations).
 - System.Security.Cryptography.Pkcs 10.0.13 (direct reference that lifts the vulnerable 9.0.11 copy brought in by Microsoft.Data.SqlClient).
+- Microsoft.EntityFrameworkCore.SqlServer 10.0.13 and Microsoft.EntityFrameworkCore.Design 10.0.13 in Agent.Core (the agent database), and the Design package in Agent.Web (startup project of dotnet ef for that database); already listed above.
+- System.Security.Cryptography.Pkcs 10.0.13 in Agent.Core, pinned for the same reason as in the wallet; already listed above.
+- Microsoft.Extensions.Http 10.0.13 (IHttpClientFactory and the typed wallet client in Agent.Core).
+- Microsoft.Extensions.Options.DataAnnotations 10.0.13 (validation of the agent's options at start).
+- Microsoft.Extensions.Options.ConfigurationExtensions 10.0.13 (binding the `Agent` section to the agent's options).
+- Microsoft.Extensions.Hosting.Abstractions 10.0.13 (IHostEnvironment, for the Development default of the wallet client key).
+- Microsoft.Extensions.Configuration.Json, Microsoft.Extensions.Configuration.UserSecrets and Microsoft.Extensions.Configuration.EnvironmentVariables 10.0.13 (configuration of the agent database's design-time factory for dotnet ef).
 - SQL Server (local instance, LocalDB or container) as the mock wallet's database.
 - dotnet-ef 10.0.13 (EF Core command-line tool, pinned in .config/dotnet-tools.json).
 
