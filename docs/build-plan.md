@@ -106,6 +106,18 @@ Note, 14 Oct 2026: all six lines are shown by tests in `tests/Agent.Core.Tests`.
 - Three Playwright journeys pass: the happy path, the timer ending and killing the button, and a double tap.
 - The phone frame is right to left and the console is left to right.
 
+**Status, 14 Oct 2026:** every "Done when" line is shown by a journey or a test.
+
+| Done when | Shown by |
+|---|---|
+| The Hammoudi request, typed in the phone, shows the card, and Confirm moves the money | Journey `HammoudiHappyPath`; `ChatSessionTests.TheHammoudiSentenceGivesTheCardAndConfirmMovesTheMoney` |
+| The wallet data component shows the new balance and the new history row | Journey `HammoudiHappyPath` |
+| The live trace shows each step with its zone | Journey `HammoudiHappyPath` (entries in the User, Model, Code and Write zones); `TraceSinkTests.ATransferTracesEveryStepInItsZone` |
+| Three Playwright journeys pass | `HammoudiHappyPath`, `TimerKillsTheButton`, `DoubleTapExecutesOnce` (`dotnet test tests/Agent.Web.Journeys`, about 20 s) |
+| The phone frame is right to left and the console is left to right | Journey `HammoudiHappyPath` (`dir` of `phone-frame` and `console`) |
+
+The console and the journeys are described in [agent-web.md](agent-web.md).
+
 ## Milestone 5: Test set and runner (the gate)
 
 **Delivers**

@@ -2,6 +2,16 @@
 
 What `src/Agent.Core` does as built in milestone 3 and the first task of milestone 4: the structured request and the parser seam that produces it, the pipeline that turns it into one reply, the resolvers, the ordered checks, the card and its view, the pending record and its states, the sweep, Confirm and Checking, the live trace, and the audit log. No model call exists yet; the scripted parser and the tests build the structured request. The design it follows is sections 3 to 5 of [architecture.md](architecture.md); the matching and question rules are [matching-rules.md](matching-rules.md); the wallet it calls is [wallet-api.md](wallet-api.md).
 
+## Hosts
+
+`Agent.Core` registers its services with `AddAgentCore` and leaves three choices to the host. The web console's choices, and the rule that every UI action opens its own DI scope, are in [agent-web.md](agent-web.md):
+
+- the parser (`IParser`; the console registers `ScriptedParser`);
+- the trace sink (`ITraceSink`; the console routes each action's steps to the circuit's `TraceLog`);
+- whether the sweeper runs (`SweepIntervalSeconds`).
+
+The test hosts set `SweepIntervalSeconds` to 0 and use `NullTraceSink`, or a recording sink.
+
 ## Purpose and the rules it enforces
 
 `Agent.Core` holds every decision between "the user said something" and "the money moved". It talks to the mock wallet over HTTP only, through the typed `WalletClient`, and keeps its own database (`ZainCashAgent`) for pending records and the audit trail.
