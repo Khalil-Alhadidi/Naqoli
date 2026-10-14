@@ -4,7 +4,7 @@ using Wallet.MockApi.Services;
 namespace Wallet.MockApi.Endpoints;
 
 /// <summary>
-/// The one way the payment and admin endpoints build a ProblemDetails: a fixed English title per code, and the code itself
+/// The one way the read, payment and admin endpoints build a ProblemDetails: a fixed English title per code, and the code itself
 /// as the <c>code</c> extension, plus the figures some codes carry. Nothing from the request is echoed.
 /// </summary>
 internal static class WalletProblems
