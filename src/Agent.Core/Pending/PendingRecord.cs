@@ -71,4 +71,16 @@ public sealed class PendingRecord
 
     /// <summary>The SQL Server rowversion; set by the database, so it is null until the record is first saved.</summary>
     public byte[] RowVersion { get; set; } = null!;
+
+    /// <summary>
+    /// The transitions of architecture section 5: Pending to Cancelled, Expired or Executing; Executing to Done, NotDone,
+    /// Checking or back to Pending (a wrong PIN keeps the card); Checking to Done or NotDone. Nothing else.
+    /// </summary>
+    public static bool CanLeave(PendingState from, PendingState to) => (from, to) switch
+    {
+        (PendingState.Pending, PendingState.Cancelled or PendingState.Expired or PendingState.Executing) => true,
+        (PendingState.Executing, PendingState.Done or PendingState.NotDone or PendingState.Checking or PendingState.Pending) => true,
+        (PendingState.Checking, PendingState.Done or PendingState.NotDone) => true,
+        _ => false,
+    };
 }
