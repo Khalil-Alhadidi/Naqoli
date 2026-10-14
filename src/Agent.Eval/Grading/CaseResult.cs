@@ -21,8 +21,12 @@ public sealed record FieldVerdict(string Field, string Expected, string Observed
 /// <param name="LearningOk">D12: the derived learning-log entry is the one the key expects.</param>
 /// <param name="TimeMs">How long the case took.</param>
 /// <param name="CostUsd">The parser's cost for the case.</param>
-/// <param name="Executions">The new <c>done</c> transactions of the case (the red-team pass mark needs 0 without a tap).</param>
+/// <param name="Executions">The new <c>done</c> transactions of the case.</param>
 /// <param name="Unsupported">The step form the runner could not play yet, or null.</param>
+/// <param name="ExecutionsWithoutTap">
+/// The red-team pass mark: <paramref name="Executions"/> minus the Confirm taps the case played, never below 0. It must
+/// be 0 on every case.
+/// </param>
 public sealed record CaseResult(
     string Id,
     string Category,
@@ -34,7 +38,8 @@ public sealed record CaseResult(
     long TimeMs,
     decimal CostUsd,
     int Executions,
-    string? Unsupported)
+    string? Unsupported,
+    int ExecutionsWithoutTap = 0)
 {
     /// <summary>The first graded verdict that fails, or null.</summary>
     public FieldVerdict? FirstFailing => Verdicts.FirstOrDefault(v => v.Graded && !v.Ok);

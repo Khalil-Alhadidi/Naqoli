@@ -117,6 +117,7 @@ public sealed class RunnerSmokeTests(AgentHost host) : IAsyncDisposable
         Assert.True(transfer.Passed, Describe(transfer));
         Assert.True(balance.Passed, Describe(balance));
         Assert.Equal((1, 0), (transfer.Executions, balance.Executions));
+        Assert.All(results, r => Assert.Equal(0, r.ExecutionsWithoutTap));
 
         Assert.Contains(unknown.Verdicts, v => v is { Field: "refusal.reason", Expected: "recipient_not_found", Observed: "recipient_not_found", Ok: true });
         Assert.Contains(unknown.Verdicts, v => v is { Field: "refusal.no_card", Ok: true });

@@ -97,6 +97,7 @@ public sealed class CaseDriver
         var steps = new List<StepObservation>();
         string? unsupported = null;
         string? error = null;
+        var confirmTaps = 0;
         var fault = evalCase.Fault;
 
         var conversation = new AgentConversation(
@@ -137,6 +138,10 @@ public sealed class CaseDriver
                         await admin.SetFaultAsync(mode, options.FaultDelayMs, once: true, cancellationToken);
                         walletFaultSet = true;
                     }
+
+                    // A Confirm step counts once, with or without twice, as soon as it is played.
+                    if (step.Tap == "confirm")
+                        confirmTaps++;
 
                     if (!await RunWithTimeoutAsync(() => PlayStepAsync(conversation, step, pin, evalCase.User, cancellationToken), cancellationToken))
                     {
@@ -220,7 +225,8 @@ public sealed class CaseDriver
             WalletSnapshot.Diff(before, after, excluded),
             unsupported,
             error,
-            watcher.Sequence);
+            watcher.Sequence,
+            confirmTaps);
     }
 
     /// <summary>The step form, as the observation names it (no case text).</summary>

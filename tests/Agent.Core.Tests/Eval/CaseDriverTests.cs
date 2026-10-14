@@ -84,8 +84,21 @@ public sealed class CaseDriverTests(AgentHost host) : IAsyncDisposable
         Assert.Equal([HammoudiSentence], seen.ParserTexts);
         Assert.Equal((0, 0, 0m), (seen.Usage.InputTokens, seen.Usage.OutputTokens, seen.Usage.CostUsd));
         Assert.Equal(["live", "done"], seen.StatusSequence);
+        Assert.Equal(1, seen.ConfirmTaps);
         Assert.Null(seen.LearningEntry);
         Assert.All(seen.Steps, s => Assert.False(s.PinSeen));
+    }
+
+    [Fact]
+    public async Task ADoubleTapIsOneConfirmTapAndOneExecution()
+    {
+        var runner = Start();
+
+        var seen = await runner.Driver.PlayAsync(Case("U1", null, Say(HammoudiSentence), Confirm(twice: true)), Token);
+
+        Assert.Null(seen.StepError);
+        Assert.Equal((1, 1), (seen.ConfirmTaps, seen.Steps[1].Executions));
+        Assert.Single(seen.WalletDiff.NewTransactions);
     }
 
     [Fact]
@@ -101,6 +114,7 @@ public sealed class CaseDriverTests(AgentHost host) : IAsyncDisposable
         var wrong = seen.Steps[1];
         Assert.Equal(("live", "pin_wrong", 2, 0L), (wrong.CardState, wrong.OutcomeCode, wrong.AttemptsLeft, wrong.MovedIqd));
         Assert.Equal(("done", 1), (seen.Steps[2].CardState, seen.Steps[2].Executions));
+        Assert.Equal(2, seen.ConfirmTaps);
         Assert.Equal(1_100_000L, Assert.Single(seen.WalletDiff.NewTransactions).AmountIqd);
         Assert.All(seen.Steps, s => Assert.False(s.PinSeen));
     }

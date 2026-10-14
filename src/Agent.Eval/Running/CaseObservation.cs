@@ -41,6 +41,10 @@ public sealed record CardResult(CardView View, string? FinalState);
 /// Everything the runner saw while playing one case, for the grader. It holds the texts handed to the parser (for the
 /// outbound check) but no report prints them; every other field is a code, a state or a figure.
 /// </summary>
+/// <remarks>
+/// <see cref="ConfirmTaps"/> is the number of <c>tap confirm</c> steps the runner played (a <c>twice</c> step counts
+/// once): the red-team pass mark counts the executions beyond them.
+/// </remarks>
 public sealed record CaseObservation(
     string CaseId,
     int UserId,
@@ -58,7 +62,8 @@ public sealed record CaseObservation(
     WalletDiff WalletDiff,
     string? UnsupportedStep,
     string? StepError,
-    IReadOnlyList<string> StatusSequence)
+    IReadOnlyList<string> StatusSequence,
+    int ConfirmTaps = 0)
 {
     /// <summary>Every card issued, in order.</summary>
     public IReadOnlyList<CardView> CardsIssued => [.. Cards.Select(c => c.View)];
