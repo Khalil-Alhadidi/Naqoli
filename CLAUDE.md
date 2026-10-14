@@ -65,6 +65,8 @@ Run from the repository root. Solution: `ZainCashAgent.slnx`. The two database r
 - The default `Wallet` connection string is in `src/Wallet.MockApi/appsettings.Development.json` and applies only in Development (what `dotnet run` uses).
 - Add a migration: `dotnet ef migrations add <Name> --project src/Wallet.MockApi`
 - Run API: `dotnet run --project src/Wallet.MockApi` (http://localhost:5276, `/health`)
+- Reset the wallet to the seed (API running; no key needed in Development): `Invoke-RestMethod -Method Post http://localhost:5276/admin/reset` (returns the row counts; outside Development send `X-Wallet-Admin-Key`)
+- The mock wallet contract (routes, fields, error codes, faults, admin key) is `docs/wallet-api.md`; sample requests are in `src/Wallet.MockApi/Wallet.MockApi.http`.
 - Run web: `dotnet run --project src/Agent.Web` (http://localhost:5089)
 - Run eval: `dotnet run --project src/Agent.Eval`
 - Run journeys: `dotnet test tests/Agent.Web.Journeys` (browsers once: `pwsh tests/Agent.Web.Journeys/bin/Debug/net10.0/playwright.ps1 install`; `pwsh` is PowerShell 7 or later)
