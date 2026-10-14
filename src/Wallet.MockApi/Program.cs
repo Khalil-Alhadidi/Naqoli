@@ -2,6 +2,7 @@ using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Wallet.MockApi;
 using Wallet.MockApi.Data;
+using Wallet.MockApi.Endpoints;
 
 // "seed-hash": print the hash of the frozen seed and exit. Never touches the database.
 if (args is ["seed-hash", ..])
@@ -64,6 +65,7 @@ if (app.Environment.IsDevelopment())
 }
 
 app.MapGet("/health", () => "ok");
+app.MapReadEndpoints();
 
 app.Run();
 return 0;

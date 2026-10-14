@@ -59,7 +59,7 @@ Run from the repository root. Solution: `ZainCashAgent.slnx`. The two database r
 - Restore tools (once per clone): `dotnet tool restore`
 - Build: `dotnet build`
 - Test: `dotnet test` (all) or `dotnet test tests/Agent.Core.Tests`; one class: `dotnet test tests/Agent.Core.Tests -- --filter-class "<Namespace.Class>"`
-- Database test (opt-in; does not read the `Wallet` string; default is the local default instance, database `ZainCashWallet_Test`; on LocalDB or a container set `ConnectionStrings__WalletTest` to a string whose database name ends in `_Test`): `$env:ZAINCASH_TEST_SQL='1'; dotnet test tests/Agent.Core.Tests` (clear afterwards with `Remove-Item Env:ZAINCASH_TEST_SQL`)
+- Database tests (collection `wallet-api`; run with `dotnet test` when the test server answers, Skipped otherwise; do not read the `Wallet` string; default is the local default instance, database `ZainCashWallet_Test`; on LocalDB or a container set `ConnectionStrings__WalletTest` to a string whose database name ends in `_Test`). To make an unreachable server fail instead of skip: `$env:ZAINCASH_TEST_SQL='1'; dotnet test tests/Agent.Core.Tests` (clear afterwards with `Remove-Item Env:ZAINCASH_TEST_SQL`)
 - Create and seed: `dotnet run --project src/Wallet.MockApi -- migrate` (prints `Database ready: 3 users, 3 accounts`)
 - The default `Wallet` connection string is in `src/Wallet.MockApi/appsettings.Development.json` and applies only in Development (what `dotnet run` uses).
 - Add a migration: `dotnet ef migrations add <Name> --project src/Wallet.MockApi`

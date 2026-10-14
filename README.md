@@ -74,7 +74,7 @@ Run every command from the repository root. The solution file is `ZainCashAgent.
 | Test, all projects | `dotnet test` |
 | Test, unit project only | `dotnet test tests/Agent.Core.Tests` |
 | Test, one class | `dotnet test tests/Agent.Core.Tests -- --filter-class "Agent.Core.Tests.Wallet.HealthTests"` |
-| Database test (opt-in, PowerShell) | `$env:ZAINCASH_TEST_SQL='1'; dotnet test tests/Agent.Core.Tests` |
+| Database tests, required (PowerShell) | `$env:ZAINCASH_TEST_SQL='1'; dotnet test tests/Agent.Core.Tests` |
 | Create and seed the database | `dotnet run --project src/Wallet.MockApi -- migrate` |
 | Add a migration | `dotnet ef migrations add <Name> --project src/Wallet.MockApi` |
 | Run the mock wallet API | `dotnet run --project src/Wallet.MockApi` |
@@ -85,7 +85,7 @@ Run every command from the repository root. The solution file is `ZainCashAgent.
 Notes:
 
 - The tests use xunit.v3 on Microsoft Testing Platform, selected in the root `global.json`, so test filters go after `--` as shown.
-- The database test reports Skipped unless `ZAINCASH_TEST_SQL=1` is set. It does not read the `Wallet` connection string. By default it uses the local default instance with Windows authentication and the database `ZainCashWallet_Test`. On route A or B, set the `ConnectionStrings__WalletTest` environment variable to a connection string whose database name ends in `_Test`; the test refuses any other name, because it drops the database before and after it runs. In PowerShell, `ZAINCASH_TEST_SQL` stays set for the rest of the session; clear it with `Remove-Item Env:ZAINCASH_TEST_SQL`.
+- The database tests (collection `wallet-api`, fixture `WalletApiFixture`) probe the test server once, with a 3-second timeout. If it answers, they recreate the test database, apply the migrations and the seed, and run the API in process against it. If it does not, every database test reports Skipped with "SQL Server not reachable at <server>; set ConnectionStrings__WalletTest or start SQL Server"; with `ZAINCASH_TEST_SQL=1` set they fail instead. They never read the `Wallet` connection string. By default they use the local default instance with Windows authentication and the database `ZainCashWallet_Test`. On route A or B, set the `ConnectionStrings__WalletTest` environment variable to a connection string whose database name ends in `_Test`; the fixture refuses any other name, because it drops the database at the start of the run. In PowerShell, `ZAINCASH_TEST_SQL` stays set for the rest of the session; clear it with `Remove-Item Env:ZAINCASH_TEST_SQL`.
 - `migrate` applies the migrations and the synthetic seed, prints `Database ready: 12 users, 12 accounts, 12 contacts, 19 transactions` and exits 0. It is safe to run twice. Without a connection string it prints `No connection string 'Wallet'. Set ConnectionStrings:Wallet in appsettings, user secrets or the ConnectionStrings__Wallet environment variable.` and exits 1.
 - `seed-hash` (`dotnet run --project src/Wallet.MockApi -- seed-hash`) prints the hash of the frozen seed, the value kept in `data/seed/seed-hash.txt`, and exits 0. It needs no database. See [data/seed/README.md](data/seed/README.md).
 - The database tests (`SeedApplyTests`) also check that `SeedReset.Reset` restores the seed with identity values from 1.
