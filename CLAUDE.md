@@ -54,4 +54,15 @@ If a task seems to need breaking one of these, stop and ask.
 
 ## Commands
 
-To be filled in at milestone 1: build, test, create and seed the database, run the two apps, run the eval console, run the screen journeys.
+Run from the repository root. Solution: `ZainCashAgent.slnx`. The two database routes (LocalDB, container) are in `README.md`.
+
+- Restore tools (once per clone): `dotnet tool restore`
+- Build: `dotnet build`
+- Test: `dotnet test` (all) or `dotnet test tests/Agent.Core.Tests`; one class: `dotnet test tests/Agent.Core.Tests -- --filter-class "<Namespace.Class>"`
+- Database test (opt-in; local default instance, database `ZainCashWallet_Test`): `$env:ZAINCASH_TEST_SQL='1'; dotnet test tests/Agent.Core.Tests`
+- Create and seed: `dotnet run --project src/Wallet.MockApi -- migrate` (prints `Database ready: 3 users, 3 accounts`)
+- Add a migration: `dotnet ef migrations add <Name> --project src/Wallet.MockApi`
+- Run API: `dotnet run --project src/Wallet.MockApi` (http://localhost:5276, `/health`)
+- Run web: `dotnet run --project src/Agent.Web` (http://localhost:5089)
+- Run eval: `dotnet run --project src/Agent.Eval`
+- Run journeys: `dotnet test tests/Agent.Web.Journeys` (browsers once: `pwsh tests/Agent.Web.Journeys/bin/Debug/net10.0/playwright.ps1 install`)
