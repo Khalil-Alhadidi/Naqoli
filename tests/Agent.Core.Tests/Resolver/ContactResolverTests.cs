@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Agent.Core.Resolver;
+using Agent.Core.Text;
 using Agent.Core.Tests.Wallet;
 using Agent.Core.Wallet;
 
@@ -161,6 +162,35 @@ public class ContactResolverTests
         Assert.Equal(new ContactCandidate("saved two", false, 12, "07805550102", null, "closed", "S02", null, null), candidates[1]);
         Assert.Equal(new ContactCandidate("alias one", true, 11, "07805550101", "Reg One", "active", "S01", sent, 50_000), candidates[2]);
         Assert.Equal(new ContactCandidate("orphan", true, 99, "07805550199", null, "active", null, null, null), candidates[3]);
+    }
+
+    [Fact]
+    public void TwoLetterFragmentOfASavedNameIsNotFound()
+    {
+        // The first two letters of S01's first saved-name word: too short to match inside a longer word.
+        var fragment = SeedFacts.Contact("S01").SavedName.Split(' ')[0][..2];
+
+        Assert.IsType<Resolution.NotFound>(ContactResolver.Resolve(fragment, SeedCandidates.For("U1")), exactMatch: true);
+    }
+
+    [Fact]
+    public void TwoLetterWholeWordOfOneCandidateGivesACard()
+    {
+        // A short word (not a title or kinship word) that is a whole word of exactly one account's candidates in U1's
+        // directory. U1's seed has none today; the test skips until one exists.
+        var candidates = SeedCandidates.For("U1");
+        var word = candidates
+            .SelectMany(c => ArabicText.Words(c.Text).Select(w => (Word: ArabicText.StripLeadingAl(w), c.AccountId)))
+            .Where(x => x.Word.Length < ContactResolver.MinSubstringWordLength && !ArabicText.IsTitle(x.Word) && !ArabicText.IsKinship(x.Word))
+            .GroupBy(x => x.Word, StringComparer.Ordinal)
+            .Where(g => g.Select(x => x.AccountId).Distinct().Count() == 1)
+            .Select(g => g.Key)
+            .FirstOrDefault();
+        if (word is null)
+            Assert.Skip("U1's directory has no two-letter name word on exactly one account.");
+
+        var card = Assert.IsType<Resolution.Card>(ContactResolver.Resolve(word, candidates), exactMatch: true);
+        Assert.Contains(word, ArabicText.Words(card.Chosen.Text).Select(ArabicText.StripLeadingAl));
     }
 
     private static string KindName(QuestionKind kind) => kind switch

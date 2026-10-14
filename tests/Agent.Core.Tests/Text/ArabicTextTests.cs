@@ -108,6 +108,10 @@ public class ArabicTextTests
     }
 
     [Fact]
+    public void KeyOfAllahIsTheTwoLetterRemainder()
+        => Assert.Equal(new string([Lam, Heh]), ArabicText.Key(new string([Alef, Lam, Lam, Heh])));
+
+    [Fact]
     public void KeyRemovesSpacesAndNormalises()
     {
         var abd = new string([Ain, Beh, Dal]);

@@ -9,6 +9,13 @@ namespace Agent.Core.Resolver;
 /// </summary>
 public static class ContactResolver
 {
+    /// <summary>
+    /// A typed word shorter than this (normalised) must equal a whole word of the candidate in the partial step;
+    /// longer words may occur anywhere inside the candidate's key. Provisional reading of rule 4 (rule 4 does not say
+    /// how short a fragment may be), reported to Khalil.
+    /// </summary>
+    public const int MinSubstringWordLength = 3;
+
     public static Resolution Resolve(string typedName, IReadOnlyList<ContactCandidate> candidates)
     {
         ArgumentNullException.ThrowIfNull(typedName);
@@ -35,11 +42,17 @@ public static class ContactResolver
         if (typedWords.All(w => ArabicText.IsTitle(w) || ArabicText.IsKinship(w)))
             return new Resolution.NotFound();
 
-        // 2. Partial (rules 4, 5, 7): every typed word is inside the candidate's key.
-        var wordKeys = typedWords.Select(ArabicText.Key).Where(k => k.Length > 0).ToList();
+        // 2. Partial (rules 4, 5, 7): every typed word is inside the candidate's key; a short typed word must equal
+        // one of the candidate's words (both compared after the per-word leading al strip).
+        var wordKeys = typedWords
+            .Select(w => (Key: ArabicText.Key(w), WholeWordOnly: w.Length < MinSubstringWordLength))
+            .Where(w => w.Key.Length > 0)
+            .ToList();
         var typedHasTitle = typedWords.Any(ArabicText.IsTitle);
         var partial = keyed
-            .Where(k => wordKeys.All(w => k.Key.Contains(w, StringComparison.Ordinal)))
+            .Where(k => wordKeys.All(w => w.WholeWordOnly
+                ? ArabicText.Words(k.Candidate.Text).Any(cw => ArabicText.StripLeadingAl(cw) == w.Key)
+                : k.Key.Contains(w.Key, StringComparison.Ordinal)))
             .Select(k => k.Candidate)
             .ToList();
         if (partial.Count > 0)
