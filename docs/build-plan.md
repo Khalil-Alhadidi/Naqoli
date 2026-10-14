@@ -87,6 +87,8 @@ Note, 14 Oct 2026: the seed was replaced by Khalil's test-set export (commit 462
 - Every state change writes an audit row.
 - A test fails if anything other than the Confirm handler can reach the wallet's execute call. This is the "no tap, no money" rule as a test.
 
+Note, 14 Oct 2026: all six lines are shown by tests in `tests/Agent.Core.Tests`. Double confirm: `ConfirmHandlerTests.DoubleTapExecutesOnce` and `PendingStoreTests.ConcurrentBeginExecuteWinsOnce`. Expired or cancelled: `ConfirmHandlerTests.ExpiredCannotExecute` and `CancelledCannotExecute`. Retry from Checking: `ConfirmHandlerTests.RetryReusesTheSameKey`. Recheck: `ConfirmHandlerTests.BalanceChangedAfterTheCard`. Audit row per state change: `PendingStoreTests.EveryTransitionWritesAnAuditRow`. No tap, no money: `NoTapNoMoneyTests.OnlyTheConfirmHandlerCanReachExecute` and `ExecuteIsInternal`. Beyond the list, bill and product resolution (`BillResolver`, `ProductResolver`) were built at code level, because the checks need them; their screens stay in milestones 8 and 9b. The provisional codes `amount_below_minimum`, `pin_locked` and `caller_cancelled`, and the warning key `repeat`, await Khalil. The write path is described in [agent-core.md](agent-core.md).
+
 ## Milestone 4: First slice on screen
 
 **Delivers**

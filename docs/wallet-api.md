@@ -13,7 +13,7 @@ dotnet run --project src/Wallet.MockApi              # serve on http://localhost
 
 `migrate` prints `Database ready: 5 users, 42 accounts, 34 contacts, 86 transactions`. Both commands read the seed files first (see Seed); a missing or invalid file stops them with a message that names the file.
 
-The API serves plain HTTP on loopback and does not redirect to HTTPS. `GET /health` returns `ok`; it is the only route that needs no client key (see Client key). In Development the OpenAPI document is at `/openapi/v1.json`. The connection string and the database routes are in [README.md](../README.md#database).
+The API serves plain HTTP on loopback and does not redirect to HTTPS. `GET /health` returns `ok`; it is the only wallet route that needs no client key (see Client key). In Development the OpenAPI document is at `/openapi/v1.json`; it is mapped outside the client-key group, so it needs no key either. The connection string and the database routes are in [README.md](../README.md#database).
 
 ## Conventions
 

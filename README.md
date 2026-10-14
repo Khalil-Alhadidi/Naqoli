@@ -9,7 +9,7 @@ Rules: the nine rules that are never broken are listed in [CLAUDE.md](CLAUDE.md)
 - `src/`: the four applications: `Wallet.MockApi` (minimal API, EF Core with SQL Server), `Agent.Core` (orchestrator and request pipeline), `Agent.Web` (Blazor Server with MudBlazor), `Agent.Eval` (console that runs the request sets).
 - `tests/`: `Agent.Core.Tests` (xunit.v3 unit and API tests) and `Agent.Web.Journeys` (Playwright screen journeys).
 - `data/`: Khalil's exported test-set files: the wallet seed (`data/seed/*.json`, see `data/seed/README.md`) and the request sets.
-- `docs/`: architecture, build plan, failure modes and disclosure.
+- `docs/`: architecture, build plan, failure modes and disclosure. The agent's write path as built (structured request, resolvers, checks, pending states, Confirm and Checking, audit log) is in [docs/agent-core.md](docs/agent-core.md).
 
 ## Prerequisites
 
