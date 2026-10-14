@@ -43,6 +43,7 @@ If a task seems to need breaking one of these, stop and ask.
 - Inside the phone frame: Iraqi Arabic, right to left, Arabic-Indic digits. Typed input is accepted in either digit form.
 - Everything else on the page (grids, settings, log, learning data), plus code, comments, commit messages and docs: English, left to right.
 - Page layout B: side menu, selected component in the middle, live trace always visible, phone frame on the right.
+- Arabic in C# appears only as seed values in `src/Wallet.MockApi/Data/SeedData.cs` and `SeedStrings.cs`; tests refer to seed text through `SeedStrings`, never by literal.
 
 ## Working habits
 
@@ -65,7 +66,7 @@ Run from the repository root. Solution: `ZainCashAgent.slnx`. The two database r
 - The default `Wallet` connection string is in `src/Wallet.MockApi/appsettings.Development.json` and applies only in Development (what `dotnet run` uses).
 - Add a migration: `dotnet ef migrations add <Name> --project src/Wallet.MockApi`
 - Run API: `dotnet run --project src/Wallet.MockApi` (http://localhost:5276, `/health`)
-- Reset the wallet to the seed (API running; no key needed in Development): `Invoke-RestMethod -Method Post http://localhost:5276/admin/reset` (returns the row counts; outside Development send `X-Wallet-Admin-Key`)
+- Reset the wallet to the seed (API running): `Invoke-RestMethod -Method Post http://localhost:5276/admin/reset -Headers @{ 'X-Wallet-Admin-Key' = 'dev' }` (returns the row counts; in Development with no `Wallet:AdminKey` any non-empty value works, otherwise send the key, at least 16 characters)
 - The mock wallet contract (routes, fields, error codes, faults, admin key) is `docs/wallet-api.md`; sample requests are in `src/Wallet.MockApi/Wallet.MockApi.http`.
 - Run web: `dotnet run --project src/Agent.Web` (http://localhost:5089)
 - Run eval: `dotnet run --project src/Agent.Eval`
