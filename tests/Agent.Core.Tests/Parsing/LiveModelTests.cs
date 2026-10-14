@@ -1,6 +1,8 @@
 using System.Text.Json;
 using Agent.Core.Masking;
 using Agent.Core.Parsing;
+using Agent.Core.Requests;
+using Agent.Eval.Cases;
 using Agent.Eval.Running;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -9,23 +11,21 @@ namespace Agent.Core.Tests.Parsing;
 
 /// <summary>
 /// The real model, gated: runs only with <c>ZAINCASH_MODEL_TESTS=1</c> and a key (<c>Anthropic:ApiKey</c> in the web
-/// console's user secrets, or <c>ANTHROPIC_API_KEY</c>). Three example sentences of the frozen prompt go through the
-/// real client for each candidate of <c>src/Agent.Web/appsettings.json</c>; the intent and the slots must equal the
-/// prompt's own answer. The usage of each call is printed. The sentences are read from the prompt file, so this file
-/// holds no Arabic.
+/// console's user secrets, or <c>ANTHROPIC_API_KEY</c>), for each candidate of <c>src/Agent.Web/appsettings.json</c>.
+/// Three example sentences of the frozen prompt must parse as the prompt's own answers, and the balance questions of the
+/// development set must be the balance intent (D22). The usage of each call is printed. Every sentence is read from a
+/// file (the prompt, the development set), so this file holds no Arabic; the held-out set is never read.
 /// </summary>
 public class LiveModelTests(ITestOutputHelper output)
 {
-    /// <summary>The web console's user-secrets id (<c>src/Agent.Web/Agent.Web.csproj</c>).</summary>
     private const string UserSecretsId = EvalCommand.WebUserSecretsId;
 
     private static CancellationToken Token => TestContext.Current.CancellationToken;
 
     public static TheoryData<string> Candidates => new("haiku", "sonnet", "opus");
 
-    [Theory]
-    [MemberData(nameof(Candidates))]
-    public async Task ThreePromptExamplesParseAsThePromptSays(string candidate)
+    /// <summary>The Claude parser for <paramref name="candidate"/>; skips the test without the gate or a key.</summary>
+    private static ClaudeParser Parser(string candidate)
     {
         Assert.SkipUnless(Environment.GetEnvironmentVariable("ZAINCASH_MODEL_TESTS") == "1", "Set ZAINCASH_MODEL_TESTS=1 to call the real model.");
         var configuration = new ConfigurationBuilder()
@@ -38,12 +38,25 @@ public class LiveModelTests(ITestOutputHelper output)
 
         var options = configuration.GetSection(ModelOptions.SectionName).Get<ModelOptions>() ?? throw new InvalidOperationException("No Model section.");
         options.Candidate = candidate;
-        var parser = new ClaudeParser(
+        return new ClaudeParser(
             ParserFactory.CreateChatClient(key, options.Candidates[candidate]),
             Microsoft.Extensions.Options.Options.Create(options),
             TimeProvider.System,
             new ClaudeParserTests.RecordingTrace(),
             NullLogger<ClaudeParser>.Instance);
+    }
+
+    private void Print(string candidate, ClaudeParser parser)
+    {
+        var usage = parser.LastUsage;
+        output.WriteLine($"{candidate}: {usage?.InputTokens} in, {usage?.OutputTokens} out, {usage?.CostUsd} USD, {usage?.Duration.TotalMilliseconds:0} ms");
+    }
+
+    [Theory]
+    [MemberData(nameof(Candidates))]
+    public async Task ThreePromptExamplesParseAsThePromptSays(string candidate)
+    {
+        var parser = Parser(candidate);
 
         foreach (var (message, answer) in ClaudeParser.Examples().Take(3))
         {
@@ -52,9 +65,29 @@ public class LiveModelTests(ITestOutputHelper output)
 
             var parsed = await parser.ParseAsync(masked.Text, new ParseContext(null, masked.Map), Token);
 
-            var usage = parser.LastUsage;
-            output.WriteLine($"{candidate}: {usage?.InputTokens} in, {usage?.OutputTokens} out, {usage?.CostUsd} USD, {usage?.Duration.TotalMilliseconds:0} ms");
+            Print(candidate, parser);
             Assert.Equal(expected, parsed);
+        }
+    }
+
+    [Theory]
+    [MemberData(nameof(Candidates))]
+    public async Task TheBalanceQuestionIsItsOwnIntent(string candidate)
+    {
+        var parser = Parser(candidate);
+        var questions = CaseLoader.Load(Path.Combine(EvalPaths.RepositoryRoot(), "data", "requests.dev.jsonl"))
+            .Where(c => c.Category == "Clean" && c.Type == "Balance")
+            .ToList();
+        Assert.NotEmpty(questions);
+
+        foreach (var question in questions)
+        {
+            var masked = Masker.Mask(question.Message);
+
+            var parsed = await parser.ParseAsync(masked.Text, new ParseContext(null, masked.Map), Token);
+
+            Print(candidate, parser);
+            Assert.Equal(RequestIntent.Balance, parsed.Intent);
         }
     }
 }
