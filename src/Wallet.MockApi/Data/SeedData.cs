@@ -24,6 +24,20 @@ public static class SeedData
 
     private const string PinPlaceholder = "***";
 
+    // The fees of the seeded history, frozen with the seed. They are deliberately not read from WalletOptions,
+    // so a change to the configured fees never rewrites the frozen rows (or the seed hash).
+    private const long SeedTransferFeeIqd = 1000;
+    private const long SeedBillFeeIqd = 500;
+    private const long SeedPurchaseFeeIqd = 0;
+
+    private const string SeedPin = "1234";
+    private const int SeedUserCount = 12;
+
+    // PBKDF2 is slow on purpose, so the twelve seed PIN hashes are computed once per process, each with its own salt,
+    // and shared by every Build: seeding, resets and the accessors below stop paying 12 hashes each.
+    private static readonly Lazy<string[]> SeedPinHashes = new(
+        () => Enumerable.Range(0, SeedUserCount).Select(_ => PinHasher.Hash(SeedPin)).ToArray());
+
     private static readonly JsonSerializerOptions HashJsonOptions = new()
     {
         WriteIndented = false,
@@ -31,19 +45,19 @@ public static class SeedData
     };
 
     /// <summary>Returns a fresh, untracked graph on every call: users with accounts, contacts, aliases and bill accounts.</summary>
-    public static IReadOnlyList<User> Users() => Build(HashSeedPin).Users;
+    public static IReadOnlyList<User> Users() => Build(SeedPinHashes.Value).Users;
 
     /// <summary>Returns a fresh, untracked list on every call.</summary>
-    public static IReadOnlyList<Biller> Billers() => Build(HashSeedPin).Billers;
+    public static IReadOnlyList<Biller> Billers() => Build(SeedPinHashes.Value).Billers;
 
     /// <summary>Returns a fresh, untracked list on every call.</summary>
-    public static IReadOnlyList<Product> Products() => Build(HashSeedPin).Products;
+    public static IReadOnlyList<Product> Products() => Build(SeedPinHashes.Value).Products;
 
     /// <summary>The seeded history, in insert order, linked to its users, accounts, bill accounts and products.</summary>
-    public static IReadOnlyList<Transaction> Transactions() => Build(HashSeedPin).Transactions;
+    public static IReadOnlyList<Transaction> Transactions() => Build(SeedPinHashes.Value).Transactions;
 
     /// <summary>The seeded store orders, linked to their transactions.</summary>
-    public static IReadOnlyList<Order> Orders() => Build(HashSeedPin).Orders;
+    public static IReadOnlyList<Order> Orders() => Build(SeedPinHashes.Value).Orders;
 
     /// <summary>
     /// Adds the seed once. Does nothing if any user already exists. Rows are inserted one at a time,
@@ -58,7 +72,7 @@ public static class SeedData
         if (db.Users.Any())
             return;
 
-        var seed = Build(HashSeedPin);
+        var seed = Build(SeedPinHashes.Value);
 
         // Take the rows each user owns off the graph so that adding a user inserts only the user and its accounts.
         var contacts = seed.Users.SelectMany(u => u.Contacts).ToList();
@@ -91,7 +105,7 @@ public static class SeedData
     /// </summary>
     public static string ComputeHash()
     {
-        var seed = Build(() => PinPlaceholder);
+        var seed = Build(Enumerable.Repeat(PinPlaceholder, SeedUserCount).ToArray());
 
         var canonical = new
         {
@@ -155,8 +169,6 @@ public static class SeedData
         return Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(json)));
     }
 
-    private static string HashSeedPin() => PinHasher.Hash("1234");
-
     private static void InsertInOrder<T>(DbContext db, IEnumerable<T> rows) where T : class
     {
         foreach (var row in rows)
@@ -173,23 +185,26 @@ public static class SeedData
         List<Transaction> Transactions,
         List<Order> Orders);
 
-    private static SeedGraph Build(Func<string> pinHash)
+    private static SeedGraph Build(IReadOnlyList<string> pinHashes)
     {
+        var nextPin = 0;
+        string PinHash() => pinHashes[nextPin++];
+
         // Users 1 to 12, in identity order. Display names are the registered names.
         List<User> users =
         [
-            NewUser("07700001001", "أحمد كريم جاسم", 300000, pinHash),
-            NewUser("07700001002", "سارة عبد الله حسن", 1250000, pinHash),
-            NewUser("07700001003", "عمر سعد محمود", 0, pinHash),
-            NewUser("07700001004", "محمود كريم جاسم", 80000, pinHash),
-            NewUser("07700001005", "علي حسن كاظم", 45000, pinHash),
-            NewUser("07700001006", "علي كريم عبود", 120000, pinHash),
-            NewUser("07700001007", "حسن علي رشيد", 10000, pinHash),
-            NewUser("07700001008", "حسين علي رشيد", 10000, pinHash),
-            NewUser("07700001009", "فاطمة جاسم محمد", 500000, pinHash),
-            NewUser("07700001010", "نور صباح فاضل", 25000, pinHash),
-            NewUser("07700001011", "زينب طالب حميد", 60000, pinHash),
-            NewUser("07700001012", "كاظم جبار علي", 15000, pinHash),
+            NewUser("07700001001", SeedStrings.User1RegisteredName, 300000, PinHash),
+            NewUser("07700001002", SeedStrings.User2RegisteredName, 1250000, PinHash),
+            NewUser("07700001003", "عمر سعد محمود", 0, PinHash),
+            NewUser("07700001004", SeedStrings.User4RegisteredName, 80000, PinHash),
+            NewUser("07700001005", "علي حسن كاظم", 45000, PinHash),
+            NewUser("07700001006", "علي كريم عبود", 120000, PinHash),
+            NewUser("07700001007", "حسن علي رشيد", 10000, PinHash),
+            NewUser("07700001008", "حسين علي رشيد", 10000, PinHash),
+            NewUser("07700001009", "فاطمة جاسم محمد", 500000, PinHash),
+            NewUser("07700001010", "نور صباح فاضل", 25000, PinHash),
+            NewUser("07700001011", "زينب طالب حميد", 60000, PinHash),
+            NewUser("07700001012", "كاظم جبار علي", 15000, PinHash),
         ];
 
         User UserNo(int id) => users[id - 1];
@@ -200,15 +215,15 @@ public static class SeedData
 
         // Contacts. User 1 has a planted duplicate (two contacts saved as Ali) and a planted near name (Hasan, Husain).
         AddContacts(ahmed,
-            ("حمودي", 4),
-            ("علي", 5),
-            ("علي", 6),
+            (SeedStrings.SavedNameHammoudi, 4),
+            (SeedStrings.SavedNameAli, 5),
+            (SeedStrings.SavedNameAli, 6),
             ("حسن", 7),
             ("حسين", 8),
             ("ماما", 9),
             ("نور", 10),
             ("ام محمد", 11),
-            ("ابو علي", 12),
+            (SeedStrings.SavedNameAbuAli, 12),
             ("سارة", 2));
         AddContacts(sara,
             ("احمد", 1),
@@ -221,21 +236,21 @@ public static class SeedData
         }
 
         // Aliases of user 1: one alias, one account (D15).
-        foreach (var (text, userId) in new[] { ("اخوي", 4), ("البيت", 9), ("الدكان", 12) })
+        foreach (var (text, userId) in new[] { (SeedStrings.AliasBrother, 4), (SeedStrings.AliasHome, 9), ("الدكان", 12) })
             ahmed.Aliases.Add(new Alias { Owner = ahmed, Text = text, TargetAccount = AccountOf(userId) });
 
         // Billers.
-        var electricity = new Biller { Code = "electricity", Name = "الكهرباء" };
+        var electricity = new Biller { Code = "electricity", Name = SeedStrings.BillerElectricity };
         var water = new Biller { Code = "water", Name = "الماء" };
         var internet = new Biller { Code = "internet", Name = "نور نت" };
         List<Biller> billers = [electricity, water, internet];
 
         // Bill accounts.
-        var ahmedElectricityHome = NewBill(ahmed, electricity, "البيت", "10000000001", 45000, new DateOnly(2026, 10, 25));
+        var ahmedElectricityHome = NewBill(ahmed, electricity, SeedStrings.BillLabelHome, "10000000001", 45000, new DateOnly(2026, 10, 25));
         NewBill(ahmed, electricity, "الدكان", "10000000002", 120000, new DateOnly(2026, 10, 20));
-        var ahmedWaterHome = NewBill(ahmed, water, "البيت", "20000000001", 15000, null);
-        var ahmedInternetHome = NewBill(ahmed, internet, "البيت", "30000000001", 0, null);
-        NewBill(sara, electricity, "البيت", "10000000003", 60000, null);
+        var ahmedWaterHome = NewBill(ahmed, water, SeedStrings.BillLabelHome, "20000000001", 15000, null);
+        var ahmedInternetHome = NewBill(ahmed, internet, SeedStrings.BillLabelHome, "30000000001", 0, null);
+        NewBill(sara, electricity, SeedStrings.BillLabelHome, "10000000003", 60000, null);
 
         // Store catalogue: Provider, Type, Name, FaceValue, Price.
         List<Product> products =
@@ -245,7 +260,7 @@ public static class SeedData
             new() { Provider = "Zain", Type = ProductType.Internet, Name = "انترنت زين ١٠ جيجا", FaceValueIqd = 0, PriceIqd = 15000 },
             new() { Provider = "Asiacell", Type = ProductType.Credit, Name = "رصيد آسياسيل ٥٠٠٠", FaceValueIqd = 5000, PriceIqd = 5000 },
             new() { Provider = "Asiacell", Type = ProductType.Credit, Name = "رصيد آسياسيل ١٠٠٠٠", FaceValueIqd = 10000, PriceIqd = 10000 },
-            new() { Provider = "Asiacell", Type = ProductType.Internet, Name = "انترنت آسياسيل ١٠ جيجا", FaceValueIqd = 0, PriceIqd = 15000 },
+            new() { Provider = "Asiacell", Type = ProductType.Internet, Name = SeedStrings.ProductAsiacellInternet10Gb, FaceValueIqd = 0, PriceIqd = 15000 },
             new() { Provider = "Korek", Type = ProductType.Credit, Name = "رصيد كورك ٥٠٠٠", FaceValueIqd = 5000, PriceIqd = 5000 },
             new() { Provider = "Korek", Type = ProductType.Internet, Name = "انترنت كورك ١٠ جيجا", FaceValueIqd = 0, PriceIqd = 15000 },
         ];
@@ -253,7 +268,6 @@ public static class SeedData
         var asiacellInternet = products[5];
 
         // History. Balances above are frozen values; they are not recomputed from these rows.
-        var fees = new WalletOptions();
         List<Transaction> transactions = [];
         List<Order> orders = [];
         var keyCounters = new Dictionary<User, int>();
@@ -264,9 +278,9 @@ public static class SeedData
             keyCounters[payer] = keyCounters.GetValueOrDefault(payer) + 1;
             var fee = type switch
             {
-                TransactionType.Transfer => fees.TransferFeeIqd,
-                TransactionType.Bill => fees.BillFeeIqd,
-                _ => fees.PurchaseFeeIqd,
+                TransactionType.Transfer => SeedTransferFeeIqd,
+                TransactionType.Bill => SeedBillFeeIqd,
+                _ => SeedPurchaseFeeIqd,
             };
             var createdAt = Anchor.AddDays(-daysAgo);
             var row = new Transaction

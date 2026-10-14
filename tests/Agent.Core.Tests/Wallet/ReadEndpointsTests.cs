@@ -6,13 +6,25 @@ using Wallet.MockApi.Data;
 
 namespace Agent.Core.Tests.Wallet;
 
+/// <summary>
+/// The read endpoints against the frozen seed. Every test starts from a reset (<see cref="InitializeAsync"/>), so the
+/// assertions never depend on which test class ran before.
+/// </summary>
 [Collection(WalletApiCollection.Name)]
-public class ReadEndpointsTests(WalletApiFixture fixture)
+public sealed class ReadEndpointsTests(WalletApiFixture fixture) : IAsyncLifetime
 {
     private const string HammoudiPhone = "07700001004";
-    private const string Ali = "علي";
+    private const string Ali = SeedStrings.SavedNameAli;
 
     private static CancellationToken Token => TestContext.Current.CancellationToken;
+
+    public async ValueTask InitializeAsync()
+    {
+        if (fixture.DatabaseAvailable)
+            await fixture.ResetAsync();
+    }
+
+    public ValueTask DisposeAsync() => ValueTask.CompletedTask;
 
     [Fact]
     public async Task UserByPhoneReturnsRegisteredName()
@@ -24,10 +36,10 @@ public class ReadEndpointsTests(WalletApiFixture fixture)
         Assert.NotNull(user);
         Assert.Equal(4, user.Id);
         Assert.Equal(HammoudiPhone, user.Phone);
-        Assert.Equal("محمود كريم جاسم", user.RegisteredName);
+        Assert.Equal(SeedStrings.User4RegisteredName, user.RegisteredName);
 
         var demo = await fixture.Client.GetFromJsonAsync<UserSummary>($"/users/{SeedData.DemoUserId}", Token);
-        Assert.Equal(new UserSummary(1, "07700001001", "أحمد كريم جاسم"), demo);
+        Assert.Equal(new UserSummary(1, "07700001001", SeedStrings.User1RegisteredName), demo);
     }
 
     [Theory]
@@ -50,6 +62,7 @@ public class ReadEndpointsTests(WalletApiFixture fixture)
         Assert.NotNull(problem);
         Assert.Equal(404, problem.Status);
         Assert.Equal("User not found", problem.Title);
+        Assert.Equal("unknown_user", problem.Code());
     }
 
     [Fact]
@@ -64,8 +77,8 @@ public class ReadEndpointsTests(WalletApiFixture fixture)
         Assert.Equal(2, result.Contacts.Count(c => c.SavedName == Ali));
 
         var hammoudi = Assert.Single(result.Contacts, c => c.Phone == HammoudiPhone);
-        Assert.Equal("حمودي", hammoudi.SavedName);
-        Assert.Equal("محمود كريم جاسم", hammoudi.RegisteredName);
+        Assert.Equal(SeedStrings.SavedNameHammoudi, hammoudi.SavedName);
+        Assert.Equal(SeedStrings.User4RegisteredName, hammoudi.RegisteredName);
         Assert.Equal(4, hammoudi.TargetAccountId);
         Assert.Equal(25000, hammoudi.LastSentAmountIqd);
         Assert.Equal(SeedData.Anchor.AddDays(-7), hammoudi.LastSentAt);
@@ -75,10 +88,10 @@ public class ReadEndpointsTests(WalletApiFixture fixture)
         Assert.Null(husain.LastSentAmountIqd);
 
         Assert.Equal(3, result.Aliases.Count);
-        var brother = Assert.Single(result.Aliases, a => a.Text == "اخوي");
+        var brother = Assert.Single(result.Aliases, a => a.Text == SeedStrings.AliasBrother);
         Assert.Equal(4, brother.TargetAccountId);
         Assert.Equal(HammoudiPhone, brother.Phone);
-        Assert.Equal("محمود كريم جاسم", brother.RegisteredName);
+        Assert.Equal(SeedStrings.User4RegisteredName, brother.RegisteredName);
     }
 
     [Fact]
@@ -92,14 +105,16 @@ public class ReadEndpointsTests(WalletApiFixture fixture)
         Assert.NotNull(result);
         Assert.Equal(["07700001005", "07700001006", "07700001012"], result.Contacts.Select(c => c.Phone));
         Assert.Equal(2, result.Contacts.Count(c => c.SavedName == Ali));
-        Assert.Single(result.Contacts, c => c.SavedName == "ابو علي");
+        Assert.Single(result.Contacts, c => c.SavedName == SeedStrings.SavedNameAbuAli);
         Assert.Empty(result.Aliases);
 
+        // The home alias without its two-letter article: a substring that only that alias contains.
+        var homeWithoutArticle = SeedStrings.AliasHome[2..];
         var byAlias = await fixture.Client.GetFromJsonAsync<ContactsResponse>(
-            $"/users/{SeedData.DemoUserId}/contacts?q={Uri.EscapeDataString("بيت")}", Token);
+            $"/users/{SeedData.DemoUserId}/contacts?q={Uri.EscapeDataString(homeWithoutArticle)}", Token);
         Assert.NotNull(byAlias);
         Assert.Empty(byAlias.Contacts);
-        Assert.Equal("البيت", Assert.Single(byAlias.Aliases).Text);
+        Assert.Equal(SeedStrings.AliasHome, Assert.Single(byAlias.Aliases).Text);
     }
 
     [Fact]
@@ -117,8 +132,8 @@ public class ReadEndpointsTests(WalletApiFixture fixture)
         var home = Assert.Single(bills, b => b.AccountNumber == "10000000001");
         Assert.Equal(45000, home.AmountDueIqd);
         Assert.Equal(new DateOnly(2026, 10, 25), home.DueDate);
-        Assert.Equal("الكهرباء", home.BillerName);
-        Assert.Equal("البيت", home.Label);
+        Assert.Equal(SeedStrings.BillerElectricity, home.BillerName);
+        Assert.Equal(SeedStrings.BillLabelHome, home.Label);
     }
 
     [Fact]
@@ -147,10 +162,10 @@ public class ReadEndpointsTests(WalletApiFixture fixture)
         Assert.Equal([25000L, 50000L, 50000L, 50000L], history.Select(h => h.AmountIqd));
         Assert.All(history, h =>
         {
-            Assert.Equal("Transfer", h.Type);
-            Assert.Equal("Done", h.Status);
+            Assert.Equal("transfer", h.Type);
+            Assert.Equal("done", h.Status);
             Assert.Equal(HammoudiPhone, h.CounterpartyPhone);
-            Assert.Equal("محمود كريم جاسم", h.CounterpartyName);
+            Assert.Equal(SeedStrings.User4RegisteredName, h.CounterpartyName);
             Assert.Equal(1000, h.FeeIqd);
             Assert.Equal(h.AmountIqd + h.FeeIqd, h.TotalIqd);
         });
@@ -193,10 +208,18 @@ public class ReadEndpointsTests(WalletApiFixture fixture)
 
         Assert.NotNull(zainCredit);
         Assert.Equal([1, 2], zainCredit.Select(p => p.ProductId));
-        Assert.All(zainCredit, p => Assert.Equal("Credit", p.Type));
+        Assert.All(zainCredit, p => Assert.Equal("credit", p.Type));
         Assert.Equal([1, 4, 7], fiveThousand!.Select(p => p.ProductId));
         Assert.Equal(8, all!.Count);
-        Assert.Equal(3, Assert.Single(lowerCase!).ProductId);
+        var zainInternet = Assert.Single(lowerCase!);
+        Assert.Equal(3, zainInternet.ProductId);
+        Assert.Equal("internet", zainInternet.Type);
+
+        // Any case is accepted; anything but a type name matches nothing.
+        var upperCase = await fixture.Client.GetFromJsonAsync<List<ProductItem>>("/store/products?type=CREDIT", Token);
+        var number = await fixture.Client.GetFromJsonAsync<List<ProductItem>>("/store/products?type=0", Token);
+        Assert.Equal(5, upperCase!.Count);
+        Assert.Empty(number!);
     }
 
     [Fact]
@@ -211,6 +234,6 @@ public class ReadEndpointsTests(WalletApiFixture fixture)
         Assert.Equal([18, 17], orders.Select(o => o.TransactionId));
         Assert.Equal(["1234567890002", "1234567890001"], orders.Select(o => o.Code));
         Assert.Equal([6, 1], orders.Select(o => o.ProductId));
-        Assert.Equal("انترنت آسياسيل ١٠ جيجا", orders[0].ProductName);
+        Assert.Equal(SeedStrings.ProductAsiacellInternet10Gb, orders[0].ProductName);
     }
 }

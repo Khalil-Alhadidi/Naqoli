@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Wallet.MockApi.Contracts;
 using Wallet.MockApi.Data;
 using Wallet.MockApi.Data.Entities;
+using Wallet.MockApi.Services;
 
 namespace Wallet.MockApi.Endpoints;
 
@@ -56,13 +57,6 @@ public static class ReadEndpoints
         return app;
     }
 
-    /// <summary>The one 404 every <c>/users/...</c> route returns for a user that does not exist.</summary>
-    internal static ProblemHttpResult UserNotFound()
-        => TypedResults.Problem(
-            statusCode: StatusCodes.Status404NotFound,
-            title: "User not found",
-            detail: "No wallet user matches the request.");
-
     private static async Task<Results<Ok<UserSummary>, ProblemHttpResult>> GetUserAsync(
         int id, WalletDbContext db, CancellationToken cancellationToken)
     {
@@ -71,7 +65,7 @@ public static class ReadEndpoints
             .Select(u => new UserSummary(u.Id, u.Phone, u.DisplayName))
             .SingleOrDefaultAsync(cancellationToken);
 
-        return user is null ? UserNotFound() : TypedResults.Ok(user);
+        return user is null ? WalletProblems.UserNotFound() : TypedResults.Ok(user);
     }
 
     private static async Task<Results<Ok<UserSummary>, ProblemHttpResult>> GetUserByPhoneAsync(
@@ -82,14 +76,14 @@ public static class ReadEndpoints
             .Select(u => new UserSummary(u.Id, u.Phone, u.DisplayName))
             .SingleOrDefaultAsync(cancellationToken);
 
-        return user is null ? UserNotFound() : TypedResults.Ok(user);
+        return user is null ? WalletProblems.UserNotFound() : TypedResults.Ok(user);
     }
 
     private static async Task<Results<Ok<ContactsResponse>, ProblemHttpResult>> GetContactsAsync(
         int id, string? q, WalletDbContext db, CancellationToken cancellationToken)
     {
         if (!await UserExistsAsync(db, id, cancellationToken))
-            return UserNotFound();
+            return WalletProblems.UserNotFound();
 
         // Raw, case-insensitive substring. Arabic normalising is the agent's job, not the wallet's.
         var term = string.IsNullOrEmpty(q) ? null : q.ToLowerInvariant();
@@ -135,7 +129,7 @@ public static class ReadEndpoints
         int id, WalletDbContext db, CancellationToken cancellationToken)
     {
         if (!await UserExistsAsync(db, id, cancellationToken))
-            return UserNotFound();
+            return WalletProblems.UserNotFound();
 
         var bills = await db.BillAccounts.AsNoTracking()
             .Where(b => b.UserId == id)
@@ -157,7 +151,7 @@ public static class ReadEndpoints
             .SingleOrDefaultAsync(cancellationToken);
 
         return account is null
-            ? UserNotFound()
+            ? WalletProblems.UserNotFound()
             : TypedResults.Ok(new BalanceResponse(account.Id, account.BalanceIqd, clock.GetUtcNow()));
     }
 
@@ -165,7 +159,7 @@ public static class ReadEndpoints
         int id, string? to, DateTimeOffset? since, int? take, WalletDbContext db, CancellationToken cancellationToken)
     {
         if (!await UserExistsAsync(db, id, cancellationToken))
-            return UserNotFound();
+            return WalletProblems.UserNotFound();
 
         var limit = Math.Clamp(take ?? DefaultHistoryTake, 1, MaxHistoryTake);
 
@@ -206,8 +200,8 @@ public static class ReadEndpoints
             .Select(t => new HistoryItem(
                 t.Id,
                 t.Reference ?? string.Empty,
-                t.Type.ToString(),
-                t.Status.ToString(),
+                TransactionNames.Of(t.Type),
+                TransactionNames.Of(t.Status),
                 t.AmountIqd,
                 t.FeeIqd,
                 t.TotalIqd,
@@ -232,13 +226,10 @@ public static class ReadEndpoints
 
         if (!string.IsNullOrEmpty(type))
         {
-            // Only an exact enum name matches (any case); numbers and unknown names match nothing.
-            var name = Enum.GetNames<ProductType>()
-                .FirstOrDefault(n => string.Equals(n, type, StringComparison.OrdinalIgnoreCase));
-            if (name is null)
+            // Only an exact type name matches (any case); numbers and unknown names match nothing.
+            if (!ProductTypeNames.TryParse(type, out var productType))
                 return TypedResults.Ok(new List<ProductItem>());
 
-            var productType = Enum.Parse<ProductType>(name);
             rows = rows.Where(p => p.Type == productType);
         }
 
@@ -251,7 +242,7 @@ public static class ReadEndpoints
             .ToListAsync(cancellationToken);
 
         return TypedResults.Ok(products
-            .Select(p => new ProductItem(p.Id, p.Provider, p.Type.ToString(), p.Name, p.FaceValueIqd, p.PriceIqd))
+            .Select(p => new ProductItem(p.Id, p.Provider, ProductTypeNames.Of(p.Type), p.Name, p.FaceValueIqd, p.PriceIqd))
             .ToList());
     }
 
@@ -259,7 +250,7 @@ public static class ReadEndpoints
         int id, WalletDbContext db, CancellationToken cancellationToken)
     {
         if (!await UserExistsAsync(db, id, cancellationToken))
-            return UserNotFound();
+            return WalletProblems.UserNotFound();
 
         var orders = await db.Orders.AsNoTracking()
             .Where(o => o.UserId == id)
@@ -302,4 +293,31 @@ public static class ReadEndpoints
     }
 
     private sealed record LastTransfer(DateTimeOffset CreatedAt, long AmountIqd);
+}
+
+/// <summary>The lower-case names product types carry in JSON, as transaction types and statuses do.</summary>
+public static class ProductTypeNames
+{
+    public static string Of(ProductType type) => type switch
+    {
+        ProductType.Credit => "credit",
+        ProductType.Internet => "internet",
+        _ => throw new ArgumentOutOfRangeException(nameof(type), type, null),
+    };
+
+    /// <summary>Parses a type name, ignoring case. Numbers and unknown names are refused.</summary>
+    public static bool TryParse(string? name, out ProductType type)
+    {
+        foreach (var candidate in Enum.GetValues<ProductType>())
+        {
+            if (string.Equals(name, Of(candidate), StringComparison.OrdinalIgnoreCase))
+            {
+                type = candidate;
+                return true;
+            }
+        }
+
+        type = default;
+        return false;
+    }
 }

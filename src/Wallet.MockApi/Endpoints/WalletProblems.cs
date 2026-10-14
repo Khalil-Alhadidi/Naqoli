@@ -11,7 +11,8 @@ internal static class WalletProblems
 {
     private static readonly Dictionary<string, string> Titles = new(StringComparer.Ordinal)
     {
-        [PaymentErrors.MissingIdempotencyKey] = "Idempotency key missing or too long",
+        [PaymentErrors.MissingIdempotencyKey] = "Idempotency key missing",
+        [PaymentErrors.InvalidIdempotencyKey] = "Idempotency key malformed",
         [PaymentErrors.InvalidType] = "Unknown payment type",
         [PaymentErrors.UnknownUser] = "Unknown user",
         [PaymentErrors.UnknownRecipient] = "Unknown recipient",
@@ -33,7 +34,18 @@ internal static class WalletProblems
         [AdminErrors.InvalidFaultDelay] = "Invalid fault delay",
     };
 
-    public static ProblemHttpResult From(PaymentRefusal refusal)
+    /// <summary>
+    /// The 404 every <c>/users/...</c> read route returns for a user that does not exist: code <c>unknown_user</c>
+    /// (the same code quote and execute refuse an unknown payer with, there as 422) and the title <c>User not found</c>.
+    /// </summary>
+    public static ProblemHttpResult UserNotFound()
+        => From(new PaymentRefusal(StatusCodes.Status404NotFound, PaymentErrors.UnknownUser), "User not found");
+
+    public static ProblemHttpResult From(PaymentRefusal refusal) => From(refusal, title: null);
+
+    public static ProblemHttpResult Create(int statusCode, string code) => From(new PaymentRefusal(statusCode, code));
+
+    private static ProblemHttpResult From(PaymentRefusal refusal, string? title)
     {
         ArgumentNullException.ThrowIfNull(refusal);
 
@@ -45,9 +57,7 @@ internal static class WalletProblems
 
         return TypedResults.Problem(
             statusCode: refusal.StatusCode,
-            title: Titles.GetValueOrDefault(refusal.Code, "Payment refused"),
+            title: title ?? Titles.GetValueOrDefault(refusal.Code, "Payment refused"),
             extensions: extensions);
     }
-
-    public static ProblemHttpResult Create(int statusCode, string code) => From(new PaymentRefusal(statusCode, code));
 }

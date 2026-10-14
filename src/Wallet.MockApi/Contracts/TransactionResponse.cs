@@ -3,7 +3,8 @@ namespace Wallet.MockApi.Contracts;
 /// <summary>
 /// The outcome of an executed transaction, and of a lookup or replay by idempotency key. <see cref="Status"/> is
 /// <c>executing</c>, <c>done</c> or <c>failed</c>. <see cref="BalanceAfterIqd"/> is the payer's balance when the
-/// response was made. <see cref="Code"/> is the purchase code, for purchases only.
+/// response was made. <see cref="Code"/> is the purchase code, for purchases only. <see cref="ErrorCode"/> is the
+/// stored refusal code (<c>insufficient_funds</c> or <c>nothing_due</c>) of a <c>failed</c> row, and null otherwise.
 /// </summary>
 public sealed record TransactionResponse(
     int TransactionId,
@@ -15,4 +16,5 @@ public sealed record TransactionResponse(
     long TotalIqd,
     long BalanceAfterIqd,
     string? Code,
-    DateTimeOffset CompletedAt);
+    DateTimeOffset CompletedAt,
+    string? ErrorCode);

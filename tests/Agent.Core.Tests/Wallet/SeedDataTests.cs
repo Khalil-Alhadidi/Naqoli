@@ -38,7 +38,7 @@ public class SeedDataTests
         var demo = DemoUser(SeedData.Users());
 
         Assert.Equal(10, demo.Contacts.Count);
-        Assert.Equal(2, demo.Contacts.Count(c => c.SavedName == "علي"));
+        Assert.Equal(2, demo.Contacts.Count(c => c.SavedName == SeedStrings.SavedNameAli));
     }
 
     [Fact]

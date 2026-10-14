@@ -29,6 +29,8 @@ builder.Services.AddDbContext<WalletDbContext>(o => o.UseSqlServer(connectionStr
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddOptions<WalletOptions>()
     .BindConfiguration(WalletOptions.SectionName)
+    // An empty admin key means none, as an absent one does; post-configuration runs before validation.
+    .PostConfigure(o => o.AdminKey = string.IsNullOrEmpty(o.AdminKey) ? null : o.AdminKey)
     .ValidateDataAnnotations()
     .ValidateOnStart();
 builder.Services.AddSingleton<FeeCalculator>();

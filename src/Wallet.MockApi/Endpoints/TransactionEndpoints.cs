@@ -51,8 +51,11 @@ public static class TransactionEndpoints
         TransactionService transactions,
         CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(idempotencyKey) || idempotencyKey.Length > TransactionService.MaxIdempotencyKeyLength)
+        // Both checks come before the fault switch, so a 400 never uses up a once fault.
+        if (string.IsNullOrWhiteSpace(idempotencyKey))
             return WalletProblems.Create(StatusCodes.Status400BadRequest, PaymentErrors.MissingIdempotencyKey);
+        if (!TransactionService.IsValidIdempotencyKey(idempotencyKey))
+            return WalletProblems.Create(StatusCodes.Status400BadRequest, PaymentErrors.InvalidIdempotencyKey);
 
         var result = await transactions.ExecuteAsync(idempotencyKey, request, cancellationToken);
         return result switch
@@ -67,7 +70,8 @@ public static class TransactionEndpoints
     private static async Task<Results<Ok<TransactionResponse>, ProblemHttpResult>> GetByKeyAsync(
         string key, TransactionService transactions, CancellationToken cancellationToken)
     {
-        var found = key.Length <= TransactionService.MaxIdempotencyKeyLength
+        // A malformed key can never have been stored, so it is simply unknown.
+        var found = TransactionService.IsValidIdempotencyKey(key)
             ? await transactions.FindAsync(key, cancellationToken)
             : null;
         return found is null

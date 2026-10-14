@@ -10,21 +10,25 @@ public static class SeedReset
     /// In one database transaction: deletes every row in dependency order, reseeds each identity column,
     /// then applies <see cref="SeedData"/>. Pure data; no HTTP.
     /// </summary>
-    public static void Reset(WalletDbContext db)
+    /// <remarks>
+    /// <see cref="SeedData.Apply"/> stays synchronous (it is shared with <c>migrate</c>) and runs inside this
+    /// transaction; its PIN hashes are computed once per process, so it does little more than insert rows.
+    /// </remarks>
+    public static async Task ResetAsync(WalletDbContext db, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(db);
 
-        using var transaction = db.Database.BeginTransaction();
+        await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
 
-        db.Orders.ExecuteDelete();
-        db.Transactions.ExecuteDelete();
-        db.BillAccounts.ExecuteDelete();
-        db.Aliases.ExecuteDelete();
-        db.Contacts.ExecuteDelete();
-        db.Accounts.ExecuteDelete();
-        db.Users.ExecuteDelete();
-        db.Products.ExecuteDelete();
-        db.Billers.ExecuteDelete();
+        await db.Orders.ExecuteDeleteAsync(cancellationToken);
+        await db.Transactions.ExecuteDeleteAsync(cancellationToken);
+        await db.BillAccounts.ExecuteDeleteAsync(cancellationToken);
+        await db.Aliases.ExecuteDeleteAsync(cancellationToken);
+        await db.Contacts.ExecuteDeleteAsync(cancellationToken);
+        await db.Accounts.ExecuteDeleteAsync(cancellationToken);
+        await db.Users.ExecuteDeleteAsync(cancellationToken);
+        await db.Products.ExecuteDeleteAsync(cancellationToken);
+        await db.Billers.ExecuteDeleteAsync(cancellationToken);
 
         Type[] identityTables =
         [
@@ -32,17 +36,17 @@ public static class SeedReset
             typeof(Account), typeof(User), typeof(Product), typeof(Biller),
         ];
         foreach (var entity in identityTables)
-            Reseed(db, entity);
+            await ReseedAsync(db, entity, cancellationToken);
 
         db.ChangeTracker.Clear();
         SeedData.Apply(db);
 
-        transaction.Commit();
+        await transaction.CommitAsync(cancellationToken);
     }
 
     // Table names come from the EF model, never from input. RESEED 0 makes the next row 1 only on a table
     // that has held rows; on a table that never had one it would make the next row 0, so such a table is skipped.
-    private static void Reseed(WalletDbContext db, Type entity)
+    private static async Task ReseedAsync(WalletDbContext db, Type entity, CancellationToken cancellationToken)
     {
         var entityType = db.Model.FindEntityType(entity)
             ?? throw new InvalidOperationException($"{entity.Name} is not in the wallet model.");
@@ -53,6 +57,6 @@ public static class SeedReset
         var sql = string.Concat(
             "IF EXISTS (SELECT 1 FROM sys.identity_columns WHERE object_id = OBJECT_ID(N'", name, "') AND last_value IS NOT NULL) ",
             "DBCC CHECKIDENT ('", name, "', RESEED, 0) WITH NO_INFOMSGS;");
-        db.Database.ExecuteSqlRaw(sql);
+        await db.Database.ExecuteSqlRawAsync(sql, cancellationToken);
     }
 }

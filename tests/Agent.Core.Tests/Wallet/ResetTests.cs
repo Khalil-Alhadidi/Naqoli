@@ -14,6 +14,9 @@ public class ResetTests(WalletApiFixture fixture)
 {
     private const string HammoudiPhone = "07700001004";
 
+    // The demo user's default account. In the seed, account ids equal user ids.
+    private const int DemoAccountId = 1;
+
     private static CancellationToken Token => TestContext.Current.CancellationToken;
 
     [Fact]
@@ -32,8 +35,9 @@ public class ResetTests(WalletApiFixture fixture)
         for (var attempt = 1; attempt <= 3; attempt++)
         {
             var wrong = await PostAsync($"r-wrong-{attempt}",
-                new PaymentRequest(2, "transfer", 1_100_000, null, SeedData.DemoUserId, null, null, "9999"));
+                new PaymentRequest(2, "transfer", 1_100_000, null, DemoAccountId, null, null, "9999"));
             Assert.Equal(HttpStatusCode.UnprocessableEntity, wrong.StatusCode);
+            Assert.Equal("pin_invalid", (await wrong.ReadProblemAsync(Token)).Code());
         }
 
         Assert.NotEqual(before, await SnapshotAsync());

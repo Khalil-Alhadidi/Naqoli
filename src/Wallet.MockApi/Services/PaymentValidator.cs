@@ -11,6 +11,7 @@ namespace Wallet.MockApi.Services;
 public static class PaymentErrors
 {
     public const string MissingIdempotencyKey = "missing_idempotency_key";
+    public const string InvalidIdempotencyKey = "invalid_idempotency_key";
     public const string InvalidType = "invalid_type";
     public const string UnknownUser = "unknown_user";
     public const string UnknownRecipient = "unknown_recipient";

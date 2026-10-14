@@ -3,10 +3,12 @@
 # Requests for the mock wallet, against the frozen seed (data/seed/README.md). The contract is docs/wallet-api.md.
 # User 1 is the demo user; 07700001004 is Hammoudi (user 4); bill account 1 is user 1's home electricity; product 1 is Zain credit 5,000.
 # Change @idempotencyKey before each new payment: a used key replays the stored outcome instead of paying again.
+# Keys are 1 to 64 characters of A-Z, a-z, 0-9, _ and -; anything else is 400 invalid_idempotency_key.
 @idempotencyKey = http-demo-001
 
-# In Development with no Wallet:AdminKey set, the /admin routes need no key. With a key set, add this header to them:
-# X-Wallet-Admin-Key: <your key>
+# Every /admin request carries the X-Wallet-Admin-Key header. In Development with no Wallet:AdminKey set, any non-empty
+# value is accepted (the header is there so a browser must preflight). With a key set, put the key here instead.
+@adminKey = dev
 
 ### Health
 GET {{Wallet.MockApi_HostAddress}}/health
@@ -30,7 +32,7 @@ GET {{Wallet.MockApi_HostAddress}}/users/1/balance
 GET {{Wallet.MockApi_HostAddress}}/users/1/history?to=07700001004&take=10
 
 ### Store catalogue: Zain credit cards
-GET {{Wallet.MockApi_HostAddress}}/store/products?provider=Zain&type=Credit
+GET {{Wallet.MockApi_HostAddress}}/store/products?provider=Zain&type=credit
 
 ### Orders of user 1
 GET {{Wallet.MockApi_HostAddress}}/users/1/orders
@@ -95,10 +97,12 @@ GET {{Wallet.MockApi_HostAddress}}/transactions/by-key/{{idempotencyKey}}
 
 ### Current fault switch
 GET {{Wallet.MockApi_HostAddress}}/admin/faults
+X-Wallet-Admin-Key: {{adminKey}}
 
 ### Fault: the next execute waits 300 ms, then runs normally
 POST {{Wallet.MockApi_HostAddress}}/admin/faults
 Content-Type: application/json
+X-Wallet-Admin-Key: {{adminKey}}
 
 {
   "mode": "slow",
@@ -109,6 +113,7 @@ Content-Type: application/json
 ### Fault: the next execute commits, then hangs for the configured delay (look it up by key meanwhile)
 POST {{Wallet.MockApi_HostAddress}}/admin/faults
 Content-Type: application/json
+X-Wallet-Admin-Key: {{adminKey}}
 
 {
   "mode": "timeoutAfterExecute",
@@ -118,6 +123,7 @@ Content-Type: application/json
 ### Clear the fault switch
 POST {{Wallet.MockApi_HostAddress}}/admin/faults
 Content-Type: application/json
+X-Wallet-Admin-Key: {{adminKey}}
 
 {
   "mode": "none"
@@ -125,3 +131,4 @@ Content-Type: application/json
 
 ### Reset: restore the seed exactly and clear faults
 POST {{Wallet.MockApi_HostAddress}}/admin/reset
+X-Wallet-Admin-Key: {{adminKey}}

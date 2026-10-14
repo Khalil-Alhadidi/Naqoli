@@ -3,6 +3,7 @@ using System.Net;
 using System.Net.Http.Json;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Wallet.MockApi;
 using Wallet.MockApi.Contracts;
 using Wallet.MockApi.Data;
 
@@ -16,6 +17,9 @@ public class FaultTests(WalletApiFixture fixture)
     private const int HammoudiId = 4;
     private const long DemoSeedBalance = 300_000;
     private const long HammoudiSeedBalance = 80_000;
+
+    // At least 16 characters (WalletOptions.MinAdminKeyLength). A test value, not a secret.
+    private const string AdminTestKey = "test-admin-key-0123456789";
 
     private static CancellationToken Token => TestContext.Current.CancellationToken;
 
@@ -151,7 +155,7 @@ public class FaultTests(WalletApiFixture fixture)
         await using var keyed = new WebApplicationFactory<Program>().WithWebHostBuilder(host =>
         {
             host.UseSetting("ConnectionStrings:Wallet", fixture.TestConnectionString);
-            host.UseSetting("Wallet:AdminKey", "test-key");
+            host.UseSetting("Wallet:AdminKey", AdminTestKey);
         });
         using var client = keyed.CreateClient();
 
@@ -164,7 +168,7 @@ public class FaultTests(WalletApiFixture fixture)
         Assert.Equal(HttpStatusCode.Forbidden, (await client.SendAsync(wrong, Token)).StatusCode);
 
         using var right = new HttpRequestMessage(HttpMethod.Get, "/admin/faults");
-        right.Headers.Add("X-Wallet-Admin-Key", "test-key");
+        right.Headers.Add("X-Wallet-Admin-Key", AdminTestKey);
         Assert.Equal(HttpStatusCode.OK, (await client.SendAsync(right, Token)).StatusCode);
 
         // Every admin route is behind the key, the reset included.
@@ -172,6 +176,45 @@ public class FaultTests(WalletApiFixture fixture)
         Assert.Equal(HttpStatusCode.Forbidden, reset.StatusCode);
         var setFault = await client.PostAsJsonAsync("/admin/faults", new FaultRequest("error", null), Token);
         Assert.Equal(HttpStatusCode.Forbidden, setFault.StatusCode);
+    }
+
+    [Fact]
+    public async Task AdminIsClosedOutsideDevelopmentWithoutKey()
+    {
+        Assert.SkipUnless(fixture.DatabaseAvailable, fixture.SkipReason);
+
+        await using var production = new WebApplicationFactory<Program>().WithWebHostBuilder(host =>
+        {
+            host.UseEnvironment("Production");
+            host.UseSetting("ConnectionStrings:Wallet", fixture.TestConnectionString);
+            host.UseSetting("Wallet:AdminKey", string.Empty);
+        });
+        using var client = production.CreateClient();
+        client.DefaultRequestHeaders.Add(AdminKeyFilter.HeaderName, "any-value");
+
+        // Closed on every admin route, even with the header: outside Development only a configured key opens them.
+        var faults = await client.GetAsync("/admin/faults", Token);
+        Assert.Equal(HttpStatusCode.Forbidden, faults.StatusCode);
+        Assert.Equal("admin_key_required", (await faults.ReadProblemAsync(Token)).Code());
+        Assert.Equal(HttpStatusCode.Forbidden, (await client.PostAsJsonAsync("/admin/faults", new FaultRequest("error", null), Token)).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await client.PostAsync("/admin/reset", null, Token)).StatusCode);
+    }
+
+    [Fact]
+    public async Task AdminNeedsTheHeaderInDevelopmentWithoutKey()
+    {
+        Assert.SkipUnless(fixture.DatabaseAvailable, fixture.SkipReason);
+        await fixture.ResetAsync();
+
+        // A client without the header, as a web page's plain fetch would be: refused, so nothing is reset.
+        using var bare = fixture.CreateClient();
+        var reset = await bare.PostAsync("/admin/reset", null, Token);
+        Assert.Equal(HttpStatusCode.Forbidden, reset.StatusCode);
+        Assert.Equal("admin_key_required", (await reset.ReadProblemAsync(Token)).Code());
+        Assert.Equal(HttpStatusCode.Forbidden, (await bare.GetAsync("/admin/faults", Token)).StatusCode);
+
+        // The fixture's client sends the header with an arbitrary value, and is let in.
+        Assert.Equal(HttpStatusCode.OK, (await fixture.Client.GetAsync("/admin/faults", Token)).StatusCode);
     }
 
     private async Task<FaultState> SetFaultAsync(FaultRequest request)

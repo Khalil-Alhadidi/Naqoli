@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Wallet.MockApi;
 using Wallet.MockApi.Data;
 
 namespace Agent.Core.Tests.Wallet;
@@ -19,6 +20,9 @@ public sealed class WalletApiFixture : IAsyncLifetime
     public const string DefaultConnectionString =
         "Server=localhost;Database=ZainCashWallet_Test;Trusted_Connection=True;TrustServerCertificate=True";
 
+    /// <summary>The value <see cref="Client"/> sends in <c>X-Wallet-Admin-Key</c>; any non-empty value opens <c>/admin</c> in Development.</summary>
+    public const string DevelopmentAdminHeaderValue = "tests";
+
     private const int ProbeTimeoutSeconds = 3;
 
     private WebApplicationFactory<Program>? factory;
@@ -31,7 +35,10 @@ public sealed class WalletApiFixture : IAsyncLifetime
 
     public string SkipReason { get; private set; } = string.Empty;
 
-    /// <summary>A client of the API under test. Only valid when <see cref="DatabaseAvailable"/> is true.</summary>
+    /// <summary>
+    /// A client of the API under test, sending the <c>X-Wallet-Admin-Key</c> header on every request. Only valid when
+    /// <see cref="DatabaseAvailable"/> is true.
+    /// </summary>
     public HttpClient Client => client ?? throw new InvalidOperationException("The wallet API is not running. " + SkipReason);
 
     private static bool DatabaseRequired => Environment.GetEnvironmentVariable("ZAINCASH_TEST_SQL") == "1";
@@ -59,6 +66,7 @@ public sealed class WalletApiFixture : IAsyncLifetime
         factory = new WebApplicationFactory<Program>().WithWebHostBuilder(host =>
         {
             host.UseSetting("ConnectionStrings:Wallet", TestConnectionString);
+            // No admin key (empty overrides any key in user secrets and means none): the Development rule applies.
             host.UseSetting("Wallet:AdminKey", string.Empty);
         });
 
@@ -80,6 +88,9 @@ public sealed class WalletApiFixture : IAsyncLifetime
         }
 
         client = factory.CreateClient();
+
+        // In Development with no admin key, the /admin routes still need the header, with any value.
+        client.DefaultRequestHeaders.Add(AdminKeyFilter.HeaderName, DevelopmentAdminHeaderValue);
         DatabaseAvailable = true;
     }
 
@@ -90,7 +101,10 @@ public sealed class WalletApiFixture : IAsyncLifetime
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
 
-    /// <summary>A new client of the API under test, for tests that need their own timeout. The caller disposes it.</summary>
+    /// <summary>
+    /// A new client of the API under test, for tests that need their own timeout. It sends no admin header.
+    /// The caller disposes it.
+    /// </summary>
     public HttpClient CreateClient()
         => (factory ?? throw new InvalidOperationException("The wallet API is not running. " + SkipReason)).CreateClient();
 

@@ -35,7 +35,7 @@ public class QuoteTests(WalletApiFixture fixture)
         Assert.True(quote.Sufficient);
         Assert.False(quote.PinRequired);
         Assert.Equal(HammoudiPhone, quote.RecipientPhone);
-        Assert.Equal("محمود كريم جاسم", quote.RecipientName);
+        Assert.Equal(SeedStrings.User4RegisteredName, quote.RecipientName);
 
         // A quote moves no money.
         var balance = await fixture.Client.GetFromJsonAsync<BalanceResponse>($"/users/{SeedData.DemoUserId}/balance", Token);

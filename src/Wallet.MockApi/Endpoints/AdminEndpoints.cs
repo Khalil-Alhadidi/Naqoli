@@ -20,9 +20,6 @@ public static class AdminErrors
 /// </summary>
 public static class AdminEndpoints
 {
-    /// <summary>The longest delay a fault may hold a response, as for <see cref="WalletOptions.FaultDelayMs"/>.</summary>
-    public const int MaxFaultDelayMs = 600_000;
-
     public static IEndpointRouteBuilder MapAdminEndpoints(this IEndpointRouteBuilder app)
     {
         ArgumentNullException.ThrowIfNull(app);
@@ -48,7 +45,7 @@ public static class AdminEndpoints
     {
         if (!FaultModes.TryParse(request.Mode, out var mode))
             return WalletProblems.Create(StatusCodes.Status422UnprocessableEntity, AdminErrors.InvalidFaultMode);
-        if (request.DelayMs is < 0 or > MaxFaultDelayMs)
+        if (request.DelayMs is < 0 or > WalletOptions.MaxFaultDelayMs)
             return WalletProblems.Create(StatusCodes.Status422UnprocessableEntity, AdminErrors.InvalidFaultDelay);
 
         return TypedResults.Ok(faults.Set(mode, request.DelayMs, request.Once).ToState());
@@ -63,7 +60,7 @@ public static class AdminEndpoints
     {
         using (await gate.EnterExclusiveAsync(cancellationToken))
         {
-            SeedReset.Reset(db);
+            await SeedReset.ResetAsync(db, cancellationToken);
             faults.Set(FaultMode.None, null, once: false);
 
             return TypedResults.Ok(new ResetResponse(

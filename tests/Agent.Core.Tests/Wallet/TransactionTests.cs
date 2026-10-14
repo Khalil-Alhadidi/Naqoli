@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Wallet.MockApi.Contracts;
 using Wallet.MockApi.Data;
+using Wallet.MockApi.Data.Entities;
 
 namespace Agent.Core.Tests.Wallet;
 
@@ -12,6 +13,9 @@ public class TransactionTests(WalletApiFixture fixture)
 {
     private const string HammoudiPhone = "07700001004";
     private const int HammoudiId = 4;
+
+    // The demo user's default account. In the seed, account ids equal user ids.
+    private const int DemoAccountId = 1;
     private const string SeedPin = "1234";
     private const int ConcurrencyRounds = 3;
 
@@ -32,11 +36,32 @@ public class TransactionTests(WalletApiFixture fixture)
         Assert.Equal(HttpStatusCode.BadRequest, missing.StatusCode);
         Assert.Equal("missing_idempotency_key", (await missing.ReadProblemAsync(Token)).Code());
 
-        var tooLong = await PostAsync(new string('k', 65), SendFiftyThousandToHammoudi);
-        Assert.Equal(HttpStatusCode.BadRequest, tooLong.StatusCode);
-        Assert.Equal("missing_idempotency_key", (await tooLong.ReadProblemAsync(Token)).Code());
+        var blank = await PostAsync("   ", SendFiftyThousandToHammoudi);
+        Assert.Equal(HttpStatusCode.BadRequest, blank.StatusCode);
+        Assert.Equal("missing_idempotency_key", (await blank.ReadProblemAsync(Token)).Code());
 
         Assert.Equal(300_000, await BalanceAsync(SeedData.DemoUserId));
+    }
+
+    [Theory]
+    [InlineData("has space")]
+    [InlineData("kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk")]
+    [InlineData("dot.key")]
+    public async Task MalformedKeyIs400(string key)
+    {
+        Assert.SkipUnless(fixture.DatabaseAvailable, fixture.SkipReason);
+        await fixture.ResetAsync();
+
+        var response = await PostAsync(key, SendFiftyThousandToHammoudi);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal("invalid_idempotency_key", (await response.ReadProblemAsync(Token)).Code());
+        Assert.Equal(300_000, await BalanceAsync(SeedData.DemoUserId));
+
+        // By-key applies the same format: a malformed key is simply unknown.
+        var lookup = await fixture.Client.GetAsync($"/transactions/by-key/{Uri.EscapeDataString(key)}", Token);
+        Assert.Equal(HttpStatusCode.NotFound, lookup.StatusCode);
+        Assert.Equal("unknown_key", (await lookup.ReadProblemAsync(Token)).Code());
     }
 
     [Fact]
@@ -115,7 +140,7 @@ public class TransactionTests(WalletApiFixture fixture)
         Assert.SkipUnless(fixture.DatabaseAvailable, fixture.SkipReason);
         await fixture.ResetAsync();
 
-        var request = Transfer(3, 1_000, toAccountId: SeedData.DemoUserId);
+        var request = Transfer(3, 1_000, toAccountId: DemoAccountId);
         var response = await PostAsync("t-empty", request);
 
         Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
@@ -126,6 +151,7 @@ public class TransactionTests(WalletApiFixture fixture)
         // The failure is stored against the key, and a retry gets the same answer without executing.
         var lookup = await fixture.Client.GetFromJsonAsync<TransactionResponse>("/transactions/by-key/t-empty", Token);
         Assert.Equal("failed", lookup!.Status);
+        Assert.Equal("insufficient_funds", lookup.ErrorCode);
 
         var replay = await PostAsync("t-empty", request);
         Assert.Equal(HttpStatusCode.UnprocessableEntity, replay.StatusCode);
@@ -154,6 +180,31 @@ public class TransactionTests(WalletApiFixture fixture)
 
             Assert.Equal(3_000, await BalanceAsync(7));
             Assert.Equal(16_000, await BalanceAsync(8));
+        }
+    }
+
+    [Fact]
+    public async Task TwoConcurrentPaymentsOfOneBillPayOnce()
+    {
+        Assert.SkipUnless(fixture.DatabaseAvailable, fixture.SkipReason);
+
+        for (var round = 0; round < ConcurrencyRounds; round++)
+        {
+            await fixture.ResetAsync();
+
+            // Bill account 1 has 45,000 due. Two payments with different keys race; the bill is cleared once.
+            var request = new PaymentRequest(SeedData.DemoUserId, "bill", null, null, null, 1, null, null);
+            var responses = await Task.WhenAll(
+                PostAsync($"bill-a-{round}", request),
+                PostAsync($"bill-b-{round}", request));
+
+            Assert.Single(responses, r => r.StatusCode == HttpStatusCode.Created);
+            var refused = Assert.Single(responses, r => r.StatusCode == HttpStatusCode.UnprocessableEntity);
+            Assert.Equal("nothing_due", (await refused.ReadProblemAsync(Token)).Code());
+
+            Assert.Equal(300_000 - 45_000 - 500, await BalanceAsync(SeedData.DemoUserId));
+            var bills = await fixture.Client.GetFromJsonAsync<List<BillItem>>($"/users/{SeedData.DemoUserId}/bills", Token);
+            Assert.Equal(0, Assert.Single(bills!, b => b.BillAccountId == 1).AmountDueIqd);
         }
     }
 
@@ -219,12 +270,12 @@ public class TransactionTests(WalletApiFixture fixture)
         await fixture.ResetAsync();
 
         // Sara holds 1,250,000; 1,100,000 plus the fee is above the 1,000,000 PIN threshold.
-        var withoutPin = await PostAsync("t-pin-none", Transfer(2, 1_100_000, toAccountId: SeedData.DemoUserId));
+        var withoutPin = await PostAsync("t-pin-none", Transfer(2, 1_100_000, toAccountId: DemoAccountId));
         Assert.Equal(HttpStatusCode.UnprocessableEntity, withoutPin.StatusCode);
         Assert.Equal("pin_required", (await withoutPin.ReadProblemAsync(Token)).Code());
         Assert.Equal(1_250_000, await BalanceAsync(2));
 
-        var withPin = await PostAsync("t-pin-ok", Transfer(2, 1_100_000, toAccountId: SeedData.DemoUserId, pin: SeedPin));
+        var withPin = await PostAsync("t-pin-ok", Transfer(2, 1_100_000, toAccountId: DemoAccountId, pin: SeedPin));
         Assert.Equal(HttpStatusCode.Created, withPin.StatusCode);
         Assert.Equal(149_000, await BalanceAsync(2));
         Assert.Equal(1_400_000, await BalanceAsync(SeedData.DemoUserId));
@@ -238,7 +289,7 @@ public class TransactionTests(WalletApiFixture fixture)
 
         for (var attempt = 1; attempt <= 3; attempt++)
         {
-            var wrong = await PostAsync($"t-wrong-{attempt}", Transfer(2, 1_100_000, toAccountId: SeedData.DemoUserId, pin: "9999"));
+            var wrong = await PostAsync($"t-wrong-{attempt}", Transfer(2, 1_100_000, toAccountId: DemoAccountId, pin: "9999"));
 
             Assert.Equal(HttpStatusCode.UnprocessableEntity, wrong.StatusCode);
             var problem = await wrong.ReadProblemAsync(Token);
@@ -247,7 +298,7 @@ public class TransactionTests(WalletApiFixture fixture)
         }
 
         // Once locked, even the right PIN is refused, and nothing moves.
-        var locked = await PostAsync("t-locked", Transfer(2, 1_100_000, toAccountId: SeedData.DemoUserId, pin: SeedPin));
+        var locked = await PostAsync("t-locked", Transfer(2, 1_100_000, toAccountId: DemoAccountId, pin: SeedPin));
         Assert.Equal(HttpStatusCode.Locked, locked.StatusCode);
         Assert.Equal("pin_locked", (await locked.ReadProblemAsync(Token)).Code());
         Assert.Equal(1_250_000, await BalanceAsync(2));
@@ -257,6 +308,108 @@ public class TransactionTests(WalletApiFixture fixture)
         var sara = await db.Users.AsNoTracking().SingleAsync(u => u.Id == 2, Token);
         Assert.True(sara.PinLocked);
         Assert.Equal(3, sara.PinFailedAttempts);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(2)]
+    public async Task ConcurrentWrongPinsCannotExceedTheLockout(int priorWrongPins)
+    {
+        Assert.SkipUnless(fixture.DatabaseAvailable, fixture.SkipReason);
+        const int maxPinAttempts = 3;
+        const int wrongGuesses = 20;
+        const long saraSeedBalance = 1_250_000;
+        const long saraAfterOnePayment = saraSeedBalance - 1_100_000 - 1_000;
+        var slotsLeft = maxPinAttempts - priorWrongPins;
+
+        for (var round = 0; round < ConcurrencyRounds; round++)
+        {
+            await fixture.ResetAsync();
+
+            // Wrong PINs entered one at a time first, so the race starts with fewer slots left.
+            for (var prior = 0; prior < priorWrongPins; prior++)
+            {
+                var wrong = await PostAsync($"pin-race-{round}-prior-{prior}", Transfer(2, 1_100_000, toAccountId: DemoAccountId, pin: "9999"));
+                Assert.Equal("pin_invalid", (await wrong.ReadProblemAsync(Token)).Code());
+            }
+
+            // Sara (user 2) sends 1,100,000, above the PIN threshold: 20 wrong PINs and the right one, all at once.
+            var calls = Enumerable.Range(0, wrongGuesses)
+                .Select(i => PostAsync($"pin-race-{round}-wrong-{i}", Transfer(2, 1_100_000, toAccountId: DemoAccountId, pin: "9999")))
+                .Append(PostAsync($"pin-race-{round}-right", Transfer(2, 1_100_000, toAccountId: DemoAccountId, pin: SeedPin)))
+                .ToList();
+            var responses = await Task.WhenAll(calls);
+
+            var attemptsLeft = new List<long>();
+            foreach (var response in responses.Take(wrongGuesses))
+            {
+                var problem = await response.ReadProblemAsync(Token);
+                if (response.StatusCode == HttpStatusCode.Locked)
+                {
+                    Assert.Equal("pin_locked", problem.Code());
+                    continue;
+                }
+
+                Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+                Assert.Equal("pin_invalid", problem.Code());
+                attemptsLeft.Add(problem.Long("attemptsLeft"));
+            }
+
+            // The right PIN either won a reserved slot and paid, or found the PIN locked. Nothing else.
+            var rightWon = responses[wrongGuesses].StatusCode == HttpStatusCode.Created;
+            if (!rightWon)
+                Assert.Equal(HttpStatusCode.Locked, responses[wrongGuesses].StatusCode);
+
+            await using var scope = fixture.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<WalletDbContext>();
+            var sara = await db.Users.AsNoTracking().SingleAsync(u => u.Id == 2, Token);
+            var report = $"attemptsLeft [{string.Join(", ", attemptsLeft.Order())}], the right PIN {(rightWon ? "paid" : "was locked out")}, "
+                + $"PinFailedAttempts {sara.PinFailedAttempts}, PinLocked {sara.PinLocked}";
+
+            // Never more counted attempts than the limit.
+            Assert.True(sara.PinFailedAttempts <= maxPinAttempts, report);
+
+            if (!rightWon)
+            {
+                // Locked out: the wrong PINs checked are exactly the slots that were left, each attempt number once,
+                // and the PIN is locked.
+                Assert.True(attemptsLeft.Order().SequenceEqual(Enumerable.Range(0, slotsLeft).Select(n => (long)n)), report);
+                Assert.True(sara.PinLocked, report);
+            }
+            else if (slotsLeft == 1)
+            {
+                // The right PIN paid only by holding the last slot: no wrong PIN was checked before it, it cleared its
+                // own lock, and any wrong PIN checked after it counts again from the top (2, then 1, then 0 left).
+                var expected = Enumerable.Range(1, attemptsLeft.Count).Select(n => (long)(maxPinAttempts - n));
+                Assert.True(attemptsLeft.OrderDescending().SequenceEqual(expected), report);
+            }
+            else
+            {
+                // It held one of the slots: fewer than the slots left were checked before it, at most the limit after it.
+                Assert.True(attemptsLeft.Count <= slotsLeft - 1 + maxPinAttempts, report);
+            }
+
+            if (sara.PinLocked)
+            {
+                // Locked: even the right PIN is refused now.
+                var final = await PostAsync($"pin-race-{round}-final", Transfer(2, 1_100_000, toAccountId: DemoAccountId, pin: SeedPin));
+                Assert.Equal(HttpStatusCode.Locked, final.StatusCode);
+                Assert.Equal("pin_locked", (await final.ReadProblemAsync(Token)).Code());
+            }
+            else
+            {
+                // Only a right PIN unlocks: here it held the last slot and the wrong PINs that came while it was checked
+                // were refused unchecked (423).
+                Assert.True(rightWon, report);
+            }
+
+            // Money moved at most once, and only if the right PIN won.
+            var keyPrefix = $"pin-race-{round}-";
+            var done = await db.Transactions.CountAsync(
+                t => t.IdempotencyKey.StartsWith(keyPrefix) && t.Status == TransactionStatus.Done, Token);
+            Assert.Equal(rightWon ? 1 : 0, done);
+            Assert.Equal(rightWon ? saraAfterOnePayment : saraSeedBalance, await BalanceAsync(2));
+        }
     }
 
     [Fact]

@@ -31,7 +31,7 @@ public class SeedApplyTests(WalletApiFixture fixture)
             db.Accounts.Where(a => a.UserId == SeedData.DemoUserId).ExecuteUpdate(s => s.SetProperty(a => a.BalanceIqd, 1L));
             db.Contacts.Where(c => c.OwnerUserId == SeedData.DemoUserId).ExecuteDelete();
 
-            SeedReset.Reset(db);
+            await SeedReset.ResetAsync(db, TestContext.Current.CancellationToken);
             db.ChangeTracker.Clear();
 
             Assert.Equal(12, db.Users.Count());

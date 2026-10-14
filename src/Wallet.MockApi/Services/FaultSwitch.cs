@@ -84,11 +84,17 @@ public sealed class FaultSwitch(IOptionsMonitor<WalletOptions> options)
             return current ??= Cleared();
     }
 
-    /// <summary>Sets the fault. A null <paramref name="delayMs"/> takes <see cref="WalletOptions.FaultDelayMs"/>.</summary>
+    /// <summary>
+    /// Sets the fault. A null <paramref name="delayMs"/> takes <see cref="WalletOptions.FaultDelayMs"/>; any other
+    /// value must be 0 to <see cref="WalletOptions.MaxFaultDelayMs"/>.
+    /// </summary>
     public FaultSetting Set(FaultMode mode, int? delayMs, bool once)
     {
-        if (delayMs is < 0)
-            throw new ArgumentOutOfRangeException(nameof(delayMs), delayMs, "The delay cannot be negative.");
+        if (delayMs is < 0 or > WalletOptions.MaxFaultDelayMs)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(delayMs), delayMs, $"The delay must be 0 to {WalletOptions.MaxFaultDelayMs} ms.");
+        }
 
         var setting = new FaultSetting(mode, delayMs ?? options.CurrentValue.FaultDelayMs, once && mode != FaultMode.None);
         lock (sync)

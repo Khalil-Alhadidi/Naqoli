@@ -1,4 +1,5 @@
 using System.Data;
+using System.Text.RegularExpressions;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
@@ -23,10 +24,11 @@ public abstract record ExecuteResult
 }
 
 /// <summary>
-/// The only code in the mock wallet that moves money. One idempotency key executes at most once: the unique index
-/// on <see cref="Transaction.IdempotencyKey"/> is the guarantee, and a violation of it returns the stored outcome.
-/// A balance never goes below zero: the debit is one conditional update. The fault switch applies here and only here,
-/// and every payment holds the <see cref="WalletGate"/> shared, so a reset never runs in the middle of one.
+/// The only code in the mock wallet that moves money. One idempotency key executes at most once: a known key replays
+/// its stored outcome before anything else is checked, and the unique index on <see cref="Transaction.IdempotencyKey"/>
+/// settles two calls with the same key that arrive together. A balance never goes below zero: the debit is one
+/// conditional update. The fault switch applies here and only here, and every payment holds the
+/// <see cref="WalletGate"/> shared, so a reset never runs in the middle of one.
 /// </summary>
 public sealed partial class TransactionService(
     WalletDbContext db,
@@ -43,10 +45,18 @@ public sealed partial class TransactionService(
     private const int SqlDuplicateKeyRow = 2601;
     private const int SqlUniqueConstraint = 2627;
 
+    // Generous: each failed try means another call changed the same user row in between.
+    private const int MaxPinReserveTries = 50;
+
     /// <summary>
-    /// Applies the injected fault, if any, then validates, checks the PIN, records the key, and moves the money in one
-    /// database transaction. A request refused by validation or the PIN rules still returns the stored outcome when its
-    /// key was used before, so a retry never depends on the body or on data the first call changed.
+    /// True when <paramref name="key"/> is 1 to <see cref="MaxIdempotencyKeyLength"/> characters of ASCII letters,
+    /// digits, <c>_</c> and <c>-</c> (a GUID in "N" or "D" form fits).
+    /// </summary>
+    public static bool IsValidIdempotencyKey(string? key) => key is not null && IdempotencyKeyFormat().IsMatch(key);
+
+    /// <summary>
+    /// Applies the injected fault, if any; then, inside the gate, replays a known key, or validates, checks the PIN,
+    /// records the key and moves the money in one database transaction.
     /// </summary>
     /// <remarks>
     /// Fault delays sit outside the gate, so a hanging request never holds up a reset. A timeout after execute
@@ -55,7 +65,8 @@ public sealed partial class TransactionService(
     /// </remarks>
     public async Task<ExecuteResult> ExecuteAsync(string idempotencyKey, PaymentRequest request, CancellationToken cancellationToken)
     {
-        ArgumentException.ThrowIfNullOrEmpty(idempotencyKey);
+        if (!IsValidIdempotencyKey(idempotencyKey))
+            throw new ArgumentException("The idempotency key is missing or malformed.", nameof(idempotencyKey));
         ArgumentNullException.ThrowIfNull(request);
 
         var fault = faults.Take();
@@ -97,6 +108,13 @@ public sealed partial class TransactionService(
 
     private async Task<ExecuteResult> ExecuteCoreAsync(string idempotencyKey, PaymentRequest request, CancellationToken cancellationToken)
     {
+        // A known key is answered from its record at once: no validation, no PIN check (so no attempt is counted
+        // and no user row changes), no insert. A retry never depends on the body or on data the first call changed.
+        if (await LoadAsync(idempotencyKey, cancellationToken) is { } existing)
+            return await ReplayAsync(existing, cancellationToken);
+
+        // The key was unknown a moment ago; a call with the same key may still commit while this one is checked, so
+        // a refusal looks the key up once more before it is returned.
         var check = await validator.ValidateAsync(request, cancellationToken);
         if (!check.IsValid)
             return await RefuseUnlessKnownAsync(idempotencyKey, check.Refusal, cancellationToken);
@@ -119,50 +137,77 @@ public sealed partial class TransactionService(
         return row is null ? null : await ToResponseAsync(row, cancellationToken);
     }
 
+    /// <summary>
+    /// Reserves an attempt before the slow PBKDF2 check, so concurrent guesses cannot all see the PIN unlocked: at most
+    /// <see cref="WalletOptions.MaxPinAttempts"/> checks are counted before the lock, however many arrive together.
+    /// A right PIN gives its attempt back.
+    /// </summary>
     private async Task<ExecuteResult?> CheckPinAsync(string key, int userId, string? pin, CancellationToken cancellationToken)
     {
         if (pin is null)
             return await RefuseUnlessKnownAsync(key, PaymentRefusal.Unprocessable(PaymentErrors.PinRequired), cancellationToken);
 
-        var user = await db.Users.AsNoTracking()
-            .Where(u => u.Id == userId)
-            .Select(u => new { u.PinHash, u.PinLocked })
-            .SingleAsync(cancellationToken);
-
-        var locked = new PaymentRefusal(StatusCodes.Status423Locked, PaymentErrors.PinLocked);
-        if (user.PinLocked)
-            return await RefuseUnlessKnownAsync(key, locked, cancellationToken);
-
-        if (PinHasher.Verify(pin, user.PinHash))
+        var maxAttempts = options.Value.MaxPinAttempts;
+        var reservation = await ReservePinAttemptAsync(userId, maxAttempts, cancellationToken);
+        if (reservation is null)
         {
+            return await RefuseUnlessKnownAsync(
+                key, new PaymentRefusal(StatusCodes.Status423Locked, PaymentErrors.PinLocked), cancellationToken);
+        }
+
+        if (PinHasher.Verify(pin, reservation.PinHash))
+        {
+            // Reset the count. Clear the lock only when this attempt set it (it held the last slot); a lock that
+            // other wrong entries set after this reservation stands.
+            var lockedByThisAttempt = reservation.Attempts >= maxAttempts;
             await db.Users
-                .Where(u => u.Id == userId && u.PinFailedAttempts > 0 && !u.PinLocked)
-                .ExecuteUpdateAsync(s => s.SetProperty(u => u.PinFailedAttempts, 0), cancellationToken);
+                .Where(u => u.Id == userId && (!u.PinLocked || lockedByThisAttempt))
+                .ExecuteUpdateAsync(s => s
+                    .SetProperty(u => u.PinFailedAttempts, 0)
+                    .SetProperty(u => u.PinLocked, false),
+                    cancellationToken);
             return null;
         }
 
-        // A retry of a key that already ran is answered from the record, and does not cost an attempt.
-        if (await LoadAsync(key, cancellationToken) is { } existing)
-            return await ReplayAsync(existing, cancellationToken);
-
-        var maxAttempts = options.Value.MaxPinAttempts;
-        var counted = await db.Users
-            .Where(u => u.Id == userId && !u.PinLocked)
-            .ExecuteUpdateAsync(s => s
-                .SetProperty(u => u.PinFailedAttempts, u => u.PinFailedAttempts + 1)
-                .SetProperty(u => u.PinLocked, u => u.PinFailedAttempts + 1 >= maxAttempts),
-                cancellationToken);
-        if (counted == 0)
-            return new ExecuteResult.Refused(locked);
-
-        var attempts = await db.Users.AsNoTracking()
-            .Where(u => u.Id == userId)
-            .Select(u => u.PinFailedAttempts)
-            .SingleAsync(cancellationToken);
-        LogWrongPin(logger, userId, attempts);
-
+        LogWrongPin(logger, userId, reservation.Attempts);
         return new ExecuteResult.Refused(new PaymentRefusal(
-            StatusCodes.Status422UnprocessableEntity, PaymentErrors.PinInvalid, AttemptsLeft: Math.Max(0, maxAttempts - attempts)));
+            StatusCodes.Status422UnprocessableEntity,
+            PaymentErrors.PinInvalid,
+            AttemptsLeft: Math.Max(0, maxAttempts - reservation.Attempts)));
+    }
+
+    /// <summary>
+    /// Counts one attempt against the user, and locks the PIN when that attempt is the last allowed. The update is
+    /// conditional on the PIN being unlocked and on the count read just before (compare and swap), so the attempt
+    /// number it returns is exact under concurrency without a second read. Null when the PIN is locked.
+    /// </summary>
+    private async Task<PinReservation?> ReservePinAttemptAsync(int userId, int maxAttempts, CancellationToken cancellationToken)
+    {
+        for (var tries = 0; tries < MaxPinReserveTries; tries++)
+        {
+            var user = await db.Users.AsNoTracking()
+                .Where(u => u.Id == userId)
+                .Select(u => new { u.PinHash, u.PinFailedAttempts, u.PinLocked })
+                .SingleAsync(cancellationToken);
+            if (user.PinLocked)
+                return null;
+
+            var seen = user.PinFailedAttempts;
+            var attempts = seen + 1;
+            var lockNow = attempts >= maxAttempts;
+            var reserved = await db.Users
+                .Where(u => u.Id == userId && !u.PinLocked && u.PinFailedAttempts == seen)
+                .ExecuteUpdateAsync(s => s
+                    .SetProperty(u => u.PinFailedAttempts, attempts)
+                    .SetProperty(u => u.PinLocked, lockNow),
+                    cancellationToken);
+            if (reserved == 1)
+                return new PinReservation(user.PinHash, attempts);
+
+            // Another call changed the count or the lock between the read and the update: read again.
+        }
+
+        throw new InvalidOperationException($"Could not reserve a PIN attempt for user {userId}.");
     }
 
     private async Task<ExecuteResult> RunAsync(string key, PaymentPlan plan, CancellationToken cancellationToken)
@@ -204,29 +249,33 @@ public sealed partial class TransactionService(
         row.Reference = ReferenceGenerator.ForId(row.Id);
         await db.SaveChangesAsync(cancellationToken);
 
+        // From the debit on, the work runs to its commit without the request's token: a caller who disconnects
+        // cannot cancel the commit half-way. The outcome is stored either way and found by the key.
+        var toCommit = CancellationToken.None;
+
         // The balance floor: the debit happens only if the balance covers the total at this moment.
         var debited = await db.Accounts
             .Where(a => a.Id == plan.FromAccountId && a.BalanceIqd >= plan.TotalIqd)
-            .ExecuteUpdateAsync(s => s.SetProperty(a => a.BalanceIqd, a => a.BalanceIqd - plan.TotalIqd), cancellationToken);
+            .ExecuteUpdateAsync(s => s.SetProperty(a => a.BalanceIqd, a => a.BalanceIqd - plan.TotalIqd), toCommit);
         if (debited == 0)
-            return await FailAsync(transaction, row, PaymentErrors.InsufficientFunds, cancellationToken);
+            return await FailAsync(transaction, row, PaymentErrors.InsufficientFunds);
 
         string? code = null;
         switch (plan.Type)
         {
             case TransactionType.Transfer:
-                await CreditAsync(plan.ToAccountId!.Value, plan.AmountIqd, cancellationToken);
+                await CreditAsync(plan.ToAccountId!.Value, plan.AmountIqd, toCommit);
                 break;
 
             case TransactionType.Bill:
                 // Only the amount that was quoted is cleared, so two payments of one bill cannot both succeed.
                 var cleared = await db.BillAccounts
                     .Where(b => b.Id == plan.BillAccountId && b.AmountDueIqd == plan.AmountIqd)
-                    .ExecuteUpdateAsync(s => s.SetProperty(b => b.AmountDueIqd, 0L), cancellationToken);
+                    .ExecuteUpdateAsync(s => s.SetProperty(b => b.AmountDueIqd, 0L), toCommit);
                 if (cleared == 0)
                 {
-                    await CreditAsync(plan.FromAccountId, plan.TotalIqd, cancellationToken);
-                    return await FailAsync(transaction, row, PaymentErrors.NothingDue, cancellationToken);
+                    await CreditAsync(plan.FromAccountId, plan.TotalIqd, toCommit);
+                    return await FailAsync(transaction, row, PaymentErrors.NothingDue);
                 }
 
                 break;
@@ -246,9 +295,9 @@ public sealed partial class TransactionService(
 
         row.Status = TransactionStatus.Done;
         row.CompletedAt = clock.GetUtcNow();
-        await db.SaveChangesAsync(cancellationToken);
-        var balanceAfter = await BalanceAsync(plan.FromAccountId, cancellationToken);
-        await transaction.CommitAsync(cancellationToken);
+        await db.SaveChangesAsync(toCommit);
+        var balanceAfter = await BalanceAsync(plan.FromAccountId, toCommit);
+        await transaction.CommitAsync(toCommit);
 
         LogExecuted(logger, row.Id, row.Type, row.Status);
         return new ExecuteResult.Executed(ToResponse(row, balanceAfter, code));
@@ -263,15 +312,17 @@ public sealed partial class TransactionService(
             throw new InvalidOperationException($"Account {accountId} could not be credited.");
     }
 
-    /// <summary>Stores the failure against the key and commits it, so a retry gets the same answer.</summary>
-    private async Task<ExecuteResult> FailAsync(
-        IDbContextTransaction transaction, Transaction row, string errorCode, CancellationToken cancellationToken)
+    /// <summary>
+    /// Stores the failure against the key and commits it, so a retry gets the same answer. Runs after the debit was
+    /// tried, so it takes no cancellation token (see <see cref="RunAsync"/>).
+    /// </summary>
+    private async Task<ExecuteResult> FailAsync(IDbContextTransaction transaction, Transaction row, string errorCode)
     {
         row.Status = TransactionStatus.Failed;
         row.ErrorCode = errorCode;
         row.CompletedAt = clock.GetUtcNow();
-        await db.SaveChangesAsync(cancellationToken);
-        await transaction.CommitAsync(cancellationToken);
+        await db.SaveChangesAsync(CancellationToken.None);
+        await transaction.CommitAsync(CancellationToken.None);
 
         LogExecuted(logger, row.Id, row.Type, row.Status);
         return new ExecuteResult.Refused(StoredFailure(errorCode));
@@ -326,10 +377,17 @@ public sealed partial class TransactionService(
         row.TotalIqd,
         balanceAfterIqd,
         code,
-        row.CompletedAt ?? row.CreatedAt);
+        row.CompletedAt ?? row.CreatedAt,
+        row.Status == TransactionStatus.Failed ? row.ErrorCode : null);
 
     private static bool IsUniqueViolation(DbUpdateException exception)
         => exception.InnerException is SqlException { Number: SqlDuplicateKeyRow or SqlUniqueConstraint };
+
+    // Keep the upper bound equal to MaxIdempotencyKeyLength. \z, not $, so a trailing newline never matches.
+    [GeneratedRegex(@"^[A-Za-z0-9_-]{1,64}\z")]
+    private static partial Regex IdempotencyKeyFormat();
+
+    private sealed record PinReservation(string PinHash, int Attempts);
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Transaction {TransactionId} ({Type}) ended {Status}")]
     private static partial void LogExecuted(ILogger logger, int transactionId, TransactionType type, TransactionStatus status);
