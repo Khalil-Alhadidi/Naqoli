@@ -41,12 +41,13 @@ sequenceDiagram
 
 `Masker.Mask(text)` returns the masked text and a `MaskMap`.
 
-- A number is a run of 7 or more digits: ASCII, Arabic-Indic (U+0660 to U+0669) or Extended Arabic-Indic (U+06F0 to U+06F9). Spaces, dashes and dots between digits count inside the run, and a leading `+` belongs to it.
+- A number is a run of 7 or more digits: ASCII, Arabic-Indic (U+0660 to U+0669) or Extended Arabic-Indic (U+06F0 to U+06F9). Any separator between digits counts inside the run, and a leading `+` belongs to it. The separators are one set, `NumberSeparators`, shared with the phone rule (`PhoneNumbers`): Unicode whitespace (a no-break space, a tab, a line break), format characters (the bidi marks a phone keyboard inserts), `-`, `.`, `(` and `)`. A comma is not one, because it separates thousands in an amount.
 - Each run becomes `<NUM_1>`, `<NUM_2>`, ... in order of appearance. The map keeps each run exactly as typed.
 - Six digits or fewer are never masked (`150000`, and `1,000,000` with its commas). A seven-digit amount written without separators is masked; the amount slot is then empty and the agent asks for it ([failure-modes.md](failure-modes.md)).
 - Only the map of the message a token came from turns it back into the number. The conversation un-masks in one place, after the parse call: a `RecipientText` that is exactly a token of this map becomes the number as typed, and the orchestrator reads it as a phone number (rule 20). Any other token stays a token.
 - The parse call sees the masked text and the one-line pending note (`pending_card transfer`, `open_question which_amount`, or `none`), built by code from types and codes. It never sees a balance, a saved name or alias, a registered name, a purchase code, a PIN, or any earlier message.
 - The scripted parser masks its sentences the same way at load, so a scripted sentence may hold a real-looking number.
+- The Claude parser masks the text itself when a caller passes no map (`ParseContext.Map` null), so no caller can send a number to the model.
 
 ## The structure
 
@@ -75,7 +76,7 @@ The JSON schema sent with the call is exported from `ParsedRequestsDto` by `Json
 - Enum strings exact and lower case, in the sets above.
 - Texts at most 100 characters; a blank text is null.
 - `amount_value` finite, not below 0 (and below 1e28, so the conversion to decimal cannot overflow); `product_value` above 0.
-- `recipient_text` exactly one token of this message's map, or words with no run of 7 or more digits and no token the map does not hold. A number the user never typed cannot become a recipient.
+- `recipient_text` exactly one token of this message's map, or words with no run of 7 or more digits, nothing `PhoneNumbers.LooksLikeNumber` would take for a phone number (the same test the orchestrator uses), and no token the map does not hold. A number the user never typed cannot become a recipient.
 
 The parser adds two problems of its own: `json` (the reply is not the strict JSON) and `truncated` (the reply hit the output limit).
 
@@ -121,7 +122,7 @@ Its examples are the full-request sentences of the Example column of [matching-r
 | `...:Effort` | `low` (default); `low`, `medium`, `high`, `xhigh` or `max`. Sent as `output_config.effort` |
 | `...:MaxOutputTokens` | 1,500. The 5.5 models think by default, and thinking tokens count against this limit |
 | `...:Temperature` | Unset. Haiku 5.5 and Sonnet 5.5 answer a non-default temperature with HTTP 400, and Opus 5.5 answers any temperature with 400 |
-| `...:TimeoutSeconds` | 20. The SDK's own retries (429, 5xx, connection) run inside it |
+| `...:TimeoutSeconds` | 20. The Anthropic client never retries (`MaxRetries = 0`): one message is one request, and a 429 or 529 shows the handover message at once |
 | `...:InputPricePerMTok`, `...:OutputPricePerMTok` | USD per million tokens: haiku 0.10 and 0.50, sonnet 2 and 10, opus 4 and 20 |
 
 The defaults are in `src/Agent.Web/appsettings.json` and `src/Agent.Eval/appsettings.json`. With `claude`, the start checks the candidate (it exists, the provider is `anthropic`, the model id is set, the limits are above 0, the effort is a known level, the prices are not below 0) and the key. The console shows `Agent:Parser` and the `Model` section read-only. The screen journeys pin `scripted`.
@@ -147,6 +148,8 @@ The table is `LearningEntries` (migration `LearningLog`): `Id`, `At`, `UserId`, 
 - **What is written.** The conversation writes one row after every reply that is logged. The entry is `model_invalid_reply` with the field as detail when the structure was refused, otherwise what `LearningLogRule.EntryFor` returns ([agent-core.md](agent-core.md), the learning-log rule).
 - **What is stored.** `LearningLog.WriteAsync` masks the detail and the text once more before it stores them, and has no parameter for a PIN, a balance or a purchase code.
 - **What is graded.** `Conversation.LastLearningEntry` is the entry written for the last reply; the runner grades that.
+- **A typed PIN.** A run of four to six digits is not masked, so a PIN typed into the chat reaches the parse call and can be stored in `MaskedText`. The runner's PIN check scans the parse-call texts and the learning log, and the policy is open for Khalil ([failure-modes.md](failure-modes.md)).
+- **Retention.** Rows are kept with the user id and the masked words, with no limit yet. A retention rule is an open item for the learning-data view in milestone 7.
 
 ## Faults and failures
 

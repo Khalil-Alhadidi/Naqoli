@@ -252,7 +252,7 @@ The only endpoint that moves money. Header `Idempotency-Key` is required. A miss
 
 **Unknown outcomes.** Any 500 without a `code` extension, and any transport failure (timeout, dropped connection, no response), means the client does not know whether the money moved. The record goes to Checking, never to Failed (CLAUDE.md, rule 6). Settle it by resending the same body with the same key: it executes once or replays the stored outcome (201 or 200 means done, a stored 422 means failed, 409 means keep checking). `GET /transactions/by-key/{key}` may be used for display while checking, but its 404 is final only once the original call has definitely ended (see below).
 
-**A 5xx with a `code` means the wallet refused before writing; a bare 5xx means unknown** (ruling of 14 Oct 2026). On a first execute call, the agent reads a 5xx whose ProblemDetails carries a wallet `code` (`injected_error`, `injected_timeout`) as a refusal, like a 4xx: the card ends not done with `not_done_nothing_taken` and the code as detail, and the record leaves Pending once. A 5xx without `code`, with no body or with a body it cannot read, stays unknown (Checking). On a resend that settles a Checking record, a coded 5xx stays Checking too: the fault switch answers before the key lookup, so it says nothing about whether the original call was written.
+**A 5xx with a code that means nothing was written is a refusal; any other 5xx means unknown** (ruling of 14 Oct 2026, narrowed by the milestone 6 security review, M1). The 5xx codes that mean nothing was written are `injected_error` and `injected_timeout` (`WalletProblem.IsNothingWritten`). On a first execute call, the agent reads a 5xx with one of them as a refusal, like a 4xx: the card ends not done with `not_done_nothing_taken` and the code as detail, and the record leaves Pending once. A 5xx with any other code, without `code`, with no body or with a body it cannot read, stays unknown (Checking). On a resend that settles a Checking record, a coded 5xx stays Checking too: the fault switch answers before the key lookup, so it says nothing about whether the original call was written.
 
 `TransactionResponse`:
 
@@ -381,7 +381,7 @@ Every code is the `code` extension of a ProblemDetails. Source: `PaymentErrors` 
 | `invalid_fault_mode` | 422 | `POST /admin/faults` | Unknown mode name | |
 | `invalid_fault_delay` | 422 | `POST /admin/faults` | `delayMs` below 0 or above 600,000 | |
 
-A ProblemDetails without `code` comes from ASP.NET Core, not from the wallet's rules (see Conventions). On execute, a 500 without `code` means the outcome is unknown; a 5xx with `code` means the wallet refused before writing (see Unknown outcomes above).
+A ProblemDetails without `code` comes from ASP.NET Core, not from the wallet's rules (see Conventions). On execute, a 500 without `code` means the outcome is unknown; a 5xx with `injected_error` or `injected_timeout` means the wallet refused before writing (see Unknown outcomes above); any other code on a 5xx is unknown.
 
 ## Idempotency
 
