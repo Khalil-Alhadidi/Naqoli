@@ -95,4 +95,12 @@ Notes:
 - The eval console prints a usage line for now. It runs the request sets from milestone 5.
 - Install the Playwright browsers once, after the first build: `pwsh tests/Agent.Web.Journeys/bin/Debug/net10.0/playwright.ps1 install`.
 
-Status: milestone 1 of 12, see [docs/build-plan.md](docs/build-plan.md).
+## Mock wallet API
+
+The mock wallet is a minimal API on http://localhost:5276 with read endpoints for users, contacts and aliases, bills, balance, history, the store catalogue and orders; `POST /quotes`; `POST /transactions`, the only endpoint that moves money, which requires an `Idempotency-Key` header; `GET /transactions/by-key/{key}` for the status check after a timeout; and the `/admin` routes for the fault switch and the reset. Errors are ProblemDetails with a machine-readable `code`.
+
+The full contract (every route, field, error code, the idempotency, PIN and balance-floor rules, the fault modes, the reset and the admin key) is in [docs/wallet-api.md](docs/wallet-api.md). Ready-made requests against the seed are in `src/Wallet.MockApi/Wallet.MockApi.http`.
+
+The `/admin` routes need no key in Development when `Wallet:AdminKey` is not set. Outside Development, set a key in user secrets or the `Wallet__AdminKey` environment variable and send it in the `X-Wallet-Admin-Key` header; never commit it.
+
+Status: milestone 2 of 12, see [docs/build-plan.md](docs/build-plan.md).

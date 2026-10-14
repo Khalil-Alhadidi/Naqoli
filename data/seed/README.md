@@ -8,7 +8,11 @@ Every name, phone number, account number, purchase code and transaction here is 
 
 `seed-hash.txt` holds the SHA-256 of a canonical JSON form of every seed row (`SeedData.ComputeHash()`). The test `SeedHashTests.SeedHashMatchesCommittedValue` fails if the seed changes. If a change is intended, run `dotnet run --project src/Wallet.MockApi -- seed-hash`, write the printed value to `seed-hash.txt`, and re-check every answer key (build plan, milestone 2). PIN hashes are salted, so the hash covers a `***` placeholder instead of them.
 
-The seed is tagged `seed-v1` at the end of milestone 2.
+The seed is frozen as of milestone 2 and tagged `seed-v1` once the milestone 2 review is done. The answer keys from milestone 5 depend on it, so any later change to the seed means re-checking every answer key.
+
+## Reset
+
+`POST /admin/reset` on the mock wallet (and `SeedReset.Reset` behind it) restores this seed exactly, identity values included: ids start again where the seed leaves them, so the next transaction after a reset is id 20. The endpoint is serialised with payments (`WalletGate`): it waits for payments in progress, holds new ones back until it is done, and never runs alongside another reset; it also clears the fault switch. See [docs/wallet-api.md](../../docs/wallet-api.md#reset).
 
 ## Phone numbers
 

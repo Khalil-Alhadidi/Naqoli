@@ -1,3 +1,127 @@
 @Wallet.MockApi_HostAddress = http://localhost:5276
 
-###
+# Requests for the mock wallet, against the frozen seed (data/seed/README.md). The contract is docs/wallet-api.md.
+# User 1 is the demo user; 07700001004 is Hammoudi (user 4); bill account 1 is user 1's home electricity; product 1 is Zain credit 5,000.
+# Change @idempotencyKey before each new payment: a used key replays the stored outcome instead of paying again.
+@idempotencyKey = http-demo-001
+
+# In Development with no Wallet:AdminKey set, the /admin routes need no key. With a key set, add this header to them:
+# X-Wallet-Admin-Key: <your key>
+
+### Health
+GET {{Wallet.MockApi_HostAddress}}/health
+
+### One user
+GET {{Wallet.MockApi_HostAddress}}/users/1
+
+### The user behind a phone number
+GET {{Wallet.MockApi_HostAddress}}/users/by-phone/07700001004
+
+### Contacts and aliases of user 1 (add ?q= to filter by a substring of the saved name or alias)
+GET {{Wallet.MockApi_HostAddress}}/users/1/contacts
+
+### Bills of user 1
+GET {{Wallet.MockApi_HostAddress}}/users/1/bills
+
+### Balance of user 1
+GET {{Wallet.MockApi_HostAddress}}/users/1/balance
+
+### History of user 1: transfers to Hammoudi, newest first
+GET {{Wallet.MockApi_HostAddress}}/users/1/history?to=07700001004&take=10
+
+### Store catalogue: Zain credit cards
+GET {{Wallet.MockApi_HostAddress}}/store/products?provider=Zain&type=Credit
+
+### Orders of user 1
+GET {{Wallet.MockApi_HostAddress}}/users/1/orders
+
+### Quote: 50,000 to Hammoudi (no money moves)
+POST {{Wallet.MockApi_HostAddress}}/quotes
+Content-Type: application/json
+
+{
+  "userId": 1,
+  "type": "transfer",
+  "amountIqd": 50000,
+  "toPhone": "07700001004"
+}
+
+### Quote: pay bill account 1 in full
+POST {{Wallet.MockApi_HostAddress}}/quotes
+Content-Type: application/json
+
+{
+  "userId": 1,
+  "type": "bill",
+  "billAccountId": 1
+}
+
+### Execute: 50,000 to Hammoudi (201 the first time, 200 replay with the same key)
+POST {{Wallet.MockApi_HostAddress}}/transactions
+Content-Type: application/json
+Idempotency-Key: {{idempotencyKey}}
+
+{
+  "userId": 1,
+  "type": "transfer",
+  "amountIqd": 50000,
+  "toPhone": "07700001004"
+}
+
+### Execute: pay bill account 1 (amount comes from the wallet)
+POST {{Wallet.MockApi_HostAddress}}/transactions
+Content-Type: application/json
+Idempotency-Key: {{idempotencyKey}}-bill
+
+{
+  "userId": 1,
+  "type": "bill",
+  "billAccountId": 1
+}
+
+### Execute: buy product 1 (the response carries the purchase code)
+POST {{Wallet.MockApi_HostAddress}}/transactions
+Content-Type: application/json
+Idempotency-Key: {{idempotencyKey}}-purchase
+
+{
+  "userId": 1,
+  "type": "purchase",
+  "productId": 1
+}
+
+### Look up the transfer by its key
+GET {{Wallet.MockApi_HostAddress}}/transactions/by-key/{{idempotencyKey}}
+
+### Current fault switch
+GET {{Wallet.MockApi_HostAddress}}/admin/faults
+
+### Fault: the next execute waits 300 ms, then runs normally
+POST {{Wallet.MockApi_HostAddress}}/admin/faults
+Content-Type: application/json
+
+{
+  "mode": "slow",
+  "delayMs": 300,
+  "once": true
+}
+
+### Fault: the next execute commits, then hangs for the configured delay (look it up by key meanwhile)
+POST {{Wallet.MockApi_HostAddress}}/admin/faults
+Content-Type: application/json
+
+{
+  "mode": "timeoutAfterExecute",
+  "once": true
+}
+
+### Clear the fault switch
+POST {{Wallet.MockApi_HostAddress}}/admin/faults
+Content-Type: application/json
+
+{
+  "mode": "none"
+}
+
+### Reset: restore the seed exactly and clear faults
+POST {{Wallet.MockApi_HostAddress}}/admin/reset
