@@ -13,6 +13,8 @@ What `src/Agent.Core` does as built in milestone 3, the first task of milestone 
 
 A host that talks to a user builds a `Conversation` (below) per user: the console's `ChatSession` builds one per circuit, and the test runner (milestone 5) one per case.
 
+The test runner (`Agent.Eval`), its grading and its report are described in [agent-eval.md](agent-eval.md).
+
 The test hosts set `SweepIntervalSeconds` to 0 and use `NullTraceSink`, or a recording sink.
 
 ## Purpose and the rules it enforces

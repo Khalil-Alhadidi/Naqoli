@@ -118,7 +118,7 @@ Notes:
 
 ## Run eval
 
-`Agent.Eval` plays a request set through the same conversation logic as the phone (the scripted parser, never a live model), grades every case against its answer key and writes a report.
+`Agent.Eval` plays a request set through the same conversation logic as the phone (the scripted parser, never a live model), grades every case against its answer key and writes a report. How it plays and grades each case, the red-team pass mark and the first development run are in [docs/agent-eval.md](docs/agent-eval.md).
 
 1. Create the wallet database once (`dotnet run --project src/Wallet.MockApi -- migrate`) and start the wallet: `dotnet run --project src/Wallet.MockApi`.
 2. Run the development set: `dotnet run --project src/Agent.Eval -- dev`.

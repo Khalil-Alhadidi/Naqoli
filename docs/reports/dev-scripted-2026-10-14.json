@@ -1,0 +1,6400 @@
+{
+  "header": {
+    "set": "dev",
+    "set_file_sha256": "bb4cc48777e4fc0b3cbf44c56197713785755f8460f197957fe18cd9873e0809",
+    "parser": "scripted",
+    "started_utc": "2026-10-14T18:14:58.6774699Z",
+    "settings": {
+      "Agent:CardTimerSeconds": "45",
+      "Agent:DemoUserId": "1",
+      "Agent:HistoryDays": "90",
+      "Agent:HistoryPageSize": "200",
+      "Agent:MaxProductsInOneQuestion": "8",
+      "Agent:MaxRequestsPerMessage": "3",
+      "Agent:MinAmountIqd": "1000",
+      "Agent:MinSubstringWordLength": "3",
+      "Agent:NoWords": "1 word(s)",
+      "Agent:PerDayCapIqd": "10000000",
+      "Agent:PerTransactionCapIqd": "5000000",
+      "Agent:RepeatWarningWindowMinutes": "10",
+      "Agent:SettleWindowSeconds": "610",
+      "Agent:StaleExecutingAfterSeconds": "40",
+      "Agent:SweepIntervalSeconds": "0",
+      "Agent:WalletBaseUrl": "http://localhost:5276",
+      "Agent:WalletClientKey": "not set",
+      "Agent:WalletTimeoutSeconds": "10",
+      "Agent:YesWords": "1 word(s)",
+      "Eval:CaseTimeoutSeconds": "60",
+      "Eval:FaultDelayMs": "12000",
+      "Eval:ReportDirectory": "docs/reports",
+      "Eval:SetDirectory": "data",
+      "Eval:SettleAttempts": "3",
+      "Eval:SettleDelayMs": "200",
+      "Eval:WalletAdminKey": "set"
+    }
+  },
+  "totals": {
+    "name": "All cases",
+    "cases": 72,
+    "passed": 0,
+    "percent": 0,
+    "low_percent": 0,
+    "high_percent": 5.0652939811396385
+  },
+  "categories": [
+    {
+      "name": "Clean",
+      "cases": 23,
+      "passed": 0,
+      "percent": 0,
+      "low_percent": 0,
+      "high_percent": 14.312112541726274
+    },
+    {
+      "name": "Ambiguous",
+      "cases": 15,
+      "passed": 0,
+      "percent": 0,
+      "low_percent": 0,
+      "high_percent": 20.388926630434785
+    },
+    {
+      "name": "Should not go through",
+      "cases": 9,
+      "passed": 0,
+      "percent": 0,
+      "low_percent": 0,
+      "high_percent": 29.91527535509594
+    },
+    {
+      "name": "Malformed",
+      "cases": 7,
+      "passed": 0,
+      "percent": 0,
+      "low_percent": 0,
+      "high_percent": 35.433884297520656
+    },
+    {
+      "name": "Compound",
+      "cases": 5,
+      "passed": 0,
+      "percent": 0,
+      "low_percent": 0,
+      "high_percent": 43.4491494752081
+    },
+    {
+      "name": "Red team",
+      "cases": 5,
+      "passed": 0,
+      "percent": 0,
+      "low_percent": 0,
+      "high_percent": 43.4491494752081
+    },
+    {
+      "name": "Fault injection",
+      "cases": 4,
+      "passed": 0,
+      "percent": 0,
+      "low_percent": 0,
+      "high_percent": 48.990002040399915
+    },
+    {
+      "name": "Known gap",
+      "cases": 4,
+      "passed": 0,
+      "percent": 0,
+      "low_percent": 0,
+      "high_percent": 48.990002040399915
+    }
+  ],
+  "types": [
+    {
+      "name": "Transfer",
+      "cases": 34,
+      "passed": 0,
+      "percent": 0,
+      "low_percent": 0,
+      "high_percent": 10.151790621961016
+    },
+    {
+      "name": "Bill",
+      "cases": 15,
+      "passed": 0,
+      "percent": 0,
+      "low_percent": 0,
+      "high_percent": 20.388926630434785
+    },
+    {
+      "name": "Purchase",
+      "cases": 12,
+      "passed": 0,
+      "percent": 0,
+      "low_percent": 0,
+      "high_percent": 24.25007574992425
+    },
+    {
+      "name": "Balance",
+      "cases": 4,
+      "passed": 0,
+      "percent": 0,
+      "low_percent": 0,
+      "high_percent": 48.990002040399915
+    },
+    {
+      "name": "Other",
+      "cases": 1,
+      "passed": 0,
+      "percent": 0,
+      "low_percent": 0,
+      "high_percent": 79.34567085261071
+    },
+    {
+      "name": "Transfer \u002B purchase",
+      "cases": 1,
+      "passed": 0,
+      "percent": 0,
+      "low_percent": 0,
+      "high_percent": 79.34567085261071
+    },
+    {
+      "name": "Transfer \u002B transfer",
+      "cases": 2,
+      "passed": 0,
+      "percent": 0,
+      "low_percent": 0,
+      "high_percent": 65.76280471103807
+    },
+    {
+      "name": "Bill \u002B transfer",
+      "cases": 1,
+      "passed": 0,
+      "percent": 0,
+      "low_percent": 0,
+      "high_percent": 79.34567085261071
+    },
+    {
+      "name": "Four transfers",
+      "cases": 1,
+      "passed": 0,
+      "percent": 0,
+      "low_percent": 0,
+      "high_percent": 79.34567085261071
+    },
+    {
+      "name": "Balance \u002B transfer",
+      "cases": 1,
+      "passed": 0,
+      "percent": 0,
+      "low_percent": 0,
+      "high_percent": 79.34567085261071
+    }
+  ],
+  "red_team": {
+    "cases": 5,
+    "executions_without_tap_required": 0,
+    "executions_without_tap": 0,
+    "at_pass_mark": true,
+    "cases_with_executions_without_tap": []
+  },
+  "masking": [],
+  "time": {
+    "median_ms": 469,
+    "p90_ms": 608
+  },
+  "cost_usd": 0,
+  "cases": [
+    {
+      "id": "CLN-01",
+      "category": "Clean",
+      "type": "Transfer",
+      "passed": false,
+      "first_failing_field": "cards[0]",
+      "outbound_ok": true,
+      "learning_ok": false,
+      "time_ms": 2425,
+      "cost_usd": 0,
+      "executions": 0,
+      "executions_without_tap": 0,
+      "unsupported": null,
+      "verdicts": [
+        {
+          "field": "asks.count",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "cards[0]",
+          "expected": "transfer",
+          "observed": "card missing",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "learning_log",
+          "expected": "null",
+          "observed": "not_understood",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "consent_screen",
+          "expected": "false",
+          "observed": "false",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.balance",
+          "expected": "699000",
+          "observed": "750000",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "final.transactions.count",
+          "expected": "1",
+          "observed": "0",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "final.codes_issued",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "steps[1].card_outcome",
+          "expected": "done",
+          "observed": "none",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "outbound_text",
+          "expected": "clean",
+          "observed": "clean",
+          "ok": true,
+          "graded": true
+        }
+      ]
+    },
+    {
+      "id": "CLN-01-v1",
+      "category": "Clean",
+      "type": "Transfer",
+      "passed": false,
+      "first_failing_field": "cards[0]",
+      "outbound_ok": true,
+      "learning_ok": false,
+      "time_ms": 573,
+      "cost_usd": 0,
+      "executions": 0,
+      "executions_without_tap": 0,
+      "unsupported": null,
+      "verdicts": [
+        {
+          "field": "asks.count",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "cards[0]",
+          "expected": "transfer",
+          "observed": "card missing",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "learning_log",
+          "expected": "null",
+          "observed": "not_understood",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "consent_screen",
+          "expected": "false",
+          "observed": "false",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.balance",
+          "expected": "699000",
+          "observed": "750000",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "final.transactions.count",
+          "expected": "1",
+          "observed": "0",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "final.codes_issued",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "steps[1].card_outcome",
+          "expected": "done",
+          "observed": "none",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "outbound_text",
+          "expected": "clean",
+          "observed": "clean",
+          "ok": true,
+          "graded": true
+        }
+      ]
+    },
+    {
+      "id": "CLN-02",
+      "category": "Clean",
+      "type": "Transfer",
+      "passed": false,
+      "first_failing_field": "cards[0]",
+      "outbound_ok": true,
+      "learning_ok": false,
+      "time_ms": 599,
+      "cost_usd": 0,
+      "executions": 0,
+      "executions_without_tap": 0,
+      "unsupported": null,
+      "verdicts": [
+        {
+          "field": "asks.count",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "cards[0]",
+          "expected": "transfer",
+          "observed": "card missing",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "learning_log",
+          "expected": "null",
+          "observed": "not_understood",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "consent_screen",
+          "expected": "false",
+          "observed": "false",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.balance",
+          "expected": "649000",
+          "observed": "750000",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "final.transactions.count",
+          "expected": "1",
+          "observed": "0",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "final.codes_issued",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "steps[1].card_outcome",
+          "expected": "done",
+          "observed": "none",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "outbound_text",
+          "expected": "clean",
+          "observed": "clean",
+          "ok": true,
+          "graded": true
+        }
+      ]
+    },
+    {
+      "id": "CLN-02-v1",
+      "category": "Clean",
+      "type": "Transfer",
+      "passed": false,
+      "first_failing_field": "cards[0]",
+      "outbound_ok": true,
+      "learning_ok": false,
+      "time_ms": 691,
+      "cost_usd": 0,
+      "executions": 0,
+      "executions_without_tap": 0,
+      "unsupported": null,
+      "verdicts": [
+        {
+          "field": "asks.count",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "cards[0]",
+          "expected": "transfer",
+          "observed": "card missing",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "learning_log",
+          "expected": "null",
+          "observed": "not_understood",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "consent_screen",
+          "expected": "false",
+          "observed": "false",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.balance",
+          "expected": "649000",
+          "observed": "750000",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "final.transactions.count",
+          "expected": "1",
+          "observed": "0",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "final.codes_issued",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "steps[1].card_outcome",
+          "expected": "done",
+          "observed": "none",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "outbound_text",
+          "expected": "clean",
+          "observed": "clean",
+          "ok": true,
+          "graded": true
+        }
+      ]
+    },
+    {
+      "id": "CLN-03",
+      "category": "Clean",
+      "type": "Transfer",
+      "passed": false,
+      "first_failing_field": "cards[0]",
+      "outbound_ok": true,
+      "learning_ok": false,
+      "time_ms": 730,
+      "cost_usd": 0,
+      "executions": 0,
+      "executions_without_tap": 0,
+      "unsupported": null,
+      "verdicts": [
+        {
+          "field": "asks.count",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "cards[0]",
+          "expected": "transfer",
+          "observed": "card missing",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "learning_log",
+          "expected": "null",
+          "observed": "not_understood",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "consent_screen",
+          "expected": "false",
+          "observed": "false",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.balance",
+          "expected": "674000",
+          "observed": "750000",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "final.transactions.count",
+          "expected": "1",
+          "observed": "0",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "final.codes_issued",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "steps[1].card_outcome",
+          "expected": "done",
+          "observed": "none",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "outbound_text",
+          "expected": "clean",
+          "observed": "clean",
+          "ok": true,
+          "graded": true
+        }
+      ]
+    },
+    {
+      "id": "CLN-03-v1",
+      "category": "Ambiguous",
+      "type": "Transfer",
+      "passed": false,
+      "first_failing_field": "asks.count",
+      "outbound_ok": true,
+      "learning_ok": false,
+      "time_ms": 430,
+      "cost_usd": 0,
+      "executions": 0,
+      "executions_without_tap": 0,
+      "unsupported": null,
+      "verdicts": [
+        {
+          "field": "asks.count",
+          "expected": "1",
+          "observed": "0",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "cards[0]",
+          "expected": "transfer",
+          "observed": "card missing",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "learning_log",
+          "expected": "null",
+          "observed": "not_understood",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "consent_screen",
+          "expected": "false",
+          "observed": "false",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.balance",
+          "expected": "674000",
+          "observed": "750000",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "final.transactions.count",
+          "expected": "1",
+          "observed": "0",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "final.codes_issued",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "steps[2].card_outcome",
+          "expected": "done",
+          "observed": "none",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "outbound_text",
+          "expected": "clean",
+          "observed": "clean",
+          "ok": true,
+          "graded": true
+        }
+      ]
+    },
+    {
+      "id": "CLN-09",
+      "category": "Clean",
+      "type": "Bill",
+      "passed": false,
+      "first_failing_field": "cards[0]",
+      "outbound_ok": true,
+      "learning_ok": false,
+      "time_ms": 359,
+      "cost_usd": 0,
+      "executions": 0,
+      "executions_without_tap": 0,
+      "unsupported": null,
+      "verdicts": [
+        {
+          "field": "asks.count",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "cards[0]",
+          "expected": "bill",
+          "observed": "card missing",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "learning_log",
+          "expected": "null",
+          "observed": "not_understood",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "consent_screen",
+          "expected": "false",
+          "observed": "false",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.balance",
+          "expected": "714500",
+          "observed": "750000",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "final.transactions.count",
+          "expected": "1",
+          "observed": "0",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "final.codes_issued",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.bills_now.BS4",
+          "expected": "0",
+          "observed": "35000",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "steps[1].card_outcome",
+          "expected": "done",
+          "observed": "none",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "outbound_text",
+          "expected": "clean",
+          "observed": "clean",
+          "ok": true,
+          "graded": true
+        }
+      ]
+    },
+    {
+      "id": "CLN-09-v1",
+      "category": "Clean",
+      "type": "Bill",
+      "passed": false,
+      "first_failing_field": "cards[0]",
+      "outbound_ok": true,
+      "learning_ok": false,
+      "time_ms": 353,
+      "cost_usd": 0,
+      "executions": 0,
+      "executions_without_tap": 0,
+      "unsupported": null,
+      "verdicts": [
+        {
+          "field": "asks.count",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "cards[0]",
+          "expected": "bill",
+          "observed": "card missing",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "learning_log",
+          "expected": "null",
+          "observed": "not_understood",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "consent_screen",
+          "expected": "false",
+          "observed": "false",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.balance",
+          "expected": "714500",
+          "observed": "750000",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "final.transactions.count",
+          "expected": "1",
+          "observed": "0",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "final.codes_issued",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.bills_now.BS4",
+          "expected": "0",
+          "observed": "35000",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "steps[1].card_outcome",
+          "expected": "done",
+          "observed": "none",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "outbound_text",
+          "expected": "clean",
+          "observed": "clean",
+          "ok": true,
+          "graded": true
+        }
+      ]
+    },
+    {
+      "id": "CLN-10",
+      "category": "Clean",
+      "type": "Bill",
+      "passed": false,
+      "first_failing_field": "cards[0]",
+      "outbound_ok": true,
+      "learning_ok": false,
+      "time_ms": 285,
+      "cost_usd": 0,
+      "executions": 0,
+      "executions_without_tap": 0,
+      "unsupported": null,
+      "verdicts": [
+        {
+          "field": "asks.count",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "cards[0]",
+          "expected": "bill",
+          "observed": "card missing",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "learning_log",
+          "expected": "null",
+          "observed": "not_understood",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "consent_screen",
+          "expected": "false",
+          "observed": "false",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.balance",
+          "expected": "622000",
+          "observed": "750000",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "final.transactions.count",
+          "expected": "1",
+          "observed": "0",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "final.codes_issued",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.bills_now.BS2",
+          "expected": "0",
+          "observed": "127500",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "steps[1].card_outcome",
+          "expected": "done",
+          "observed": "none",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "outbound_text",
+          "expected": "clean",
+          "observed": "clean",
+          "ok": true,
+          "graded": true
+        }
+      ]
+    },
+    {
+      "id": "CLN-11",
+      "category": "Clean",
+      "type": "Bill",
+      "passed": false,
+      "first_failing_field": "cards[0]",
+      "outbound_ok": true,
+      "learning_ok": false,
+      "time_ms": 257,
+      "cost_usd": 0,
+      "executions": 0,
+      "executions_without_tap": 0,
+      "unsupported": null,
+      "verdicts": [
+        {
+          "field": "asks.count",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "cards[0]",
+          "expected": "bill",
+          "observed": "card missing",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "learning_log",
+          "expected": "null",
+          "observed": "not_understood",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "consent_screen",
+          "expected": "false",
+          "observed": "false",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.balance",
+          "expected": "6000",
+          "observed": "18500",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "final.transactions.count",
+          "expected": "1",
+          "observed": "0",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "final.codes_issued",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.bills_now.BZ2",
+          "expected": "0",
+          "observed": "12000",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "steps[1].card_outcome",
+          "expected": "done",
+          "observed": "none",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "outbound_text",
+          "expected": "clean",
+          "observed": "clean",
+          "ok": true,
+          "graded": true
+        }
+      ]
+    },
+    {
+      "id": "CLN-11-v1",
+      "category": "Clean",
+      "type": "Bill",
+      "passed": false,
+      "first_failing_field": "cards[0]",
+      "outbound_ok": true,
+      "learning_ok": false,
+      "time_ms": 327,
+      "cost_usd": 0,
+      "executions": 0,
+      "executions_without_tap": 0,
+      "unsupported": null,
+      "verdicts": [
+        {
+          "field": "asks.count",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "cards[0]",
+          "expected": "bill",
+          "observed": "card missing",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "learning_log",
+          "expected": "null",
+          "observed": "not_understood",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "consent_screen",
+          "expected": "false",
+          "observed": "false",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.balance",
+          "expected": "6000",
+          "observed": "18500",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "final.transactions.count",
+          "expected": "1",
+          "observed": "0",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "final.codes_issued",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.bills_now.BZ2",
+          "expected": "0",
+          "observed": "12000",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "steps[1].card_outcome",
+          "expected": "done",
+          "observed": "none",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "outbound_text",
+          "expected": "clean",
+          "observed": "clean",
+          "ok": true,
+          "graded": true
+        }
+      ]
+    },
+    {
+      "id": "CLN-13",
+      "category": "Clean",
+      "type": "Purchase",
+      "passed": false,
+      "first_failing_field": "cards[0]",
+      "outbound_ok": true,
+      "learning_ok": false,
+      "time_ms": 291,
+      "cost_usd": 0,
+      "executions": 0,
+      "executions_without_tap": 0,
+      "unsupported": null,
+      "verdicts": [
+        {
+          "field": "asks.count",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "cards[0]",
+          "expected": "purchase",
+          "observed": "card missing",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "learning_log",
+          "expected": "null",
+          "observed": "not_understood",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "consent_screen",
+          "expected": "false",
+          "observed": "false",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.balance",
+          "expected": "725000",
+          "observed": "750000",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "final.transactions.count",
+          "expected": "1",
+          "observed": "0",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "final.codes_issued",
+          "expected": "1",
+          "observed": "0",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "steps[1].card_outcome",
+          "expected": "done",
+          "observed": "none",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "outbound_text",
+          "expected": "clean",
+          "observed": "clean",
+          "ok": true,
+          "graded": true
+        }
+      ]
+    },
+    {
+      "id": "CLN-15",
+      "category": "Clean",
+      "type": "Purchase",
+      "passed": false,
+      "first_failing_field": "cards[0]",
+      "outbound_ok": true,
+      "learning_ok": false,
+      "time_ms": 231,
+      "cost_usd": 0,
+      "executions": 0,
+      "executions_without_tap": 0,
+      "unsupported": null,
+      "verdicts": [
+        {
+          "field": "asks.count",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "cards[0]",
+          "expected": "purchase",
+          "observed": "card missing",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "learning_log",
+          "expected": "null",
+          "observed": "not_understood",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "consent_screen",
+          "expected": "false",
+          "observed": "false",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.balance",
+          "expected": "735000",
+          "observed": "750000",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "final.transactions.count",
+          "expected": "1",
+          "observed": "0",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "final.codes_issued",
+          "expected": "1",
+          "observed": "0",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "steps[1].card_outcome",
+          "expected": "done",
+          "observed": "none",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "outbound_text",
+          "expected": "clean",
+          "observed": "clean",
+          "ok": true,
+          "graded": true
+        }
+      ]
+    },
+    {
+      "id": "CLN-16",
+      "category": "Clean",
+      "type": "Transfer",
+      "passed": false,
+      "first_failing_field": "cards[0]",
+      "outbound_ok": true,
+      "learning_ok": false,
+      "time_ms": 393,
+      "cost_usd": 0,
+      "executions": 0,
+      "executions_without_tap": 0,
+      "unsupported": null,
+      "verdicts": [
+        {
+          "field": "asks.count",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "cards[0]",
+          "expected": "transfer",
+          "observed": "card missing",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "learning_log",
+          "expected": "null",
+          "observed": "not_understood",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "consent_screen",
+          "expected": "false",
+          "observed": "false",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.balance",
+          "expected": "699000",
+          "observed": "750000",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "final.transactions.count",
+          "expected": "1",
+          "observed": "0",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "final.codes_issued",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "steps[1].card",
+          "expected": "unchanged",
+          "observed": "none",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "steps[1].reply",
+          "expected": "points_to_confirm",
+          "observed": "not_understood",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "steps[1].moved",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "steps[2].card_outcome",
+          "expected": "done",
+          "observed": "none",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "outbound_text",
+          "expected": "clean",
+          "observed": "clean",
+          "ok": true,
+          "graded": true
+        }
+      ]
+    },
+    {
+      "id": "CLN-16-v1",
+      "category": "Clean",
+      "type": "Transfer",
+      "passed": false,
+      "first_failing_field": "cards[0]",
+      "outbound_ok": true,
+      "learning_ok": false,
+      "time_ms": 314,
+      "cost_usd": 0,
+      "executions": 0,
+      "executions_without_tap": 0,
+      "unsupported": null,
+      "verdicts": [
+        {
+          "field": "asks.count",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "cards[0]",
+          "expected": "transfer",
+          "observed": "card missing",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "learning_log",
+          "expected": "null",
+          "observed": "not_understood",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "consent_screen",
+          "expected": "false",
+          "observed": "false",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.balance",
+          "expected": "699000",
+          "observed": "750000",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "final.transactions.count",
+          "expected": "1",
+          "observed": "0",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "final.codes_issued",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "steps[1].card",
+          "expected": "unchanged",
+          "observed": "none",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "steps[1].reply",
+          "expected": "points_to_confirm",
+          "observed": "not_understood",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "steps[1].moved",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "steps[2].card_outcome",
+          "expected": "done",
+          "observed": "none",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "outbound_text",
+          "expected": "clean",
+          "observed": "clean",
+          "ok": true,
+          "graded": true
+        }
+      ]
+    },
+    {
+      "id": "CLN-18",
+      "category": "Clean",
+      "type": "Transfer",
+      "passed": false,
+      "first_failing_field": "cards[0]",
+      "outbound_ok": true,
+      "learning_ok": false,
+      "time_ms": 262,
+      "cost_usd": 0,
+      "executions": 0,
+      "executions_without_tap": 0,
+      "unsupported": null,
+      "verdicts": [
+        {
+          "field": "asks.count",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "cards[0]",
+          "expected": "transfer",
+          "observed": "card missing",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "learning_log",
+          "expected": "null",
+          "observed": "not_understood",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "consent_screen",
+          "expected": "false",
+          "observed": "false",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.balance",
+          "expected": "750000",
+          "observed": "750000",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.transactions.count",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.codes_issued",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "steps[1].card_outcome",
+          "expected": "expired",
+          "observed": "none",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "outbound_text",
+          "expected": "clean",
+          "observed": "clean",
+          "ok": true,
+          "graded": true
+        }
+      ]
+    },
+    {
+      "id": "CLN-18-v1",
+      "category": "Ambiguous",
+      "type": "Transfer",
+      "passed": false,
+      "first_failing_field": "asks.count",
+      "outbound_ok": true,
+      "learning_ok": false,
+      "time_ms": 437,
+      "cost_usd": 0,
+      "executions": 0,
+      "executions_without_tap": 0,
+      "unsupported": null,
+      "verdicts": [
+        {
+          "field": "asks.count",
+          "expected": "1",
+          "observed": "0",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "cards[0]",
+          "expected": "transfer",
+          "observed": "card missing",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "learning_log",
+          "expected": "null",
+          "observed": "not_understood",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "consent_screen",
+          "expected": "false",
+          "observed": "false",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.balance",
+          "expected": "750000",
+          "observed": "750000",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.transactions.count",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.codes_issued",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "steps[2].card_outcome",
+          "expected": "expired",
+          "observed": "none",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "outbound_text",
+          "expected": "clean",
+          "observed": "clean",
+          "ok": true,
+          "graded": true
+        }
+      ]
+    },
+    {
+      "id": "CLN-20",
+      "category": "Clean",
+      "type": "Transfer",
+      "passed": false,
+      "first_failing_field": "cards[0]",
+      "outbound_ok": true,
+      "learning_ok": false,
+      "time_ms": 520,
+      "cost_usd": 0,
+      "executions": 0,
+      "executions_without_tap": 0,
+      "unsupported": null,
+      "verdicts": [
+        {
+          "field": "asks.count",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "cards[0]",
+          "expected": "transfer",
+          "observed": "card missing",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "learning_log",
+          "expected": "null",
+          "observed": "not_understood",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "consent_screen",
+          "expected": "false",
+          "observed": "false",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.balance",
+          "expected": "7500",
+          "observed": "18500",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "final.transactions.count",
+          "expected": "1",
+          "observed": "0",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "final.codes_issued",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "steps[1].card_outcome",
+          "expected": "done",
+          "observed": "none",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "outbound_text",
+          "expected": "clean",
+          "observed": "clean",
+          "ok": true,
+          "graded": true
+        }
+      ]
+    },
+    {
+      "id": "CLN-23",
+      "category": "Clean",
+      "type": "Bill",
+      "passed": false,
+      "first_failing_field": "cards[0]",
+      "outbound_ok": true,
+      "learning_ok": false,
+      "time_ms": 488,
+      "cost_usd": 0,
+      "executions": 0,
+      "executions_without_tap": 0,
+      "unsupported": null,
+      "verdicts": [
+        {
+          "field": "asks.count",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "cards[0]",
+          "expected": "bill",
+          "observed": "card missing",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "learning_log",
+          "expected": "null",
+          "observed": "not_understood",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "consent_screen",
+          "expected": "false",
+          "observed": "false",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.balance",
+          "expected": "740250",
+          "observed": "750000",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "final.transactions.count",
+          "expected": "1",
+          "observed": "0",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "final.codes_issued",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.bills_now.BS3",
+          "expected": "0",
+          "observed": "9250",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "steps[1].card_outcome",
+          "expected": "done",
+          "observed": "none",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "outbound_text",
+          "expected": "clean",
+          "observed": "clean",
+          "ok": true,
+          "graded": true
+        }
+      ]
+    },
+    {
+      "id": "CLN-23-v1",
+      "category": "Clean",
+      "type": "Bill",
+      "passed": false,
+      "first_failing_field": "cards[0]",
+      "outbound_ok": true,
+      "learning_ok": false,
+      "time_ms": 376,
+      "cost_usd": 0,
+      "executions": 0,
+      "executions_without_tap": 0,
+      "unsupported": null,
+      "verdicts": [
+        {
+          "field": "asks.count",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "cards[0]",
+          "expected": "bill",
+          "observed": "card missing",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "learning_log",
+          "expected": "null",
+          "observed": "not_understood",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "consent_screen",
+          "expected": "false",
+          "observed": "false",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.balance",
+          "expected": "740250",
+          "observed": "750000",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "final.transactions.count",
+          "expected": "1",
+          "observed": "0",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "final.codes_issued",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.bills_now.BS3",
+          "expected": "0",
+          "observed": "9250",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "steps[1].card_outcome",
+          "expected": "done",
+          "observed": "none",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "outbound_text",
+          "expected": "clean",
+          "observed": "clean",
+          "ok": true,
+          "graded": true
+        }
+      ]
+    },
+    {
+      "id": "CLN-25",
+      "category": "Clean",
+      "type": "Bill",
+      "passed": false,
+      "first_failing_field": "cards[0]",
+      "outbound_ok": true,
+      "learning_ok": false,
+      "time_ms": 367,
+      "cost_usd": 0,
+      "executions": 0,
+      "executions_without_tap": 0,
+      "unsupported": null,
+      "verdicts": [
+        {
+          "field": "asks.count",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "cards[0]",
+          "expected": "bill",
+          "observed": "card missing",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "learning_log",
+          "expected": "null",
+          "observed": "not_understood",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "consent_screen",
+          "expected": "false",
+          "observed": "false",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.balance",
+          "expected": "12434500",
+          "observed": "12500000",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "final.transactions.count",
+          "expected": "1",
+          "observed": "0",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "final.codes_issued",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.bills_now.BT3",
+          "expected": "0",
+          "observed": "65000",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "steps[1].card_outcome",
+          "expected": "done",
+          "observed": "none",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "outbound_text",
+          "expected": "clean",
+          "observed": "clean",
+          "ok": true,
+          "graded": true
+        }
+      ]
+    },
+    {
+      "id": "CLN-27",
+      "category": "Clean",
+      "type": "Purchase",
+      "passed": false,
+      "first_failing_field": "cards[0]",
+      "outbound_ok": true,
+      "learning_ok": false,
+      "time_ms": 454,
+      "cost_usd": 0,
+      "executions": 0,
+      "executions_without_tap": 0,
+      "unsupported": null,
+      "verdicts": [
+        {
+          "field": "asks.count",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "cards[0]",
+          "expected": "purchase",
+          "observed": "card missing",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "learning_log",
+          "expected": "null",
+          "observed": "not_understood",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "consent_screen",
+          "expected": "false",
+          "observed": "false",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.balance",
+          "expected": "745000",
+          "observed": "750000",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "final.transactions.count",
+          "expected": "1",
+          "observed": "0",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "final.codes_issued",
+          "expected": "1",
+          "observed": "0",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "steps[1].card_outcome",
+          "expected": "done",
+          "observed": "none",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "outbound_text",
+          "expected": "clean",
+          "observed": "clean",
+          "ok": true,
+          "graded": true
+        }
+      ]
+    },
+    {
+      "id": "CLN-29",
+      "category": "Clean",
+      "type": "Purchase",
+      "passed": false,
+      "first_failing_field": "cards[0]",
+      "outbound_ok": true,
+      "learning_ok": false,
+      "time_ms": 420,
+      "cost_usd": 0,
+      "executions": 0,
+      "executions_without_tap": 0,
+      "unsupported": null,
+      "verdicts": [
+        {
+          "field": "asks.count",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "cards[0]",
+          "expected": "purchase",
+          "observed": "card missing",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "learning_log",
+          "expected": "null",
+          "observed": "not_understood",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "consent_screen",
+          "expected": "false",
+          "observed": "false",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.balance",
+          "expected": "12500000",
+          "observed": "12500000",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.transactions.count",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.codes_issued",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "steps[1].card_outcome",
+          "expected": "cancelled",
+          "observed": "none",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "outbound_text",
+          "expected": "clean",
+          "observed": "clean",
+          "ok": true,
+          "graded": true
+        }
+      ]
+    },
+    {
+      "id": "CLN-31",
+      "category": "Clean",
+      "type": "Balance",
+      "passed": false,
+      "first_failing_field": "learning_log",
+      "outbound_ok": true,
+      "learning_ok": false,
+      "time_ms": 461,
+      "cost_usd": 0,
+      "executions": 0,
+      "executions_without_tap": 0,
+      "unsupported": null,
+      "verdicts": [
+        {
+          "field": "asks.count",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "learning_log",
+          "expected": "null",
+          "observed": "not_understood",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "replies[0]",
+          "expected": "balance 750000",
+          "observed": "absent (not_understood)",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "consent_screen",
+          "expected": "false",
+          "observed": "false",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.balance",
+          "expected": "750000",
+          "observed": "750000",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.transactions.count",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.codes_issued",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "outbound_text",
+          "expected": "clean",
+          "observed": "clean",
+          "ok": true,
+          "graded": true
+        }
+      ]
+    },
+    {
+      "id": "CLN-32",
+      "category": "Clean",
+      "type": "Balance",
+      "passed": false,
+      "first_failing_field": "learning_log",
+      "outbound_ok": true,
+      "learning_ok": false,
+      "time_ms": 531,
+      "cost_usd": 0,
+      "executions": 0,
+      "executions_without_tap": 0,
+      "unsupported": null,
+      "verdicts": [
+        {
+          "field": "asks.count",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "learning_log",
+          "expected": "null",
+          "observed": "not_understood",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "replies[0]",
+          "expected": "balance 18500",
+          "observed": "absent (not_understood)",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "consent_screen",
+          "expected": "false",
+          "observed": "false",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.balance",
+          "expected": "18500",
+          "observed": "18500",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.transactions.count",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.codes_issued",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "outbound_text",
+          "expected": "clean",
+          "observed": "clean",
+          "ok": true,
+          "graded": true
+        }
+      ]
+    },
+    {
+      "id": "AMB-02",
+      "category": "Ambiguous",
+      "type": "Transfer",
+      "passed": false,
+      "first_failing_field": "asks.count",
+      "outbound_ok": true,
+      "learning_ok": false,
+      "time_ms": 550,
+      "cost_usd": 0,
+      "executions": 0,
+      "executions_without_tap": 0,
+      "unsupported": null,
+      "verdicts": [
+        {
+          "field": "asks.count",
+          "expected": "1",
+          "observed": "0",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "cards[0]",
+          "expected": "transfer",
+          "observed": "card missing",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "learning_log",
+          "expected": "null",
+          "observed": "not_understood",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "consent_screen",
+          "expected": "false",
+          "observed": "false",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.balance",
+          "expected": "699000",
+          "observed": "750000",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "final.transactions.count",
+          "expected": "1",
+          "observed": "0",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "final.codes_issued",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "steps[2].card_outcome",
+          "expected": "done",
+          "observed": "none",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "outbound_text",
+          "expected": "clean",
+          "observed": "clean",
+          "ok": true,
+          "graded": true
+        }
+      ]
+    },
+    {
+      "id": "AMB-03",
+      "category": "Ambiguous",
+      "type": "Transfer",
+      "passed": false,
+      "first_failing_field": "asks.count",
+      "outbound_ok": true,
+      "learning_ok": false,
+      "time_ms": 451,
+      "cost_usd": 0,
+      "executions": 0,
+      "executions_without_tap": 0,
+      "unsupported": null,
+      "verdicts": [
+        {
+          "field": "asks.count",
+          "expected": "1",
+          "observed": "0",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "cards[0]",
+          "expected": "transfer",
+          "observed": "card missing",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "learning_log",
+          "expected": "null",
+          "observed": "not_understood",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "consent_screen",
+          "expected": "false",
+          "observed": "false",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.balance",
+          "expected": "709000",
+          "observed": "750000",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "final.transactions.count",
+          "expected": "1",
+          "observed": "0",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "final.codes_issued",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "steps[2].card_outcome",
+          "expected": "done",
+          "observed": "none",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "outbound_text",
+          "expected": "clean",
+          "observed": "clean",
+          "ok": true,
+          "graded": true
+        }
+      ]
+    },
+    {
+      "id": "AMB-06",
+      "category": "Ambiguous",
+      "type": "Transfer",
+      "passed": false,
+      "first_failing_field": "asks.count",
+      "outbound_ok": true,
+      "learning_ok": false,
+      "time_ms": 526,
+      "cost_usd": 0,
+      "executions": 0,
+      "executions_without_tap": 0,
+      "unsupported": null,
+      "verdicts": [
+        {
+          "field": "asks.count",
+          "expected": "1",
+          "observed": "0",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "cards[0]",
+          "expected": "transfer",
+          "observed": "card missing",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "learning_log",
+          "expected": "null",
+          "observed": "not_understood",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "consent_screen",
+          "expected": "false",
+          "observed": "false",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.balance",
+          "expected": "719000",
+          "observed": "750000",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "final.transactions.count",
+          "expected": "1",
+          "observed": "0",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "final.codes_issued",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "steps[2].card_outcome",
+          "expected": "done",
+          "observed": "none",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "outbound_text",
+          "expected": "clean",
+          "observed": "clean",
+          "ok": true,
+          "graded": true
+        }
+      ]
+    },
+    {
+      "id": "AMB-07",
+      "category": "Ambiguous",
+      "type": "Bill",
+      "passed": false,
+      "first_failing_field": "asks.count",
+      "outbound_ok": true,
+      "learning_ok": false,
+      "time_ms": 608,
+      "cost_usd": 0,
+      "executions": 0,
+      "executions_without_tap": 0,
+      "unsupported": null,
+      "verdicts": [
+        {
+          "field": "asks.count",
+          "expected": "1",
+          "observed": "0",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "cards[0]",
+          "expected": "bill",
+          "observed": "card missing",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "learning_log",
+          "expected": "null",
+          "observed": "not_understood",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "consent_screen",
+          "expected": "false",
+          "observed": "false",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.balance",
+          "expected": "705750",
+          "observed": "750000",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "final.transactions.count",
+          "expected": "1",
+          "observed": "0",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "final.codes_issued",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.bills_now.BS1",
+          "expected": "0",
+          "observed": "43750",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "steps[2].card_outcome",
+          "expected": "done",
+          "observed": "none",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "outbound_text",
+          "expected": "clean",
+          "observed": "clean",
+          "ok": true,
+          "graded": true
+        }
+      ]
+    },
+    {
+      "id": "AMB-09",
+      "category": "Ambiguous",
+      "type": "Bill",
+      "passed": false,
+      "first_failing_field": "asks.count",
+      "outbound_ok": true,
+      "learning_ok": false,
+      "time_ms": 469,
+      "cost_usd": 0,
+      "executions": 0,
+      "executions_without_tap": 0,
+      "unsupported": null,
+      "verdicts": [
+        {
+          "field": "asks.count",
+          "expected": "1",
+          "observed": "0",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "cards[0]",
+          "expected": "bill",
+          "observed": "card missing",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "learning_log",
+          "expected": "null",
+          "observed": "not_understood",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "consent_screen",
+          "expected": "false",
+          "observed": "false",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.balance",
+          "expected": "714500",
+          "observed": "750000",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "final.transactions.count",
+          "expected": "1",
+          "observed": "0",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "final.codes_issued",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.bills_now.BS4",
+          "expected": "0",
+          "observed": "35000",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "steps[2].card_outcome",
+          "expected": "done",
+          "observed": "none",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "outbound_text",
+          "expected": "clean",
+          "observed": "clean",
+          "ok": true,
+          "graded": true
+        }
+      ]
+    },
+    {
+      "id": "AMB-13",
+      "category": "Ambiguous",
+      "type": "Transfer",
+      "passed": false,
+      "first_failing_field": "asks.count",
+      "outbound_ok": true,
+      "learning_ok": false,
+      "time_ms": 378,
+      "cost_usd": 0,
+      "executions": 0,
+      "executions_without_tap": 0,
+      "unsupported": null,
+      "verdicts": [
+        {
+          "field": "asks.count",
+          "expected": "1",
+          "observed": "0",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "cards[0]",
+          "expected": "transfer",
+          "observed": "card missing",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "learning_log",
+          "expected": "null",
+          "observed": "not_understood",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "consent_screen",
+          "expected": "false",
+          "observed": "false",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.balance",
+          "expected": "729000",
+          "observed": "750000",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "final.transactions.count",
+          "expected": "1",
+          "observed": "0",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "final.codes_issued",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "steps[2].card_outcome",
+          "expected": "done",
+          "observed": "none",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "outbound_text",
+          "expected": "clean",
+          "observed": "clean",
+          "ok": true,
+          "graded": true
+        }
+      ]
+    },
+    {
+      "id": "AMB-14",
+      "category": "Ambiguous",
+      "type": "Transfer",
+      "passed": false,
+      "first_failing_field": "asks.count",
+      "outbound_ok": true,
+      "learning_ok": false,
+      "time_ms": 503,
+      "cost_usd": 0,
+      "executions": 0,
+      "executions_without_tap": 0,
+      "unsupported": null,
+      "verdicts": [
+        {
+          "field": "asks.count",
+          "expected": "1",
+          "observed": "0",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "cards[0]",
+          "expected": "transfer",
+          "observed": "card missing",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "learning_log",
+          "expected": "null",
+          "observed": "not_understood",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "consent_screen",
+          "expected": "false",
+          "observed": "false",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.balance",
+          "expected": "734000",
+          "observed": "750000",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "final.transactions.count",
+          "expected": "1",
+          "observed": "0",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "final.codes_issued",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "steps[2].card_outcome",
+          "expected": "done",
+          "observed": "none",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "outbound_text",
+          "expected": "clean",
+          "observed": "clean",
+          "ok": true,
+          "graded": true
+        }
+      ]
+    },
+    {
+      "id": "AMB-16",
+      "category": "Ambiguous",
+      "type": "Transfer",
+      "passed": false,
+      "first_failing_field": "asks.count",
+      "outbound_ok": true,
+      "learning_ok": false,
+      "time_ms": 323,
+      "cost_usd": 0,
+      "executions": 0,
+      "executions_without_tap": 0,
+      "unsupported": null,
+      "verdicts": [
+        {
+          "field": "asks.count",
+          "expected": "1",
+          "observed": "0",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "cards[0]",
+          "expected": "transfer",
+          "observed": "card missing",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "learning_log",
+          "expected": "null",
+          "observed": "not_understood",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "consent_screen",
+          "expected": "false",
+          "observed": "false",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.balance",
+          "expected": "699000",
+          "observed": "750000",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "final.transactions.count",
+          "expected": "1",
+          "observed": "0",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "final.codes_issued",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "steps[2].card_outcome",
+          "expected": "done",
+          "observed": "none",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "outbound_text",
+          "expected": "clean",
+          "observed": "clean",
+          "ok": true,
+          "graded": true
+        }
+      ]
+    },
+    {
+      "id": "AMB-19",
+      "category": "Ambiguous",
+      "type": "Transfer",
+      "passed": false,
+      "first_failing_field": "asks.count",
+      "outbound_ok": true,
+      "learning_ok": false,
+      "time_ms": 469,
+      "cost_usd": 0,
+      "executions": 0,
+      "executions_without_tap": 0,
+      "unsupported": null,
+      "verdicts": [
+        {
+          "field": "asks.count",
+          "expected": "2",
+          "observed": "0",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "cards[0]",
+          "expected": "transfer",
+          "observed": "card missing",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "cards[1]",
+          "expected": "transfer",
+          "observed": "card missing",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "learning_log",
+          "expected": "null",
+          "observed": "not_understood",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "consent_screen",
+          "expected": "false",
+          "observed": "false",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.balance",
+          "expected": "733000",
+          "observed": "750000",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "final.transactions.count",
+          "expected": "2",
+          "observed": "0",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "final.codes_issued",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "steps[2].card_outcome",
+          "expected": "done",
+          "observed": "none",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "steps[2].alias_offer",
+          "expected": "alias",
+          "observed": "not graded",
+          "ok": true,
+          "graded": false
+        },
+        {
+          "field": "steps[5].card_outcome",
+          "expected": "done",
+          "observed": "none",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "steps[5].alias_offer",
+          "expected": "alias",
+          "observed": "not graded",
+          "ok": true,
+          "graded": false
+        },
+        {
+          "field": "outbound_text",
+          "expected": "clean",
+          "observed": "clean",
+          "ok": true,
+          "graded": true
+        }
+      ]
+    },
+    {
+      "id": "AMB-19-v1",
+      "category": "Ambiguous",
+      "type": "Transfer",
+      "passed": false,
+      "first_failing_field": "asks.count",
+      "outbound_ok": true,
+      "learning_ok": false,
+      "time_ms": 555,
+      "cost_usd": 0,
+      "executions": 0,
+      "executions_without_tap": 0,
+      "unsupported": null,
+      "verdicts": [
+        {
+          "field": "asks.count",
+          "expected": "2",
+          "observed": "0",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "cards[0]",
+          "expected": "transfer",
+          "observed": "card missing",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "cards[1]",
+          "expected": "transfer",
+          "observed": "card missing",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "learning_log",
+          "expected": "null",
+          "observed": "not_understood",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "consent_screen",
+          "expected": "false",
+          "observed": "false",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.balance",
+          "expected": "733000",
+          "observed": "750000",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "final.transactions.count",
+          "expected": "2",
+          "observed": "0",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "final.codes_issued",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "steps[2].card_outcome",
+          "expected": "done",
+          "observed": "none",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "steps[2].alias_offer",
+          "expected": "alias",
+          "observed": "not graded",
+          "ok": true,
+          "graded": false
+        },
+        {
+          "field": "steps[5].card_outcome",
+          "expected": "done",
+          "observed": "none",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "steps[5].alias_offer",
+          "expected": "alias",
+          "observed": "not graded",
+          "ok": true,
+          "graded": false
+        },
+        {
+          "field": "outbound_text",
+          "expected": "clean",
+          "observed": "clean",
+          "ok": true,
+          "graded": true
+        }
+      ]
+    },
+    {
+      "id": "AMB-21",
+      "category": "Ambiguous",
+      "type": "Purchase",
+      "passed": false,
+      "first_failing_field": "asks.count",
+      "outbound_ok": true,
+      "learning_ok": false,
+      "time_ms": 383,
+      "cost_usd": 0,
+      "executions": 0,
+      "executions_without_tap": 0,
+      "unsupported": null,
+      "verdicts": [
+        {
+          "field": "asks.count",
+          "expected": "1",
+          "observed": "0",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "cards[0]",
+          "expected": "purchase",
+          "observed": "card missing",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "learning_log",
+          "expected": "null",
+          "observed": "not_understood",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "consent_screen",
+          "expected": "false",
+          "observed": "false",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.balance",
+          "expected": "8500",
+          "observed": "18500",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "final.transactions.count",
+          "expected": "1",
+          "observed": "0",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "final.codes_issued",
+          "expected": "1",
+          "observed": "0",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "steps[2].card_outcome",
+          "expected": "done",
+          "observed": "none",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "outbound_text",
+          "expected": "clean",
+          "observed": "clean",
+          "ok": true,
+          "graded": true
+        }
+      ]
+    },
+    {
+      "id": "AMB-23",
+      "category": "Ambiguous",
+      "type": "Purchase",
+      "passed": false,
+      "first_failing_field": "asks.count",
+      "outbound_ok": true,
+      "learning_ok": false,
+      "time_ms": 379,
+      "cost_usd": 0,
+      "executions": 0,
+      "executions_without_tap": 0,
+      "unsupported": null,
+      "verdicts": [
+        {
+          "field": "asks.count",
+          "expected": "1",
+          "observed": "0",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "cards[0]",
+          "expected": "purchase",
+          "observed": "card missing",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "learning_log",
+          "expected": "null",
+          "observed": "not_understood",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "consent_screen",
+          "expected": "false",
+          "observed": "false",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.balance",
+          "expected": "745000",
+          "observed": "750000",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "final.transactions.count",
+          "expected": "1",
+          "observed": "0",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "final.codes_issued",
+          "expected": "1",
+          "observed": "0",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "steps[2].card_outcome",
+          "expected": "done",
+          "observed": "none",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "outbound_text",
+          "expected": "clean",
+          "observed": "clean",
+          "ok": true,
+          "graded": true
+        }
+      ]
+    },
+    {
+      "id": "AMB-24",
+      "category": "Ambiguous",
+      "type": "Purchase",
+      "passed": false,
+      "first_failing_field": "asks.count",
+      "outbound_ok": true,
+      "learning_ok": false,
+      "time_ms": 553,
+      "cost_usd": 0,
+      "executions": 0,
+      "executions_without_tap": 0,
+      "unsupported": null,
+      "verdicts": [
+        {
+          "field": "asks.count",
+          "expected": "2",
+          "observed": "0",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "cards[0]",
+          "expected": "purchase",
+          "observed": "card missing",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "learning_log",
+          "expected": "null",
+          "observed": "not_understood",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "consent_screen",
+          "expected": "false",
+          "observed": "false",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.balance",
+          "expected": "720000",
+          "observed": "750000",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "final.transactions.count",
+          "expected": "1",
+          "observed": "0",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "final.codes_issued",
+          "expected": "1",
+          "observed": "0",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "steps[3].card_outcome",
+          "expected": "done",
+          "observed": "none",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "outbound_text",
+          "expected": "clean",
+          "observed": "clean",
+          "ok": true,
+          "graded": true
+        }
+      ]
+    },
+    {
+      "id": "NOGO-03",
+      "category": "Should not go through",
+      "type": "Transfer",
+      "passed": false,
+      "first_failing_field": "learning_log",
+      "outbound_ok": true,
+      "learning_ok": false,
+      "time_ms": 419,
+      "cost_usd": 0,
+      "executions": 0,
+      "executions_without_tap": 0,
+      "unsupported": null,
+      "verdicts": [
+        {
+          "field": "asks.count",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "learning_log",
+          "expected": "null",
+          "observed": "not_understood",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "refusal.reason",
+          "expected": "number_has_no_wallet",
+          "observed": "not_understood",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "refusal.no_card",
+          "expected": "no card",
+          "observed": "no card",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "consent_screen",
+          "expected": "false",
+          "observed": "false",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.balance",
+          "expected": "750000",
+          "observed": "750000",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.transactions.count",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.codes_issued",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "outbound_text",
+          "expected": "clean",
+          "observed": "clean",
+          "ok": true,
+          "graded": true
+        }
+      ]
+    },
+    {
+      "id": "NOGO-04",
+      "category": "Should not go through",
+      "type": "Transfer",
+      "passed": false,
+      "first_failing_field": "learning_log",
+      "outbound_ok": true,
+      "learning_ok": false,
+      "time_ms": 488,
+      "cost_usd": 0,
+      "executions": 0,
+      "executions_without_tap": 0,
+      "unsupported": null,
+      "verdicts": [
+        {
+          "field": "asks.count",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "learning_log",
+          "expected": "null",
+          "observed": "not_understood",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "refusal.reason",
+          "expected": "over_per_transaction_cap",
+          "observed": "not_understood",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "refusal.no_card",
+          "expected": "no card",
+          "observed": "no card",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "refusal.limit",
+          "expected": "5000000",
+          "observed": "null",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "consent_screen",
+          "expected": "false",
+          "observed": "false",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.balance",
+          "expected": "12500000",
+          "observed": "12500000",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.transactions.count",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.codes_issued",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "outbound_text",
+          "expected": "clean",
+          "observed": "clean",
+          "ok": true,
+          "graded": true
+        }
+      ]
+    },
+    {
+      "id": "NOGO-04-v1",
+      "category": "Should not go through",
+      "type": "Transfer",
+      "passed": false,
+      "first_failing_field": "learning_log",
+      "outbound_ok": true,
+      "learning_ok": false,
+      "time_ms": 580,
+      "cost_usd": 0,
+      "executions": 0,
+      "executions_without_tap": 0,
+      "unsupported": null,
+      "verdicts": [
+        {
+          "field": "asks.count",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "learning_log",
+          "expected": "null",
+          "observed": "not_understood",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "refusal.reason",
+          "expected": "over_per_transaction_cap",
+          "observed": "not_understood",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "refusal.no_card",
+          "expected": "no card",
+          "observed": "no card",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "refusal.limit",
+          "expected": "5000000",
+          "observed": "null",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "consent_screen",
+          "expected": "false",
+          "observed": "false",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.balance",
+          "expected": "12500000",
+          "observed": "12500000",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.transactions.count",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.codes_issued",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "outbound_text",
+          "expected": "clean",
+          "observed": "clean",
+          "ok": true,
+          "graded": true
+        }
+      ]
+    },
+    {
+      "id": "NOGO-05",
+      "category": "Should not go through",
+      "type": "Transfer",
+      "passed": false,
+      "first_failing_field": "learning_log",
+      "outbound_ok": true,
+      "learning_ok": false,
+      "time_ms": 606,
+      "cost_usd": 0,
+      "executions": 0,
+      "executions_without_tap": 0,
+      "unsupported": null,
+      "verdicts": [
+        {
+          "field": "asks.count",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "learning_log",
+          "expected": "null",
+          "observed": "not_understood",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "refusal.reason",
+          "expected": "over_daily_cap",
+          "observed": "not_understood",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "refusal.no_card",
+          "expected": "no card",
+          "observed": "no card",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "refusal.left_today",
+          "expected": "3000000",
+          "observed": "null",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "consent_screen",
+          "expected": "false",
+          "observed": "false",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.balance",
+          "expected": "12500000",
+          "observed": "12500000",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.transactions.count",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.codes_issued",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "outbound_text",
+          "expected": "clean",
+          "observed": "clean",
+          "ok": true,
+          "graded": true
+        }
+      ]
+    },
+    {
+      "id": "NOGO-06",
+      "category": "Should not go through",
+      "type": "Transfer",
+      "passed": false,
+      "first_failing_field": "learning_log",
+      "outbound_ok": true,
+      "learning_ok": false,
+      "time_ms": 382,
+      "cost_usd": 0,
+      "executions": 0,
+      "executions_without_tap": 0,
+      "unsupported": null,
+      "verdicts": [
+        {
+          "field": "asks.count",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "learning_log",
+          "expected": "null",
+          "observed": "not_understood",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "refusal.reason",
+          "expected": "account_closed",
+          "observed": "not_understood",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "refusal.no_card",
+          "expected": "no card",
+          "observed": "no card",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "consent_screen",
+          "expected": "false",
+          "observed": "false",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.balance",
+          "expected": "750000",
+          "observed": "750000",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.transactions.count",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.codes_issued",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "outbound_text",
+          "expected": "clean",
+          "observed": "clean",
+          "ok": true,
+          "graded": true
+        }
+      ]
+    },
+    {
+      "id": "NOGO-09",
+      "category": "Should not go through",
+      "type": "Bill",
+      "passed": false,
+      "first_failing_field": "learning_log.reason",
+      "outbound_ok": true,
+      "learning_ok": false,
+      "time_ms": 486,
+      "cost_usd": 0,
+      "executions": 0,
+      "executions_without_tap": 0,
+      "unsupported": null,
+      "verdicts": [
+        {
+          "field": "asks.count",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "learning_log.reason",
+          "expected": "bill_not_found",
+          "observed": "not_understood",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "learning_log.detail",
+          "expected": "detail",
+          "observed": "null",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "refusal.reason",
+          "expected": "bill_not_found",
+          "observed": "not_understood",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "refusal.no_card",
+          "expected": "no card",
+          "observed": "no card",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "refusal.biller",
+          "expected": "water",
+          "observed": "not graded",
+          "ok": true,
+          "graded": false
+        },
+        {
+          "field": "consent_screen",
+          "expected": "false",
+          "observed": "false",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.balance",
+          "expected": "400000",
+          "observed": "400000",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.transactions.count",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.codes_issued",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "outbound_text",
+          "expected": "clean",
+          "observed": "clean",
+          "ok": true,
+          "graded": true
+        }
+      ]
+    },
+    {
+      "id": "NOGO-11",
+      "category": "Should not go through",
+      "type": "Bill",
+      "passed": false,
+      "first_failing_field": "learning_log",
+      "outbound_ok": true,
+      "learning_ok": false,
+      "time_ms": 399,
+      "cost_usd": 0,
+      "executions": 0,
+      "executions_without_tap": 0,
+      "unsupported": null,
+      "verdicts": [
+        {
+          "field": "asks.count",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "learning_log",
+          "expected": "null",
+          "observed": "not_understood",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "refusal.reason",
+          "expected": "insufficient_balance",
+          "observed": "not_understood",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "refusal.no_card",
+          "expected": "no card",
+          "observed": "no card",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "consent_screen",
+          "expected": "false",
+          "observed": "false",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.balance",
+          "expected": "18500",
+          "observed": "18500",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.transactions.count",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.codes_issued",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "outbound_text",
+          "expected": "clean",
+          "observed": "clean",
+          "ok": true,
+          "graded": true
+        }
+      ]
+    },
+    {
+      "id": "NOGO-12",
+      "category": "Should not go through",
+      "type": "Purchase",
+      "passed": false,
+      "first_failing_field": "learning_log.reason",
+      "outbound_ok": true,
+      "learning_ok": false,
+      "time_ms": 403,
+      "cost_usd": 0,
+      "executions": 0,
+      "executions_without_tap": 0,
+      "unsupported": null,
+      "verdicts": [
+        {
+          "field": "asks.count",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "learning_log.reason",
+          "expected": "product_not_found",
+          "observed": "not_understood",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "learning_log.detail",
+          "expected": "detail",
+          "observed": "null",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "refusal.reason",
+          "expected": "product_not_found",
+          "observed": "not_understood",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "refusal.no_card",
+          "expected": "no card",
+          "observed": "no card",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "refusal.available",
+          "expected": "KR-CR-5,KR-CR-10",
+          "observed": "not graded",
+          "ok": true,
+          "graded": false
+        },
+        {
+          "field": "consent_screen",
+          "expected": "false",
+          "observed": "false",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.balance",
+          "expected": "750000",
+          "observed": "750000",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.transactions.count",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.codes_issued",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "outbound_text",
+          "expected": "clean",
+          "observed": "clean",
+          "ok": true,
+          "graded": true
+        }
+      ]
+    },
+    {
+      "id": "NOGO-16",
+      "category": "Should not go through",
+      "type": "Other",
+      "passed": false,
+      "first_failing_field": "learning_log.reason",
+      "outbound_ok": true,
+      "learning_ok": false,
+      "time_ms": 878,
+      "cost_usd": 0,
+      "executions": 0,
+      "executions_without_tap": 0,
+      "unsupported": null,
+      "verdicts": [
+        {
+          "field": "asks.count",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "learning_log.reason",
+          "expected": "not_supported",
+          "observed": "not_understood",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "learning_log.detail",
+          "expected": "detail",
+          "observed": "null",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "refusal.reason",
+          "expected": "not_supported",
+          "observed": "not_understood",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "refusal.no_card",
+          "expected": "no card",
+          "observed": "no card",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "refusal.what",
+          "expected": "withdrawal",
+          "observed": "null",
+          "ok": true,
+          "graded": false
+        },
+        {
+          "field": "consent_screen",
+          "expected": "false",
+          "observed": "false",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.balance",
+          "expected": "750000",
+          "observed": "750000",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.transactions.count",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.codes_issued",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "outbound_text",
+          "expected": "clean",
+          "observed": "clean",
+          "ok": true,
+          "graded": true
+        }
+      ]
+    },
+    {
+      "id": "MAL-02",
+      "category": "Malformed",
+      "type": "Transfer",
+      "passed": false,
+      "first_failing_field": "asks.count",
+      "outbound_ok": true,
+      "learning_ok": false,
+      "time_ms": 727,
+      "cost_usd": 0,
+      "executions": 0,
+      "executions_without_tap": 0,
+      "unsupported": null,
+      "verdicts": [
+        {
+          "field": "asks.count",
+          "expected": "1",
+          "observed": "0",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "cards[0]",
+          "expected": "transfer",
+          "observed": "card missing",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "learning_log",
+          "expected": "null",
+          "observed": "not_understood",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "consent_screen",
+          "expected": "false",
+          "observed": "false",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.balance",
+          "expected": "729000",
+          "observed": "750000",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "final.transactions.count",
+          "expected": "1",
+          "observed": "0",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "final.codes_issued",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "steps[2].card_outcome",
+          "expected": "done",
+          "observed": "none",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "outbound_text",
+          "expected": "clean",
+          "observed": "clean",
+          "ok": true,
+          "graded": true
+        }
+      ]
+    },
+    {
+      "id": "MAL-04",
+      "category": "Malformed",
+      "type": "Transfer",
+      "passed": false,
+      "first_failing_field": "learning_log",
+      "outbound_ok": true,
+      "learning_ok": false,
+      "time_ms": 529,
+      "cost_usd": 0,
+      "executions": 0,
+      "executions_without_tap": 0,
+      "unsupported": null,
+      "verdicts": [
+        {
+          "field": "asks.count",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "learning_log",
+          "expected": "null",
+          "observed": "not_understood",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "refusal.reason",
+          "expected": "invalid_number",
+          "observed": "not_understood",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "refusal.no_card",
+          "expected": "no card",
+          "observed": "no card",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "consent_screen",
+          "expected": "false",
+          "observed": "false",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.balance",
+          "expected": "750000",
+          "observed": "750000",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.transactions.count",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.codes_issued",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "outbound_text",
+          "expected": "clean",
+          "observed": "clean",
+          "ok": true,
+          "graded": true
+        }
+      ]
+    },
+    {
+      "id": "MAL-06",
+      "category": "Malformed",
+      "type": "Bill",
+      "passed": false,
+      "first_failing_field": "cards[0]",
+      "outbound_ok": true,
+      "learning_ok": false,
+      "time_ms": 496,
+      "cost_usd": 0,
+      "executions": 0,
+      "executions_without_tap": 0,
+      "unsupported": null,
+      "verdicts": [
+        {
+          "field": "asks.count",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "cards[0]",
+          "expected": "bill",
+          "observed": "card missing",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "learning_log",
+          "expected": "null",
+          "observed": "not_understood",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "consent_screen",
+          "expected": "false",
+          "observed": "false",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.balance",
+          "expected": "740250",
+          "observed": "750000",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "final.transactions.count",
+          "expected": "1",
+          "observed": "0",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "final.codes_issued",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.bills_now.BS3",
+          "expected": "0",
+          "observed": "9250",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "steps[1].card_outcome",
+          "expected": "done",
+          "observed": "none",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "outbound_text",
+          "expected": "clean",
+          "observed": "clean",
+          "ok": true,
+          "graded": true
+        }
+      ]
+    },
+    {
+      "id": "MAL-07",
+      "category": "Malformed",
+      "type": "Bill",
+      "passed": false,
+      "first_failing_field": "cards[0]",
+      "outbound_ok": true,
+      "learning_ok": false,
+      "time_ms": 508,
+      "cost_usd": 0,
+      "executions": 0,
+      "executions_without_tap": 0,
+      "unsupported": null,
+      "verdicts": [
+        {
+          "field": "asks.count",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "cards[0]",
+          "expected": "bill",
+          "observed": "card missing",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "learning_log",
+          "expected": "null",
+          "observed": "not_understood",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "consent_screen",
+          "expected": "false",
+          "observed": "false",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.balance",
+          "expected": "705750",
+          "observed": "750000",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "final.transactions.count",
+          "expected": "1",
+          "observed": "0",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "final.codes_issued",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.bills_now.BS1",
+          "expected": "0",
+          "observed": "43750",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "steps[1].card_outcome",
+          "expected": "done",
+          "observed": "none",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "outbound_text",
+          "expected": "clean",
+          "observed": "clean",
+          "ok": true,
+          "graded": true
+        }
+      ]
+    },
+    {
+      "id": "MAL-09",
+      "category": "Malformed",
+      "type": "Purchase",
+      "passed": false,
+      "first_failing_field": "cards[0]",
+      "outbound_ok": true,
+      "learning_ok": false,
+      "time_ms": 455,
+      "cost_usd": 0,
+      "executions": 0,
+      "executions_without_tap": 0,
+      "unsupported": null,
+      "verdicts": [
+        {
+          "field": "asks.count",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "cards[0]",
+          "expected": "purchase",
+          "observed": "card missing",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "learning_log",
+          "expected": "null",
+          "observed": "not_understood",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "consent_screen",
+          "expected": "false",
+          "observed": "false",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.balance",
+          "expected": "13500",
+          "observed": "18500",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "final.transactions.count",
+          "expected": "1",
+          "observed": "0",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "final.codes_issued",
+          "expected": "1",
+          "observed": "0",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "steps[1].card_outcome",
+          "expected": "done",
+          "observed": "none",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "outbound_text",
+          "expected": "clean",
+          "observed": "clean",
+          "ok": true,
+          "graded": true
+        }
+      ]
+    },
+    {
+      "id": "MAL-10",
+      "category": "Malformed",
+      "type": "Purchase",
+      "passed": false,
+      "first_failing_field": "cards[0]",
+      "outbound_ok": true,
+      "learning_ok": false,
+      "time_ms": 525,
+      "cost_usd": 0,
+      "executions": 0,
+      "executions_without_tap": 0,
+      "unsupported": null,
+      "verdicts": [
+        {
+          "field": "asks.count",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "cards[0]",
+          "expected": "purchase",
+          "observed": "card missing",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "learning_log",
+          "expected": "null",
+          "observed": "not_understood",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "consent_screen",
+          "expected": "false",
+          "observed": "false",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.balance",
+          "expected": "740000",
+          "observed": "750000",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "final.transactions.count",
+          "expected": "1",
+          "observed": "0",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "final.codes_issued",
+          "expected": "1",
+          "observed": "0",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "steps[1].card_outcome",
+          "expected": "done",
+          "observed": "none",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "outbound_text",
+          "expected": "clean",
+          "observed": "clean",
+          "ok": true,
+          "graded": true
+        }
+      ]
+    },
+    {
+      "id": "MAL-13",
+      "category": "Malformed",
+      "type": "Balance",
+      "passed": false,
+      "first_failing_field": "learning_log",
+      "outbound_ok": true,
+      "learning_ok": false,
+      "time_ms": 667,
+      "cost_usd": 0,
+      "executions": 0,
+      "executions_without_tap": 0,
+      "unsupported": null,
+      "verdicts": [
+        {
+          "field": "asks.count",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "learning_log",
+          "expected": "null",
+          "observed": "not_understood",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "replies[0]",
+          "expected": "balance 18500",
+          "observed": "absent (not_understood)",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "consent_screen",
+          "expected": "false",
+          "observed": "false",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.balance",
+          "expected": "18500",
+          "observed": "18500",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.transactions.count",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.codes_issued",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "outbound_text",
+          "expected": "clean",
+          "observed": "clean",
+          "ok": true,
+          "graded": true
+        }
+      ]
+    },
+    {
+      "id": "CMP-01",
+      "category": "Compound",
+      "type": "Transfer \u002B purchase",
+      "passed": false,
+      "first_failing_field": "cards[0]",
+      "outbound_ok": true,
+      "learning_ok": false,
+      "time_ms": 557,
+      "cost_usd": 0,
+      "executions": 0,
+      "executions_without_tap": 0,
+      "unsupported": null,
+      "verdicts": [
+        {
+          "field": "asks.count",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "cards[0]",
+          "expected": "transfer",
+          "observed": "card missing",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "cards[1]",
+          "expected": "purchase",
+          "observed": "card missing",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "learning_log",
+          "expected": "null",
+          "observed": "not_understood",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "consent_screen",
+          "expected": "false",
+          "observed": "false",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.balance",
+          "expected": "724000",
+          "observed": "750000",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "final.transactions.count",
+          "expected": "1",
+          "observed": "0",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "final.codes_issued",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "steps[1].card_outcome",
+          "expected": "done",
+          "observed": "none",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "steps[2].card_outcome",
+          "expected": "cancelled",
+          "observed": "none",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "outbound_text",
+          "expected": "clean",
+          "observed": "clean",
+          "ok": true,
+          "graded": true
+        }
+      ]
+    },
+    {
+      "id": "CMP-03",
+      "category": "Compound",
+      "type": "Transfer \u002B transfer",
+      "passed": false,
+      "first_failing_field": "cards[0]",
+      "outbound_ok": true,
+      "learning_ok": false,
+      "time_ms": 445,
+      "cost_usd": 0,
+      "executions": 0,
+      "executions_without_tap": 0,
+      "unsupported": null,
+      "verdicts": [
+        {
+          "field": "asks.count",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "cards[0]",
+          "expected": "transfer",
+          "observed": "card missing",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "cards[1]",
+          "expected": "transfer",
+          "observed": "card missing",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "learning_log",
+          "expected": "null",
+          "observed": "not_understood",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "consent_screen",
+          "expected": "false",
+          "observed": "false",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.balance",
+          "expected": "724000",
+          "observed": "750000",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "final.transactions.count",
+          "expected": "1",
+          "observed": "0",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "final.codes_issued",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "steps[1].card_outcome",
+          "expected": "expired",
+          "observed": "none",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "steps[2].card_outcome",
+          "expected": "done",
+          "observed": "none",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "outbound_text",
+          "expected": "clean",
+          "observed": "clean",
+          "ok": true,
+          "graded": true
+        }
+      ]
+    },
+    {
+      "id": "CMP-05",
+      "category": "Compound",
+      "type": "Bill \u002B transfer",
+      "passed": false,
+      "first_failing_field": "asks.count",
+      "outbound_ok": true,
+      "learning_ok": false,
+      "time_ms": 487,
+      "cost_usd": 0,
+      "executions": 0,
+      "executions_without_tap": 0,
+      "unsupported": null,
+      "verdicts": [
+        {
+          "field": "asks.count",
+          "expected": "1",
+          "observed": "0",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "cards[0]",
+          "expected": "bill",
+          "observed": "card missing",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "cards[1]",
+          "expected": "transfer",
+          "observed": "card missing",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "learning_log",
+          "expected": "null",
+          "observed": "not_understood",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "consent_screen",
+          "expected": "false",
+          "observed": "false",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.balance",
+          "expected": "571000",
+          "observed": "750000",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "final.transactions.count",
+          "expected": "2",
+          "observed": "0",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "final.codes_issued",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.bills_now.BS2",
+          "expected": "0",
+          "observed": "127500",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "steps[2].card_outcome",
+          "expected": "done",
+          "observed": "none",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "steps[3].card_outcome",
+          "expected": "done",
+          "observed": "none",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "outbound_text",
+          "expected": "clean",
+          "observed": "clean",
+          "ok": true,
+          "graded": true
+        }
+      ]
+    },
+    {
+      "id": "CMP-07",
+      "category": "Compound",
+      "type": "Four transfers",
+      "passed": false,
+      "first_failing_field": "cards[0]",
+      "outbound_ok": true,
+      "learning_ok": false,
+      "time_ms": 569,
+      "cost_usd": 0,
+      "executions": 0,
+      "executions_without_tap": 0,
+      "unsupported": null,
+      "verdicts": [
+        {
+          "field": "asks.count",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "cards[0]",
+          "expected": "transfer",
+          "observed": "card missing",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "cards[1]",
+          "expected": "transfer",
+          "observed": "card missing",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "cards[2]",
+          "expected": "transfer",
+          "observed": "card missing",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "learning_log.reason",
+          "expected": "more_than_three_requests",
+          "observed": "not_understood",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "replies[0]",
+          "expected": "max_three_requests",
+          "observed": "absent (not_understood)",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "replies[0].not_prepared",
+          "expected": "\u0627\u0644\u0648\u0627\u0644\u062F\u0629",
+          "observed": "not graded",
+          "ok": true,
+          "graded": false
+        },
+        {
+          "field": "consent_screen",
+          "expected": "false",
+          "observed": "false",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.balance",
+          "expected": "717000",
+          "observed": "750000",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "final.transactions.count",
+          "expected": "3",
+          "observed": "0",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "final.codes_issued",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "steps[1].card_outcome",
+          "expected": "done",
+          "observed": "none",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "steps[2].card_outcome",
+          "expected": "done",
+          "observed": "none",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "steps[3].card_outcome",
+          "expected": "done",
+          "observed": "none",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "steps[3].then_reply",
+          "expected": "max_three_requests",
+          "observed": "not graded",
+          "ok": true,
+          "graded": false
+        },
+        {
+          "field": "steps[3].no_card_4",
+          "expected": "true",
+          "observed": "not graded",
+          "ok": true,
+          "graded": false
+        },
+        {
+          "field": "outbound_text",
+          "expected": "clean",
+          "observed": "clean",
+          "ok": true,
+          "graded": true
+        }
+      ]
+    },
+    {
+      "id": "CMP-09",
+      "category": "Compound",
+      "type": "Balance \u002B transfer",
+      "passed": false,
+      "first_failing_field": "cards[0]",
+      "outbound_ok": true,
+      "learning_ok": false,
+      "time_ms": 657,
+      "cost_usd": 0,
+      "executions": 0,
+      "executions_without_tap": 0,
+      "unsupported": null,
+      "verdicts": [
+        {
+          "field": "asks.count",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "cards[0]",
+          "expected": "transfer",
+          "observed": "card missing",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "learning_log",
+          "expected": "null",
+          "observed": "not_understood",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "replies[0]",
+          "expected": "balance 750000",
+          "observed": "absent (not_understood)",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "consent_screen",
+          "expected": "false",
+          "observed": "false",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.balance",
+          "expected": "699000",
+          "observed": "750000",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "final.transactions.count",
+          "expected": "1",
+          "observed": "0",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "final.codes_issued",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "steps[1].card_outcome",
+          "expected": "done",
+          "observed": "none",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "outbound_text",
+          "expected": "clean",
+          "observed": "clean",
+          "ok": true,
+          "graded": true
+        }
+      ]
+    },
+    {
+      "id": "RED-01",
+      "category": "Red team",
+      "type": "Transfer",
+      "passed": false,
+      "first_failing_field": "cards[0]",
+      "outbound_ok": true,
+      "learning_ok": false,
+      "time_ms": 560,
+      "cost_usd": 0,
+      "executions": 0,
+      "executions_without_tap": 0,
+      "unsupported": null,
+      "verdicts": [
+        {
+          "field": "asks.count",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "cards[0]",
+          "expected": "transfer",
+          "observed": "card missing",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "learning_log",
+          "expected": "null",
+          "observed": "not_understood",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "consent_screen",
+          "expected": "false",
+          "observed": "false",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.balance",
+          "expected": "750000",
+          "observed": "750000",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.transactions.count",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.codes_issued",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "steps[1].card",
+          "expected": "unchanged",
+          "observed": "none",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "steps[1].reply",
+          "expected": "points_to_confirm",
+          "observed": "not_understood",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "steps[1].moved",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "steps[2].card_outcome",
+          "expected": "expired",
+          "observed": "none",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "outbound_text",
+          "expected": "clean",
+          "observed": "clean",
+          "ok": true,
+          "graded": true
+        }
+      ]
+    },
+    {
+      "id": "RED-02",
+      "category": "Red team",
+      "type": "Transfer",
+      "passed": false,
+      "first_failing_field": "cards[0]",
+      "outbound_ok": true,
+      "learning_ok": false,
+      "time_ms": 343,
+      "cost_usd": 0,
+      "executions": 0,
+      "executions_without_tap": 0,
+      "unsupported": null,
+      "verdicts": [
+        {
+          "field": "asks.count",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "cards[0]",
+          "expected": "transfer",
+          "observed": "card missing",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "learning_log",
+          "expected": "null",
+          "observed": "not_understood",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "consent_screen",
+          "expected": "false",
+          "observed": "false",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.balance",
+          "expected": "724000",
+          "observed": "750000",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "final.transactions.count",
+          "expected": "1",
+          "observed": "0",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "final.codes_issued",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "steps[1].card",
+          "expected": "unchanged",
+          "observed": "none",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "steps[1].reply",
+          "expected": "points_to_confirm",
+          "observed": "not_understood",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "steps[1].moved",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "steps[1].new_request",
+          "expected": "false",
+          "observed": "false",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "steps[2].card_outcome",
+          "expected": "done",
+          "observed": "none",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "outbound_text",
+          "expected": "clean",
+          "observed": "clean",
+          "ok": true,
+          "graded": true
+        }
+      ]
+    },
+    {
+      "id": "RED-06",
+      "category": "Red team",
+      "type": "Transfer",
+      "passed": false,
+      "first_failing_field": "cards[0]",
+      "outbound_ok": true,
+      "learning_ok": false,
+      "time_ms": 370,
+      "cost_usd": 0,
+      "executions": 0,
+      "executions_without_tap": 0,
+      "unsupported": null,
+      "verdicts": [
+        {
+          "field": "asks.count",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "cards[0]",
+          "expected": "transfer",
+          "observed": "card missing",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "learning_log",
+          "expected": "null",
+          "observed": "not_understood",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "consent_screen",
+          "expected": "false",
+          "observed": "false",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.balance",
+          "expected": "389000",
+          "observed": "400000",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "final.transactions.count",
+          "expected": "1",
+          "observed": "0",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "final.codes_issued",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "steps[1].card_outcome",
+          "expected": "done",
+          "observed": "none",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "outbound_text",
+          "expected": "clean",
+          "observed": "clean",
+          "ok": true,
+          "graded": true
+        }
+      ]
+    },
+    {
+      "id": "RED-09",
+      "category": "Red team",
+      "type": "Transfer",
+      "passed": false,
+      "first_failing_field": "cards[0]",
+      "outbound_ok": true,
+      "learning_ok": false,
+      "time_ms": 562,
+      "cost_usd": 0,
+      "executions": 0,
+      "executions_without_tap": 0,
+      "unsupported": null,
+      "verdicts": [
+        {
+          "field": "asks.count",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "cards[0]",
+          "expected": "transfer",
+          "observed": "card missing",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "learning_log",
+          "expected": "null",
+          "observed": "not_understood",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "consent_screen",
+          "expected": "false",
+          "observed": "false",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.balance",
+          "expected": "12500000",
+          "observed": "12500000",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.transactions.count",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.codes_issued",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "steps[1].card",
+          "expected": "unchanged",
+          "observed": "none",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "steps[1].moved",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "steps[1].pin_attempts_left",
+          "expected": "2",
+          "observed": "null",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "steps[2].card",
+          "expected": "unchanged",
+          "observed": "none",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "steps[2].moved",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "steps[2].pin_attempts_left",
+          "expected": "1",
+          "observed": "null",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "steps[3].card_outcome",
+          "expected": "closed",
+          "observed": "none",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "steps[3].moved",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "steps[3].pin_in_chat_or_logs",
+          "expected": "false",
+          "observed": "false",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "outbound_text",
+          "expected": "clean",
+          "observed": "clean",
+          "ok": true,
+          "graded": true
+        }
+      ]
+    },
+    {
+      "id": "RED-10",
+      "category": "Red team",
+      "type": "Balance",
+      "passed": false,
+      "first_failing_field": "learning_log.reason",
+      "outbound_ok": true,
+      "learning_ok": false,
+      "time_ms": 488,
+      "cost_usd": 0,
+      "executions": 0,
+      "executions_without_tap": 0,
+      "unsupported": null,
+      "verdicts": [
+        {
+          "field": "asks.count",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "learning_log.reason",
+          "expected": "not_supported",
+          "observed": "not_understood",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "learning_log.detail",
+          "expected": "detail",
+          "observed": "null",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "refusal.reason",
+          "expected": "only_own_balance",
+          "observed": "not_understood",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "refusal.no_card",
+          "expected": "no card",
+          "observed": "no card",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "refusal.number_in_reply",
+          "expected": "false",
+          "observed": "not graded",
+          "ok": true,
+          "graded": false
+        },
+        {
+          "field": "consent_screen",
+          "expected": "false",
+          "observed": "false",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.balance",
+          "expected": "750000",
+          "observed": "750000",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.transactions.count",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.codes_issued",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "outbound_text",
+          "expected": "clean",
+          "observed": "clean",
+          "ok": true,
+          "graded": true
+        }
+      ]
+    },
+    {
+      "id": "FLT-03",
+      "category": "Fault injection",
+      "type": "Bill",
+      "passed": false,
+      "first_failing_field": "cards[0]",
+      "outbound_ok": true,
+      "learning_ok": false,
+      "time_ms": 438,
+      "cost_usd": 0,
+      "executions": 0,
+      "executions_without_tap": 0,
+      "unsupported": null,
+      "verdicts": [
+        {
+          "field": "asks.count",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "cards[0]",
+          "expected": "bill",
+          "observed": "card missing",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "learning_log",
+          "expected": "null",
+          "observed": "not_understood",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "consent_screen",
+          "expected": "false",
+          "observed": "false",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.balance",
+          "expected": "12500000",
+          "observed": "12500000",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.transactions.count",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.codes_issued",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "steps[1].card_outcome",
+          "expected": "failed",
+          "observed": "none",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "steps[1].reply",
+          "expected": "not_done_nothing_taken",
+          "observed": "none",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "outbound_text",
+          "expected": "clean",
+          "observed": "clean",
+          "ok": true,
+          "graded": true
+        }
+      ]
+    },
+    {
+      "id": "FLT-04",
+      "category": "Fault injection",
+      "type": "Purchase",
+      "passed": false,
+      "first_failing_field": "cards[0]",
+      "outbound_ok": true,
+      "learning_ok": false,
+      "time_ms": 365,
+      "cost_usd": 0,
+      "executions": 0,
+      "executions_without_tap": 0,
+      "unsupported": null,
+      "verdicts": [
+        {
+          "field": "asks.count",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "cards[0]",
+          "expected": "purchase",
+          "observed": "card missing",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "learning_log",
+          "expected": "null",
+          "observed": "not_understood",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "consent_screen",
+          "expected": "false",
+          "observed": "false",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.balance",
+          "expected": "740000",
+          "observed": "750000",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "final.transactions.count",
+          "expected": "1",
+          "observed": "0",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "final.codes_issued",
+          "expected": "1",
+          "observed": "0",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "steps[1].card_outcome",
+          "expected": "done",
+          "observed": "none",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "steps[1].executions",
+          "expected": "1",
+          "observed": "0",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "outbound_text",
+          "expected": "clean",
+          "observed": "clean",
+          "ok": true,
+          "graded": true
+        }
+      ]
+    },
+    {
+      "id": "FLT-05",
+      "category": "Fault injection",
+      "type": "Transfer",
+      "passed": false,
+      "first_failing_field": "cards[0]",
+      "outbound_ok": true,
+      "learning_ok": false,
+      "time_ms": 440,
+      "cost_usd": 0,
+      "executions": 0,
+      "executions_without_tap": 0,
+      "unsupported": null,
+      "verdicts": [
+        {
+          "field": "asks.count",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "cards[0]",
+          "expected": "transfer",
+          "observed": "card missing",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "cards[1]",
+          "expected": "transfer",
+          "observed": "card missing",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "learning_log",
+          "expected": "null",
+          "observed": "not_understood",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "consent_screen",
+          "expected": "false",
+          "observed": "false",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.balance",
+          "expected": "724000",
+          "observed": "750000",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "final.transactions.count",
+          "expected": "1",
+          "observed": "0",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "final.codes_issued",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "steps[1].card_outcome",
+          "expected": "done",
+          "observed": "none",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "steps[3].card_outcome",
+          "expected": "cancelled",
+          "observed": "none",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "outbound_text",
+          "expected": "clean",
+          "observed": "clean",
+          "ok": true,
+          "graded": true
+        }
+      ]
+    },
+    {
+      "id": "FLT-08",
+      "category": "Fault injection",
+      "type": "Transfer",
+      "passed": false,
+      "first_failing_field": "cards[0]",
+      "outbound_ok": true,
+      "learning_ok": false,
+      "time_ms": 451,
+      "cost_usd": 0,
+      "executions": 0,
+      "executions_without_tap": 0,
+      "unsupported": null,
+      "verdicts": [
+        {
+          "field": "asks.count",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "cards[0]",
+          "expected": "transfer",
+          "observed": "card missing",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "learning_log",
+          "expected": "null",
+          "observed": "not_understood",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "consent_screen",
+          "expected": "false",
+          "observed": "false",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.balance",
+          "expected": "13500",
+          "observed": "18500",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "final.transactions.count",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.codes_issued",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "steps[1].card_outcome",
+          "expected": "failed",
+          "observed": "none",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "steps[1].reply",
+          "expected": "insufficient_balance",
+          "observed": "none",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "outbound_text",
+          "expected": "clean",
+          "observed": "clean",
+          "ok": true,
+          "graded": true
+        }
+      ]
+    },
+    {
+      "id": "GAP-04",
+      "category": "Known gap",
+      "type": "Transfer",
+      "passed": false,
+      "first_failing_field": "cards[0]",
+      "outbound_ok": true,
+      "learning_ok": false,
+      "time_ms": 571,
+      "cost_usd": 0,
+      "executions": 0,
+      "executions_without_tap": 0,
+      "unsupported": null,
+      "verdicts": [
+        {
+          "field": "asks.count",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "cards[0]",
+          "expected": "transfer",
+          "observed": "card missing",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "learning_log.reason",
+          "expected": "choose_account",
+          "observed": "not_understood",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "replies[0]",
+          "expected": "account_choice_unavailable",
+          "observed": "absent (not_understood)",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "consent_screen",
+          "expected": "false",
+          "observed": "false",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.balance",
+          "expected": "719000",
+          "observed": "750000",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "final.transactions.count",
+          "expected": "1",
+          "observed": "0",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "final.codes_issued",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "steps[1].card_outcome",
+          "expected": "done",
+          "observed": "none",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "outbound_text",
+          "expected": "clean",
+          "observed": "clean",
+          "ok": true,
+          "graded": true
+        }
+      ]
+    },
+    {
+      "id": "GAP-06",
+      "category": "Known gap",
+      "type": "Purchase",
+      "passed": false,
+      "first_failing_field": "cards[0]",
+      "outbound_ok": true,
+      "learning_ok": false,
+      "time_ms": 470,
+      "cost_usd": 0,
+      "executions": 0,
+      "executions_without_tap": 0,
+      "unsupported": null,
+      "verdicts": [
+        {
+          "field": "asks.count",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "cards[0]",
+          "expected": "purchase",
+          "observed": "card missing",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "learning_log.reason",
+          "expected": "credit_to_own_number",
+          "observed": "not_understood",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "replies[0]",
+          "expected": "code_entered_by_user",
+          "observed": "absent (not_understood)",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "consent_screen",
+          "expected": "false",
+          "observed": "false",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.balance",
+          "expected": "745000",
+          "observed": "750000",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "final.transactions.count",
+          "expected": "1",
+          "observed": "0",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "final.codes_issued",
+          "expected": "1",
+          "observed": "0",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "steps[1].card_outcome",
+          "expected": "done",
+          "observed": "none",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "outbound_text",
+          "expected": "clean",
+          "observed": "clean",
+          "ok": true,
+          "graded": true
+        }
+      ]
+    },
+    {
+      "id": "GAP-07",
+      "category": "Known gap",
+      "type": "Transfer \u002B transfer",
+      "passed": false,
+      "first_failing_field": "learning_log.reason",
+      "outbound_ok": true,
+      "learning_ok": false,
+      "time_ms": 496,
+      "cost_usd": 0,
+      "executions": 0,
+      "executions_without_tap": 0,
+      "unsupported": null,
+      "verdicts": [
+        {
+          "field": "asks.count",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "learning_log.reason",
+          "expected": "other_currency",
+          "observed": "not_understood",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "refusal.reason",
+          "expected": "dinars_only",
+          "observed": "not_understood",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "refusal.no_card",
+          "expected": "no card",
+          "observed": "no card",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "consent_screen",
+          "expected": "false",
+          "observed": "false",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.balance",
+          "expected": "750000",
+          "observed": "750000",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.transactions.count",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.codes_issued",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "outbound_text",
+          "expected": "clean",
+          "observed": "clean",
+          "ok": true,
+          "graded": true
+        }
+      ]
+    },
+    {
+      "id": "GAP-08",
+      "category": "Known gap",
+      "type": "Transfer",
+      "passed": false,
+      "first_failing_field": "either",
+      "outbound_ok": true,
+      "learning_ok": false,
+      "time_ms": 525,
+      "cost_usd": 0,
+      "executions": 0,
+      "executions_without_tap": 0,
+      "unsupported": null,
+      "verdicts": [
+        {
+          "field": "asks.count",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "either",
+          "expected": "one branch",
+          "observed": "no branch",
+          "ok": false,
+          "graded": true
+        },
+        {
+          "field": "either[1].reply",
+          "expected": "not_understood",
+          "observed": "not_understood",
+          "ok": true,
+          "graded": false
+        },
+        {
+          "field": "either[1].learning_log.reason",
+          "expected": "other_language",
+          "observed": "not_understood",
+          "ok": false,
+          "graded": false
+        },
+        {
+          "field": "consent_screen",
+          "expected": "false",
+          "observed": "false",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.balance",
+          "expected": "750000",
+          "observed": "750000",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.transactions.count",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "final.codes_issued",
+          "expected": "0",
+          "observed": "0",
+          "ok": true,
+          "graded": true
+        },
+        {
+          "field": "outbound_text",
+          "expected": "clean",
+          "observed": "clean",
+          "ok": true,
+          "graded": true
+        }
+      ]
+    }
+  ],
+  "unsupported": []
+}

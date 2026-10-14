@@ -139,6 +139,19 @@ The console and the journeys are described in [agent-web.md](agent-web.md).
 
 **Held-out commit:** `462187f33dd18d08b8176ee767a5114ba9a7f1b2` (14 Oct 2026, "Add test data: seed, matching rules, dev set, held-out set (sealed)"). It adds `data/requests.heldout.jsonl` (62 cases, SHA-256 `3e396362fd6cea5fa81e26ad9e4c17e9c4de2066ee186e963690a14c195ca1c1`) together with the development set, the seed files under `data/seed/` and `docs/matching-rules.md`, all exported from the test-set workbook v0.15. The file was copied as bytes and never opened. Any later commit that touches it, other than the milestone 11 run, must be explained in `docs/disclosure.md`.
 
+**Status, 14 Oct 2026:** every "Done when" line is shown by a test, a committed file or the first development run.
+
+| Done when | Shown by |
+|---|---|
+| The held-out file is committed, and its commit hash is written in `docs/disclosure.md` | Commit 462187f, named in `docs/disclosure.md` with the file's SHA-256; `HeldOutGuardTests.TheRepositoryDisclosureRecordsAHeldOutHash`; the runner refuses the file without `--milestone-11-run` (`HeldOutGuardTests.WithoutTheFlagTheGuardRefusesAndOpensNothing`) |
+| No model prompt other than the scripted parser | `grep -rniE "IChatClient\|ChatClient\|Microsoft\.Extensions\.AI\|Anthropic\|OpenAI\|prompt" src --include=*.cs --include=*.csproj --include=*.json` finds nothing; the only `IParser` is `ScriptedParser` (wrapped by the runner's `RecordingParser`); `NoTapNoMoneyTests` (Agent.Core, Agent.Web and Agent.Eval) |
+| The grader has its own tests: a known wrong card marked wrong, a missing tap as no execution | `CaseGraderTests.AKnownWrongCardFieldIsMarkedWrongWithTheFieldNamed`, `AnExpectedCardThatNeverAppearedFailsAsMissingWithNoExecution`, `StepsWithoutAConfirmExecuteNothingAndTheFinalStateIsGraded`, `AnUnexpectedCardFails`, `ARedTeamCaseWithNoTapAndOneExecutionIsNotAtThePassMark` |
+| The three per-case checks have their own tests | Planted phone: `CaseGraderTests.APlantedPhoneInTheParserTextFailsTheCase` and `OutboundTextCheckTests`; planted balance: `CaseGraderTests.APlantedBalanceInTheParserTextFailsTheCase`; missing learning entry: `CaseGraderTests.AMissingLearningEntryFailsWhenTheKeyExpectsOne` (and `AnUnexpectedLearningEntryFailsWhenTheKeySaysNull`); time and cost recorded: `CaseDriverTests.ACleanTransferIsPlayedEndToEnd` |
+| A balance case: no card, no execution, the reply figure equal to the wallet balance | `CaseGraderTests.ABalanceCaseIsNoCardNoExecutionAndTheBalanceReplyWithTheWalletFigure`; end to end in `RunnerSmokeTests.ThreeCasesRunEndToEndAndAreGraded` |
+| The runner completes on the development set with the scripted parser | `docs/reports/dev-scripted-2026-10-14.md` and `.json`: all 72 cases played, 0 passed (the scripted sentences are English placeholders, so every dev sentence is `not_understood`), 0 executions without a tap, 0 masking failures, 0 unsupported steps, median 469 ms per case, cost 0 |
+
+The runner, the grading rules and the report are described in [agent-eval.md](agent-eval.md).
+
 ## Milestone 6: Model in
 
 **Delivers**
