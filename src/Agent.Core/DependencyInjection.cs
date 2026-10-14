@@ -1,4 +1,5 @@
 using Agent.Core.Audit;
+using Agent.Core.Confirm;
 using Agent.Core.Data;
 using Agent.Core.Pending;
 using Agent.Core.Pipeline;
@@ -18,7 +19,8 @@ public static class AgentCoreServiceCollectionExtensions
     /// <summary>
     /// Adds <see cref="AgentOptions"/> (section <c>Agent</c>, validated at start), a <see cref="TimeProvider"/>
     /// unless one is registered, the <see cref="AgentDbContext"/> on <c>ConnectionStrings:Agent</c> and the typed
-    /// <see cref="WalletClient"/>, the scoped <see cref="Checks"/>, <see cref="AuditLog"/> and <see cref="PendingStore"/>. Nothing connects until it is used, so the app starts without the wallet or the database.
+    /// <see cref="WalletClient"/>, the scoped <see cref="Checks"/>, <see cref="AuditLog"/>, <see cref="PendingStore"/>,
+    /// <see cref="CardBuilder"/>, <see cref="Orchestrator"/> and <see cref="ConfirmHandler"/>. Nothing connects until it is used, so the app starts without the wallet or the database.
     /// </summary>
     public static IServiceCollection AddAgentCore(this IServiceCollection services, IConfiguration configuration)
     {
@@ -53,6 +55,9 @@ public static class AgentCoreServiceCollectionExtensions
         services.AddScoped<Checks>();
         services.AddScoped<AuditLog>();
         services.AddScoped<PendingStore>();
+        services.AddScoped<CardBuilder>();
+        services.AddScoped<Orchestrator>();
+        services.AddScoped<ConfirmHandler>();
 
         return services;
     }
