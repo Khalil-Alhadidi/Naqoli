@@ -1,6 +1,14 @@
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
+using Wallet.MockApi;
 using Wallet.MockApi.Data;
+
+// "seed-hash": print the hash of the frozen seed and exit. Never touches the database.
+if (args is ["seed-hash", ..])
+{
+    Console.WriteLine(SeedData.ComputeHash());
+    return 0;
+}
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -16,6 +24,11 @@ if (string.IsNullOrWhiteSpace(connectionString))
 builder.Services.AddOpenApi();
 builder.Services.AddProblemDetails();
 builder.Services.AddDbContext<WalletDbContext>(o => o.UseSqlServer(connectionString));
+builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddOptions<WalletOptions>()
+    .BindConfiguration(WalletOptions.SectionName)
+    .ValidateDataAnnotations()
+    .ValidateOnStart();
 
 var app = builder.Build();
 
@@ -28,7 +41,9 @@ if (args is ["migrate", ..])
         var db = scope.ServiceProvider.GetRequiredService<WalletDbContext>();
         db.Database.Migrate();
         SeedData.Apply(db);
-        Console.WriteLine($"Database ready: {db.Users.Count()} users, {db.Accounts.Count()} accounts");
+        Console.WriteLine(
+            $"Database ready: {db.Users.Count()} users, {db.Accounts.Count()} accounts, "
+            + $"{db.Contacts.Count()} contacts, {db.Transactions.Count()} transactions");
         return 0;
     }
     catch (SqlException ex)

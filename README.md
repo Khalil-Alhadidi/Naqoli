@@ -86,7 +86,9 @@ Notes:
 
 - The tests use xunit.v3 on Microsoft Testing Platform, selected in the root `global.json`, so test filters go after `--` as shown.
 - The database test reports Skipped unless `ZAINCASH_TEST_SQL=1` is set. It does not read the `Wallet` connection string. By default it uses the local default instance with Windows authentication and the database `ZainCashWallet_Test`. On route A or B, set the `ConnectionStrings__WalletTest` environment variable to a connection string whose database name ends in `_Test`; the test refuses any other name, because it drops the database before and after it runs. In PowerShell, `ZAINCASH_TEST_SQL` stays set for the rest of the session; clear it with `Remove-Item Env:ZAINCASH_TEST_SQL`.
-- `migrate` applies the migrations and the synthetic seed, prints `Database ready: 3 users, 3 accounts` and exits 0. It is safe to run twice. Without a connection string it prints `No connection string 'Wallet'. Set ConnectionStrings:Wallet in appsettings, user secrets or the ConnectionStrings__Wallet environment variable.` and exits 1.
+- `migrate` applies the migrations and the synthetic seed, prints `Database ready: 12 users, 12 accounts, 12 contacts, 19 transactions` and exits 0. It is safe to run twice. Without a connection string it prints `No connection string 'Wallet'. Set ConnectionStrings:Wallet in appsettings, user secrets or the ConnectionStrings__Wallet environment variable.` and exits 1.
+- `seed-hash` (`dotnet run --project src/Wallet.MockApi -- seed-hash`) prints the hash of the frozen seed, the value kept in `data/seed/seed-hash.txt`, and exits 0. It needs no database. See [data/seed/README.md](data/seed/README.md).
+- The database tests (`SeedApplyTests`) also check that `SeedReset.Reset` restores the seed with identity values from 1.
 - The mock wallet API listens on http://localhost:5276. `GET /health` returns `ok`, and the OpenAPI document is at `/openapi/v1.json` in Development.
 - The mock wallet API serves plain HTTP on loopback by design and does not redirect to HTTPS.
 - The web app listens on http://localhost:5089.
