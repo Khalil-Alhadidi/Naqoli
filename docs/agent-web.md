@@ -42,7 +42,7 @@ The side menu sits in the layout outside the `console` element, and it is Englis
 | `IStringLocalizer<PhoneStrings>` (`AddLocalization`) | transient (its factory is a singleton) | The phone strings in `Resources/PhoneStrings.resx` (rule 4) |
 | `TraceLog` | scoped (one per circuit) | The circuit's live trace; it implements `ITraceSink` |
 | `ITraceSink` | scoped | `TraceLog.Current.Value ?? sp.GetRequiredService<TraceLog>()` (see "The live trace") |
-| `IParser` | singleton | `new ScriptedParser()`, through a factory, because DI would pick the constructor that takes a sentence list and pass an empty one |
+| `IParser` | singleton or scoped | `ParserFactory.AddAgentParser`: `Agent:Parser` `scripted` (the default) gives the singleton `new ScriptedParser()`; `claude` (set in user secrets with `Anthropic:ApiKey`, see README) gives a scoped `ClaudeParser`, resolved in the circuit's scope so it writes `more_than_one_request` to the circuit's trace. The settings component shows `Agent:Parser` and the `Model` section read-only, never a key. The journeys pin `scripted` |
 | `ChatSession` | scoped (one per circuit) | The phone's adapter over a `Conversation`: localised messages, the circuit's trace, `Changed` |
 | `AgentOptions` post-configuration | options | `YesWords` and `NoWords` (D6) from the resource values `Word_yes` and `Word_no`, so `Agent.Core` holds no phone text |
 | `ConsoleNavigation` | scoped | The side menu's selection |
@@ -326,7 +326,7 @@ Options validation requires `StaleExecutingAfterSeconds` to be more than three t
 | `send fifty thousand to my brother Hammoudi` | `Transfer`, `recipientText` = S01's alias (copied from `data/seed/contacts.json`), `amountValue` 50, `amountUnit` `Thousand` |
 | `balance` | `Balance` |
 
-Khalil replaces the two sentences; the requests stay. The journeys type the transfer sentence through `ScriptedParser.EmbeddedSentences()`, so they keep working after the change.
+Khalil replaces the two sentences; the requests stay. A sentence may hold a phone number written as the user would type it: the parser masks each sentence at load as the conversation masks the typed text. The journeys type the transfer sentence through `ScriptedParser.EmbeddedSentences()`, so they keep working after the change.
 
 ## The `data-testid` contract
 

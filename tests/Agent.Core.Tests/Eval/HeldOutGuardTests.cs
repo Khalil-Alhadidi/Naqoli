@@ -155,4 +155,39 @@ public sealed class HeldOutGuardTests : IDisposable
         Assert.Equal(new Uri("http://localhost:5999"), parsed.Wallet);
         Assert.Equal("reports", parsed.Out);
     }
+
+    [Theory]
+    [InlineData(new[] { "dev" }, "scripted")]
+    [InlineData(new[] { "dev", "--parser", "scripted" }, "scripted")]
+    [InlineData(new[] { "dev", "--parser", "claude:haiku" }, "claude:haiku")]
+    [InlineData(new[] { "dev", "--only", "A-01", "--parser", "claude:opus" }, "claude:opus")]
+    public void TheParserIsReadFromTheCommandLine(string[] args, string expected)
+    {
+        var parsed = EvalArguments.Parse(args, out var error);
+
+        Assert.Null(error);
+        Assert.Equal(expected, parsed?.Parser);
+    }
+
+    [Theory]
+    [InlineData("gpt")]
+    [InlineData("claude")]
+    [InlineData("claude:")]
+    [InlineData("claude:Haiku 5")]
+    public void AnUnknownParserIsRefused(string parser)
+    {
+        Assert.Null(EvalArguments.Parse(["dev", "--parser", parser], out var error));
+        Assert.NotNull(error);
+    }
+
+    [Fact]
+    public void TheReportNameAndTheEstimateFollowTheParser()
+    {
+        var haiku = new global::Agent.Core.Parsing.ModelCandidate { ModelId = "claude-haiku-5-5", InputPricePerMTok = 0.10m, OutputPricePerMTok = 0.50m };
+
+        Assert.Equal("claude-haiku", EvalCommand.ReportParserName("claude:haiku"));
+        Assert.Equal("scripted", EvalCommand.ReportParserName("scripted"));
+        // 72 cases x (1,500 x 0.10 + 150 x 0.50) / 1,000,000.
+        Assert.Equal(0.0162m, EvalCommand.EstimatedCostUsd(72, haiku));
+    }
 }

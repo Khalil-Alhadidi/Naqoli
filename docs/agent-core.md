@@ -53,7 +53,7 @@ The test hosts set `SweepIntervalSeconds` to 0 and use `NullTraceSink`, or a rec
 
 `IParser.ParseAsync(text, context, cancellationToken)` (`src/Agent.Core/Parsing/IParser.cs`) is the parse call of rule 2: one call per message, read only, returning a `ParsedRequest`. `ParseContext(PendingNote, Map)` is all it may know besides the user's words (D5, rule 5): the one-line note of what is pending, built by code from the type and codes only, or null when nothing is pending; and the `MaskMap` of this message, which the structure validator needs to accept a token (null when the caller did not mask). The text it receives is already masked.
 
-Until milestone 6 the only implementation is `ScriptedParser` (`src/Agent.Core/Parsing/ScriptedParser.cs`). It reads `scripted-sentences.json`, an embedded resource next to it, as a list of `{ "sentence": ..., "request": { ...ParsedRequest... } }` (web JSON defaults, enums as strings; a `note` field is ignored). A typed text matches a sentence when both are equal, ordinal, after `ArabicText.Normalize` (Arabic-Indic and Eastern Arabic-Indic digits to ASCII, whitespace trimmed and collapsed, and the rest of rule 1); anything else is `Unclear`. It holds no per-user state, so one instance serves the whole app; `AddAgentCore` registers no parser, and the host (`Agent.Web`, Task 2) registers `ScriptedParser` as a singleton.
+The scripted implementation is `ScriptedParser` (`src/Agent.Core/Parsing/ScriptedParser.cs`). It reads `scripted-sentences.json`, an embedded resource next to it, as a list of `{ "sentence": ..., "request": { ...ParsedRequest... } }` (web JSON defaults, enums as strings; a `note` field is ignored). A typed text matches a sentence when both are equal, ordinal, after `ArabicText.Normalize` (Arabic-Indic and Eastern Arabic-Indic digits to ASCII, whitespace trimmed and collapsed, and the rest of rule 1); anything else is `Unclear`. It holds no per-user state, so one instance serves the whole app; `AddAgentCore` registers no parser, and `ParserFactory.AddAgentParser` registers it as a singleton when `Agent:Parser` is `scripted` (the default). From milestone 6 each sentence is masked at load as the typed text is, so a sentence may hold a real-looking number.
 
 The file is Khalil's to write. Today it holds two English placeholders marked `TODO-AR`: `send fifty thousand to my brother Hammoudi`, which parses to a transfer to S01's alias (copied character for character from `data/seed/contacts.json`) of 50 thousand, and `balance`, the balance question. A typed yes or no is not a sentence: D6 is the conversation's business, and it points to the Confirm button.
 
@@ -97,6 +97,36 @@ flowchart TD
     unclear --> orch
     orch --> reply["Reply shown"]
     reply --> log["LearningLog.WriteAsync(entry, masked text)"]
+```
+
+## The Claude parser (milestone 6)
+
+`ClaudeParser` (`src/Agent.Core/Parsing/ClaudeParser.cs`) is the model parser: one read-only call per message through `IChatClient` (`Microsoft.Extensions.AI` 10.11.0 over the official `Anthropic` 12.56.0 SDK, `AnthropicClient.AsIChatClient(modelId, maxOutputTokens)`), so a candidate model is a configuration change.
+
+- **What it sends.** A system message, the frozen prompt `parse-prompt.md` (embedded; first line `version: 1`, `ClaudeParser.PromptVersion`; English, with the full-request examples of `docs/matching-rules.md` rules 1 to 17 that name no seed contact), and one user message: `Pending: <the pending note, or none>` and `Message: <the masked text>`. Nothing else: no history, no name, no balance, no purchase code (rule 5; `OutboundPayloadTests` drives the whole conversation and checks the captured payload).
+- **The options.** `ModelId`, `MaxOutputTokens` (400), `Temperature` only when a candidate sets it (none does: the Claude 5.5 models reject a non-default temperature, and Opus 5.5 any), and `ResponseFormat = ChatResponseFormat.ForJsonSchema(ClaudeParser.Schema, "parse", ...)`. The schema is `JsonSchemaExporter`'s schema of `ParsedRequestsDto`, every object closed (`additionalProperties: false`) with every field required, and each enum string limited to its set. The Anthropic adapter maps it to the API's `output_config.format` (`json_schema`); `AnthropicAdapterTests` proves it offline by reading the request body the real adapter sends to a stub handler, so no `RawRepresentationFactory` fallback is built.
+- **What it reads.** The reply text, deserialised strictly (an unknown field, a wrong type or text that is not JSON gives `Unclear` with `Problem` `json`), then `ParsedRequestValidator.Validate` with the message's `MaskMap` from `ParseContext.Map`. A reply with more than one request gives the first and traces `more_than_one_request` (Model zone, the count) until milestone 9 builds compound requests.
+- **Usage.** `LastUsage` (`IParserUsage`): the input and output tokens of `ChatResponse.Usage` (`InputTokenCount`, `OutputTokenCount`), the cost at the candidate's prices per million tokens, and the time.
+- **Failures.** The candidate's `TimeoutSeconds` (20) ends the call (`timeout`); an HTTP answer with a status (401 bad key, 400 bad request, 429 rate limit, 5xx, 529 overloaded) gives `http_<status>`; a transport failure gives `connection`; any other exception its type. Each is a `ParserUnavailableException` (the reply `model_unavailable`) whose message holds the reason only, never the key or the response body. The caller's own cancellation propagates. The SDK's own retries (2, on 429, 5xx and connection errors) run inside the timeout.
+- **Logs.** Model id, duration, tokens, cost and finish reason at Information; the reason and duration of a failure at Warning. Never the text.
+- **Name.** `claude:<candidate>`, on the trace (`parse:claude:haiku`) and in the report name (`dev-claude-haiku-...`). The scripted parser is `scripted`.
+
+### Choosing the parser
+
+`ParserFactory.AddAgentParser` (`Agent:Parser`, `AgentOptions.Parser`) registers `ScriptedParser` (`scripted`, the default; nothing of Anthropic is constructed) or `ClaudeParser` (`claude`), scoped so it writes to the scope's trace, over a singleton `IChatClient`. With `claude`, `ModelOptions` (section `Model`: `Candidate`, and `Candidates:<name>` with `Provider` `anthropic`, `ModelId`, `MaxOutputTokens`, `Temperature`, `TimeoutSeconds`, `InputPricePerMTok`, `OutputPricePerMTok`) is validated at start: the candidate must exist, the provider be `anthropic`, the model id be set, the limits above 0, the prices not below 0, and a key must be set (`Anthropic:ApiKey` in user secrets, or `ANTHROPIC_API_KEY`). A failure stops the start with a message that names the settings, never a value. The `Model` section is bound whatever the parser, and the console shows it read-only.
+
+```mermaid
+flowchart TD
+    setting{"Agent:Parser"} -- "scripted (default)" --> scripted["ScriptedParser (singleton)"]
+    setting -- claude --> check{"Candidate valid and a key set?"}
+    check -- no --> stop["Start refused: message names the settings"]
+    check -- yes --> client["IChatClient: AnthropicClient.AsIChatClient(modelId)"]
+    client --> claude["ClaudeParser (scoped, the scope's trace)"]
+    claude --> call["GetResponseAsync(prompt + Pending + masked Message, schema, max tokens, timeout)"]
+    call -- "timeout, HTTP status, connection" --> unavailable["ParserUnavailableException: model_unavailable"]
+    call -- reply --> read{"Strict JSON of ParsedRequestsDto?"}
+    read -- no --> json["Unclear, Problem json"]
+    read -- yes --> validate["ParsedRequestValidator with the message's map"]
 ```
 
 ## The pipeline, in order
@@ -451,6 +481,7 @@ Any other exception in an action is traced as `error` (the exception type) and a
 | `CardsIssued` | Every card issued, in order (for the grader) |
 | `QuestionsAsked` | Every question, in order, as `ConversationQuestion(Kind, Answer, OptionValues)` (for the grader) |
 | `LastReply`, `LastRequest` | The last `AgentReply` to a request, and the request it answered (together they give the learning-log entry) |
+| `LastLearningEntry` | The learning-log entry the conversation wrote for its last reply (`model_invalid_reply` for a refused structure, else `LearningLogRule.EntryFor`), or null; the runner grades it |
 | `ConsentShown` | True once the consent screen has been shown |
 
 `Changed` is raised on every new message, and at the start and end of every action. It is raised while the action still holds its turn, so a handler sees each message on the async flow of the action that added it.
@@ -516,7 +547,7 @@ stateDiagram-v2
 | Code | `Orchestrator` | `parse_received` (the intent), `consent_checked` (`given` or `required`), `recipient_resolved` (`contact`, `alias`, `number`, `bill` or `purchase`), `amount_resolved` (the amount), `checks_passed` (the quote's total) or `check_failed:<reason>` (the figure), `card_created` (type, total, `pin` when one is needed), `question:<kind>` (how many options), `refusal:<code>` (the wallet code for `not_done_nothing_taken`, else the figure), `balance_shown` (no figure) |
 | Write | `ConfirmHandler` | `begin_execute` (type and total), `recheck_ok` or `recheck_failed:<reason>` (the wallet code, if any), `execute_sent`, `outcome:<done, not_done, checking, expired, already_handled, not_found, pin_required, pin_wrong, pin_malformed, cancelled or exception>` (the record's state, the reason, or the attempts left), `settle_sent`, `settle_outcome:<the same names>` |
 
-The User and Model zones are written by the `Conversation` (below; `message_received`, `confirm_tapped`, `check_again_tapped`, `cancel_tapped`, `parse:scripted`, `parse:unavailable`) and the model parser (milestone 6). The `Conversation` also writes, in the Code zone, `model_invalid_reply` (the field the validator refused), `learning_logged` (the reason) and `error` (an exception's type). A detail holds codes, states and amounts only: never a PIN, an idempotency key, a purchase code, a phone, a name, a balance or any text the user typed (an unsupported reason stays out until milestone 6 validates it). `TraceSinkTests.NoPinKeyCodeOrPhoneInAnyStep` runs a PIN payment and a purchase through a recording sink and checks every step and detail.
+The User and Model zones are written by the `Conversation` (below; `message_received`, `confirm_tapped`, `check_again_tapped`, `cancel_tapped`, `parse:<parser name>` with the intent, `parse:unavailable`) and the Claude parser (`more_than_one_request`, Model zone, with the count). The `Conversation` also writes, in the Code zone, `model_invalid_reply` (the field the validator refused), `learning_logged` (the reason) and `error` (an exception's type). A detail holds codes, states and amounts only: never a PIN, an idempotency key, a purchase code, a phone, a name, a balance or any text the user typed (an unsupported reason stays out until milestone 6 validates it). `TraceSinkTests.NoPinKeyCodeOrPhoneInAnyStep` runs a PIN payment and a purchase through a recording sink and checks every step and detail.
 
 ```mermaid
 sequenceDiagram

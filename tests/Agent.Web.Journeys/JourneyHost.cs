@@ -196,6 +196,8 @@ public sealed class JourneyHost : IAsyncLifetime
             host.UseSetting("Agent:WalletClientKey", ClientKey);
             host.UseSetting("ConnectionStrings:Agent", AgentConnectionString);
             host.UseSetting("Agent:SweepIntervalSeconds", "1");
+            // Journeys never call a live model: the scripted parser is pinned whatever the developer's secrets say.
+            host.UseSetting("Agent:Parser", "scripted");
             if (cardTimerSeconds is { } seconds)
                 host.UseSetting("Agent:CardTimerSeconds", seconds.ToString(System.Globalization.CultureInfo.InvariantCulture));
         });

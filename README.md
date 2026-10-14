@@ -116,16 +116,29 @@ Notes:
 - Install the Playwright browser once, after the first build: `pwsh tests/Agent.Web.Journeys/bin/Debug/net10.0/playwright.ps1 install chromium`.
 - The screen journeys (`tests/Agent.Web.Journeys`, collection `journeys`, fixture `JourneyHost`) host the mock wallet and the web console in process on Kestrel, on dynamic loopback ports, and drive them with headless Chromium through the scripted parser (never a live model). The wallet uses `ZainCashWalletJourneys_Test` (override `ConnectionStrings__WalletJourneysTest`) and the console `ZainCashAgent_Journeys_Test` (override `ConnectionStrings__AgentJourneysTest`); both are dropped and recreated at the start of a run, so both names must end in `_Test`. Two consoles run: one with the default card timer and one with a 4-second timer for the timer journey. The journeys skip when SQL Server does not answer the 3-second probe, or when Chromium is not installed (the skip message gives the install command). A run takes about 20 seconds.
 
+## The model (Claude parser)
+
+The parse call is the scripted parser by default (`Agent:Parser` = `scripted`): no model, no key. The Claude parser (milestone 6) calls a candidate of the `Model` section (`haiku`, the default; `sonnet`; `opus`) through `Microsoft.Extensions.AI`. It needs an Anthropic API key, kept in user secrets or the environment, never in a file:
+
+```powershell
+dotnet user-secrets set "Anthropic:ApiKey" "<your key>" --project src/Agent.Web
+dotnet user-secrets set "Agent:Parser" "claude" --project src/Agent.Web
+```
+
+The first command stores the key for both the console and the runner (`Agent.Eval` reads only `Anthropic:ApiKey` from the console's store). The second switches the console to the model; remove it (`dotnet user-secrets remove "Agent:Parser" --project src/Agent.Web`) to go back to the scripted parser. `ANTHROPIC_API_KEY` works instead of the first command. With `Agent:Parser` = `claude` and no key, the console and the runner refuse to start with a message naming both settings (never a value). Another candidate: `dotnet user-secrets set "Model:Candidate" "sonnet" --project src/Agent.Web`. The screen journeys always use the scripted parser.
+
+The live model test is skipped unless asked for: `$env:ZAINCASH_MODEL_TESTS='1'; dotnet test tests/Agent.Core.Tests -- --filter-class "Agent.Core.Tests.Parsing.LiveModelTests"` (clear it afterwards with `Remove-Item Env:ZAINCASH_MODEL_TESTS`). It calls each candidate three times and prints the tokens and the cost.
+
 ## Run eval
 
-`Agent.Eval` plays a request set through the same conversation logic as the phone (the scripted parser, never a live model), grades every case against its answer key and writes a report. How it plays and grades each case, the red-team pass mark and the first development run are in [docs/agent-eval.md](docs/agent-eval.md).
+`Agent.Eval` plays a request set through the same conversation logic as the phone (the scripted parser by default, or a model candidate with `--parser claude:<candidate>`), grades every case against its answer key and writes a report. How it plays and grades each case, the red-team pass mark and the first development run are in [docs/agent-eval.md](docs/agent-eval.md).
 
 1. Create the wallet database once (`dotnet run --project src/Wallet.MockApi -- migrate`) and start the wallet: `dotnet run --project src/Wallet.MockApi`.
 2. Run the development set: `dotnet run --project src/Agent.Eval -- dev`.
 
-Options: `--only CLN-01,CLN-02` runs some cases; `--wallet http://localhost:5276` points at another wallet; `--out <dir>` writes the report elsewhere. The settings are in `src/Agent.Eval/appsettings.json` (sections `Eval` and `Agent`); the runner uses its own agent database, `ZainCashAgent_Eval` (`ConnectionStrings:Agent`), which it creates and migrates, because before every case it resets the wallet to the seed, closes open pending records and empties the audit log. It runs in the Development environment unless `DOTNET_ENVIRONMENT` says otherwise.
+Options: `--only CLN-01,CLN-02` runs some cases; `--wallet http://localhost:5276` points at another wallet; `--out <dir>` writes the report elsewhere; `--parser claude:haiku` (or `sonnet`, `opus`) measures a model candidate, printing the estimated cost before the run and the real cost after it (it needs the key, see The model above). The settings are in `src/Agent.Eval/appsettings.json` (sections `Eval` and `Agent`); the runner uses its own agent database, `ZainCashAgent_Eval` (`ConnectionStrings:Agent`), which it creates and migrates, because before every case it resets the wallet to the seed, closes open pending records and empties the audit log. It runs in the Development environment unless `DOTNET_ENVIRONMENT` says otherwise.
 
-The console prints one line per case (id, passed or the first failing field) and one per category, then the report paths: `docs/reports/dev-scripted-<UTC date>.md` and `.json` (a second run on the same day replaces them). A report holds case ids, categories, codes, figures and verdicts, never a case's text. Exit codes: 0 the run completed (whatever the pass rate), 2 the command line is wrong or the held-out guard refused, 1 the wallet or the agent database does not answer, or the set file is missing.
+The console prints one line per case (id, passed or the first failing field) and one per category, then the report paths: `docs/reports/dev-<parser>-<UTC date>-<UTC HHmm>.md` and `.json` (for example `dev-claude-haiku-2026-10-14-2130`). A report holds case ids, categories, codes, figures and verdicts, never a case's text. Exit codes: 0 the run completed (whatever the pass rate), 2 the command line is wrong or the held-out guard refused, 1 the wallet or the agent database does not answer, or the set file is missing.
 
 The held-out set (`data/requests.heldout.jsonl`) is sealed (rule 7). `dotnet run --project src/Agent.Eval -- heldout` refuses and prints the rule without opening any file. Only the milestone 11 run uses `heldout --milestone-11-run`, which hashes the file and refuses unless the SHA-256 equals the one recorded in `docs/disclosure.md`.
 

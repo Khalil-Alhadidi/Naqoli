@@ -1,11 +1,13 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
+    <PackageReference Include="Anthropic" Version="12.56.0" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.13">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
     <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.13" />
+    <PackageReference Include="Microsoft.Extensions.AI" Version="10.11.0" />
     <PackageReference Include="Microsoft.Extensions.Configuration.EnvironmentVariables" Version="10.0.13" />
     <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="10.0.13" />
     <PackageReference Include="Microsoft.Extensions.Configuration.UserSecrets" Version="10.0.13" />
@@ -20,8 +22,10 @@
   <ItemGroup>
     <!-- Khalil's word lists from matching rule 1 (kinship groups and title words). -->
     <EmbeddedResource Include="Text\arabic-words.json" />
-    <!-- Khalil's scripted sentences for the scripted parser, until the model arrives in milestone 6. -->
+    <!-- Khalil's scripted sentences for the scripted parser (the screen journeys, and the console's default). -->
     <EmbeddedResource Include="Parsing\scripted-sentences.json" />
+    <!-- The frozen prompt of the Claude parser (its version on the first line). -->
+    <EmbeddedResource Include="Parsing\parse-prompt.md" />
   </ItemGroup>
 
 </Project>

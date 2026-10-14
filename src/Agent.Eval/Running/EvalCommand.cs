@@ -17,7 +17,7 @@ namespace Agent.Eval.Running;
 /// <summary>
 /// The eval command line: builds the host (<c>AddAgentEval</c>: the agent's services, <see cref="EvalClock"/> as the
 /// <see cref="TimeProvider"/>), runs the held-out guard before any set file is opened, plays every case through a
-/// <see cref="CaseDriver"/> with the <see cref="ScriptedParser"/> inside a <see cref="RecordingParser"/>, grades it with
+/// <see cref="CaseDriver"/> with the parser <c>--parser</c> names inside a <see cref="RecordingParser"/>, grades it with
 /// the <see cref="CaseGrader"/>, and writes the report. It prints case ids, codes and figures, never case text.
 /// </summary>
 public static class EvalCommand
@@ -31,10 +31,30 @@ public static class EvalCommand
     /// <summary>The held-out guard refused, or the command line or the settings are wrong.</summary>
     public const int Refused = 2;
 
-    /// <summary>The parser this milestone measures.</summary>
-    public const string ParserName = "scripted";
+    /// <summary>The input tokens one case is estimated to take before a model run (the prompt and one message).</summary>
+    public const int EstimatedInputTokensPerCase = 1_500;
+
+    /// <summary>The output tokens one case is estimated to take before a model run.</summary>
+    public const int EstimatedOutputTokensPerCase = 150;
+
+    /// <summary>The web console's user-secrets id (<c>src/Agent.Web/Agent.Web.csproj</c>), where Khalil sets the key once.</summary>
+    public const string WebUserSecretsId = "2caa1826-0a12-43da-8479-d86df1b92e41";
 
     private static readonly TimeSpan AdminTimeout = TimeSpan.FromMinutes(2);
+
+    /// <summary>The parser's name as it appears in a report file name: <c>claude:haiku</c> becomes <c>claude-haiku</c>.</summary>
+    public static string ReportParserName(string parserName)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(parserName);
+        return parserName.Replace(':', '-');
+    }
+
+    /// <summary>The cost estimated before a run: <paramref name="cases"/> × (1,500 input + 150 output tokens) at the candidate's prices.</summary>
+    public static decimal EstimatedCostUsd(int cases, ModelCandidate candidate)
+    {
+        ArgumentNullException.ThrowIfNull(candidate);
+        return cases * candidate.CostUsd(EstimatedInputTokensPerCase, EstimatedOutputTokensPerCase);
+    }
 
     /// <summary>Runs the command of <paramref name="args"/>; returns the exit code.</summary>
     public static async Task<int> RunAsync(string[] args, TextWriter output, TextWriter errors, CancellationToken cancellationToken)
@@ -142,13 +162,33 @@ public static class EvalCommand
             return Unavailable;
         }
 
+        // The parser Agent:Parser names (the command line set it): resolved once, in a scope that lasts the run.
+        await using var runScope = host.Services.CreateAsyncScope();
+        var measured = runScope.ServiceProvider.GetRequiredService<IParser>();
+        var model = host.Services.GetRequiredService<IOptions<ModelOptions>>().Value;
+        var candidate = parsed.Candidate is null ? null : model.Selected;
+        var settings = new Dictionary<string, string>(Settings(options, agentOptions), StringComparer.Ordinal);
+        if (candidate is not null)
+        {
+            var estimate = EstimatedCostUsd(cases.Count, candidate);
+            settings["Model:Candidate"] = parsed.Candidate!;
+            settings["Model:ModelId"] = candidate.ModelId;
+            settings["Model:PromptVersion"] = ClaudeParser.PromptVersion;
+            settings["Model:EstimatedCostUsd"] = Usd(estimate);
+            await output.WriteLineAsync(string.Create(
+                CultureInfo.InvariantCulture,
+                $"Model {parsed.Candidate} ({candidate.ModelId}), prompt version {ClaudeParser.PromptVersion}. Estimated cost: {cases.Count} case(s) x ({EstimatedInputTokensPerCase} in + {EstimatedOutputTokensPerCase} out tokens) = {Usd(estimate)} USD."));
+        }
+
         var admin = new WalletAdmin(http, options.WalletAdminKey, seed);
-        var parser = new RecordingParser(new ScriptedParser());
+        var parser = new RecordingParser(measured);
         var driver = new CaseDriver(host.Services, admin, seed, host.Services.GetRequiredService<EvalClock>(), parser, options);
         var grader = new CaseGrader(seed);
 
         var started = TimeProvider.System.GetUtcNow();
         var results = new List<CaseResult>(cases.Count);
+        long inputTokens = 0;
+        long outputTokens = 0;
         foreach (var evalCase in cases)
         {
             CaseObservation observation;
@@ -162,12 +202,24 @@ public static class EvalCommand
                 return Unavailable;
             }
 
+            inputTokens += observation.Usage.InputTokens;
+            outputTokens += observation.Usage.OutputTokens;
             var result = grader.Grade(evalCase, observation);
             results.Add(result);
             await output.WriteLineAsync(evalCase.Id + " " + (result.Passed ? "passed" : "failed" + (result.FirstFailing is { } f ? " at " + f.Field : string.Empty)));
         }
 
-        var summary = new RunSummary(parsed.Set, setHash, ParserName, started, Settings(options, agentOptions), results);
+        if (candidate is not null)
+        {
+            var cost = results.Sum(r => r.CostUsd);
+            settings["Model:CostUsd"] = Usd(cost);
+            settings["Model:InputTokens"] = inputTokens.ToString(CultureInfo.InvariantCulture);
+            settings["Model:OutputTokens"] = outputTokens.ToString(CultureInfo.InvariantCulture);
+            await output.WriteLineAsync(string.Create(
+                CultureInfo.InvariantCulture, $"Model cost: {Usd(cost)} USD ({inputTokens} tokens in, {outputTokens} out)."));
+        }
+
+        var summary = new RunSummary(parsed.Set, setHash, ReportParserName(measured.Name), started, settings, results);
         var paths = ReportWriter.Write(summary, EvalPaths.Resolve(parsed.Out ?? options.ReportDirectory, root));
 
         foreach (var score in ReportWriter.Scores(results, r => r.Category))
@@ -232,12 +284,31 @@ public static class EvalCommand
         var overrides = new Dictionary<string, string?>(StringComparer.Ordinal);
         if (parsed.Wallet is { } wallet)
             overrides[AgentOptions.SectionName + ":" + nameof(AgentOptions.WalletBaseUrl)] = wallet.ToString();
+
+        // --parser claude:<candidate> selects the Claude parser and the candidate; the key comes from the web console's
+        // user secrets (the same UserSecretsId) or ANTHROPIC_API_KEY, and is checked when the host starts.
+        overrides[ParserFactory.ParserSetting] = parsed.Candidate is null ? ParserFactory.Scripted : ParserFactory.Claude;
+        if (parsed.Candidate is { } name)
+        {
+            overrides[ModelOptions.SectionName + ":" + nameof(ModelOptions.Candidate)] = name;
+
+            // Only the key is taken from the web console's user secrets: its other secrets (its own agent database)
+            // must never reach the runner, which empties the tables of the database it uses.
+            if (builder.Environment.IsDevelopment() && builder.Configuration[ParserFactory.ApiKeySetting] is null)
+            {
+                var key = new ConfigurationBuilder().AddUserSecrets(WebUserSecretsId).Build()[ParserFactory.ApiKeySetting];
+                if (!string.IsNullOrWhiteSpace(key))
+                    overrides[ParserFactory.ApiKeySetting] = key;
+            }
+        }
         if (overrides.Count > 0)
             builder.Configuration.AddInMemoryCollection(overrides);
 
         builder.Services.AddAgentEval(builder.Configuration);
         return builder.Build();
     }
+
+    private static string Usd(decimal value) => value.ToString("0.0000", CultureInfo.InvariantCulture);
 
     private static async Task<bool> WalletAnswersAsync(HttpClient http, CancellationToken cancellationToken)
     {

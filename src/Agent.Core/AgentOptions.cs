@@ -112,6 +112,13 @@ public sealed class AgentOptions
     /// <summary>D6: the typed words that mean "no" while a card is live; a no cancels the card. See <see cref="YesWords"/>.</summary>
     public string[] NoWords { get; set; } = [];
 
+    /// <summary>
+    /// The parse call: <c>scripted</c> (the default; no model) or <c>claude</c> (the <c>Model</c> section's candidate,
+    /// with a key in user secrets). Read by <see cref="Parsing.ParserFactory.AddAgentParser"/>.
+    /// </summary>
+    [RegularExpression("^(scripted|claude)$")]
+    public string Parser { get; set; } = Parsing.ParserFactory.Scripted;
+
     /// <summary>True when <see cref="StaleExecutingAfterSeconds"/> outlasts the three timed wallet calls of a Confirm.</summary>
     internal bool StaleExecutingOutlastsAConfirm => StaleExecutingAfterSeconds > 3 * WalletTimeoutSeconds;
 }

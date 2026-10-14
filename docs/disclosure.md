@@ -29,6 +29,16 @@ Every model, tool, library, data source and AI coding assistant used in this ent
 - Microsoft.Extensions.Configuration.Json, Microsoft.Extensions.Configuration.UserSecrets and Microsoft.Extensions.Configuration.EnvironmentVariables 10.0.13 (configuration of the agent database's design-time factory for dotnet ef).
 - SQL Server (local instance, LocalDB or container) as the mock wallet's database.
 - dotnet-ef 10.0.13 (EF Core command-line tool, pinned in .config/dotnet-tools.json).
+- Anthropic 12.56.0 (the official Anthropic C# SDK; its `AsIChatClient` adapter is the agent's model client in Agent.Core).
+- Microsoft.Extensions.AI 10.11.0 (the `IChatClient` abstraction the Claude parser calls, so a candidate model is a configuration change; brings Microsoft.Extensions.AI.Abstractions 10.11.0).
+
+## Models
+
+Configured as parse-call candidates in the `Model` section (`src/Agent.Web/appsettings.json`, `src/Agent.Eval/appsettings.json`). Each is read-only: one structured parse call per message, no tools. The model ids are listed from the commit that configures them, before any call.
+
+- Claude Haiku 5.5 (`claude-haiku-5-5`, Anthropic API), candidate `haiku`, the default.
+- Claude Sonnet 5.5 (`claude-sonnet-5-5`, Anthropic API), candidate `sonnet`.
+- Claude Opus 5.5 (`claude-opus-5-5`, Anthropic API), candidate `opus`.
 
 ## Data sources
 

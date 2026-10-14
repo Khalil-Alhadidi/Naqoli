@@ -1,0 +1,266 @@
+using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
+using System.Text.Json;
+using System.Text.Json.Nodes;
+using System.Text.Json.Schema;
+using System.Text.Json.Serialization.Metadata;
+using Agent.Core.Masking;
+using Agent.Core.Requests;
+using Agent.Core.Trace;
+using Anthropic.Exceptions;
+using Microsoft.Extensions.AI;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+
+namespace Agent.Core.Parsing;
+
+/// <summary>
+/// The model parser (rule 2): one read-only call per message through <see cref="IChatClient"/>
+/// (<c>Microsoft.Extensions.AI</c>, so a candidate is a configuration change). It sends the frozen prompt
+/// (<c>parse-prompt.md</c>, <see cref="PromptVersion"/>) as the system message and, as the user message, the pending
+/// note and the masked text only (rule 5). It asks for the strict structure (<see cref="ParsedRequestsDto"/>) through
+/// <see cref="ChatOptions.ResponseFormat"/>, reads the reply strictly and hands it to <see cref="ParsedRequestValidator"/>
+/// with the message's mask map. It never throws for a bad reply (that is <see cref="RequestIntent.Unclear"/> with a
+/// <see cref="ParsedRequest.Problem"/>); a call that fails or outlasts the candidate's timeout throws
+/// <see cref="ParserUnavailableException"/>. Logs hold the model id, the time, the tokens and the cost, never the text.
+/// </summary>
+/// <remarks>
+/// Structured output: the Anthropic adapter (<c>AnthropicClientExtensions.AsIChatClient</c>, package <c>Anthropic</c>
+/// 12.56.0) maps <see cref="ChatResponseFormatJson"/> with a schema to the API's <c>output_config.format</c>
+/// (<c>json_schema</c>), transforming the schema to what the API supports. <c>AnthropicAdapterTests</c> proves it offline
+/// by reading the request body the adapter sends, so no <see cref="ChatOptions.RawRepresentationFactory"/> fallback is
+/// built.
+/// </remarks>
+public sealed partial class ClaudeParser : IParser, IParserUsage
+{
+    /// <summary>The <see cref="ParsedRequest.Problem"/> of a reply that is not the structure (not JSON, an unknown field).</summary>
+    public const string JsonProblem = "json";
+
+    /// <summary>The Model-zone trace step when the reply listed more than one request (detail: how many).</summary>
+    public const string MoreThanOneRequestStep = "more_than_one_request";
+
+    private const string PromptResource = "Agent.Core.Parsing.parse-prompt.md";
+    private const string VersionPrefix = "version: ";
+    private const string MessagePrefix = "Message: ";
+    private const string AnswerPrefix = "Answer: ";
+
+    private static readonly JsonSerializerOptions StrictJson = new(JsonSerializerDefaults.General)
+    {
+        TypeInfoResolver = new DefaultJsonTypeInfoResolver(),
+    };
+
+    private static readonly Lazy<string> LazyPrompt = new(LoadPrompt);
+    private static readonly Lazy<JsonElement> LazySchema = new(BuildSchema);
+
+    private readonly IChatClient client;
+    private readonly ModelCandidate candidate;
+    private readonly TimeProvider clock;
+    private readonly ITraceSink trace;
+    private readonly ILogger<ClaudeParser> logger;
+    private ParseUsage? lastUsage;
+
+    /// <exception cref="InvalidOperationException">The options name no candidate (the start-up validation says which).</exception>
+    public ClaudeParser(IChatClient client, IOptions<ModelOptions> options, TimeProvider clock, ITraceSink trace, ILogger<ClaudeParser> logger)
+    {
+        ArgumentNullException.ThrowIfNull(client);
+        ArgumentNullException.ThrowIfNull(options);
+        ArgumentNullException.ThrowIfNull(clock);
+        ArgumentNullException.ThrowIfNull(trace);
+        ArgumentNullException.ThrowIfNull(logger);
+
+        var model = options.Value;
+        candidate = model.Selected
+            ?? throw new InvalidOperationException("Model:Candidate must name one of Model:Candidates.");
+        Name = "claude:" + model.Candidate;
+        this.client = client;
+        this.clock = clock;
+        this.trace = trace;
+        this.logger = logger;
+    }
+
+    /// <summary>The frozen prompt (<c>parse-prompt.md</c>), sent as the system message.</summary>
+    public static string Prompt => LazyPrompt.Value;
+
+    /// <summary>The prompt's version: its first line, <c>version: N</c>.</summary>
+    public static string PromptVersion => Prompt.Split('\n', 2)[0][VersionPrefix.Length..].Trim();
+
+    /// <summary>
+    /// The JSON schema of <see cref="ParsedRequestsDto"/> asked for: exported by <see cref="JsonSchemaExporter"/>, every
+    /// object closed (<c>additionalProperties: false</c>) with every field required, and each enum string limited to its set.
+    /// </summary>
+    public static JsonElement Schema => LazySchema.Value;
+
+    public string Name { get; }
+
+    public ParseUsage? LastUsage => Volatile.Read(ref lastUsage);
+
+    /// <summary>The prompt's examples, in order: each message and the answer the prompt gives for it.</summary>
+    public static IReadOnlyList<(string Message, string Answer)> Examples()
+    {
+        var lines = Prompt.Split('\n').Select(l => l.TrimEnd('\r')).ToList();
+        var examples = new List<(string, string)>();
+        for (var i = 0; i + 1 < lines.Count; i++)
+        {
+            if (lines[i].StartsWith(MessagePrefix, StringComparison.Ordinal) && lines[i + 1].StartsWith(AnswerPrefix, StringComparison.Ordinal))
+                examples.Add((lines[i][MessagePrefix.Length..], lines[i + 1][AnswerPrefix.Length..]));
+        }
+
+        return examples;
+    }
+
+    public async Task<ParsedRequest> ParseAsync(string text, ParseContext context, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        ArgumentNullException.ThrowIfNull(context);
+
+        List<ChatMessage> messages =
+        [
+            new(ChatRole.System, Prompt),
+            new(ChatRole.User, "Pending: " + (context.PendingNote ?? "none") + "\nMessage: " + text),
+        ];
+        var options = new ChatOptions
+        {
+            ModelId = candidate.ModelId,
+            MaxOutputTokens = candidate.MaxOutputTokens,
+            Temperature = candidate.Temperature,
+            ResponseFormat = ChatResponseFormat.ForJsonSchema(Schema, "parse", "The requests in the user's message, in the order spoken."),
+        };
+
+        var started = clock.GetTimestamp();
+        ChatResponse response;
+        using (var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken))
+        {
+            timeout.CancelAfter(TimeSpan.FromSeconds(candidate.TimeoutSeconds));
+            try
+            {
+                response = await client.GetResponseAsync(messages, options, timeout.Token);
+            }
+            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+            {
+                throw Unavailable("timeout", started);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                throw Unavailable(ReasonOf(ex), started);
+            }
+        }
+
+        var duration = clock.GetElapsedTime(started);
+        var inputTokens = response.Usage?.InputTokenCount ?? 0;
+        var outputTokens = response.Usage?.OutputTokenCount ?? 0;
+        var cost = candidate.CostUsd(inputTokens, outputTokens);
+        Volatile.Write(ref lastUsage, new ParseUsage(ToInt(inputTokens), ToInt(outputTokens), cost, duration));
+        LogParsed(candidate.ModelId, (long)duration.TotalMilliseconds, inputTokens, outputTokens, cost, response.FinishReason?.Value ?? "none");
+
+        if (!TryRead(response.Text, out var reply))
+            return new ParsedRequest { Intent = RequestIntent.Unclear, Problem = JsonProblem };
+
+        if (reply.Requests is { Count: > 1 } several)
+            trace.Record(TraceZone.Model, MoreThanOneRequestStep, several.Count.ToString(CultureInfo.InvariantCulture));
+
+        return ParsedRequestValidator.Validate(reply, context.Map ?? MaskMap.Empty).Request;
+    }
+
+    private static bool TryRead(string? text, [NotNullWhen(true)] out ParsedRequestsDto? reply)
+    {
+        reply = null;
+        if (string.IsNullOrWhiteSpace(text))
+            return false;
+        try
+        {
+            reply = JsonSerializer.Deserialize<ParsedRequestsDto>(text, StrictJson);
+            return reply is not null;
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// The reason of a failed call: <c>http_NNN</c> for an answer with a status (a bad key is 401, a rate limit 429),
+    /// <c>connection</c> for a transport failure, otherwise the exception's type. Never its message, which may hold the
+    /// response body.
+    /// </summary>
+    private static string ReasonOf(Exception ex) => ex switch
+    {
+        AnthropicApiException api => "http_" + ((int)api.StatusCode).ToString(CultureInfo.InvariantCulture),
+        HttpRequestException { StatusCode: { } status } => "http_" + ((int)status).ToString(CultureInfo.InvariantCulture),
+        HttpRequestException or AnthropicIOException => "connection",
+        _ => ex.GetType().Name,
+    };
+
+    private ParserUnavailableException Unavailable(string reason, long started)
+    {
+        LogUnavailable(candidate.ModelId, reason, (long)clock.GetElapsedTime(started).TotalMilliseconds);
+        return new ParserUnavailableException("The model did not answer (" + reason + ").");
+    }
+
+    private static int ToInt(long tokens) => tokens > int.MaxValue ? int.MaxValue : (int)Math.Max(0, tokens);
+
+    private static string LoadPrompt()
+    {
+        using var stream = typeof(ClaudeParser).Assembly.GetManifestResourceStream(PromptResource)
+            ?? throw new InvalidOperationException($"Embedded resource {PromptResource} is missing.");
+        using var reader = new StreamReader(stream);
+        var prompt = reader.ReadToEnd().Replace("\r\n", "\n", StringComparison.Ordinal);
+        if (!prompt.StartsWith(VersionPrefix, StringComparison.Ordinal))
+            throw new InvalidOperationException($"Embedded resource {PromptResource} must start with '{VersionPrefix}'.");
+        return prompt;
+    }
+
+    private static JsonElement BuildSchema()
+    {
+        var exporter = new JsonSchemaExporterOptions
+        {
+            TreatNullObliviousAsNonNullable = true,
+            TransformSchemaNode = static (context, node) =>
+            {
+                if (node is not JsonObject schema)
+                    return node;
+
+                if (context.PropertyInfo is null && (context.TypeInfo.Type == typeof(ParsedRequestsDto) || context.TypeInfo.Type == typeof(ParsedRequestDto)))
+                    Close(schema);
+                else if (context.PropertyInfo?.Name == "requests")
+                    schema["type"] = "array";
+                else if (context.PropertyInfo?.Name is { } name && EnumOf(name) is { } values)
+                {
+                    schema["enum"] = new JsonArray([.. values.Select(v => (JsonNode?)v)]);
+                    if (!values.Contains(null))
+                        schema["type"] = "string";
+                }
+
+                return schema;
+            },
+        };
+
+        var node = StrictJson.GetJsonSchemaAsNode(typeof(ParsedRequestsDto), exporter);
+        return JsonSerializer.SerializeToElement(node, StrictJson);
+    }
+
+    /// <summary>An object schema: non-null, closed, every property required.</summary>
+    private static void Close(JsonObject schema)
+    {
+        schema["type"] = "object";
+        schema["additionalProperties"] = false;
+        if (schema["properties"] is JsonObject properties)
+            schema["required"] = new JsonArray([.. properties.Select(p => (JsonNode?)p.Key)]);
+    }
+
+    /// <summary>The fixed set of a field, with null for the fields that may be null.</summary>
+    private static string?[]? EnumOf(string field) => field switch
+    {
+        "intent" => ["transfer", "bill", "purchase", "balance", "unsupported", "unclear"],
+        "amount_unit" => ["none", "dinars", "thousand", "million"],
+        "biller_code" => ["electricity", "water", "internet", "school_fees", null],
+        "product_type" => ["credit", "internet", null],
+        "unsupported_reason" => [.. ParsedRequestValidator.UnsupportedReasons, null],
+        _ => null,
+    };
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Parse call to {ModelId}: {DurationMs} ms, {InputTokens} tokens in, {OutputTokens} out, {CostUsd} USD, finish {FinishReason}")]
+    private partial void LogParsed(string modelId, long durationMs, long inputTokens, long outputTokens, decimal costUsd, string finishReason);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Parse call to {ModelId} unavailable ({Reason}) after {DurationMs} ms")]
+    private partial void LogUnavailable(string modelId, string reason, long durationMs);
+}

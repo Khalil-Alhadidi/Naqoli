@@ -1,19 +1,32 @@
+using System.Text.RegularExpressions;
+
 namespace Agent.Eval.Running;
 
 /// <summary>
 /// The runner's command line: <c>dev</c> or <c>heldout --milestone-11-run</c>, then <c>--only id,id</c>,
-/// <c>--wallet url</c> and <c>--out dir</c> in any order.
+/// <c>--wallet url</c>, <c>--out dir</c> and <c>--parser scripted|claude:&lt;candidate&gt;</c> in any order.
 /// </summary>
 /// <param name="Set"><see cref="HeldOutGuard.DevSet"/> or <see cref="HeldOutGuard.HeldOutSet"/>.</param>
 /// <param name="Milestone11Run">The held-out flag was given.</param>
 /// <param name="Only">The case ids to run, or null for all.</param>
 /// <param name="Wallet">The wallet's address, overriding <c>Agent:WalletBaseUrl</c>.</param>
 /// <param name="Out">The report directory, overriding <c>Eval:ReportDirectory</c>.</param>
-public sealed record EvalArguments(string Set, bool Milestone11Run, IReadOnlyList<string>? Only, Uri? Wallet, string? Out)
+/// <param name="Parser">The parser measured: <c>scripted</c> (the default) or <c>claude:&lt;candidate&gt;</c>.</param>
+public sealed partial record EvalArguments(
+    string Set, bool Milestone11Run, IReadOnlyList<string>? Only, Uri? Wallet, string? Out, string Parser = EvalArguments.ScriptedParser)
 {
     /// <summary>The usage line.</summary>
     public const string Usage =
-        "Usage: Agent.Eval dev | heldout --milestone-11-run  [--only <id,id,...>] [--wallet <url>] [--out <dir>]";
+        "Usage: Agent.Eval dev | heldout --milestone-11-run  [--only <id,id,...>] [--wallet <url>] [--out <dir>] [--parser scripted|claude:<candidate>]";
+
+    /// <summary>The default parser.</summary>
+    public const string ScriptedParser = "scripted";
+
+    /// <summary>The prefix of a model parser: <c>claude:</c> and a candidate name of the <c>Model</c> section.</summary>
+    public const string ClaudePrefix = "claude:";
+
+    /// <summary>The candidate of a <c>claude:&lt;candidate&gt;</c> parser, or null for the scripted one.</summary>
+    public string? Candidate => Parser.StartsWith(ClaudePrefix, StringComparison.Ordinal) ? Parser[ClaudePrefix.Length..] : null;
 
     /// <summary>Parses <paramref name="args"/>; null with <paramref name="error"/> set when they do not fit <see cref="Usage"/>.</summary>
     public static EvalArguments? Parse(IReadOnlyList<string> args, out string? error)
@@ -30,6 +43,7 @@ public sealed record EvalArguments(string Set, bool Milestone11Run, IReadOnlyLis
         IReadOnlyList<string>? only = null;
         Uri? wallet = null;
         string? output = null;
+        var parser = ScriptedParser;
         for (var i = 1; i < args.Count; i++)
         {
             var arg = args[i];
@@ -39,7 +53,7 @@ public sealed record EvalArguments(string Set, bool Milestone11Run, IReadOnlyLis
                 continue;
             }
 
-            if (arg is not ("--only" or "--wallet" or "--out"))
+            if (arg is not ("--only" or "--wallet" or "--out" or "--parser"))
             {
                 error = "Unknown argument '" + arg + "'.";
                 return null;
@@ -65,6 +79,15 @@ public sealed record EvalArguments(string Set, bool Milestone11Run, IReadOnlyLis
                     }
 
                     break;
+                case "--parser":
+                    if (!ParserPattern().IsMatch(value))
+                    {
+                        error = "--parser needs 'scripted' or 'claude:<candidate>', a candidate of the Model section (haiku, sonnet, opus).";
+                        return null;
+                    }
+
+                    parser = value;
+                    break;
                 default:
                     output = value;
                     break;
@@ -77,6 +100,9 @@ public sealed record EvalArguments(string Set, bool Milestone11Run, IReadOnlyLis
             return null;
         }
 
-        return new EvalArguments(args[0], flag, only, wallet, output);
+        return new EvalArguments(args[0], flag, only, wallet, output, parser);
     }
+
+    [GeneratedRegex("^(scripted|claude:[a-z0-9_-]+)$", RegexOptions.CultureInvariant)]
+    private static partial Regex ParserPattern();
 }
