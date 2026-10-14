@@ -154,4 +154,20 @@ public class ArabicTextTests
         Assert.Equal(ArabicText.Key(name), ArabicText.Key(dirty));
         Assert.Equal(ArabicText.Normalize(name), ArabicText.Normalize(dirty));
     }
+
+    [Fact]
+    public void SupplementaryFormatCharactersAreDropped()
+    {
+        // Language tag characters (U+E0001, U+E0041) are format characters outside the basic plane: two UTF-16 units
+        // each, so they are only seen as format characters when the text is read as runes.
+        var name = SeedFacts.Contact("S01").SavedName;
+        var dirty = name[..1] + "\U000E0001" + name[1..] + "\U000E0041";
+
+        Assert.Equal(ArabicText.Key(name), ArabicText.Key(dirty));
+        Assert.Equal(ArabicText.Normalize(name), ArabicText.Normalize(dirty));
+    }
+
+    [Fact]
+    public void OtherSupplementaryCharactersAreKept()
+        => Assert.Equal("a\U0001F600b", ArabicText.Normalize("a\U0001F600b"));
 }

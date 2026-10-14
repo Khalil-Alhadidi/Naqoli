@@ -26,7 +26,10 @@ public abstract record BillResolution
     /// <summary>Rule 17: "pay the internet" from a user with no internet bill. A <c>which_product</c> question.</summary>
     public sealed record StoreInternet(IReadOnlyList<WalletProduct> InternetCards) : BillResolution;
 
-    /// <summary>The bill is found but nothing is due (D9): refusal <c>nothing_due</c>.</summary>
+    /// <summary>
+    /// The bill is found but nothing is due (D9): refusal <c>nothing_due</c>. With no biller named, the user has bills but
+    /// none is due, and <see cref="Bill"/> is the first of them in wallet order.
+    /// </summary>
     public sealed record NothingDue(WalletBill Bill) : BillResolution;
 
     /// <summary>No bill fits: refusal <c>bill_not_found</c>.</summary>
@@ -54,12 +57,14 @@ public static class BillResolver
         ArgumentNullException.ThrowIfNull(products);
         ArgumentNullException.ThrowIfNull(options);
 
-        // Rule 14: no biller named lists every bill that has an amount due; one such bill goes to the card.
+        // Rule 14: no biller named lists every bill that has an amount due; one such bill goes to the card. With bills
+        // but none due, nothing is due (Khalil, 14 Oct 2026); with no bills at all, no bill is found.
         if (string.IsNullOrWhiteSpace(request.BillerCode))
         {
             var due = bills.Where(b => b.AmountDueIqd > 0).ToList();
             return due.Count switch
             {
+                0 when bills.Count > 0 => new BillResolution.NothingDue(bills[0]),
                 0 => new BillResolution.NotFound(),
                 1 => new BillResolution.Card(due[0]),
                 _ => new BillResolution.Options(due),

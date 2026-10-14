@@ -4,6 +4,7 @@ using Agent.Core.Pending;
 using Agent.Core.Requests;
 using Agent.Core.Resolver;
 using Agent.Core.Text;
+using Agent.Core.Trace;
 using Agent.Core.Wallet;
 using Microsoft.Extensions.Options;
 
@@ -14,7 +15,8 @@ namespace Agent.Core.Pipeline;
 /// screen, or a confirmation card (architecture sections 3 and 4). It composes the wallet's reads, the resolvers, the
 /// amount rule and the ordered checks, and opens the pending record of a card. It never executes: only the Confirm
 /// handler, given the card's pending ID, does (rule 1). Nothing it reads from the wallet goes back into the request
-/// (rule 5). Every question and refusal writes one audit row.
+/// (rule 5). Every question and refusal writes one audit row, and every step goes to the trace (<see cref="ITraceSink"/>,
+/// Code zone) with codes, states and amounts only: never the user's text, a phone, a name or a balance.
 /// </summary>
 public sealed class Orchestrator
 {
@@ -25,6 +27,19 @@ public sealed class Orchestrator
     /// <summary>The wallet's code for a phone with no account (<c>GET /accounts/by-phone</c>).</summary>
     private const string UnknownAccountCode = "unknown_account";
 
+    /// <summary>
+    /// The prefix of a <c>which_contact</c> option value for an alias whose account no saved contact points to: the
+    /// value is <c>account:</c> and the account ID (<see cref="ContactOptionValue"/>).
+    /// </summary>
+    public const string AccountOptionPrefix = "account:";
+
+    // Trace details: how the recipient was found, and the consent gate.
+    private const string RecipientByNumber = "number";
+    private const string RecipientByContact = "contact";
+    private const string RecipientByAlias = "alias";
+    private const string ConsentGiven = "given";
+    private const string ConsentRequired = "required";
+
     private readonly WalletClient wallet;
     private readonly Checks checks;
     private readonly CardBuilder cards;
@@ -32,6 +47,7 @@ public sealed class Orchestrator
     private readonly AuditLog audit;
     private readonly AgentOptions options;
     private readonly TimeProvider clock;
+    private readonly ITraceSink trace;
 
     public Orchestrator(
         WalletClient wallet,
@@ -40,7 +56,8 @@ public sealed class Orchestrator
         PendingStore store,
         AuditLog audit,
         IOptions<AgentOptions> options,
-        TimeProvider clock)
+        TimeProvider clock,
+        ITraceSink trace)
     {
         ArgumentNullException.ThrowIfNull(wallet);
         ArgumentNullException.ThrowIfNull(checks);
@@ -49,6 +66,7 @@ public sealed class Orchestrator
         ArgumentNullException.ThrowIfNull(audit);
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(clock);
+        ArgumentNullException.ThrowIfNull(trace);
 
         this.wallet = wallet;
         this.checks = checks;
@@ -57,6 +75,17 @@ public sealed class Orchestrator
         this.audit = audit;
         this.options = options.Value;
         this.clock = clock;
+        this.trace = trace;
+    }
+
+    /// <summary>
+    /// The value a tap on a contact option sends back: the contact's code, or for an alias whose account no saved contact
+    /// points to, <see cref="AccountOptionPrefix"/> and the account ID, so it can never be read as a contact code.
+    /// </summary>
+    public static string ContactOptionValue(ContactCandidate candidate)
+    {
+        ArgumentNullException.ThrowIfNull(candidate);
+        return candidate.ContactCode ?? AccountOptionPrefix + candidate.AccountId.ToString(CultureInfo.InvariantCulture);
     }
 
     /// <summary>
@@ -66,6 +95,7 @@ public sealed class Orchestrator
     public async Task<AgentReply> HandleAsync(int userId, ParsedRequest request, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
+        trace.Record(TraceZone.Code, TraceSteps.ParseReceived, request.Intent.ToString());
 
         // 1. The balance question (D22): read only, after consent, and the figure never reaches the audit row.
         if (request.Intent == RequestIntent.Balance)
@@ -75,12 +105,14 @@ public sealed class Orchestrator
                 return await RefuseUnreadAsync(userId, reader, cancellationToken);
             if (!balanceUser.ConsentGiven)
                 return await ConsentAsync(userId, cancellationToken);
+            trace.Record(TraceZone.Code, TraceSteps.ConsentChecked, ConsentGiven);
 
             var balance = await wallet.GetBalanceAsync(userId, cancellationToken);
             if (balance is not WalletResult<WalletBalance>.Ok { Value: var shown })
                 return await RefuseUnreadAsync(userId, balance, cancellationToken);
 
             await audit.WriteAsync(userId, null, AuditEvents.BalanceShown, null, null, null, null, null, cancellationToken);
+            trace.Record(TraceZone.Code, TraceSteps.BalanceShown, null);
             return new AgentReply.BalanceReply(shown.BalanceIqd);
         }
 
@@ -89,6 +121,8 @@ public sealed class Orchestrator
         {
             var reason = request.UnsupportedReason ?? ReasonCodes.NotSupported;
             await audit.WriteAsync(userId, null, AuditEvents.Refused, null, null, reason, null, null, cancellationToken);
+            // The parsed reason is not validated before milestone 6, so it stays out of the trace.
+            trace.Record(TraceZone.Code, TraceSteps.RefusalPrefix + ReasonCodes.NotSupported, null);
             return new AgentReply.Unsupported(reason);
         }
 
@@ -104,6 +138,7 @@ public sealed class Orchestrator
             return await RefuseUnreadAsync(userId, userRead, cancellationToken);
         if (!user.ConsentGiven)
             return await ConsentAsync(userId, cancellationToken);
+        trace.Record(TraceZone.Code, TraceSteps.ConsentChecked, ConsentGiven);
 
         return request.Intent switch
         {
@@ -137,6 +172,7 @@ public sealed class Orchestrator
                 case WalletResult<WalletAccount>.Ok { Value: var account }:
                     subject = new CardSubject(TransferType, account.Phone, account.AccountId, phone, account.RegisteredName, null, null, null, null);
                     accountStatus = account.Status;
+                    trace.Record(TraceZone.Code, TraceSteps.RecipientResolved, RecipientByNumber);
                     break;
                 case WalletResult<WalletAccount>.Refused { Problem: { Status: 404 } or { Code: UnknownAccountCode } }:
                     return await RefuseAsync(userId, ReasonCodes.NumberHasNoWallet, null, null, cancellationToken);
@@ -150,17 +186,18 @@ public sealed class Orchestrator
             if (contactsRead is not WalletResult<WalletContacts>.Ok { Value: var contacts })
                 return await RefuseUnreadAsync(userId, contactsRead, cancellationToken);
 
-            switch (ContactResolver.Resolve(request.RecipientText, ContactCandidate.From(contacts)))
+            switch (ContactResolver.Resolve(request.RecipientText, ContactCandidate.From(contacts), options.MinSubstringWordLength))
             {
                 case Resolution.Card { Chosen: var chosen }:
                     subject = new CardSubject(
                         TransferType, chosen.Phone, chosen.AccountId, chosen.Text, chosen.RegisteredName, null, null, null, null);
                     accountStatus = chosen.AccountStatus;
+                    trace.Record(TraceZone.Code, TraceSteps.RecipientResolved, chosen.IsAlias ? RecipientByAlias : RecipientByContact);
                     break;
                 case Resolution.Options choice:
                     var contactOptions = choice.Candidates
                         .Select(c => new Option(
-                            c.ContactCode ?? c.AccountId.ToString(CultureInfo.InvariantCulture),
+                            ContactOptionValue(c),
                             c.Text,
                             c.RegisteredName,
                             c.LastSentAt,
@@ -180,6 +217,7 @@ public sealed class Orchestrator
         {
             case AmountResolution.Dinars dinars:
                 amount = dinars.AmountIqd;
+                trace.Record(TraceZone.Code, TraceSteps.AmountResolved, amount.ToString(CultureInfo.InvariantCulture));
                 break;
             case AmountResolution.Missing:
                 return await AskAsync(userId, QuestionKinds.WhichAmount, [], cancellationToken);
@@ -188,6 +226,9 @@ public sealed class Orchestrator
                     .Select(a => new Option(a.ToString(CultureInfo.InvariantCulture), null, null, null, null, a))
                     .ToList();
                 return await AskAsync(userId, QuestionKinds.WhichAmount, amountOptions, cancellationToken);
+            case AmountResolution.Invalid { Reason: ReasonCodes.AmountBelowMinimum } belowMinimum:
+                // The reply shows the minimum, as the format check does.
+                return await RefuseAsync(userId, belowMinimum.Reason, null, options.MinAmountIqd, cancellationToken);
             case AmountResolution.Invalid invalid:
                 return await RefuseAsync(userId, invalid.Reason, null, null, cancellationToken);
             default:
@@ -252,6 +293,8 @@ public sealed class Orchestrator
                 return await RefuseAsync(userId, ReasonCodes.BillsPaidInFull, null, bill.AmountDueIqd, cancellationToken);
         }
 
+        trace.Record(TraceZone.Code, TraceSteps.RecipientResolved, BillType);
+        trace.Record(TraceZone.Code, TraceSteps.AmountResolved, bill.AmountDueIqd.ToString(CultureInfo.InvariantCulture));
         var subject = new CardSubject(BillType, null, null, bill.Label ?? bill.BillerName, null, bill.BillAccountId, bill.Code, null, null);
         var input = new CheckInput(userId, BillType, bill.AmountDueIqd, null, null, null, bill.BillAccountId, null, SkipFormat: true);
         return await CheckAndIssueAsync(userId, input, subject, cancellationToken);
@@ -286,6 +329,8 @@ public sealed class Orchestrator
                 throw new InvalidOperationException("Unknown product resolution.");
         }
 
+        trace.Record(TraceZone.Code, TraceSteps.RecipientResolved, PurchaseType);
+        trace.Record(TraceZone.Code, TraceSteps.AmountResolved, product.PriceIqd.ToString(CultureInfo.InvariantCulture));
         var subject = new CardSubject(PurchaseType, null, null, product.ProviderNameAr, null, null, null, product.ProductId, product.Code);
         var input = new CheckInput(userId, PurchaseType, product.PriceIqd, null, null, null, null, product.ProductId, SkipFormat: true);
         return await CheckAndIssueAsync(userId, input, subject, cancellationToken);
@@ -300,8 +345,10 @@ public sealed class Orchestrator
         {
             case CheckResult.Pass pass:
                 quote = pass.Quote;
+                trace.Record(TraceZone.Code, TraceSteps.ChecksPassed, quote.TotalIqd.ToString(CultureInfo.InvariantCulture));
                 break;
             case CheckResult.Fail fail:
+                trace.Record(TraceZone.Code, TraceSteps.CheckFailedPrefix + fail.Reason, fail.AmountIqd?.ToString(CultureInfo.InvariantCulture));
                 return await RefuseAsync(userId, fail.Reason, fail.Detail, fail.AmountIqd, cancellationToken);
             default:
                 throw new InvalidOperationException("Unknown check result.");
@@ -312,6 +359,10 @@ public sealed class Orchestrator
             return await RefuseUnreadAsync(userId, built, cancellationToken);
 
         var record = await store.CreateAsync(draft, cancellationToken);
+        trace.Record(
+            TraceZone.Code,
+            TraceSteps.CardCreated,
+            FormattableString.Invariant($"{record.Type} {record.TotalIqd}{(record.PinRequired ? " pin" : string.Empty)}"));
         return new AgentReply.CardIssued(record);
     }
 
@@ -327,17 +378,22 @@ public sealed class Orchestrator
     private async Task<AgentReply> AskAsync(int userId, string kind, IReadOnlyList<Option> choices, CancellationToken cancellationToken)
     {
         await audit.WriteAsync(userId, null, AuditEvents.QuestionAsked, null, null, kind, null, null, cancellationToken);
+        trace.Record(TraceZone.Code, TraceSteps.QuestionPrefix + kind, FormattableString.Invariant($"options {choices.Count}"));
         return new AgentReply.Question(kind, QuestionKinds.AnswerFor(kind, choices.Count), choices);
     }
 
     /// <summary>
     /// A refusal and its audit row; the row keeps the code, and the detail only for <c>not_done_nothing_taken</c>
-    /// (a wallet code), never a figure.
+    /// (a wallet code), never a figure. The trace keeps the same detail, or the figure, never the typed recipient.
     /// </summary>
     private async Task<AgentReply> RefuseAsync(
         int userId, string code, string? detail, long? amountIqd, CancellationToken cancellationToken)
     {
         await audit.WriteRefusalAsync(userId, code, detail, cancellationToken);
+        trace.Record(
+            TraceZone.Code,
+            TraceSteps.RefusalPrefix + code,
+            code == ReasonCodes.NotDoneNothingTaken ? detail : amountIqd?.ToString(CultureInfo.InvariantCulture));
         return new AgentReply.Refusal(code, detail, amountIqd);
     }
 
@@ -356,6 +412,7 @@ public sealed class Orchestrator
     private async Task<AgentReply> ConsentAsync(int userId, CancellationToken cancellationToken)
     {
         await audit.WriteAsync(userId, null, AuditEvents.ConsentShown, null, null, null, null, null, cancellationToken);
+        trace.Record(TraceZone.Code, TraceSteps.ConsentChecked, ConsentRequired);
         return new AgentReply.ConsentScreen();
     }
 }

@@ -271,7 +271,8 @@ public class ConfirmHandlerTests(AgentHost host)
 
         var outcome = await ConfirmAsync(card.UserId, card.Id);
 
-        Assert.Equal(new ConfirmOutcome.NotDone(ReasonCodes.InsufficientBalance, null), outcome);
+        // The shortfall is the card's total less the balance now: 10,000 - 8,000.
+        Assert.Equal(new ConfirmOutcome.NotDone(ReasonCodes.InsufficientBalance, null, 2_000), outcome);
         Assert.Equal(0, await WalletRowsAsync(card.IdempotencyKey));
         Assert.Equal(8_000, await host.Wallet.AccountBalanceAsync(TightPhone));
         var record = await RecordAsync(card.Id);
@@ -543,6 +544,99 @@ public class ConfirmHandlerTests(AgentHost host)
             (AuditEvents.Checking, "Executing", "Checking", ConfirmHandler.ExceptionReason),
             (last.Event, last.FromState, last.ToState, last.Reason));
         Assert.Equal(SeedFacts.DemoBalance, await host.Wallet.AccountBalanceAsync(SeedFacts.DemoPhone));
+    }
+
+    [Fact]
+    public async Task DailyCapReachedAfterTheCardGivesWhatIsLeft()
+    {
+        await StartAsync();
+        var card = await CardAsync(U3, TraderTransferWithPin);
+
+        // U3 pays 4,500,000 twice from outside while the card waits, so the card's 1,100,000 no longer fits today.
+        for (var i = 0; i < 2; i++)
+        {
+            using var message = new HttpRequestMessage(HttpMethod.Post, "/transactions")
+            {
+                Content = JsonContent.Create(new PaymentRequest(U3, "transfer", 4_500_000, null, SeedFacts.DemoAccountId, null, null, TraderPin)),
+            };
+            message.Headers.Add(WalletClient.IdempotencyKeyHeader, "test-outside-cap-" + i.ToString(CultureInfo.InvariantCulture));
+            using var response = await host.Wallet.Client.SendAsync(message, Token);
+            Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        }
+
+        long spent;
+        await using (var scope = host.Services.CreateAsyncScope())
+        {
+            var daily = await scope.ServiceProvider.GetRequiredService<Checks>().DailySpentAsync(U3, Token);
+            spent = Assert.IsType<WalletResult<long>.Ok>(daily).Value;
+        }
+
+        var perDayCap = host.Services.GetRequiredService<IOptions<AgentOptions>>().Value.PerDayCapIqd;
+        Assert.True(spent + card.AmountIqd > perDayCap);
+
+        var outcome = await ConfirmAsync(card.UserId, card.Id, TraderPin);
+
+        Assert.Equal(new ConfirmOutcome.NotDone(ReasonCodes.OverDailyCap, null, Math.Max(0, perDayCap - spent)), outcome);
+        Assert.Equal(0, await WalletRowsAsync(card.IdempotencyKey));
+    }
+
+    [Fact]
+    public async Task SettleWindowIsAnchoredOnExecutingSince()
+    {
+        await StartAsync();
+        var card = await CardAsync(U3, TraderTransferWithPin);
+
+        // The Confirm comes 40 seconds after the card was created, inside its timer.
+        host.Clock.Advance(TimeSpan.FromSeconds(40));
+        await SetFaultAsync(new FaultRequest("error", null, Once: true));
+        Assert.IsType<ConfirmOutcome.Checking>(await ConfirmAsync(card.UserId, card.Id, TraderPin));
+        var executingSince = (await RecordAsync(card.Id)).ExecutingSince;
+        Assert.Equal<DateTimeOffset?>(card.CreatedAt.AddSeconds(40), executingSince);
+
+        // Past the window counted from the card's creation, but not from the Confirm: still Checking.
+        host.Clock.Advance(TimeSpan.FromSeconds(SettleWindowSeconds - 20));
+        Assert.IsType<ConfirmOutcome.Checking>(await SettleAsync(card.UserId, card.Id));
+        Assert.Equal(PendingState.Checking, (await RecordAsync(card.Id)).State);
+
+        // Past the window counted from the Confirm: the PIN refusal is final.
+        host.Clock.Advance(TimeSpan.FromSeconds(30));
+        Assert.Equal(
+            new ConfirmOutcome.NotDone(ReasonCodes.NotDoneNothingTaken, "pin_required"),
+            await SettleAsync(card.UserId, card.Id));
+    }
+
+    [Fact]
+    public async Task ExceptionBeforeTheExecuteGoesBackToPending()
+    {
+        await StartAsync();
+        var card = await CardAsync(U1, FiftyThousandToHammoudi);
+        var client = host.CreateClient(
+            new ThrowingBalanceHandler { InnerHandler = host.Wallet.CreateHandler() }, TimeSpan.FromSeconds(10));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => ConfirmThroughAsync(client, card));
+
+        // Nothing was sent, so the card stays open with its key and timer.
+        var record = await RecordAsync(card.Id);
+        Assert.Equal(PendingState.Pending, record.State);
+        Assert.Null(record.ExecutingSince);
+        var last = (await AuditAsync(card.Id))[^1];
+        Assert.Equal(
+            (AuditEvents.BackToPending, "Executing", "Pending", ConfirmHandler.ExceptionReason),
+            (last.Event, last.FromState, last.ToState, last.Reason));
+        Assert.Equal(0, await WalletRowsAsync(card.IdempotencyKey));
+
+        // Another tap on the same card goes through.
+        Assert.IsType<ConfirmOutcome.Done>(await ConfirmAsync(card.UserId, card.Id));
+        Assert.Equal(1, await WalletRowsAsync(card.IdempotencyKey));
+    }
+
+    /// <summary>Throws on the balance read (the first call of the recheck) and passes every other request on.</summary>
+    private sealed class ThrowingBalanceHandler : DelegatingHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+            => request.RequestUri?.AbsolutePath.EndsWith("/balance", StringComparison.Ordinal) == true
+                ? throw new InvalidOperationException("Stub failure during the recheck.")
+                : base.SendAsync(request, cancellationToken);
     }
 
     [Fact]

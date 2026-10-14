@@ -76,6 +76,8 @@ public sealed class AgentHost : IAsyncLifetime
                 ["Agent:WalletBaseUrl"] = WalletBaseUrl,
                 ["Agent:WalletClientKey"] = TestWalletClientKey,
                 ["ConnectionStrings:Agent"] = TestConnectionString,
+                // No hosted sweep: the tests sweep by hand (PendingSweeperTests).
+                ["Agent:SweepIntervalSeconds"] = "0",
             })
             .Build();
 

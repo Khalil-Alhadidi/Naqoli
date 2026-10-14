@@ -3,6 +3,7 @@ using Agent.Core.Confirm;
 using Agent.Core.Data;
 using Agent.Core.Pending;
 using Agent.Core.Pipeline;
+using Agent.Core.Trace;
 using Agent.Core.Wallet;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -20,7 +21,10 @@ public static class AgentCoreServiceCollectionExtensions
     /// Adds <see cref="AgentOptions"/> (section <c>Agent</c>, validated at start), a <see cref="TimeProvider"/>
     /// unless one is registered, the <see cref="AgentDbContext"/> on <c>ConnectionStrings:Agent</c> and the typed
     /// <see cref="WalletClient"/>, the scoped <see cref="Checks"/>, <see cref="AuditLog"/>, <see cref="PendingStore"/>,
-    /// <see cref="CardBuilder"/>, <see cref="Orchestrator"/> and <see cref="ConfirmHandler"/>. Nothing connects until it is used, so the app starts without the wallet or the database.
+    /// <see cref="CardBuilder"/>, <see cref="Orchestrator"/> and <see cref="ConfirmHandler"/>, a scoped
+    /// <see cref="NullTraceSink"/> as <see cref="ITraceSink"/> unless one is registered, and the hosted
+    /// <see cref="PendingSweeper"/> when <c>Agent:SweepIntervalSeconds</c> is above 0. No <c>IParser</c> is registered:
+    /// the host picks one. Nothing connects until it is used, so the app starts without the wallet or the database.
     /// </summary>
     public static IServiceCollection AddAgentCore(this IServiceCollection services, IConfiguration configuration)
     {
@@ -35,6 +39,9 @@ public static class AgentCoreServiceCollectionExtensions
             .Validate<IServiceProvider>(
                 (o, sp) => o.WalletClientKey is not null || sp.GetService<IHostEnvironment>()?.IsDevelopment() == true,
                 "Agent:WalletClientKey is required outside Development. Set it in user secrets or the environment.")
+            .Validate(
+                o => o.StaleExecutingOutlastsAConfirm,
+                "Agent:StaleExecutingAfterSeconds must be more than three times Agent:WalletTimeoutSeconds: a Confirm makes three timed wallet calls while its record is Executing.")
             .ValidateOnStart();
 
         services.TryAddSingleton(TimeProvider.System);
@@ -58,6 +65,13 @@ public static class AgentCoreServiceCollectionExtensions
         services.AddScoped<CardBuilder>();
         services.AddScoped<Orchestrator>();
         services.AddScoped<ConfirmHandler>();
+        services.TryAddScoped<ITraceSink, NullTraceSink>();
+
+        // The sweep runs in the host only when it has an interval; the test hosts set 0 and sweep by hand.
+        var sweepInterval = configuration.GetSection(AgentOptions.SectionName)
+            .GetValue(nameof(AgentOptions.SweepIntervalSeconds), new AgentOptions().SweepIntervalSeconds);
+        if (sweepInterval > 0)
+            services.AddHostedService<PendingSweeper>();
 
         return services;
     }

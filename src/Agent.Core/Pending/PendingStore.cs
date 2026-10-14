@@ -222,13 +222,20 @@ public sealed class PendingStore(AgentDbContext db, AuditLog audit, IOptions<Age
             throw new InvalidOperationException($"Pending record {id} is not Executing.");
     }
 
-    /// <summary>Executing to Checking: the wallet's answer is unknown, never shown as failed.</summary>
-    /// <exception cref="InvalidOperationException">The record is not Executing, or is not <paramref name="userId"/>'s.</exception>
+    /// <summary>
+    /// Executing to Checking: the wallet's answer is unknown, never shown as failed. A record already Checking (the
+    /// stale-Executing sweep got there first) is left as it is, with no second audit row.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">The record is neither Executing nor Checking, or is not <paramref name="userId"/>'s.</exception>
     public async Task MarkCheckingAsync(Guid id, int userId, string reason, CancellationToken cancellationToken)
     {
         var moved = await TransitionAsync(
             id, userId, PendingState.Executing, PendingState.Checking, where: null, setters: null, AuditEvents.Checking, reason, reference: null, cancellationToken);
-        if (moved is null)
+        if (moved is not null)
+            return;
+
+        var current = await FindAsync(id, userId, cancellationToken);
+        if (current?.State != PendingState.Checking)
             throw new InvalidOperationException($"Pending record {id} is not Executing.");
     }
 
@@ -236,8 +243,8 @@ public sealed class PendingStore(AgentDbContext db, AuditLog audit, IOptions<Age
     /// The stale-Executing sweep: every record still Executing whose <see cref="PendingRecord.ExecutingSince"/> is at
     /// least <paramref name="olderThan"/> ago becomes Checking with the reason <see cref="StaleExecuting"/>, never
     /// NotDone, since its execute call may have reached the wallet. It covers a process that stopped, or an exception
-    /// that escaped, between the begin and the outcome write. Returns how many moved. A hosted service runs it from
-    /// milestone 4.
+    /// that escaped, between the begin and the outcome write. Returns how many moved. The hosted
+    /// <see cref="PendingSweeper"/> runs it.
     /// </summary>
     public async Task<int> MarkStaleExecutingAsync(TimeSpan olderThan, CancellationToken cancellationToken)
     {

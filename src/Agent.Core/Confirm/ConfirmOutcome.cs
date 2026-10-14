@@ -23,8 +23,12 @@ public abstract record ConfirmOutcome
             => $"Done {{ Reference = {Reference}, BalanceAfterIqd = {BalanceAfterIqd}, PurchaseCode = {(PurchaseCode is null ? "none" : "***")} }}";
     }
 
-    /// <summary>Nothing moved. <see cref="Reason"/> is one of <c>ReasonCodes</c> (or <c>pin_locked</c>), with an optional detail.</summary>
-    public sealed record NotDone(string Reason, string? Detail) : ConfirmOutcome;
+    /// <summary>
+    /// Nothing moved. <see cref="Reason"/> is one of <c>ReasonCodes</c> (or <c>pin_locked</c>), with an optional detail.
+    /// <see cref="AmountIqd"/> is the figure the reply shows, when it has one: the shortfall for the recheck's
+    /// <c>insufficient_balance</c>, what is left of the daily cap for its <c>over_daily_cap</c>.
+    /// </summary>
+    public sealed record NotDone(string Reason, string? Detail, long? AmountIqd = null) : ConfirmOutcome;
 
     /// <summary>The wallet's answer is unknown; the record is Checking, never shown as failed (rule 6).</summary>
     public sealed record Checking : ConfirmOutcome;

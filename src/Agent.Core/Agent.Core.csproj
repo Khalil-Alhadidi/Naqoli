@@ -20,6 +20,8 @@
   <ItemGroup>
     <!-- Khalil's word lists from matching rule 1 (kinship groups and title words). -->
     <EmbeddedResource Include="Text\arabic-words.json" />
+    <!-- Khalil's scripted sentences for the scripted parser, until the model arrives in milestone 6. -->
+    <EmbeddedResource Include="Parsing\scripted-sentences.json" />
   </ItemGroup>
 
 </Project>

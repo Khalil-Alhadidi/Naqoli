@@ -1,0 +1,19 @@
+[
+  {
+    "note": "TODO-AR: English placeholder. Khalil replaces this sentence with his Iraqi Arabic one; the request stays.",
+    "sentence": "send fifty thousand to my brother Hammoudi",
+    "request": {
+      "intent": "Transfer",
+      "recipientText": "اخوية حمودي",
+      "amountValue": 50,
+      "amountUnit": "Thousand"
+    }
+  },
+  {
+    "note": "TODO-AR: English placeholder. Khalil replaces this sentence with his Iraqi Arabic one; the request stays.",
+    "sentence": "balance",
+    "request": {
+      "intent": "Balance"
+    }
+  }
+]

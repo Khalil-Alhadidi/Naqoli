@@ -1,6 +1,7 @@
 using Agent.Core.Pending;
 using Agent.Core.Pipeline;
 using Agent.Core.Text;
+using Agent.Core.Trace;
 using Agent.Core.Wallet;
 using Microsoft.Extensions.Options;
 
@@ -15,16 +16,18 @@ namespace Agent.Core.Confirm;
 /// so neither may hand that call to a helper.
 /// </summary>
 /// <remarks>
-/// The PIN travels only in the execute body: it is never stored, logged or written to an audit row. Once the wallet has
-/// answered, the outcome is recorded with <see cref="CancellationToken.None"/>, so a caller who leaves cannot strand a
-/// record in Executing; an unexpected exception after the begin moves the record to Checking before it propagates.
+/// The PIN travels only in the execute body: it is never stored, logged, traced or written to an audit row. Once the
+/// wallet has answered, the outcome is recorded with <see cref="CancellationToken.None"/>, so a caller who leaves cannot
+/// strand a record in Executing. An unexpected exception after the begin puts the record back to Pending when nothing
+/// was sent yet, and moves it to Checking once the execute call may have been sent, before it propagates. Every step is
+/// written to the trace (<see cref="ITraceSink"/>, Write zone) with codes, states and amounts only.
 /// </remarks>
 public sealed class ConfirmHandler
 {
     /// <summary>The reason stored when the caller cancelled a Confirm before or during the execute call.</summary>
     public const string CallerCancelled = "caller_cancelled";
 
-    /// <summary>The reason stored when an unexpected exception left the outcome of a Confirm unknown.</summary>
+    /// <summary>The reason stored when an unexpected exception interrupted a Confirm.</summary>
     public const string ExceptionReason = "exception";
 
     /// <summary>
@@ -33,25 +36,31 @@ public sealed class ConfirmHandler
     /// </summary>
     public const string PinLocked = "pin_locked";
 
+    private const string CancelledOutcome = "cancelled";
+
     private readonly WalletClient wallet;
     private readonly PendingStore store;
     private readonly Checks checks;
     private readonly AgentOptions options;
     private readonly TimeProvider clock;
+    private readonly ITraceSink trace;
 
-    public ConfirmHandler(WalletClient wallet, PendingStore store, Checks checks, IOptions<AgentOptions> options, TimeProvider clock)
+    public ConfirmHandler(
+        WalletClient wallet, PendingStore store, Checks checks, IOptions<AgentOptions> options, TimeProvider clock, ITraceSink trace)
     {
         ArgumentNullException.ThrowIfNull(wallet);
         ArgumentNullException.ThrowIfNull(store);
         ArgumentNullException.ThrowIfNull(checks);
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(clock);
+        ArgumentNullException.ThrowIfNull(trace);
 
         this.wallet = wallet;
         this.store = store;
         this.checks = checks;
         this.options = options.Value;
         this.clock = clock;
+        this.trace = trace;
     }
 
     /// <summary>
@@ -68,15 +77,19 @@ public sealed class ConfirmHandler
                 record = begun.Record;
                 break;
             case TransitionResult.Expired:
-                return new ConfirmOutcome.Expired();
+                return Traced(TraceSteps.OutcomePrefix, new ConfirmOutcome.Expired());
             case TransitionResult.AlreadyLeft left:
-                return new ConfirmOutcome.AlreadyHandled(left.State);
+                return Traced(TraceSteps.OutcomePrefix, new ConfirmOutcome.AlreadyHandled(left.State));
             case TransitionResult.NotFound:
-                return new ConfirmOutcome.NotFound();
+                return Traced(TraceSteps.OutcomePrefix, new ConfirmOutcome.NotFound());
             default:
                 throw new InvalidOperationException("Unknown transition result.");
         }
 
+        trace.Record(TraceZone.Write, TraceSteps.BeginExecute, FormattableString.Invariant($"{record.Type} {record.TotalIqd}"));
+
+        // Set immediately before the execute call: from then on the request may have reached the wallet.
+        var sent = false;
         try
         {
             // Section 4: recheck the balance (and the daily cap), then execute. Nothing has been sent yet.
@@ -89,67 +102,99 @@ public sealed class ConfirmHandler
             {
                 // Nothing was sent, so the card stays open for another tap.
                 await store.BackToPendingAsync(record.Id, record.UserId, CallerCancelled, CancellationToken.None);
+                trace.Record(TraceZone.Write, TraceSteps.OutcomePrefix + CancelledOutcome, nameof(PendingState.Pending));
                 throw;
             }
 
             if (stop is not null)
             {
-                return await CompleteNotDoneAsync(record, stop.ResultCode, new ConfirmOutcome.NotDone(stop.Reason, stop.Detail));
+                trace.Record(TraceZone.Write, TraceSteps.RecheckFailedPrefix + stop.Reason, stop.Detail);
+                return Traced(
+                    TraceSteps.OutcomePrefix,
+                    await CompleteNotDoneAsync(record, stop.ResultCode, new ConfirmOutcome.NotDone(stop.Reason, stop.Detail, stop.AmountIqd)));
             }
+
+            trace.Record(TraceZone.Write, TraceSteps.RecheckOk, null);
 
             ExecuteOutcome executed;
             try
             {
+                trace.Record(TraceZone.Write, TraceSteps.ExecuteSent, null);
+                sent = true;
                 executed = await wallet.ExecuteAsync(record.IdempotencyKey, RequestFrom(record, ToAsciiPin(pin)), cancellationToken);
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
                 // The request may have reached the wallet: the outcome is unknown.
                 await store.MarkCheckingAsync(record.Id, record.UserId, CallerCancelled, CancellationToken.None);
+                trace.Record(TraceZone.Write, TraceSteps.OutcomePrefix + CancelledOutcome, nameof(PendingState.Checking));
                 throw;
             }
 
+            ConfirmOutcome outcome;
             switch (executed)
             {
                 case ExecuteOutcome.Done done:
-                    return await CompleteDoneAsync(record, done.Transaction);
+                    outcome = await CompleteDoneAsync(record, done.Transaction);
+                    break;
 
                 case ExecuteOutcome.Unknown unknown:
                     await store.MarkCheckingAsync(record.Id, record.UserId, unknown.Reason, CancellationToken.None);
-                    return new ConfirmOutcome.Checking();
+                    outcome = new ConfirmOutcome.Checking();
+                    break;
 
                 case ExecuteOutcome.Refused { Problem: var problem }:
                     switch (problem.Code)
                     {
                         case WalletCodes.PinRequired:
                             await store.BackToPendingAsync(record.Id, record.UserId, problem.Code, CancellationToken.None);
-                            return new ConfirmOutcome.PinRequired();
+                            outcome = new ConfirmOutcome.PinRequired();
+                            break;
 
                         case WalletCodes.PinInvalid when problem.AttemptsLeft is > 0:
                             await store.BackToPendingAsync(record.Id, record.UserId, problem.Code, CancellationToken.None);
-                            return new ConfirmOutcome.PinWrong(problem.AttemptsLeft.Value);
+                            outcome = new ConfirmOutcome.PinWrong(problem.AttemptsLeft.Value);
+                            break;
 
                         case WalletCodes.PinInvalid:
                             // The wrong PIN took the last attempt: the wallet has locked the PIN, so the card ends here.
-                            return await CompleteNotDoneAsync(record, PinLocked, new ConfirmOutcome.NotDone(PinLocked, null));
+                            outcome = await CompleteNotDoneAsync(record, PinLocked, new ConfirmOutcome.NotDone(PinLocked, null));
+                            break;
 
                         case WalletCodes.PinMalformed:
                             await store.BackToPendingAsync(record.Id, record.UserId, problem.Code, CancellationToken.None);
-                            return new ConfirmOutcome.PinMalformed();
+                            outcome = new ConfirmOutcome.PinMalformed();
+                            break;
 
                         default:
-                            return await CompleteRefusedAsync(record, problem);
+                            outcome = await CompleteRefusedAsync(record, problem);
+                            break;
                     }
+
+                    break;
 
                 default:
                     throw new InvalidOperationException("Unknown execute outcome.");
             }
+
+            return Traced(TraceSteps.OutcomePrefix, outcome);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            // Rule 6: the execute call may have reached the wallet, so the record must not stay Executing. Checking is
-            // settled later under the same key; the exception still reaches the caller.
-            await MarkCheckingBestEffortAsync(record);
+            // Rule 6: the record must not stay Executing. Before the execute call nothing reached the wallet, so the card
+            // goes back to Pending and stays open; once the call may have been sent, the record is Checking and is settled
+            // later under the same key. The exception still reaches the caller.
+            if (sent)
+            {
+                await BestEffortAsync(() => store.MarkCheckingAsync(record.Id, record.UserId, ExceptionReason, CancellationToken.None));
+                trace.Record(TraceZone.Write, TraceSteps.OutcomePrefix + ExceptionReason, nameof(PendingState.Checking));
+            }
+            else
+            {
+                await BestEffortAsync(() => store.BackToPendingAsync(record.Id, record.UserId, ExceptionReason, CancellationToken.None));
+                trace.Record(TraceZone.Write, TraceSteps.OutcomePrefix + ExceptionReason, nameof(PendingState.Pending));
+            }
+
             throw;
         }
     }
@@ -162,39 +207,48 @@ public sealed class ConfirmHandler
     /// <remarks>
     /// The wallet stores nothing for a PIN refusal, so <c>pin_required</c>, <c>pin_invalid</c>, <c>pin_malformed</c>
     /// and <c>pin_locked</c> on a settle may only mean the original call (with its PIN) has not reached the database
-    /// yet. Such a refusal leaves the record Checking while the record is younger than
-    /// <see cref="AgentOptions.SettleWindowSeconds"/>; after that the original call can no longer be running, and the
-    /// record ends NotDone (<see cref="ReasonCodes.NotDoneNothingTaken"/>, detail the wallet's code).
+    /// yet. Such a refusal leaves the record Checking for <see cref="AgentOptions.SettleWindowSeconds"/> from the moment
+    /// the record last entered Executing (<see cref="PendingRecord.ExecutingSince"/>, else its creation); after that the
+    /// original call can no longer be running, and the record ends NotDone (<see cref="ReasonCodes.NotDoneNothingTaken"/>,
+    /// detail the wallet's code).
     /// </remarks>
     public async Task<ConfirmOutcome> SettleCheckingAsync(int userId, Guid pendingId, CancellationToken cancellationToken)
     {
         var record = await store.FindAsync(pendingId, userId, cancellationToken);
         if (record is null)
-            return new ConfirmOutcome.NotFound();
+            return Traced(TraceSteps.SettleOutcomePrefix, new ConfirmOutcome.NotFound());
         if (record.State != PendingState.Checking)
-            return new ConfirmOutcome.AlreadyHandled(record.State);
+            return Traced(TraceSteps.SettleOutcomePrefix, new ConfirmOutcome.AlreadyHandled(record.State));
 
+        trace.Record(TraceZone.Write, TraceSteps.SettleSent, null);
         var executed = await wallet.ExecuteAsync(record.IdempotencyKey, RequestFrom(record, pin: null), cancellationToken);
+        ConfirmOutcome outcome;
         switch (executed)
         {
             case ExecuteOutcome.Unknown:
-                return new ConfirmOutcome.Checking();
+                outcome = new ConfirmOutcome.Checking();
+                break;
 
             case ExecuteOutcome.Done done:
-                return await CompleteDoneAsync(record, done.Transaction);
+                outcome = await CompleteDoneAsync(record, done.Transaction);
+                break;
 
             case ExecuteOutcome.Refused { Problem: var problem } when IsPinRefusal(problem.Code):
-                if (!SettleWindowEnded(record))
-                    return new ConfirmOutcome.Checking();
-                return await CompleteNotDoneAsync(
-                    record, problem.Code, new ConfirmOutcome.NotDone(ReasonCodes.NotDoneNothingTaken, problem.Code));
+                outcome = SettleWindowEnded(record)
+                    ? await CompleteNotDoneAsync(
+                        record, problem.Code, new ConfirmOutcome.NotDone(ReasonCodes.NotDoneNothingTaken, problem.Code))
+                    : new ConfirmOutcome.Checking();
+                break;
 
             case ExecuteOutcome.Refused refused:
-                return await CompleteRefusedAsync(record, refused.Problem);
+                outcome = await CompleteRefusedAsync(record, refused.Problem);
+                break;
 
             default:
                 throw new InvalidOperationException("Unknown execute outcome.");
         }
+
+        return Traced(TraceSteps.SettleOutcomePrefix, outcome);
     }
 
     /// <summary>
@@ -218,9 +272,35 @@ public sealed class ConfirmHandler
     private static bool IsPinRefusal(string code)
         => code is WalletCodes.PinRequired or WalletCodes.PinInvalid or WalletCodes.PinMalformed or WalletCodes.PinLocked;
 
-    /// <summary>True when the record is older than the settle window, so its original execute call has ended.</summary>
+    /// <summary>
+    /// True when the settle window has passed since the record last entered Executing (its creation when that time is
+    /// not stored), so its original execute call has ended.
+    /// </summary>
     private bool SettleWindowEnded(PendingRecord record)
-        => clock.GetUtcNow() - record.CreatedAt > TimeSpan.FromSeconds(options.SettleWindowSeconds);
+        => clock.GetUtcNow() - (record.ExecutingSince ?? record.CreatedAt) > TimeSpan.FromSeconds(options.SettleWindowSeconds);
+
+    /// <summary>
+    /// Writes the outcome to the trace as <paramref name="prefix"/> plus its name, with the record's state, the reason
+    /// code or the attempts left as the detail, and returns it.
+    /// </summary>
+    private ConfirmOutcome Traced(string prefix, ConfirmOutcome outcome)
+    {
+        var (name, detail) = outcome switch
+        {
+            ConfirmOutcome.Done => ("done", nameof(PendingState.Done)),
+            ConfirmOutcome.NotDone notDone => ("not_done", notDone.Detail is null ? notDone.Reason : notDone.Reason + " " + notDone.Detail),
+            ConfirmOutcome.Checking => ("checking", nameof(PendingState.Checking)),
+            ConfirmOutcome.Expired => ("expired", nameof(PendingState.Expired)),
+            ConfirmOutcome.AlreadyHandled handled => ("already_handled", handled.State.ToString()),
+            ConfirmOutcome.NotFound => ("not_found", (string?)null),
+            ConfirmOutcome.PinRequired => ("pin_required", nameof(PendingState.Pending)),
+            ConfirmOutcome.PinWrong wrong => ("pin_wrong", FormattableString.Invariant($"attempts_left {wrong.AttemptsLeft}")),
+            ConfirmOutcome.PinMalformed => ("pin_malformed", nameof(PendingState.Pending)),
+            _ => ("unknown", null),
+        };
+        trace.Record(TraceZone.Write, prefix + name, detail);
+        return outcome;
+    }
 
     private async Task<ConfirmOutcome> CompleteDoneAsync(PendingRecord record, WalletTransaction transaction)
     {
@@ -258,15 +338,15 @@ public sealed class ConfirmHandler
     };
 
     /// <summary>
-    /// Moves the record to Checking after an unexpected exception. Best effort: if this fails too (the record already
+    /// Moves the record out of Executing after an unexpected exception. Best effort: if this fails too (the record already
     /// left Executing, or the database is unreachable), the original exception still propagates and the stale-Executing
     /// sweep moves the record later.
     /// </summary>
-    private async Task MarkCheckingBestEffortAsync(PendingRecord record)
+    private static async Task BestEffortAsync(Func<Task> move)
     {
         try
         {
-            await store.MarkCheckingAsync(record.Id, record.UserId, ExceptionReason, CancellationToken.None);
+            await move();
         }
         catch (Exception)
         {
@@ -293,7 +373,8 @@ public sealed class ConfirmHandler
         switch (await wallet.GetBalanceAsync(record.UserId, cancellationToken))
         {
             case WalletResult<WalletBalance>.Ok { Value: var balance } when balance.BalanceIqd < record.TotalIqd:
-                return new RecheckStop(ReasonCodes.InsufficientBalance, null, ReasonCodes.InsufficientBalance);
+                return new RecheckStop(
+                    ReasonCodes.InsufficientBalance, null, ReasonCodes.InsufficientBalance, record.TotalIqd - balance.BalanceIqd);
             case WalletResult<WalletBalance>.Ok:
                 break;
             case WalletResult<WalletBalance>.Unavailable unavailable:
@@ -307,7 +388,7 @@ public sealed class ConfirmHandler
         return await checks.DailySpentAsync(record.UserId, cancellationToken) switch
         {
             WalletResult<long>.Ok { Value: var spent } when spent + record.AmountIqd > options.PerDayCapIqd
-                => new RecheckStop(ReasonCodes.OverDailyCap, null, ReasonCodes.OverDailyCap),
+                => new RecheckStop(ReasonCodes.OverDailyCap, null, ReasonCodes.OverDailyCap, Math.Max(0, options.PerDayCapIqd - spent)),
             WalletResult<long>.Ok => null,
             WalletResult<long>.Unavailable unavailable => NothingTaken(ReasonCodes.WalletDetailPrefix + unavailable.Reason),
             WalletResult<long>.Refused refused => NothingTaken(refused.Problem.Code),
@@ -315,10 +396,13 @@ public sealed class ConfirmHandler
         };
     }
 
-    private static RecheckStop NothingTaken(string detail) => new(ReasonCodes.NotDoneNothingTaken, detail, detail);
+    private static RecheckStop NothingTaken(string detail) => new(ReasonCodes.NotDoneNothingTaken, detail, detail, null);
 
-    /// <summary>Why the recheck stopped the payment: the reply's reason and detail, and the record's result code.</summary>
-    private sealed record RecheckStop(string Reason, string? Detail, string ResultCode);
+    /// <summary>
+    /// Why the recheck stopped the payment: the reply's reason, detail and figure (the shortfall, or what is left of the
+    /// daily cap), and the record's result code.
+    /// </summary>
+    private sealed record RecheckStop(string Reason, string? Detail, string ResultCode, long? AmountIqd);
 
     /// <summary>The wallet's refusal codes the handler acts on (<c>docs/wallet-api.md</c>, Error codes).</summary>
     private static class WalletCodes

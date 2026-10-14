@@ -1,6 +1,6 @@
 # Agent.Core: the write path
 
-What `src/Agent.Core` does as built in milestone 3: the structured request, the pipeline that turns it into one reply, the resolvers, the ordered checks, the card, the pending record and its states, Confirm and Checking, and the audit log. No model call exists yet; tests build the structured request. The design it follows is sections 3 to 5 of [architecture.md](architecture.md); the matching and question rules are [matching-rules.md](matching-rules.md); the wallet it calls is [wallet-api.md](wallet-api.md).
+What `src/Agent.Core` does as built in milestone 3 and the first task of milestone 4: the structured request and the parser seam that produces it, the pipeline that turns it into one reply, the resolvers, the ordered checks, the card and its view, the pending record and its states, the sweep, Confirm and Checking, the live trace, and the audit log. No model call exists yet; the scripted parser and the tests build the structured request. The design it follows is sections 3 to 5 of [architecture.md](architecture.md); the matching and question rules are [matching-rules.md](matching-rules.md); the wallet it calls is [wallet-api.md](wallet-api.md).
 
 ## Purpose and the rules it enforces
 
@@ -17,7 +17,7 @@ What `src/Agent.Core` does as built in milestone 3: the structured request, the 
 
 ## The structured request
 
-`ParsedRequest` (`src/Agent.Core/Requests/ParsedRequest.cs`) is the strict structure the parse call will return in milestone 6. Today tests build it with the factory methods `Transfer`, `Bill`, `Purchase` and `Balance`, or with an object initialiser. Every text in it is the user's own words.
+`ParsedRequest` (`src/Agent.Core/Requests/ParsedRequest.cs`) is the strict structure the parse call will return in milestone 6. Today the scripted parser (below) and the tests build it, the tests with the factory methods `Transfer`, `Bill`, `Purchase` and `Balance`, or with an object initialiser. Every text in it is the user's own words.
 
 | Field | Type | Meaning |
 |---|---|---|
@@ -33,21 +33,39 @@ What `src/Agent.Core` does as built in milestone 3: the structured request, the 
 | `UnsupportedReason` | string? | For `Unsupported`: `withdrawal`, `other_balance`, `other_currency`, `refers_back`, `same_as_last_time`, `choose_account`, `part_of_bill`, `credit_to_own_number`, `change_waiting_card`, `other_language`; otherwise null |
 | `CurrencyText` | string? | A currency other than dinars, as typed. When set, the request is refused with `dinars_only` |
 
+## The parser seam
+
+`IParser.ParseAsync(text, context, cancellationToken)` (`src/Agent.Core/Parsing/IParser.cs`) is the parse call of rule 2: one call per message, read only, returning a `ParsedRequest`. `ParseContext(PendingNote)` is all it may know besides the user's words (D5, rule 5): the one-line note of what is pending, built by code from the type and codes only, or null when nothing is pending.
+
+Until milestone 6 the only implementation is `ScriptedParser` (`src/Agent.Core/Parsing/ScriptedParser.cs`). It reads `scripted-sentences.json`, an embedded resource next to it, as a list of `{ "sentence": ..., "request": { ...ParsedRequest... } }` (web JSON defaults, enums as strings; a `note` field is ignored). A typed text matches a sentence when both are equal, ordinal, after `ArabicText.Normalize` (Arabic-Indic and Eastern Arabic-Indic digits to ASCII, whitespace trimmed and collapsed, and the rest of rule 1); anything else is `Unclear`. It holds no per-user state, so one instance serves the whole app; `AddAgentCore` registers no parser, and the host (`Agent.Web`, Task 2) registers `ScriptedParser` as a singleton.
+
+The file is Khalil's to write. Today it holds two English placeholders marked `TODO-AR`: `send fifty thousand to my brother Hammoudi`, which parses to a transfer to S01's alias (copied character for character from `data/seed/contacts.json`) of 50 thousand, and `balance`, the balance question. A typed yes or no is not a sentence: D6 is the session's business, and it points to the Confirm button.
+
+```mermaid
+flowchart LR
+    typed["Typed text"] --> norm["ArabicText.Normalize: digits to ASCII, whitespace collapsed"]
+    norm --> lookup{"Equal, ordinal, to a normalised scripted sentence?"}
+    lookup -- yes --> req["Its ParsedRequest"]
+    lookup -- no --> unclear["ParsedRequest Intent Unclear"]
+    req --> orch["Orchestrator.HandleAsync"]
+    unclear --> orch
+```
+
 ## The pipeline, in order
 
-`Orchestrator.HandleAsync(userId, request, cancellationToken)` answers one `ParsedRequest` with one `AgentReply`: `Question`, `Refusal`, `BalanceReply`, `ConsentScreen`, `CardIssued` or `Unsupported`. It never executes. A wallet read with no usable answer is the refusal `not_done_nothing_taken` with detail `wallet_` plus the reason (or the wallet's code for a 4xx); it never throws for one. Every question and refusal writes one audit row.
+`Orchestrator.HandleAsync(userId, request, cancellationToken)` answers one `ParsedRequest` with one `AgentReply`: `Question`, `Refusal`, `BalanceReply`, `ConsentScreen`, `CardIssued` or `Unsupported`. It never executes. A wallet read with no usable answer is the refusal `not_done_nothing_taken` with detail `wallet_` plus the reason (or the wallet's code for a 4xx); it never throws for one. Every question and refusal writes one audit row, and every step goes to the live trace (below).
 
 1. **Balance question** (D22). Read the user; without consent, the consent screen. Otherwise read the balance and reply `BalanceReply`. The audit row `balance_shown` carries no figure.
 2. **Unsupported, unclear, currency.** `Unsupported` replies `Unsupported(reason)` with the parsed reason (`not_supported` when none). `Unclear` is refused `not_understood`. A `CurrencyText` is refused `dinars_only`. These come before the consent gate.
 3. **Consent gate.** Read the user; without consent, the consent screen replaces everything.
-4. **Transfer.** The recipient first (rule 16), then the amount (rule 10 asks for a missing one, typed; rule 9 asks which reading of a bare number below 1,000). Then the checks and the card.
+4. **Transfer.** The recipient first (rule 16), then the amount (rule 10 asks for a missing one, typed; rule 9 asks which reading of a bare number below 1,000). `AmountRule` offers only readings from `MinAmountIqd` up to `PerTransactionCapIqd`; a bare number whose whole readings are all below the minimum is refused `amount_below_minimum` with the minimum as the figure (Khalil, 14 Oct 2026: `0.5` offers only 500,000; `0.0005` is refused). Then the checks and the card.
 5. **Bill.** Read the bills (and, for `internet`, the store catalogue), resolve the bill, then D9: a bill is paid in full. An amount the user named must equal the amount due, else the refusal `bills_paid_in_full` with the full amount due. Then the checks (without the format check) and the card.
 6. **Purchase.** Read the catalogue, resolve the product, take its catalogue price. Then the checks (without the format check) and the card.
-7. **Checks, then the card.** `Checks.RunAsync` in Khalil's order; on a pass, `CardBuilder.BuildAsync` and `PendingStore.CreateAsync`, and the reply is `CardIssued(record)`.
+7. **Checks, then the card.** `Checks.RunAsync` in Khalil's order; on a pass, `CardBuilder.BuildAsync` and `PendingStore.CreateAsync`, and the reply is `CardIssued(record)`, whose `View` is the `CardView` a component gets.
 
 ### Recipient: contact and phone
 
-`ContactResolver.Resolve` (`src/Agent.Core/Resolver/ContactResolver.cs`) is pure. It compares `ArabicText.Key` of the typed name with the key of every saved name and alias (rule 1: normalised, leading al stripped, spaces removed). Normalising also drops Unicode format characters (zero-width joiner and non-joiner, zero-width space, bidi controls), so an invisible character neither splits a key nor reorders a name. The first step that hits wins. A closed account stays a candidate; the checks refuse it later. Hits on one account count once, and the alias is shown when an account was hit by both (rule 7).
+`ContactResolver.Resolve` (`src/Agent.Core/Resolver/ContactResolver.cs`) is pure. It compares `ArabicText.Key` of the typed name with the key of every saved name and alias (rule 1: normalised, leading al stripped, spaces removed). Normalising also drops Unicode format characters (zero-width joiner and non-joiner, zero-width space, bidi controls, and, since the text is read as runes, format characters outside the basic plane such as language tags), so an invisible character neither splits a key nor reorders a name. The first step that hits wins. A closed account stays a candidate; the checks refuse it later. Hits on one account count once, and the alias is shown when an account was hit by both (rule 7).
 
 ```mermaid
 flowchart TD
@@ -83,10 +101,12 @@ flowchart TD
 
 - **Exact** (rules 1, 2, 3, 7): the whole key equals a saved name or alias.
 - **Title and kinship only** (rules 1, 15): a typed name made only of title words (abu, umm) and kinship words is not a name.
-- **Partial** (rules 4, 5, 7): every typed word occurs inside the candidate's key. A typed word whose key (after the per-word leading al strip) is shorter than `ContactResolver.MinSubstringWordLength` (3) letters must equal a whole word of the candidate instead (both compared after that strip). Rule 5: a "title + name" contact matched by the bare name is only ever an option.
+- **Partial** (rules 4, 5, 7): every typed word occurs inside the candidate's key. A typed word whose key (after the per-word leading al strip) is shorter than the setting `MinSubstringWordLength` (3, default `ContactResolver.MinSubstringWordLength`; Khalil, 14 Oct 2026) must equal a whole word of the candidate instead (both compared after that strip). The orchestrator passes the setting to `ContactResolver.Resolve(typedName, candidates, minSubstringWordLength)`; the two-argument overload uses the default. Rule 5: a "title + name" contact matched by the bare name is only ever an option.
 - **Near** (rule 6): the whole key is one edit away (`ArabicText.EditDistance`). Always a question, even with one candidate.
 - **Shared word** (rule 15): a name word (not a title, not a kinship word) shared exactly. Never a card.
 - **Not found** (rule 8): no card.
+
+The value a tap on a `which_contact` or `did_you_mean` option sends back is the contact's code (`S01`). For an alias whose account no saved contact points to, it is `account:` and the account ID (`account:42`), so it can never be read as a contact code (`Orchestrator.ContactOptionValue`).
 
 The phone path is matching rule 20: a country code makes no difference, spaces and dashes are ignored, and what is left must be 11 digits starting with `07`. A number is never completed or matched to a similar one.
 
@@ -98,7 +118,8 @@ The phone path is matching rule 20: a country code makes no difference, spaces a
 flowchart TD
     subgraph billPath["BillResolver"]
         b0{"BillerCode named?"} -- no --> b1{"Bills with an amount due"}
-        b1 -- "0" --> bNF["NotFound: bill_not_found"]
+        b1 -- "0, the user has bills" --> bDueFirst["NothingDue, the first bill: nothing_due"]
+        b1 -- "0, no bills" --> bNF["NotFound: bill_not_found"]
         b1 -- "1" --> bCard["Card"]
         b1 -- "2 or more" --> bWhich["Options: which_bill"]
         b0 -- yes --> b2{"Bills of that biller"}
@@ -118,16 +139,20 @@ flowchart TD
     end
 
     subgraph productPath["ProductResolver"]
-        p0["Match OperatorText to one provider: code, English name, Arabic name or other name"] --> p1["Filter the catalogue by provider, ProductType and ProductValue"]
+        pt{"OperatorText named?"} -- no --> p1["Filter the catalogue by provider, ProductType and ProductValue"]
+        pt -- yes --> p0{"Providers whose code, English name, Arabic name or other name has its key"}
+        p0 -- "none" --> pNF
+        p0 -- "several" --> pOpNamed["AskOperator: which_operator, those providers"]
+        p0 -- "one" --> p1
         p1 --> p2{"Fitting products"}
         p2 -- "0" --> pNF["NotFound: product_not_found"]
-        p2 -- "1 or more, no operator matched" --> pOp["AskOperator: which_operator"]
-        p2 -- "1, operator matched" --> pCard["Card: catalogue price"]
-        p2 -- "2 or more, operator matched" --> pWhich["Options: which_product, cheapest MaxProductsInOneQuestion"]
+        p2 -- "1 or more, no operator named" --> pOp["AskOperator: which_operator"]
+        p2 -- "1, operator named" --> pCard["Card: catalogue price"]
+        p2 -- "2 or more, operator named" --> pWhich["Options: which_product, cheapest MaxProductsInOneQuestion"]
     end
 ```
 
-Rule 11: when the user named no operator, or a text that matches no single operator, the agent asks for it, even when one product fits. Rule 12 (more products than fit one question: operator first) then gives the same answer.
+Rule 11: when the user named no operator, the agent asks for it, even when one product fits. Rule 12 (more products than fit one question: operator first) then gives the same answer. An operator text that names no provider is refused `product_not_found`, so the learning log sees it; one that names several providers (a shared other name) asks `which_operator` among those (Khalil, 14 Oct 2026). With no biller named, a user whose bills all have nothing due gets `nothing_due` (the first bill in wallet order), and only a user with no bills gets `bill_not_found` (Khalil, 14 Oct 2026).
 
 ### The checks
 
@@ -175,6 +200,10 @@ flowchart TD
 
 Every figure on the card comes from the quote, so the card shows what the wallet will charge.
 
+### The card view
+
+`CardView.From(record)` (`src/Agent.Core/Pipeline/CardView.cs`) is the only shape of a card a component receives; `AgentReply.CardIssued.View` computes it from the record. It carries `PendingId`, `Type`, `AmountIqd`, `FeeIqd`, `TotalIqd`, `BalanceAfterIqd` (the quoted balance less the total), `DisplayName`, `RegisteredName`, `ToPhone`, `BillCode`, `ProductCode`, `PinRequired`, `FirstTime`, `Warning` and `ExpiresAt`. It has no idempotency key, no quoted balance, no row version and no user ID (`CardViewTests`).
+
 ## The pending record and its states
 
 `PendingRecord` (`src/Agent.Core/Pending/PendingRecord.cs`, table `PendingTransactions`) is one card and the payment behind it. Its key is a lower-case GUID without dashes (32 characters), unique. It holds no PIN and only the last four characters of a purchase code. `PendingRecord.CanLeave` is the transition table, and `PendingStore` moves a record only by one conditional update on its current state, inside a database transaction that also writes the audit row. The number of rows the update changed is the truth: a record leaves a state once however many calls arrive. Every call made for a user (`FindAsync`, `CancelAsync`, `TryBeginExecuteAsync`, `CompleteAsync`, `BackToPendingAsync`, `MarkCheckingAsync`) names the user, and the update's condition includes it: another user's record is not found. Only the sweeps (`ExpireDueAsync`, `ExpireAllOpenAsync`, `MarkStaleExecutingAsync`) act for no user.
@@ -199,9 +228,33 @@ stateDiagram-v2
 
 - `TryBeginExecuteAsync` moves Pending to Executing only while `ExpiresAt` is in the future, counts the attempt (`Attempts`) and sets `ExecutingSince`, in the same update. Of any number of concurrent calls exactly one gets `Begun`. A record found still Pending after its timer is marked Expired there and then.
 - `BackToPendingAsync` keeps the card open with the same key and the same timer, and clears `ExecutingSince`.
+- `MarkCheckingAsync` moves Executing to Checking. A record already Checking (the sweep got there first) is left as it is, with no second audit row; any other state throws.
 - `CompleteAsync` returns a `TransitionResult`: `Completed(record)` when this call settled the record, `AlreadyLeft(state)` when it is in another state (another settle or a reset got there first), `NotFound` for a missing or another user's record. It still throws `ArgumentException` for a final state other than Done or NotDone, or more than four characters of a purchase code.
 - `ExpireAllOpenAsync(reason)` is for a wallet reset: Pending to Expired and Checking to NotDone, both with the reason. Executing records are left to their executor and to the sweep below.
-- `MarkStaleExecutingAsync(olderThan)` is the stale-Executing sweep: every record still Executing whose `ExecutingSince` is at least `olderThan` ago becomes Checking (audit reason `stale_executing`), never NotDone, since its execute call may have reached the wallet; a settle then resolves it under the same key. It covers a process that stopped between the begin and the outcome write. Its host, a hosted service that runs it at start and on the expiry timer with `olderThan` = `WalletTimeoutSeconds` plus a margin, comes in milestone 4.
+- `MarkStaleExecutingAsync(olderThan)` is the stale-Executing sweep: every record still Executing whose `ExecutingSince` is at least `olderThan` ago becomes Checking (audit reason `stale_executing`), never NotDone, since its execute call may have reached the wallet; a settle then resolves it under the same key. It covers a process that stopped between the begin and the outcome write. `PendingSweeper` (below) runs it with `olderThan` = `StaleExecutingAfterSeconds`.
+### The pending sweeper
+
+`PendingSweeper` (`src/Agent.Core/Pending/PendingSweeper.cs`) is a `BackgroundService`. `AddAgentCore` registers it with `AddHostedService` only when `SweepIntervalSeconds` is above 0 (the test hosts set 0 and call `SweepOnceAsync` on an instance they build). At start and then on a `PeriodicTimer` every `SweepIntervalSeconds`, it opens its own DI scope, resolves `PendingStore`, runs `ExpireDueAsync` and then `MarkStaleExecutingAsync(StaleExecutingAfterSeconds)`, and logs both counts at Debug. A failed sweep is logged at Warning and the loop goes on; only the host's stop token ends it. It never calls the wallet.
+
+```mermaid
+sequenceDiagram
+    participant H as Host
+    participant P as PendingSweeper
+    participant S as PendingStore (new scope)
+
+    H->>P: StartAsync (only when SweepIntervalSeconds > 0)
+    loop at start, then every SweepIntervalSeconds
+        P->>S: ExpireDueAsync: Pending past ExpiresAt to Expired
+        P->>S: MarkStaleExecutingAsync(StaleExecutingAfterSeconds): Executing to Checking, reason stale_executing
+        alt an exception
+            P->>P: log Warning, wait for the next tick
+        else
+            P->>P: log the counts at Debug
+        end
+    end
+    H->>P: StopAsync (stop token): the loop ends
+```
+
 - **For Khalil:** section 5 of the architecture has no Executing to Pending edge. The code needs it, because a wrong PIN keeps the card (and a cancelled Confirm before the execute sent nothing). With it, a record can leave Pending more than once, but only one Executing at a time and always under the same key. Section 5 also says Checking settles by "status found by key"; the code settles by resending the same body under the same key (below), and uses by-key for display only. Suggest adding the edge and that wording to section 5.
 
 ## Confirm and Checking
@@ -244,13 +297,13 @@ sequenceDiagram
         end
     end
 
-    Note over C,W: Any exception after the begin (not a cancellation): MarkCheckingAsync("exception"), then rethrow
+    Note over C,W: Any exception after the begin (not a cancellation): BackToPendingAsync("exception") if the execute call was not sent yet, else MarkCheckingAsync("exception"); then rethrow
 
     Note over C,W: Later, for a Checking record
     U->>C: SettleCheckingAsync(userId, pendingId)
     C->>S: FindAsync(pendingId, userId): still Checking?
     C->>W: ExecuteAsync(same key, same body, no PIN)
-    alt still unknown, or a PIN refusal within SettleWindowSeconds of the card
+    alt still unknown, or a PIN refusal within SettleWindowSeconds of ExecutingSince
         C-->>U: Checking (record unchanged)
     else answer
         C->>S: CompleteAsync(Done or NotDone)
@@ -265,8 +318,9 @@ sequenceDiagram
 - The execute body is rebuilt from the record every time (`RequestFrom`), so every call under its key (Confirm and settle) carries the same request fingerprint. A transfer names the recipient by the account the quote resolved (the phone only when no account is stored). Every type carries the confirmed amount, `AmountIqd` of the record, bills and purchases included, so the wallet refuses (`bills_paid_in_full`, `invalid_amount`) a bill or a price that no longer matches the card.
 - The PIN travels only in the execute body, converted from Arabic-Indic digits to ASCII. It is never stored, logged or written to an audit row.
 - Once the wallet has answered, the outcome is recorded with `CancellationToken.None`, so a caller who leaves cannot strand a record in Executing. A cancellation during the recheck puts the record back to Pending (`caller_cancelled`); a cancellation during the execute call marks it Checking (`caller_cancelled`), since the request may have reached the wallet.
-- Any other exception after the begin (a database error writing the outcome, an unexpected exception from the wallet client) moves the record to Checking with the reason `exception`, best effort and without the caller's token, and then propagates. If even that write fails, the stale-Executing sweep moves the record later.
-- A settle sends no PIN: a replay needs none. The wallet stores nothing for a PIN refusal, so a settle's `pin_required`, `pin_invalid`, `pin_malformed` or `pin_locked` may only mean the original call (with its PIN) has not reached the wallet's database yet, for instance behind a `slow` fault. Within `SettleWindowSeconds` (610) of the card's creation such a refusal leaves the record Checking; after it the original call can no longer be running, and the record ends NotDone with the wallet's code.
+- Any other exception after the begin is split by a local `sent` flag, set immediately before the execute call. Before it (the recheck threw, say), nothing reached the wallet, so the record goes back to Pending with the reason `exception` and the card stays open. After it (a database error writing the outcome, an unexpected exception from the wallet client), the call may have reached the wallet, so the record moves to Checking with the reason `exception`. Both writes are best effort and without the caller's token, and the exception then propagates. If even that write fails, the stale-Executing sweep moves the record to Checking later.
+- A recheck that stops the payment carries its figure: `NotDone(insufficient_balance, null, shortfall)` with the card's total less the balance now, and `NotDone(over_daily_cap, null, left)` with what is left of the daily cap.
+- A settle sends no PIN: a replay needs none. The wallet stores nothing for a PIN refusal, so a settle's `pin_required`, `pin_invalid`, `pin_malformed` or `pin_locked` may only mean the original call (with its PIN) has not reached the wallet's database yet, for instance behind a `slow` fault. Within `SettleWindowSeconds` (610) of `ExecutingSince`, the moment the record last entered Executing (its creation when that is not stored), such a refusal leaves the record Checking; after it the original call can no longer be running, and the record ends NotDone with the wallet's code. Counting from the card's creation would have cut the window short for a Confirm sent late in the card's timer.
 
 ### Outcome mapping
 
@@ -277,8 +331,8 @@ As in `ConfirmHandler.cs`.
 | Record not Pending (`AlreadyLeft`) | unchanged | `AlreadyHandled(state)` |
 | Record Pending past its timer | Expired | `Expired` |
 | No record, or another user's record | none | `NotFound` |
-| Recheck: balance below the card's total | NotDone, `insufficient_balance` | `NotDone(insufficient_balance)` |
-| Recheck: done today plus the amount above `PerDayCapIqd` | NotDone, `over_daily_cap` | `NotDone(over_daily_cap)` |
+| Recheck: balance below the card's total | NotDone, `insufficient_balance` | `NotDone(insufficient_balance, null, total - balance)` |
+| Recheck: done today plus the amount above `PerDayCapIqd` | NotDone, `over_daily_cap` | `NotDone(over_daily_cap, null, what is left today)` |
 | Recheck: balance or history read with no answer | NotDone, `wallet_` plus the reason | `NotDone(not_done_nothing_taken, wallet_<reason>)` |
 | Recheck: balance or history read refused | NotDone, the wallet's code | `NotDone(not_done_nothing_taken, code)` |
 | 201 or 200 | Done, reference, balance after, last four of a purchase code | `Done(reference, balanceAfter, purchaseCode)` |
@@ -293,15 +347,42 @@ As in `ConfirmHandler.cs`.
 | 423 `pin_locked` | NotDone, `pin_locked` | `NotDone(pin_locked)` |
 | Any other 4xx | NotDone, the wallet's code | `NotDone(not_done_nothing_taken, code)` |
 | The outcome write finds the record no longer Executing (should not happen) | unchanged | `AlreadyHandled(state)` |
-| Any exception after the begin, not a cancellation | Checking, reason `exception` (best effort) | the exception propagates |
+| Any exception after the begin and before the execute call, not a cancellation | back to Pending, reason `exception` (best effort) | the exception propagates |
+| Any exception once the execute call was sent, not a cancellation | Checking, reason `exception` (best effort) | the exception propagates |
 | Settle: no record, or another user's record | none | `NotFound` |
 | Settle: record not Checking before the resend, or settled by another call (a concurrent settle, a reset) before the write (`CompleteAsync` returns `AlreadyLeft` or `NotFound`) | unchanged | `AlreadyHandled(state)` or `NotFound` |
 | Settle: another unknown outcome | stays Checking, no write | `Checking` |
-| Settle: 422 `pin_required`, `pin_invalid` or `pin_malformed`, or 423 `pin_locked`, within `SettleWindowSeconds` of the card's creation | stays Checking, no write | `Checking` |
+| Settle: 422 `pin_required`, `pin_invalid` or `pin_malformed`, or 423 `pin_locked`, within `SettleWindowSeconds` of `ExecutingSince` | stays Checking, no write | `Checking` |
 | Settle: the same PIN codes after `SettleWindowSeconds` | NotDone, the wallet's code | `NotDone(not_done_nothing_taken, code)` |
 | Settle: 201, 200 or any other 4xx | as the rows above for Done and the other 4xx | as above |
 
 `ConfirmOutcome.Done.ToString()` masks the purchase code.
+
+## The live trace
+
+`ITraceSink.Record(zone, step, detail)` (`src/Agent.Core/Trace/`) receives each step of a request for the page's live trace. `TraceZone` is `User`, `Code`, `Model` or `Write`. `AddAgentCore` registers `NullTraceSink`, which drops every step, with `TryAddScoped`, so a host that registers its own sink first keeps it. The `Orchestrator` and the `ConfirmHandler` take it by constructor. The step names are the constants of `TraceSteps`.
+
+| Zone | Written by | Steps (detail) |
+|---|---|---|
+| Code | `Orchestrator` | `parse_received` (the intent), `consent_checked` (`given` or `required`), `recipient_resolved` (`contact`, `alias`, `number`, `bill` or `purchase`), `amount_resolved` (the amount), `checks_passed` (the quote's total) or `check_failed:<reason>` (the figure), `card_created` (type, total, `pin` when one is needed), `question:<kind>` (how many options), `refusal:<code>` (the wallet code for `not_done_nothing_taken`, else the figure), `balance_shown` (no figure) |
+| Write | `ConfirmHandler` | `begin_execute` (type and total), `recheck_ok` or `recheck_failed:<reason>` (the wallet code, if any), `execute_sent`, `outcome:<done, not_done, checking, expired, already_handled, not_found, pin_required, pin_wrong, pin_malformed, cancelled or exception>` (the record's state, the reason, or the attempts left), `settle_sent`, `settle_outcome:<the same names>` |
+
+The User and Model zones are written by the web session (milestone 4, Task 2) and the model parser (milestone 6). A detail holds codes, states and amounts only: never a PIN, an idempotency key, a purchase code, a phone, a name, a balance or any text the user typed (an unsupported reason stays out until milestone 6 validates it). `TraceSinkTests.NoPinKeyCodeOrPhoneInAnyStep` runs a PIN payment and a purchase through a recording sink and checks every step and detail.
+
+```mermaid
+sequenceDiagram
+    participant O as Orchestrator (Code)
+    participant T as ITraceSink
+    participant C as ConfirmHandler (Write)
+
+    O->>T: parse_received, consent_checked
+    O->>T: recipient_resolved, amount_resolved
+    O->>T: checks_passed, card_created
+    Note over O,C: the Confirm tap on the card
+    C->>T: begin_execute, recheck_ok
+    C->>T: execute_sent
+    C->>T: outcome:done
+```
 
 ## The audit log
 
@@ -323,8 +404,8 @@ Never stored: a PIN, a balance figure, a purchase code (full or partial), the ty
 
 - `OnlyTheConfirmHandlerCanReachExecute` decodes the IL of every method and constructor of every type in `Agent.Core`, and records each one with a `call`, `callvirt`, `ldftn`, `ldvirtftn` or `newobj` whose operand resolves to `WalletClient.ExecuteAsync`. A compiler-generated state machine's `MoveNext`, or a lambda's body, is mapped back to the method that declares it (through `AsyncStateMachineAttribute`, `IteratorStateMachineAttribute`, or the `<Method>d__N` name). The set of callers must equal exactly `ConfirmHandler.ConfirmAsync` and `ConfirmHandler.SettleCheckingAsync`. So neither may hand the call to a helper, and any new caller fails the test.
 - `NothingInAgentCoreCallsTheConfirmHandler` checks, with the same scan, that no method in `Agent.Core` calls `ConfirmAsync` or `SettleCheckingAsync`: no parse or reply path can turn words into a Confirm. Milestone 4 adds exactly the card component's Confirm handler and the settle timer in `Agent.Web` as callers, and must extend the scan to that assembly with them as the only ones allowed.
-- `OnlyTheWalletClientNamesTheTransactionsRoutes` decodes every `ldstr` (`Module.ResolveString`): the literal `"transactions"` is loaded only by `WalletClient.ExecuteAsync`, `"transactions/by-key/"` only by `WalletClient.FindByKeyAsync`, and no other literal starts with `transactions`. So no second HTTP path to the execute route can hide in the assembly.
-- `NothingInAgentCoreInvokesByReflection` checks that no method calls `MethodBase.Invoke`, `Type.GetMethod` or `Type.GetMethods`.
+- `OnlyTheWalletClientNamesTheTransactionsRoutes` decodes every `ldstr` (`Module.ResolveString`): the literal `"transactions"` is loaded only by `WalletClient.ExecuteAsync`, `"transactions/by-key/"` only by `WalletClient.FindByKeyAsync`, and no other literal contains `transactions` (ordinal, so a leading slash or a full URL is caught too; the table name `PendingTransactions` is not). So no second HTTP path to the execute route can hide in the assembly.
+- `NothingInAgentCoreInvokesByReflection` checks that no method calls `MethodBase.Invoke`, `Type.GetMethod`, `Type.GetMethods`, `Type.InvokeMember`, `Delegate.DynamicInvoke` or any overload of `MethodInfo.CreateDelegate`; `TheReflectionScanKnowsEveryInvokeRoute` checks the predicate catches every public overload of each.
 - `ExecuteIsInternal` checks that `ExecuteAsync` is `internal`, not public, and that `Agent.Core.Tests` is the only friend assembly.
 
 ## Settings
@@ -343,18 +424,22 @@ Never stored: a PIN, a balance figure, a purchase code (full or partial), the ty
 | `HistoryDays` | 90 | `CardBuilder`, first time |
 | `WalletBaseUrl` | none (required); `http://localhost:5276` in Development | `WalletClient` |
 | `WalletClientKey` | none; at least 16 characters when set. Null sends `dev` in Development and stops the start elsewhere | `WalletClient`, header `X-Wallet-Client-Key` |
-| `WalletTimeoutSeconds` | 10 | `WalletClient`; past it an execute is `Unknown("timeout")`. The stale-Executing sweep (milestone 4 host) must use `olderThan` of at least three times this value plus a margin, because a Confirm makes three timed wallet calls (balance, history, execute) while the record is Executing |
-| `SettleWindowSeconds` | 610 (the wallet timeout, 10 s, plus the wallet's longest fault delay, 600 s) | `ConfirmHandler.SettleCheckingAsync`: within it a PIN refusal leaves a record Checking; after it, NotDone |
+| `WalletTimeoutSeconds` | 10 | `WalletClient`; past it an execute is `Unknown("timeout")` |
+| `SettleWindowSeconds` | 610 (the wallet timeout, 10 s, plus the wallet's longest fault delay, 600 s) | `ConfirmHandler.SettleCheckingAsync`: within it of `ExecutingSince` a PIN refusal leaves a record Checking; after it, NotDone |
 | `HistoryPageSize` | 200 | Daily cap, recheck and card history reads |
+| `DemoUserId` | 1 (U1) | The web console: the wallet user the demo acts for |
+| `SweepIntervalSeconds` | 5; 0 to 3,600 | `PendingSweeper`: how often it sweeps. 0 registers no sweeper (the test hosts) |
+| `StaleExecutingAfterSeconds` | 40; must be more than three times `WalletTimeoutSeconds` (validated at start) | `PendingSweeper`: a record Executing this long becomes Checking. A Confirm makes three timed wallet calls (balance, history, execute) while the record is Executing, so 40 is 3 x 10 s plus a margin |
+| `MinSubstringWordLength` | 3; 1 to 20 | `ContactResolver`, rule 4: a shorter typed word must equal a whole word |
 
-The settings component (milestone 4 onwards) shows them. The client key goes in user secrets or the environment, never in a committed file.
+The settings component (milestone 7) shows them; milestone 4 shows them read only. The client key goes in user secrets or the environment, never in a committed file.
 
 ## The test host and running the tests
 
 The agent's tests that need a database belong to the xUnit collection `agent` (`AgentCollection`, fixture `AgentHost`).
 
 - `AgentHost` hosts its own mock wallet in process on the database `ZainCashWalletAgent_Test` (same server as `ConnectionStrings__WalletTest`), so the `agent` and `wallet-api` collections run in parallel without dropping each other's database.
-- It builds the agent's services with `AddAgentCore` over an in-memory configuration (wallet base `http://localhost`, test client key `agent-tests-client-key`, a test value and not a secret), sends the wallet client to the in-process wallet, replaces the clock with `FakeClock`, and recreates the agent's test database: `ConnectionStrings__AgentTest`, or by default `ZainCashAgent_Test` on the local default instance. Both database names must end in `_Test`; the host refuses any other, because it drops the database.
+- It builds the agent's services with `AddAgentCore` over an in-memory configuration (wallet base `http://localhost`, test client key `agent-tests-client-key`, a test value and not a secret, and `SweepIntervalSeconds` 0, so no hosted sweep runs; `PendingSweeperTests` builds a `PendingSweeper` and calls `SweepOnceAsync`), sends the wallet client to the in-process wallet, replaces the clock with `FakeClock`, and recreates the agent's test database: `ConnectionStrings__AgentTest`, or by default `ZainCashAgent_Test` on the local default instance. Both database names must end in `_Test`; the host refuses any other, because it drops the database.
 - `AgentHost.ResetAsync` sets the shared `FakeClock` back to the real time, returns the wallet to the seed and empties both agent tables.
 - When SQL Server is unreachable the tests skip; with `ZAINCASH_TEST_SQL=1` they fail instead. The pure tests (resolvers, amount rule, `NoTapNoMoneyTests`, `AgentOptionsTests`) always run.
 
@@ -366,16 +451,16 @@ $env:ConnectionStrings__AgentTest = 'Server=(localdb)\MSSQLLocalDB;Database=Zain
 
 ## Decisions by Khalil (14 Oct 2026) and open questions
 
-Khalil answered the milestone 3 questions on 14 Oct 2026. Items marked *milestone 4* change code in milestone 4's first task; until then the code does what the "Today" column says.
+Khalil answered the milestone 3 questions on 14 Oct 2026. Items marked *milestone 4* were done in milestone 4's first task.
 
 | Question | Decision | Today |
 |---|---|---|
 | A code for an amount below the minimum | `amount_below_minimum` is a refusal code in his list; it gets its own phone string | Already used |
 | `pin_locked`, `caller_cancelled` and the warning key `repeat` | Kept as their own codes (`caller_cancelled` is audit-only) | Already used |
-| Rule 4: how short a typed fragment may be | A typed word of one or two letters must equal a whole word; longer words match inside. The minimum becomes a setting (*milestone 4*) | `ContactResolver.MinSubstringWordLength` = 3, a constant |
-| No biller named, bills exist, none due | `nothing_due` (*milestone 4*) | `bill_not_found` |
-| Operator text that matches no operator | Refuse with `product_not_found`, so the learning log sees it (*milestone 4*) | Asks `which_operator` |
-| Rule 9 readings below the minimum | Dropped from the question; a bare number with no valid reading is refused with `amount_below_minimum` (*milestone 4*) | `0.5` offers 500 and 500,000 |
+| Rule 4: how short a typed fragment may be | A typed word of one or two letters must equal a whole word; longer words match inside. The minimum becomes a setting (*milestone 4*) | Done 14 Oct: setting `MinSubstringWordLength` (3), passed to `ContactResolver.Resolve` |
+| No biller named, bills exist, none due | `nothing_due` (*milestone 4*) | Done 14 Oct: `NothingDue` of the first bill; `bill_not_found` only with no bills |
+| Operator text that matches no operator | Refuse with `product_not_found`, so the learning log sees it (*milestone 4*) | Done 14 Oct: `product_not_found`; a text naming several providers asks among those |
+| Rule 9 readings below the minimum | Dropped from the question; a bare number with no valid reading is refused with `amount_below_minimum` (*milestone 4*) | Done 14 Oct: `0.5` offers only 500,000; `0.0005` is refused with the minimum as the figure |
 | Architecture section 5 | Updated with the Executing to Pending edge and the resend-under-the-same-key settle note | Done |
 
 Still open:
@@ -389,7 +474,7 @@ Still open:
 
 | Limit | Plan |
 |---|---|
-| A record strands in Executing if the process dies between `TryBeginExecuteAsync` and the store write after the execute call | Handled by `PendingStore.MarkStaleExecutingAsync` (Executing older than `olderThan` to Checking, reason `stale_executing`) and, for an exception in the process, by the catch-all in `ConfirmAsync` (Checking, reason `exception`). The hosted service that runs the sweep comes in milestone 4; until then nothing calls it |
+| A record strands in Executing if the process dies between `TryBeginExecuteAsync` and the store write after the execute call | Handled by `PendingStore.MarkStaleExecutingAsync` (Executing older than `StaleExecutingAfterSeconds` to Checking, reason `stale_executing`), which the hosted `PendingSweeper` runs every `SweepIntervalSeconds`, and, for an exception in the process, by the catch-all in `ConfirmAsync` (back to Pending before the execute call, Checking after it, reason `exception`) |
 | Two concurrent settles of one Checking record: both resend (the wallet replays, so money moves once) | Handled: `CompleteAsync` returns `AlreadyLeft` to the second, and the handler answers `AlreadyHandled(Done)` instead of throwing (`ConfirmHandlerTests.ConcurrentSettlesSettleOnce`) |
 | The daily cap and the recheck read one page of `HistoryPageSize` (200) history rows; rows beyond it are not counted | Fail closed on a full page, or read further pages; the seed has at most two rows a day |
 | `UnsupportedReason` is stored and returned verbatim | Milestone 6 validates the parsed structure against the allowed list |

@@ -18,13 +18,17 @@ public abstract record AmountResolution
     /// <summary>The amount in whole dinars. It still goes through the checks (minimum, caps, balance).</summary>
     public sealed record Dinars(long AmountIqd) : AmountResolution;
 
-    /// <summary>No usable amount; <see cref="Reason"/> is <see cref="ReasonCodes.NotUnderstood"/>.</summary>
+    /// <summary>
+    /// No usable amount; <see cref="Reason"/> is <see cref="ReasonCodes.NotUnderstood"/>, or
+    /// <see cref="ReasonCodes.AmountBelowMinimum"/> when a bare number's only whole readings are below the minimum.
+    /// </summary>
     public sealed record Invalid(string Reason) : AmountResolution;
 }
 
 /// <summary>
 /// Matching rule 9 (a bare number below 1,000 is asked about; 1,000 or more is dinars as written) and rule 10 (a missing
-/// amount is asked for). Pure. A currency other than dinars (<see cref="ParsedRequest.CurrencyText"/>) is not handled
+/// amount is asked for). A reading below <see cref="AgentOptions.MinAmountIqd"/> is not offered, and a bare number with
+/// no reading left is <see cref="ReasonCodes.AmountBelowMinimum"/> (Khalil, 14 Oct 2026). Pure. A currency other than dinars (<see cref="ParsedRequest.CurrencyText"/>) is not handled
 /// here: the orchestrator refuses it with <see cref="ReasonCodes.DinarsOnly"/> first.
 /// </summary>
 public static class AmountRule
@@ -50,15 +54,23 @@ public static class AmountRule
         {
             case AmountUnit.None when value < BareNumberThreshold:
                 {
-                    // Rule 9: the thousand and the million reading, each only as whole dinars under the per-transaction cap.
+                    // Rule 9: the thousand and the million reading, each only as whole dinars from the minimum up to the
+                    // per-transaction cap. A reading below the minimum is dropped (Khalil, 14 Oct 2026).
                     var readings = new List<long>(2);
+                    var belowMinimum = false;
                     foreach (var multiplier in ReadingMultipliers)
                     {
-                        if (TryWholeDinars(value, multiplier, out var amount) && amount <= options.PerTransactionCapIqd)
+                        if (!TryWholeDinars(value, multiplier, out var amount) || amount > options.PerTransactionCapIqd)
+                            continue;
+                        if (amount < options.MinAmountIqd)
+                            belowMinimum = true;
+                        else
                             readings.Add(amount);
                     }
 
-                    return readings.Count == 0 ? NotUnderstood() : new AmountResolution.Ask(readings);
+                    if (readings.Count > 0)
+                        return new AmountResolution.Ask(readings);
+                    return belowMinimum ? new AmountResolution.Invalid(ReasonCodes.AmountBelowMinimum) : NotUnderstood();
                 }
 
             case AmountUnit.None:

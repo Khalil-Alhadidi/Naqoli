@@ -75,4 +75,33 @@ public sealed class AgentOptions
     /// <summary>The most history items read in one call; the wallet clamps <c>take</c> to 200.</summary>
     [Range(1, 200)]
     public int HistoryPageSize { get; set; } = 200;
+
+    /// <summary>The wallet user the demo console acts for (U1, the everyday user).</summary>
+    [Range(1, int.MaxValue)]
+    public int DemoUserId { get; set; } = 1;
+
+    /// <summary>
+    /// How often the hosted <see cref="Pending.PendingSweeper"/> expires cards past their timer and moves stale Executing
+    /// records to Checking. 0 registers no sweeper (the test hosts sweep by hand).
+    /// </summary>
+    [Range(0, 3_600)]
+    public int SweepIntervalSeconds { get; set; } = 5;
+
+    /// <summary>
+    /// How long a record may stay Executing before the sweep moves it to Checking. A Confirm makes three timed wallet
+    /// calls while the record is Executing (balance, history, execute), so this must be more than three times
+    /// <see cref="WalletTimeoutSeconds"/>; the default, 40, is 3 x 10 s plus a margin.
+    /// </summary>
+    [Range(1, 86_400)]
+    public int StaleExecutingAfterSeconds { get; set; } = 40;
+
+    /// <summary>
+    /// Matching rule 4 (Khalil, 14 Oct 2026): a typed word whose key is shorter than this must equal a whole word of a
+    /// saved name or alias; longer words may match inside one.
+    /// </summary>
+    [Range(1, 20)]
+    public int MinSubstringWordLength { get; set; } = Resolver.ContactResolver.MinSubstringWordLength;
+
+    /// <summary>True when <see cref="StaleExecutingAfterSeconds"/> outlasts the three timed wallet calls of a Confirm.</summary>
+    internal bool StaleExecutingOutlastsAConfirm => StaleExecutingAfterSeconds > 3 * WalletTimeoutSeconds;
 }

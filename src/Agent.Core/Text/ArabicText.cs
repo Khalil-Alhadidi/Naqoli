@@ -101,27 +101,32 @@ public static class ArabicText
         var composed = text.Normalize(NormalizationForm.FormC);
         var builder = new StringBuilder(composed.Length);
         var pendingSpace = false;
-        foreach (var c in composed)
+
+        // Read as runes, so a format character outside the basic plane (two UTF-16 units) is seen as one.
+        foreach (var rune in composed.EnumerateRunes())
         {
             // Invisible format characters would split a key or reorder the text on the card (category Cf).
-            if (CharUnicodeInfo.GetUnicodeCategory(c) == UnicodeCategory.Format)
+            if (Rune.GetUnicodeCategory(rune) == UnicodeCategory.Format)
                 continue;
 
-            if (char.IsWhiteSpace(c))
+            if (Rune.IsWhiteSpace(rune))
             {
                 pendingSpace = builder.Length > 0;
                 continue;
             }
 
+            if (!rune.IsBmp)
+            {
+                AppendPendingSpace(builder, ref pendingSpace);
+                builder.Append(rune.ToString());
+                continue;
+            }
+
+            var c = (char)rune.Value;
             if (c == Tatweel || c == SuperscriptAlef || c is >= FathatanFirst and <= SukunLast)
                 continue;
 
-            if (pendingSpace)
-            {
-                builder.Append(' ');
-                pendingSpace = false;
-            }
-
+            AppendPendingSpace(builder, ref pendingSpace);
             builder.Append(c switch
             {
                 AlefHamzaAbove or AlefHamzaBelow or AlefMadda => Alef,
@@ -132,5 +137,14 @@ public static class ArabicText
         }
 
         return builder.ToString();
+    }
+
+    private static void AppendPendingSpace(StringBuilder builder, ref bool pendingSpace)
+    {
+        if (pendingSpace)
+        {
+            builder.Append(' ');
+            pendingSpace = false;
+        }
     }
 }

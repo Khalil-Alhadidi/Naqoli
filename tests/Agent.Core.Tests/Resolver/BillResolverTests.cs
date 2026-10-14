@@ -97,12 +97,20 @@ public class BillResolverTests
     }
 
     [Fact]
-    public void NoBillerWithNothingDueIsNotFound()
+    public void NoBillerWithNothingDueIsNothingDueOfTheFirstBill()
     {
+        // Khalil, 14 Oct 2026: bills exist but none is due, so nothing_due, not bill_not_found.
         var bills = SeedWallet.BillsOf("U2").Where(b => b.Code == "BZ1").ToList();
-        Assert.IsType<BillResolution.NotFound>(BillResolver.Resolve(
+        Assert.Equal(0, Assert.Single(bills).AmountDueIqd);
+        var nothing = Assert.IsType<BillResolution.NothingDue>(BillResolver.Resolve(
             ParsedRequest.Bill(null, null, null, AmountUnit.None), bills, SeedWallet.Products(), Options));
+        Assert.Equal("BZ1", nothing.Bill.Code);
     }
+
+    [Fact]
+    public void NoBillerWithNoBillsIsNotFound()
+        => Assert.IsType<BillResolution.NotFound>(BillResolver.Resolve(
+            ParsedRequest.Bill(null, null, null, AmountUnit.None), [], SeedWallet.Products(), Options));
 
     [Fact]
     public void InternetBillWithNothingDueIsNothingDue()

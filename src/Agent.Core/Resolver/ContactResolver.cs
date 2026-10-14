@@ -10,16 +10,27 @@ namespace Agent.Core.Resolver;
 public static class ContactResolver
 {
     /// <summary>
-    /// A typed word whose key (normalised, leading al stripped) is shorter than this must equal a whole word of the candidate in the partial step;
-    /// longer words may occur anywhere inside the candidate's key. Provisional reading of rule 4 (rule 4 does not say
-    /// how short a fragment may be), reported to Khalil.
+    /// The default of <see cref="AgentOptions.MinSubstringWordLength"/>: a typed word whose key (normalised, leading al
+    /// stripped) is shorter than this must equal a whole word of the candidate in the partial step; longer words may
+    /// occur anywhere inside the candidate's key. Rule 4 as Khalil decided it on 14 Oct 2026 (one- and two-letter words
+    /// are whole words only).
     /// </summary>
     public const int MinSubstringWordLength = 3;
 
+    /// <summary>Resolves with the default minimum, <see cref="MinSubstringWordLength"/>.</summary>
     public static Resolution Resolve(string typedName, IReadOnlyList<ContactCandidate> candidates)
+        => Resolve(typedName, candidates, MinSubstringWordLength);
+
+    /// <param name="typedName">The name as the user typed it.</param>
+    /// <param name="candidates">The user's saved names and aliases (<see cref="ContactCandidate.From"/>).</param>
+    /// <param name="minSubstringWordLength">
+    /// <see cref="AgentOptions.MinSubstringWordLength"/>: a shorter typed word must equal a whole word of a candidate.
+    /// </param>
+    public static Resolution Resolve(string typedName, IReadOnlyList<ContactCandidate> candidates, int minSubstringWordLength)
     {
         ArgumentNullException.ThrowIfNull(typedName);
         ArgumentNullException.ThrowIfNull(candidates);
+        ArgumentOutOfRangeException.ThrowIfLessThan(minSubstringWordLength, 1);
 
         var typedKey = ArabicText.Key(typedName);
         if (typedKey.Length == 0)
@@ -48,7 +59,7 @@ public static class ContactResolver
         var wordKeys = typedWords
             .Select(ArabicText.Key)
             .Where(key => key.Length > 0)
-            .Select(key => (Key: key, WholeWordOnly: key.Length < MinSubstringWordLength))
+            .Select(key => (Key: key, WholeWordOnly: key.Length < minSubstringWordLength))
             .ToList();
         var typedHasTitle = typedWords.Any(ArabicText.IsTitle);
         var partial = keyed

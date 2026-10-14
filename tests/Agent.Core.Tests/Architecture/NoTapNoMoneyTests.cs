@@ -80,7 +80,8 @@ public class NoTapNoMoneyTests
     /// <summary>
     /// The wallet's money-moving route is named in one place: the literal <c>"transactions"</c> is loaded only by
     /// <see cref="WalletClient"/>'s execute, and <c>"transactions/by-key/"</c> only by its read by key. Any other
-    /// string literal starting with <c>transactions</c> fails the test, so no second HTTP path to the route can hide.
+    /// string literal containing <c>transactions</c> (a leading slash, an absolute URL) fails the test, so no second HTTP
+    /// path to the route can hide.
     /// </summary>
     [Fact]
     public void OnlyTheWalletClientNamesTheTransactionsRoutes()
@@ -90,7 +91,7 @@ public class NoTapNoMoneyTests
         {
             foreach (var method in MethodsOf(type))
             {
-                foreach (var literal in StringsLoadedBy(method).Where(s => s.StartsWith("transactions", StringComparison.OrdinalIgnoreCase)))
+                foreach (var literal in StringsLoadedBy(method).Where(s => s.Contains("transactions", StringComparison.Ordinal)))
                 {
                     if (!users.TryGetValue(literal, out var names))
                         users[literal] = names = new SortedSet<string>(StringComparer.Ordinal);
@@ -105,14 +106,15 @@ public class NoTapNoMoneyTests
         Assert.Equal([$"{client}.{nameof(WalletClient.FindByKeyAsync)}"], users["transactions/by-key/"]);
     }
 
-    /// <summary>No method in <c>Agent.Core</c> invokes a method by reflection, so none can reach execute that way.</summary>
+    /// <summary>
+    /// No method in <c>Agent.Core</c> invokes a method by reflection (<c>MethodBase.Invoke</c>, <c>Type.GetMethod</c>,
+    /// <c>Type.GetMethods</c>, <c>Type.InvokeMember</c>, <c>Delegate.DynamicInvoke</c>, any overload of
+    /// <c>MethodInfo.CreateDelegate</c>), so none can reach execute that way.
+    /// </summary>
     [Fact]
     public void NothingInAgentCoreInvokesByReflection()
     {
-        var callers = CallersOf(callee =>
-            (callee.DeclaringType is { } declaring && typeof(MethodBase).IsAssignableFrom(declaring) && callee.Name == nameof(MethodBase.Invoke))
-            || (callee.DeclaringType is { } owner && typeof(Type).IsAssignableFrom(owner)
-                && callee.Name is nameof(Type.GetMethod) or nameof(Type.GetMethods)));
+        var callers = CallersOf(IsReflectionInvoke);
 
         Assert.True(
             callers.Count == 0,
@@ -223,6 +225,33 @@ public class NoTapNoMoneyTests
         {
             return null;
         }
+    }
+
+    private static bool IsReflectionInvoke(MethodBase callee)
+    {
+        if (callee.DeclaringType is not { } owner)
+            return false;
+
+        return (typeof(MethodBase).IsAssignableFrom(owner) && callee.Name == nameof(MethodBase.Invoke))
+            || (typeof(MethodInfo).IsAssignableFrom(owner) && callee.Name == nameof(MethodInfo.CreateDelegate))
+            || (typeof(Type).IsAssignableFrom(owner)
+                && callee.Name is nameof(Type.GetMethod) or nameof(Type.GetMethods) or nameof(Type.InvokeMember))
+            || (typeof(Delegate).IsAssignableFrom(owner) && callee.Name == nameof(Delegate.DynamicInvoke));
+    }
+
+    [Theory]
+    [InlineData(typeof(MethodBase), nameof(MethodBase.Invoke))]
+    [InlineData(typeof(MethodInfo), nameof(MethodInfo.CreateDelegate))]
+    [InlineData(typeof(Type), nameof(Type.GetMethod))]
+    [InlineData(typeof(Type), nameof(Type.GetMethods))]
+    [InlineData(typeof(Type), nameof(Type.InvokeMember))]
+    [InlineData(typeof(Delegate), nameof(Delegate.DynamicInvoke))]
+    public void TheReflectionScanKnowsEveryInvokeRoute(Type owner, string name)
+    {
+        var overloads = owner.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static).Where(m => m.Name == name).ToList();
+
+        Assert.NotEmpty(overloads);
+        Assert.All(overloads, m => Assert.True(IsReflectionInvoke(m), $"{owner.Name}.{name} is not caught by the scan."));
     }
 
     private static bool IsExecute(MethodBase callee)

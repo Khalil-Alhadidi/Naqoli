@@ -5,6 +5,7 @@ using Agent.Core.Data;
 using Agent.Core.Pending;
 using Agent.Core.Pipeline;
 using Agent.Core.Requests;
+using Agent.Core.Resolver;
 using Agent.Core.Tests.Agent;
 using Agent.Core.Tests.Wallet;
 using Microsoft.EntityFrameworkCore;
@@ -238,6 +239,38 @@ public class OrchestratorTests(AgentHost host)
         var question = Question(
             await HandleAsync(U1, ParsedRequest.Transfer(HammoudiAlias, 50, AmountUnit.None)), QuestionKinds.WhichAmount, QuestionAnswer.Tap);
         Assert.Equal([50_000L], question.Options.Select(o => o.AmountIqd!.Value));
+    }
+
+    [Fact]
+    public async Task SmallNumberWithNoReadingAboveTheMinimumIsRefused()
+    {
+        await StartAsync();
+
+        // 0.0005 thousand is not whole dinars and 0.0005 million is 500, below the minimum (Khalil, 14 Oct 2026).
+        var refusal = Refusal(
+            await HandleAsync(U1, ParsedRequest.Transfer(HammoudiAlias, 0.0005m, AmountUnit.None)), ReasonCodes.AmountBelowMinimum);
+        Assert.Equal(1_000, refusal.AmountIqd);
+    }
+
+    [Fact]
+    public void AnAliasWithNoContactIsOfferedByItsAccount()
+    {
+        var orphan = new ContactCandidate("alias", true, 42, "07805550199", null, "active", null, null, null);
+        var saved = orphan with { IsAlias = false, ContactCode = "S01" };
+
+        Assert.Equal("account:42", Orchestrator.ContactOptionValue(orphan));
+        Assert.Equal("S01", Orchestrator.ContactOptionValue(saved));
+    }
+
+    [Fact]
+    public async Task TheCardViewEqualsTheRecord()
+    {
+        await StartAsync();
+
+        var issued = Assert.IsType<AgentReply.CardIssued>(await HandleAsync(U1, ParsedRequest.Transfer(HammoudiAlias, 50_000, AmountUnit.Dinars)));
+
+        Assert.Equal(CardView.From(issued.Pending), issued.View);
+        Assert.Equal(SeedFacts.DemoBalance - 51_000, issued.View.BalanceAfterIqd);
     }
 
     [Fact]

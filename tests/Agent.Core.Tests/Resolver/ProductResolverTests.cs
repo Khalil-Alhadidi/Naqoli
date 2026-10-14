@@ -91,10 +91,21 @@ public class ProductResolverTests
     }
 
     [Fact]
-    public void UnknownOperatorTextAsksTheOperator()
+    public void UnknownOperatorTextIsNotFound()
+        => Assert.IsType<ProductResolution.NotFound>(Resolve("fastlink", "credit", 5_000)); // Khalil, 14 Oct 2026
+
+    [Fact]
+    public void OperatorTextNamingSeveralProvidersAsksAmongThem()
     {
-        var ask = Assert.IsType<ProductResolution.AskOperator>(Resolve("fastlink", "credit", 5_000));
-        Assert.Equal(["zain", "asiacell", "korek"], ask.ProviderCodes);
+        // Two providers that share another name: the typed name matches both, so the agent asks between them.
+        const string shared = "shared name";
+        var catalogue = SeedWallet.Products()
+            .Select(p => p.Provider is "zain" or "korek" ? p with { AlsoCalled = shared } : p)
+            .ToList();
+
+        var ask = Assert.IsType<ProductResolution.AskOperator>(
+            ProductResolver.Resolve(ParsedRequest.Purchase(shared, "credit", 10_000), catalogue, Options));
+        Assert.Equal(["zain", "korek"], ask.ProviderCodes);
     }
 
     [Fact]

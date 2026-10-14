@@ -50,8 +50,15 @@ public abstract record AgentReply
     /// <summary>The consent screen replaces everything until the user gives consent.</summary>
     public sealed record ConsentScreen : AgentReply;
 
-    /// <summary>A confirmation card was issued for <see cref="Pending"/>.</summary>
-    public sealed record CardIssued(PendingRecord Pending) : AgentReply;
+    /// <summary>
+    /// A confirmation card was issued for <see cref="Pending"/>. The record is for <c>Agent.Core</c> callers; a component
+    /// gets <see cref="View"/> only.
+    /// </summary>
+    public sealed record CardIssued(PendingRecord Pending) : AgentReply
+    {
+        /// <summary>The card as the screen shows it, projected from <see cref="Pending"/>.</summary>
+        public CardView View => CardView.From(Pending);
+    }
 
     /// <summary>A request the agent does not do; <see cref="Reason"/> is the parsed unsupported reason.</summary>
     public sealed record Unsupported(string Reason) : AgentReply;

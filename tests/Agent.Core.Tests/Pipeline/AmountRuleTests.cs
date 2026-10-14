@@ -41,11 +41,26 @@ public class AmountRuleTests
     }
 
     [Fact]
-    public void ReadingsThatAreNotWholeDinarsAreDropped()
+    public void ReadingsBelowTheMinimumAreDropped()
     {
-        // 0.0005 thousand is half a dinar; 0.0005 million is 500.
-        var ask = Assert.IsType<AmountResolution.Ask>(Resolve(0.0005m, AmountUnit.None));
-        Assert.Equal([500L], ask.Options);
+        // Khalil, 14 Oct 2026: 0.5 thousand is 500, below the minimum of 1,000, so only 500,000 is offered.
+        var ask = Assert.IsType<AmountResolution.Ask>(Resolve(0.5m, AmountUnit.None));
+        Assert.Equal([500_000L], ask.Options);
+    }
+
+    [Fact]
+    public void NoReadingAtOrAboveTheMinimumIsAmountBelowMinimum()
+    {
+        // 0.0005 thousand is half a dinar (not whole); 0.0005 million is 500, below the minimum.
+        Assert.Equal(new AmountResolution.Invalid(ReasonCodes.AmountBelowMinimum), Resolve(0.0005m, AmountUnit.None));
+    }
+
+    [Fact]
+    public void ReadingsFollowTheConfiguredMinimum()
+    {
+        var options = new AgentOptions { MinAmountIqd = 100 };
+        var ask = Assert.IsType<AmountResolution.Ask>(AmountRule.Resolve(ParsedRequest.Transfer("x", 0.5m, AmountUnit.None), options));
+        Assert.Equal([500L, 500_000L], ask.Options);
     }
 
     [Fact]

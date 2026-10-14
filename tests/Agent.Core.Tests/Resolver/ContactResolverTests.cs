@@ -193,6 +193,22 @@ public class ContactResolverTests
         Assert.Contains(word, ArabicText.Words(card.Chosen.Text).Select(ArabicText.StripLeadingAl));
     }
 
+    [Fact]
+    public void TheMinimumIsPassedIn()
+    {
+        // The first three letters of S01's first saved-name word match inside it with the default minimum of three,
+        // and must be a whole word (so are not found) with a minimum of four.
+        var fragment = SeedFacts.Contact("S01").SavedName.Split(' ')[0][..3];
+        var candidates = SeedCandidates.For("U1");
+
+        Assert.IsNotType<Resolution.NotFound>(ContactResolver.Resolve(fragment, candidates, minSubstringWordLength: 3), exactMatch: true);
+        Assert.IsType<Resolution.NotFound>(ContactResolver.Resolve(fragment, candidates, minSubstringWordLength: 4), exactMatch: true);
+    }
+
+    [Fact]
+    public void TheDefaultMinimumIsTheSetting()
+        => Assert.Equal(ContactResolver.MinSubstringWordLength, new AgentOptions().MinSubstringWordLength);
+
     private static string KindName(QuestionKind kind) => kind switch
     {
         QuestionKind.WhichContact => "which_contact",

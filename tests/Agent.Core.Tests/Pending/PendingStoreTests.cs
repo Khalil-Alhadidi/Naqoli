@@ -225,6 +225,33 @@ public class PendingStoreTests(AgentHost host)
     }
 
     [Fact]
+    public async Task MarkCheckingTwiceIsIdempotent()
+    {
+        await StartAsync();
+        var record = await InScopeAsync(s => s.CreateAsync(Draft(), Token));
+        Assert.IsType<TransitionResult.Begun>(await BeginAsync(record.Id));
+
+        // The stale-Executing sweep may get there before the Confirm handler's own write, or the other way round.
+        await InScopeAsync(s => s.MarkCheckingAsync(record.Id, User, "timeout", Token));
+        await InScopeAsync(s => s.MarkCheckingAsync(record.Id, User, "exception", Token));
+
+        Assert.Equal(PendingState.Checking, (await FindAsync(record.Id))!.State);
+        var checking = (await AuditAsync(record.Id)).Where(a => a.Event == AuditEvents.Checking).ToList();
+        Assert.Equal("timeout", Assert.Single(checking).Reason);
+    }
+
+    [Fact]
+    public async Task MarkCheckingOnAPendingRecordThrows()
+    {
+        await StartAsync();
+        var record = await InScopeAsync(s => s.CreateAsync(Draft(), Token));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => InScopeAsync(s => s.MarkCheckingAsync(record.Id, User, "timeout", Token)));
+        Assert.Equal(PendingState.Pending, (await FindAsync(record.Id))!.State);
+    }
+
+    [Fact]
     public async Task BackToPendingKeepsTheCardAndItsTimer()
     {
         await StartAsync();
