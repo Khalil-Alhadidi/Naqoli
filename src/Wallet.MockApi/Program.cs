@@ -3,10 +3,10 @@ using Wallet.MockApi.Data;
 
 var builder = WebApplication.CreateBuilder(args);
 
-var connectionString = builder.Configuration.GetConnectionString(WalletDbContextFactory.ConnectionStringName);
+var connectionString = builder.Configuration.GetConnectionString(WalletConnection.ConnectionStringName);
 if (string.IsNullOrWhiteSpace(connectionString))
 {
-    Console.Error.WriteLine(WalletDbContextFactory.MissingConnectionStringMessage);
+    Console.Error.WriteLine(WalletConnection.MissingConnectionStringMessage);
     return 1;
 }
 
@@ -18,7 +18,7 @@ builder.Services.AddDbContext<WalletDbContext>(o => o.UseSqlServer(connectionStr
 var app = builder.Build();
 
 // "migrate": apply migrations, add the synthetic seed if the database is empty, report and exit.
-if (args.Contains("migrate"))
+if (args is ["migrate", ..])
 {
     using var scope = app.Services.CreateScope();
     var db = scope.ServiceProvider.GetRequiredService<WalletDbContext>();
@@ -36,5 +36,9 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
+app.MapGet("/health", () => "ok");
+
 app.Run();
 return 0;
+
+public partial class Program { }

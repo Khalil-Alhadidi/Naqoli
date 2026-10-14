@@ -4,6 +4,10 @@
     <ProjectReference Include="..\Agent.Core\Agent.Core.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Include="MudBlazor" Version="9.11.0" />
+  </ItemGroup>
+
   <PropertyGroup>
     <BlazorDisableThrowNavigationException>true</BlazorDisableThrowNavigationException>
   </PropertyGroup>

@@ -10,11 +10,6 @@ namespace Wallet.MockApi.Data;
 /// </summary>
 public class WalletDbContextFactory : IDesignTimeDbContextFactory<WalletDbContext>
 {
-    public const string ConnectionStringName = "Wallet";
-
-    public const string MissingConnectionStringMessage =
-        "No connection string 'Wallet'. Set ConnectionStrings:Wallet in appsettings, user secrets or the ConnectionStrings__Wallet environment variable.";
-
     public WalletDbContext CreateDbContext(string[] args)
     {
         var environment = Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT") ?? "Development";
@@ -27,9 +22,9 @@ public class WalletDbContextFactory : IDesignTimeDbContextFactory<WalletDbContex
             .AddEnvironmentVariables()
             .Build();
 
-        var connectionString = configuration.GetConnectionString(ConnectionStringName);
+        var connectionString = configuration.GetConnectionString(WalletConnection.ConnectionStringName);
         if (string.IsNullOrWhiteSpace(connectionString))
-            throw new InvalidOperationException(MissingConnectionStringMessage);
+            throw new InvalidOperationException(WalletConnection.MissingConnectionStringMessage);
 
         var options = new DbContextOptionsBuilder<WalletDbContext>()
             .UseSqlServer(connectionString)
