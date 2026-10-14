@@ -115,10 +115,10 @@ public class WalletClientTests(AgentHost host)
             Assert.Equal(422, refused.Problem.Status);
             Assert.Equal("insufficient_funds", refused.Problem.Code);
 
-            // 500 from the fault switch: unknown, never failed.
+            // 500 injected_error from the fault switch: the wallet refused before writing, so it is a refusal.
             await SetFaultAsync(new FaultRequest("error", null));
-            var error = Assert.IsType<ExecuteOutcome.Unknown>(await Client.ExecuteAsync("agent-k3", send, Token));
-            Assert.Equal("http_500", error.Reason);
+            var error = Assert.IsType<ExecuteOutcome.Refused>(await Client.ExecuteAsync("agent-k3", send, Token));
+            Assert.Equal((500, "injected_error"), (error.Problem.Status, error.Problem.Code));
 
             // The wallet holds the answer longer than the client waits: unknown, and nothing moved.
             await SetFaultAsync(new FaultRequest("timeoutBeforeExecute", 3_000));
@@ -236,6 +236,63 @@ public class WalletClientTests(AgentHost host)
 
         Assert.Equal(new ExecuteOutcome.Unknown("in_progress"), outcome);
     }
+
+    [Fact]
+    public async Task ExecuteServerErrorWithAWalletCodeIsRefused()
+    {
+        var stub = new ScriptedStub();
+        var client = StubClient(stub);
+        var send = Transfer(DemoUserId, 10_000, SeedFacts.HammoudiPhone);
+
+        stub.Next = (_, _) => Task.FromResult(Problem(HttpStatusCode.InternalServerError, """{"status":500,"title":"Injected error","code":"injected_error"}"""));
+        var error = Assert.IsType<ExecuteOutcome.Refused>(await client.ExecuteAsync("k-500", send, Token));
+        Assert.Equal(new WalletProblem(500, "injected_error", null, null), error.Problem);
+
+        stub.Next = (_, _) => Task.FromResult(Problem(HttpStatusCode.GatewayTimeout, """{"status":504,"title":"Injected timeout","code":"injected_timeout"}"""));
+        var timeout = Assert.IsType<ExecuteOutcome.Refused>(await client.ExecuteAsync("k-504", send, Token));
+        Assert.Equal(new WalletProblem(504, "injected_timeout", null, null), timeout.Problem);
+    }
+
+    [Fact]
+    public async Task ExecuteBareServerErrorIsUnknown()
+    {
+        var stub = new ScriptedStub();
+        var client = StubClient(stub);
+        var send = Transfer(DemoUserId, 10_000, SeedFacts.HammoudiPhone);
+
+        // No body at all.
+        stub.Next = (_, _) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.InternalServerError));
+        Assert.Equal(new ExecuteOutcome.Unknown("http_500"), await client.ExecuteAsync("k-1", send, Token));
+
+        // ProblemDetails from ASP.NET Core itself: no code.
+        stub.Next = (_, _) => Task.FromResult(Problem(HttpStatusCode.InternalServerError, """{"status":500,"title":"An error occurred"}"""));
+        Assert.Equal(new ExecuteOutcome.Unknown("http_500"), await client.ExecuteAsync("k-2", send, Token));
+
+        // A body that cannot be read.
+        stub.Next = (_, _) => Task.FromResult(Problem(HttpStatusCode.BadGateway, "{not json"));
+        Assert.Equal(new ExecuteOutcome.Unknown("http_502"), await client.ExecuteAsync("k-3", send, Token));
+
+        // Not JSON at all (a proxy's page).
+        stub.Next = (_, _) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.ServiceUnavailable)
+        {
+            Content = new StringContent("<html>code</html>", System.Text.Encoding.UTF8, "text/html"),
+        });
+        Assert.Equal(new ExecuteOutcome.Unknown("http_503"), await client.ExecuteAsync("k-4", send, Token));
+
+        // A transport failure and the client's timeout stay unknown.
+        stub.Next = (_, _) => throw new HttpRequestException("refused");
+        Assert.Equal(new ExecuteOutcome.Unknown("connection"), await client.ExecuteAsync("k-5", send, Token));
+
+        stub.Next = async (_, token) =>
+        {
+            await Task.Delay(TimeSpan.FromSeconds(10), token);
+            return new HttpResponseMessage(HttpStatusCode.Created);
+        };
+        Assert.Equal(new ExecuteOutcome.Unknown("timeout"), await client.ExecuteAsync("k-6", send, Token));
+    }
+
+    private static HttpResponseMessage Problem(HttpStatusCode status, string body)
+        => new(status) { Content = new StringContent(body, System.Text.Encoding.UTF8, "application/problem+json") };
 
     private static WalletClient StubClient(HttpMessageHandler handler)
         => new(

@@ -91,6 +91,13 @@ public class ConfirmHandlerTests(AgentHost host)
     private WalletClient StubbedExecuteClient(Func<HttpResponseMessage> execute)
         => host.CreateClient(new StubExecuteHandler(execute) { InnerHandler = host.Wallet.CreateHandler() }, TimeSpan.FromSeconds(10));
 
+    /// <summary>
+    /// A Confirm whose execute call gets a bare 500 (no body, no wallet code), as a lost database connection gives: the
+    /// outcome is unknown, so the record goes to Checking. The stub writes nothing, so a resend executes normally.
+    /// </summary>
+    private Task<ConfirmOutcome> ConfirmIntoCheckingAsync(PendingRecord card, string? pin = null)
+        => ConfirmThroughAsync(StubbedExecuteClient(() => new HttpResponseMessage(HttpStatusCode.InternalServerError)), card, pin);
+
     /// <summary>The record as stored, read by its ID alone (a test read, not a user's).</summary>
     private async Task<PendingRecord> RecordAsync(Guid id)
     {
@@ -281,13 +288,54 @@ public class ConfirmHandlerTests(AgentHost host)
     }
 
     [Fact]
-    public async Task WalletErrorIsChecking()
+    public async Task WalletErrorWithACodeIsNotDoneNothingTaken()
     {
+        // FLT-03: the fault switch answers 500 injected_error before writing anything.
         await StartAsync();
         var card = await CardAsync(U1, FiftyThousandToHammoudi);
         await SetFaultAsync(new FaultRequest("error", null, Once: true));
 
-        Assert.IsType<ConfirmOutcome.Checking>(await ConfirmAsync(card.UserId, card.Id));
+        var outcome = await ConfirmAsync(card.UserId, card.Id);
+
+        Assert.Equal(new ConfirmOutcome.NotDone(ReasonCodes.NotDoneNothingTaken, "injected_error"), outcome);
+        var record = await RecordAsync(card.Id);
+        Assert.Equal((PendingState.NotDone, "injected_error"), (record.State, record.ResultCode));
+        Assert.Equal(0, await WalletRowsAsync(card.IdempotencyKey));
+        Assert.Equal(SeedFacts.DemoBalance, await host.Wallet.AccountBalanceAsync(SeedFacts.DemoPhone));
+
+        // The record left Pending once: another tap does nothing, and the settle path does not apply.
+        Assert.Equal(new ConfirmOutcome.AlreadyHandled(PendingState.NotDone), await ConfirmAsync(card.UserId, card.Id));
+        Assert.Equal(new ConfirmOutcome.AlreadyHandled(PendingState.NotDone), await SettleAsync(card.UserId, card.Id));
+        Assert.Equal(0, await WalletRowsAsync(card.IdempotencyKey));
+        Assert.Single(await AuditAsync(card.Id), r => r.Event == AuditEvents.NotDone);
+    }
+
+    [Fact]
+    public async Task StubbedServerErrorWithACodeIsNotDone()
+    {
+        await StartAsync();
+        var coded = await CardAsync(U1, FiftyThousandToHammoudi);
+        var client = StubbedExecuteClient(() => new HttpResponseMessage(HttpStatusCode.InternalServerError)
+        {
+            Content = new StringContent(
+                """{"status":500,"title":"Injected error","code":"injected_error"}""", Encoding.UTF8, "application/problem+json"),
+        });
+
+        Assert.Equal(
+            new ConfirmOutcome.NotDone(ReasonCodes.NotDoneNothingTaken, "injected_error"),
+            await ConfirmThroughAsync(client, coded));
+        var record = await RecordAsync(coded.Id);
+        Assert.Equal((PendingState.NotDone, "injected_error"), (record.State, record.ResultCode));
+        Assert.Equal(SeedFacts.DemoBalance, await host.Wallet.AccountBalanceAsync(SeedFacts.DemoPhone));
+    }
+
+    [Fact]
+    public async Task BareWalletErrorIsCheckingThenDoneBySettle()
+    {
+        await StartAsync();
+        var card = await CardAsync(U1, FiftyThousandToHammoudi);
+
+        Assert.IsType<ConfirmOutcome.Checking>(await ConfirmIntoCheckingAsync(card));
 
         var checking = await RecordAsync(card.Id);
         Assert.Equal(PendingState.Checking, checking.State);
@@ -296,7 +344,7 @@ public class ConfirmHandlerTests(AgentHost host)
         Assert.Equal(0, await WalletRowsAsync(card.IdempotencyKey));
         Assert.Equal(SeedFacts.DemoBalance, await host.Wallet.AccountBalanceAsync(SeedFacts.DemoPhone));
 
-        // The once fault has cleared itself; the resend under the same key executes now.
+        // The bare 500 wrote nothing; the resend under the same key executes now.
         var settled = Assert.IsType<ConfirmOutcome.Done>(await SettleAsync(card.UserId, card.Id));
 
         Assert.Equal(1, await WalletRowsAsync(card.IdempotencyKey));
@@ -335,6 +383,25 @@ public class ConfirmHandlerTests(AgentHost host)
     }
 
     [Fact]
+    public async Task WalletErrorOnASettleStaysChecking()
+    {
+        await StartAsync();
+        var card = await CardAsync(U1, FiftyThousandToHammoudi);
+        await SetFaultAsync(new FaultRequest("timeoutAfterExecute", 3_000, Once: true));
+        Assert.IsType<ConfirmOutcome.Checking>(await ConfirmImpatientlyAsync(card));
+        var stored = await WaitUntilDoneAsync(card.IdempotencyKey, U1);
+
+        // The original call was written, but the fault switch answers before the key lookup: not a refusal of the card.
+        await SetFaultAsync(new FaultRequest("error", null, Once: true));
+        Assert.IsType<ConfirmOutcome.Checking>(await SettleAsync(card.UserId, card.Id));
+        Assert.Equal(PendingState.Checking, (await RecordAsync(card.Id)).State);
+
+        var settled = Assert.IsType<ConfirmOutcome.Done>(await SettleAsync(card.UserId, card.Id));
+        Assert.Equal(stored.Reference, settled.Reference);
+        Assert.Equal(1, await WalletRowsAsync(card.IdempotencyKey));
+    }
+
+    [Fact]
     public async Task TimeoutBeforeExecuteIsCheckingThenDoneByResend()
     {
         await StartAsync();
@@ -360,8 +427,7 @@ public class ConfirmHandlerTests(AgentHost host)
     {
         await StartAsync();
         var card = await CardAsync(U1, FiftyThousandToHammoudi);
-        await SetFaultAsync(new FaultRequest("error", null, Once: true));
-        Assert.IsType<ConfirmOutcome.Checking>(await ConfirmAsync(card.UserId, card.Id));
+        Assert.IsType<ConfirmOutcome.Checking>(await ConfirmIntoCheckingAsync(card));
 
         var settled = Assert.IsType<ConfirmOutcome.Done>(await SettleAsync(card.UserId, card.Id));
 
@@ -512,8 +578,7 @@ public class ConfirmHandlerTests(AgentHost host)
         await StartAsync();
         var traderBefore = await host.Wallet.AccountBalanceAsync(TraderPhone);
         var card = await CardAsync(U3, TraderTransferWithPin);
-        await SetFaultAsync(new FaultRequest("error", null, Once: true));
-        Assert.IsType<ConfirmOutcome.Checking>(await ConfirmAsync(card.UserId, card.Id, TraderPin));
+        Assert.IsType<ConfirmOutcome.Checking>(await ConfirmIntoCheckingAsync(card, TraderPin));
 
         // Within the window a PIN refusal may still mean "the original is running".
         Assert.IsType<ConfirmOutcome.Checking>(await SettleAsync(card.UserId, card.Id));
@@ -588,8 +653,7 @@ public class ConfirmHandlerTests(AgentHost host)
 
         // The Confirm comes 40 seconds after the card was created, inside its timer.
         host.Clock.Advance(TimeSpan.FromSeconds(40));
-        await SetFaultAsync(new FaultRequest("error", null, Once: true));
-        Assert.IsType<ConfirmOutcome.Checking>(await ConfirmAsync(card.UserId, card.Id, TraderPin));
+        Assert.IsType<ConfirmOutcome.Checking>(await ConfirmIntoCheckingAsync(card, TraderPin));
         var executingSince = (await RecordAsync(card.Id)).ExecutingSince;
         Assert.Equal<DateTimeOffset?>(card.CreatedAt.AddSeconds(40), executingSince);
 
@@ -644,8 +708,7 @@ public class ConfirmHandlerTests(AgentHost host)
     {
         await StartAsync();
         var card = await CardAsync(U1, FiftyThousandToHammoudi);
-        await SetFaultAsync(new FaultRequest("error", null, Once: true));
-        Assert.IsType<ConfirmOutcome.Checking>(await ConfirmAsync(card.UserId, card.Id));
+        Assert.IsType<ConfirmOutcome.Checking>(await ConfirmIntoCheckingAsync(card));
 
         var outcomes = await Task.WhenAll(SettleAsync(card.UserId, card.Id), SettleAsync(card.UserId, card.Id));
 

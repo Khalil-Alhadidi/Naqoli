@@ -229,6 +229,12 @@ public sealed class ConfirmHandler
                 outcome = new ConfirmOutcome.Checking();
                 break;
 
+            // The wallet takes its fault switch before it looks the key up, so a 5xx with a code on a resend says
+            // nothing about the original call, which may have been written: the record stays Checking (rule 6).
+            case ExecuteOutcome.Refused { Problem.Status: >= 500 }:
+                outcome = new ConfirmOutcome.Checking();
+                break;
+
             case ExecuteOutcome.Done done:
                 outcome = await CompleteDoneAsync(record, done.Transaction);
                 break;
@@ -356,7 +362,8 @@ public sealed class ConfirmHandler
 
     /// <summary>
     /// The reply for a final wallet refusal. Every code the agent has no reply of its own for is
-    /// <see cref="ReasonCodes.NotDoneNothingTaken"/> with the wallet's code as the detail: a 4xx moved nothing.
+    /// <see cref="ReasonCodes.NotDoneNothingTaken"/> with the wallet's code as the detail: a 4xx, or a 5xx that carries a
+    /// wallet code (<c>injected_error</c>), moved nothing.
     /// </summary>
     private static (string Reason, string? Detail) MapRefusal(string code) => code switch
     {

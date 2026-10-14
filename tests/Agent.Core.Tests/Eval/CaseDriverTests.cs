@@ -135,18 +135,20 @@ public sealed class CaseDriverTests(AgentHost host) : IAsyncDisposable
     }
 
     [Fact]
-    public async Task AWalletErrorOnConfirmIsCheckingThenDoneAfterTheSettle()
+    public async Task AWalletErrorOnConfirmIsNotDoneAndMovesNothing()
     {
         var runner = Start();
 
         var seen = await runner.Driver.PlayAsync(
             Case("U1", new CaseFault("wallet_error", "confirm", 1), Say(HammoudiSentence), Confirm()), Token);
 
+        // 500 injected_error: the wallet refused before writing (the 14 Oct ruling), so the card ends not done.
         Assert.Null(seen.StepError);
-        Assert.Equal(["live", "checking", "done"], seen.StatusSequence);
-        Assert.Equal(["checking", "done"], seen.Steps[1].StatusSequence);
-        Assert.Equal(("done", 1), (seen.Steps[1].CardState, seen.Steps[1].Executions));
-        Assert.Single(seen.WalletDiff.NewTransactions);
+        Assert.Equal(["live", "not_done"], seen.StatusSequence);
+        Assert.Equal(("not_done", 0), (seen.Steps[1].CardState, seen.Steps[1].Executions));
+        Assert.Contains(ReasonCodes.NotDoneNothingTaken, seen.Steps[1].ReplyCodes);
+        Assert.Empty(seen.WalletDiff.NewTransactions);
+        Assert.Equal(SeedFacts.DemoBalance, seen.WalletDiff.BalanceIqd);
     }
 
     [Fact]

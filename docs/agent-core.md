@@ -304,13 +304,13 @@ sequenceDiagram
             alt 201 or 200
                 C->>S: CompleteAsync(Done, reference, balance after, last 4 of a code)
                 C-->>U: Done
-            else 5xx, 409, timeout, connection, unreadable
+            else 5xx without a wallet code, 409, timeout, connection, unreadable
                 C->>S: MarkCheckingAsync(reason)
                 C-->>U: Checking
             else PIN to try again
                 C->>S: BackToPendingAsync(code)
                 C-->>U: PinRequired, PinWrong(attemptsLeft) or PinMalformed
-            else other 4xx
+            else other 4xx, or a 5xx with a wallet code
                 C->>S: CompleteAsync(NotDone, wallet code)
                 C-->>U: NotDone(reason)
             end
@@ -356,7 +356,7 @@ As in `ConfirmHandler.cs`.
 | Recheck: balance or history read with no answer | NotDone, `wallet_` plus the reason | `NotDone(not_done_nothing_taken, wallet_<reason>)` |
 | Recheck: balance or history read refused | NotDone, the wallet's code | `NotDone(not_done_nothing_taken, code)` |
 | 201 or 200 | Done, reference, balance after, last four of a purchase code | `Done(reference, balanceAfter, purchaseCode)` |
-| 5xx (`http_500`, `http_504`), 409 (`in_progress`), `timeout`, `connection`, `unreadable_response` | Checking, with the reason | `Checking` |
+| 5xx without a wallet `code` (`http_500`, `http_502`), 409 (`in_progress`), `timeout`, `connection`, `unreadable_response` | Checking, with the reason | `Checking` |
 | 422 `pin_required` | back to Pending | `PinRequired` |
 | 422 `pin_invalid` with `attemptsLeft` above 0 | back to Pending | `PinWrong(attemptsLeft)` |
 | 422 `pin_invalid` with no attempts left | NotDone, `pin_locked` | `NotDone(pin_locked)` |
@@ -365,13 +365,13 @@ As in `ConfirmHandler.cs`.
 | 422 `nothing_due` | NotDone, `nothing_due` | `NotDone(nothing_due)` |
 | 422 `account_closed` | NotDone, `account_closed` | `NotDone(account_closed)` |
 | 423 `pin_locked` | NotDone, `pin_locked` | `NotDone(pin_locked)` |
-| Any other 4xx | NotDone, the wallet's code | `NotDone(not_done_nothing_taken, code)` |
+| Any other 4xx, or a 5xx whose ProblemDetails carries a wallet `code` (`injected_error`, `injected_timeout`: the wallet refused before writing; ruling of 14 Oct 2026) | NotDone, the wallet's code | `NotDone(not_done_nothing_taken, code)` |
 | The outcome write finds the record no longer Executing (should not happen) | unchanged | `AlreadyHandled(state)` |
 | Any exception after the begin and before the execute call, not a cancellation | back to Pending, reason `exception` (best effort) | the exception propagates |
 | Any exception once the execute call was sent, not a cancellation | Checking, reason `exception` (best effort) | the exception propagates |
 | Settle: no record, or another user's record | none | `NotFound` |
 | Settle: record not Checking before the resend, or settled by another call (a concurrent settle, a reset) before the write (`CompleteAsync` returns `AlreadyLeft` or `NotFound`) | unchanged | `AlreadyHandled(state)` or `NotFound` |
-| Settle: another unknown outcome | stays Checking, no write | `Checking` |
+| Settle: another unknown outcome, or a 5xx with a wallet `code` (the fault switch answers before the key lookup, so it says nothing about the original call) | stays Checking, no write | `Checking` |
 | Settle: 422 `pin_required`, `pin_invalid` or `pin_malformed`, or 423 `pin_locked`, within `SettleWindowSeconds` of `ExecutingSince` | stays Checking, no write | `Checking` |
 | Settle: the same PIN codes after `SettleWindowSeconds` | NotDone, the wallet's code | `NotDone(not_done_nothing_taken, code)` |
 | Settle: 201, 200 or any other 4xx | as the rows above for Done and the other 4xx | as above |

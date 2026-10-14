@@ -170,7 +170,20 @@ public sealed partial class WalletClient
                 return new ExecuteOutcome.Refused(problem);
             }
 
-            // A 5xx, with or without a code, or any other status: the client cannot know whether money moved.
+            // A 5xx whose ProblemDetails carries a wallet code (injected_error, injected_timeout): the wallet's own rules
+            // answered before anything was written, so it is a refusal (docs/wallet-api.md, the 14 Oct ruling).
+            if (status >= 500)
+            {
+                var problem = await WalletProblem.ReadAsync(response, cancellationToken);
+                if (problem.Code != WalletProblem.NoCode)
+                {
+                    LogExecuteRefused(status, problem.Code);
+                    return new ExecuteOutcome.Refused(problem);
+                }
+            }
+
+            // A bare 5xx (no code, no body, or a body that cannot be read), or any other status: the client cannot know
+            // whether money moved.
             var reason = "http_" + status.ToString(CultureInfo.InvariantCulture);
             LogExecuteUnknown(status, reason);
             return new ExecuteOutcome.Unknown(reason);
