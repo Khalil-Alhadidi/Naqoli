@@ -67,6 +67,8 @@ No dates yet. The organisers' guidelines for the build round have not arrived, s
 - A balance can never go below zero.
 - The seed is frozen and tagged. The answer keys in milestone 5 depend on it, so any later change to the seed means checking every answer key again.
 
+Note, 14 Oct 2026: the seed was replaced by Khalil's test-set export (commit 462187f) in milestone 2b and re-frozen as `seed-v2`; the milestone 2 'Done when' lines were re-run on it.
+
 ## Milestone 3: Write path, no model
 
 **Delivers**

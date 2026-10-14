@@ -1,196 +1,97 @@
 # Seed data
 
-The mock wallet starts from one frozen, synthetic seed. The rows live in `src/Wallet.MockApi/Data/SeedData.cs` (the Arabic values that tests refer to are named constants in `SeedStrings.cs` beside it), so that `migrate` and the reset core (`SeedReset.ResetAsync`) load exactly the same data. This file describes the seed in words; the code is the source of truth.
+The mock wallet starts from one frozen, synthetic seed: the eight JSON files in this folder. Khalil exported them on 14 Oct 2026 from the test-set workbook v0.15, together with the request sets and `docs/matching-rules.md` (commit 462187f). [data/README.md](../README.md) is the export's own description of every file and field; this file says how the wallet uses them.
 
 Every name, phone number, account number, purchase code and transaction here is invented. None belongs to a real person or company account.
 
+## The files
+
+| File | Rows | What it is |
+|---|---|---|
+| `users.json` | 5 | The mock users U1 to U5: number, registered name, balance, consent flag, PIN |
+| `accounts.json` | 42 | The wallet's own account table: every number that exists, its registered name (or null) and status. 5 user accounts, 33 contact accounts, 4 other accounts (X01 to X04). A number that is not here has no wallet |
+| `contacts.json` | 34 | Each user's saved contacts: saved name, optional alias (9 have one), number |
+| `billers.json` | 4 | `electricity`, `water`, `internet`, `school_fees`, each with an English and an Arabic name |
+| `bills.json` | 11 | What each user owes to which biller: label (or null), subscriber number, amount due |
+| `store.json` | 15 | The products: code, provider, provider names, the other name the product is known by (or null), type, face value, price |
+| `settings.json` | 1 object | Fees, caps, PIN threshold, timer, fault codes, learning-log reasons. Read with the others; the wallet itself takes its fees and PIN rules from `WalletOptions`, and `SeedSetTests.WalletDefaultsMatchTheSettingsFile` checks that the defaults agree with this file |
+| `history.json` | 86 | Three months of transactions, dated as days before the seed is loaded: 57 transfers, 20 bills, 9 purchases |
+
+Two accounts are closed: `07805550120` (behind contact S20 of U1) and `07805550193` (X04, which also has no registered name). U5 has not given consent and has no history.
+
+## Source of truth
+
+The JSON files are the source. The wallet invents no row: every name, number, code, balance and amount comes from them. Claude never edits them; a change is Khalil's, made in the workbook and exported again.
+
+The Arabic text in the files is Khalil's wording. C# holds no Arabic seed text; tests read it from the files through `SeedSet` (`tests/Agent.Core.Tests/Wallet/SeedFacts.cs`).
+
 ## Frozen by hash
 
-`seed-hash.txt` holds the SHA-256 of a canonical JSON form of every seed row (`SeedData.ComputeHash()`). The test `SeedHashTests.SeedHashMatchesCommittedValue` fails if the seed changes. If a change is intended, run `dotnet run --project src/Wallet.MockApi -- seed-hash`, write the printed value to `seed-hash.txt`, and re-check every answer key (build plan, milestone 2). PIN hashes are salted, so the hash covers a `***` placeholder instead of them.
+`seed-hash.txt` holds `SeedHash.Compute` over this folder: SHA-256, lower-case hex, over each file in `SeedFiles.All` order (users, accounts, contacts, billers, bills, store, settings, history), taking the file name, a `\n`, the file's bytes with every `\r` removed, and a `\n`. Removing `\r` makes a CRLF checkout and an LF checkout hash alike. The test `SeedHashTests.SeedHashMatchesCommittedValue` fails if any file changes.
 
-The seed is frozen as of milestone 2 and tagged `seed-v1` once the milestone 2 review is done. The answer keys from milestone 5 depend on it, so any later change to the seed means re-checking every answer key.
+To re-freeze after an intended change (a new export from Khalil):
 
-## Reset
+1. Run `dotnet run --project src/Wallet.MockApi --no-launch-profile -- seed-hash`. It needs no database. The hash is the last line printed; without `--no-launch-profile`, `dotnet run` may print launch-profile and build lines first, so never redirect the whole output into the file.
+2. Write that value, with a final newline, to `seed-hash.txt`.
+3. Re-check every answer key against the new seed (build plan, milestone 2) and tag the new seed.
 
-`POST /admin/reset` on the mock wallet (and `SeedReset.ResetAsync` behind it) restores this seed exactly, identity values included: ids start again where the seed leaves them, so the next transaction after a reset is id 20. The endpoint is serialised with payments (`WalletGate`): it waits for payments in progress, holds new ones back until it is done, and never runs alongside another reset; it also clears the fault switch. See [docs/wallet-api.md](../../docs/wallet-api.md#reset).
+`seed-v1` stays in the history as the tag of the first seed, the C# literals of milestone 2, before the export. The seed from these files is tagged `seed-v2` after the milestone 2b review. The answer keys from milestone 5 depend on it, so any later change to the seed means re-checking every answer key.
+
+## How the wallet loads them
+
+- `src/Wallet.MockApi/Wallet.MockApi.csproj` links `data/seed/*.json` into the build output as `seed/*.json`, so `migrate`, `seed-hash`, the running API and the tests read the same bytes as the repository.
+- `Wallet:SeedDirectory` names the folder; the default is `seed` beside the built assembly (`SeedFiles.DefaultDirectory`).
+- `SeedSet.Load` reads the eight files and validates them: unique ids; every reference resolves (a user's number is a user account with the same name and balance, contact and history numbers are accounts, bills and history name users, billers, bills and products that exist); allowed values (account status `active` or `closed`, kind `user`, `contact` or `other`, product type `credit` or `internet`, history type `transfer`, `bill` or `purchase`, status `done`, time `HH:mm`); one account per alias per user (D15); nothing negative; every required member present and not null; and no member the models do not know. A failure throws `SeedException`, whose message starts with the file name.
+- The `SeedSet` is a singleton resolved at start-up, so a missing or invalid file stops the API before it serves anything. `migrate` prints the message and exits 1. A file saved with a UTF-8 byte order mark is refused by the JSON reader, with the file named.
+- `SeedData.Build(seed, now)` maps the files to entities; `SeedData.Apply` inserts them one row at a time, in a fixed order, inside one database transaction, and only when the database has no user yet. `migrate` and `POST /admin/reset` both go through it.
+
+### Insert order and ids
+
+Identity values follow the insert order, so they are the same on every fresh database and after every reset.
+
+| Order | Rows | Ids |
+|---|---|---|
+| 1 | Users U1 to U5, each with its own account (the default account, D10) | User ids 1 to 5; account ids 1 to 5 (account 1 is U1's) |
+| 2 | The other 37 accounts, in `accounts.json` order | Account ids 6 to 42 (6 is X03, 15 is `07805550101` behind S01, 33 is the closed `07805550120`, 35 is the closed X04) |
+| 3 | Billers, in file order | 1 `electricity` to 4 `school_fees` |
+| 4 | Products, in `store.json` order | 1 `ZN-CR-5` to 15 `KR-NET-30` (6 is `ZN-NET-40`) |
+| 5 | Contacts, in `contacts.json` order | 1 `S01` to 34 `N01` |
+| 6 | Aliases, one per contact that has one, in contact order | 1 to 9 (1 is S01's) |
+| 7 | Bill accounts, in `bills.json` order | 1 `BS1` to 11 `BZ3` |
+| 8 | Transactions, oldest first: largest `days_ago` first, then the earlier time, then file order | 1 `H0038` to 86 `H0043` |
+| 9 | Orders, one per purchase, in transaction order | 1 to 9 |
+
+An alias points at the account behind its contact's number. A contact is joined to its account by phone; S12 and S13 of U1 are two saved names for one account.
+
+### Codes
+
+Each seeded row keeps its test-set id as a code, so the answer keys can name it: `UserSummary.code` (`U1`), `ContactItem.code` (`S01`), `BillItem.code` (`BS1`), `ProductItem.code` (`ZN-CR-5`), and the code of the four other accounts (`X01` to `X04`, stored but not sent). Seeded transactions carry the idempotency key `seed-<history id>` (`seed-H0001`) and the reference `ZC-` followed by the transaction id padded to 10 digits.
+
+The purchase code of a seeded order is `SeedData.OrderCodeFor(history id)`: `9` followed by the digits of the history id, left-padded with zeros to 12 (`H0086` gives `9000000000086`). Purchases made at run time get 13 random digits.
+
+## Dates
+
+`days_ago` counts back from today in Iraq time (UTC+3, no daylight saving, `SeedData.IraqOffset`), and `time` is the clock time in Iraq. A row is stored with `CreatedAt` = `CompletedAt` = that day at that time, with offset `+03:00`; `days_ago` 0 is today. "Today" is the Iraq date of the clock when the seed is applied, so every reset re-dates the history to the current day.
+
+Two consequences:
+
+- Two rows have `days_ago` 0: H0045 at 12:07 and H0043 at 16:36 (both U3). In a run before those times they are later than "now".
+- A run that crosses midnight Iraq time sees the seeded dates shift by one day between a reset before midnight and a reset after it.
+
+## PINs and consent
+
+Each user's PIN is in `users.json`. The wallet stores only its PBKDF2 hash; each distinct PIN is hashed once per process and the hash is reused by every reset. `ConsentGiven` comes from `users.json` (false for U5 only). `POST /users/{id}/consent` sets it; a reset restores the file's value.
+
+## Fees in the history
+
+Each history row carries its own fee (transfer 1,000, bill 500, purchase 0, the values in `settings.json`). The seed stores the file's fee, not the configured one, so changing `WalletOptions` never rewrites history; total = amount + fee.
 
 ## Phone numbers
 
-Decision by Khalil, 14 Oct 2026: seeded phone numbers stay in the pattern `^0770000\d{4}$` (`07700001001` to `07700001012`). The pattern is clearly synthetic and is checked by `SeedDataTests.PhonesAreSyntheticAndUnique`.
+The export's numbers follow `07x0555xxxx` (prefixes `0750555`, `0770555`, `0780555`, `0790555`) plus `07715550191` (X02). Khalil's export supersedes the decision of 14 Oct 2026 to keep seeded phones in `0770000xxxx`; no test asserts the old pattern.
 
-## The anchor
+## Reset
 
-History dates are counted back from a fixed anchor, `SeedData.Anchor` = 14 Oct 2026 09:00 (UTC+3). Balances are frozen values, the balances after the history; they are not recomputed from it.
+`POST /admin/reset` on the mock wallet (and `SeedReset.ResetAsync` behind it) deletes every row, restarts every identity at 1 and applies the seed again, dated from the current clock: ids are as in the table above, so the next transaction after a reset is id 87. PIN failure counts, locks and consent are back to the files' values. The endpoint is serialised with payments (`WalletGate`) and clears the fault switch. See [docs/wallet-api.md](../../docs/wallet-api.md#reset).
 
-## Users
-
-Every user has one default account (D10). Every seeded PIN is `1234`, stored only as a PBKDF2 hash. The demo user, the one the agent acts for, is user 1 (`SeedData.DemoUserId`).
-
-| Id | Phone | Registered name | Note | Balance (IQD) |
-|---|---|---|---|---|
-| 1 | 07700001001 | أحمد كريم جاسم | Demo user, Ahmed | 300,000 |
-| 2 | 07700001002 | سارة عبد الله حسن | Sara | 1,250,000 |
-| 3 | 07700001003 | عمر سعد محمود | Omar, empty balance | 0 |
-| 4 | 07700001004 | محمود كريم جاسم | Hammoudi, Ahmed's brother | 80,000 |
-| 5 | 07700001005 | علي حسن كاظم | First Ali | 45,000 |
-| 6 | 07700001006 | علي كريم عبود | Second Ali | 120,000 |
-| 7 | 07700001007 | حسن علي رشيد | Hasan | 10,000 |
-| 8 | 07700001008 | حسين علي رشيد | Husain, near name of Hasan | 10,000 |
-| 9 | 07700001009 | فاطمة جاسم محمد | Ahmed's mother | 500,000 |
-| 10 | 07700001010 | نور صباح فاضل | Noor | 25,000 |
-| 11 | 07700001011 | زينب طالب حميد | Known as Umm Muhammad | 60,000 |
-| 12 | 07700001012 | كاظم جبار علي | Known as Abu Ali | 15,000 |
-
-Account ids equal user ids (account 1 belongs to user 1, and so on).
-
-## Contacts
-
-Contacts are names a user saved against another user's phone. Unique on (owner, saved name, phone).
-
-| Owner | Saved name | Phone | Points to user |
-|---|---|---|---|
-| 1 | حمودي | 07700001004 | 4 |
-| 1 | علي | 07700001005 | 5 |
-| 1 | علي | 07700001006 | 6 (planted duplicate) |
-| 1 | حسن | 07700001007 | 7 |
-| 1 | حسين | 07700001008 | 8 (planted near name) |
-| 1 | ماما | 07700001009 | 9 |
-| 1 | نور | 07700001010 | 10 |
-| 1 | ام محمد | 07700001011 | 11 |
-| 1 | ابو علي | 07700001012 | 12 |
-| 1 | سارة | 07700001002 | 2 |
-| 2 | احمد | 07700001001 | 1 |
-| 2 | عمر | 07700001003 | 3 |
-
-## Aliases
-
-One alias, one account (D15). Unique on (owner, text).
-
-| Owner | Alias | Target account |
-|---|---|---|
-| 1 | اخوي | Account of user 4 |
-| 1 | البيت | Account of user 9 |
-| 1 | الدكان | Account of user 12 |
-
-## Billers and bill accounts
-
-| Code | Name |
-|---|---|
-| electricity | الكهرباء |
-| water | الماء |
-| internet | نور نت (synthetic internet provider) |
-
-| Owner | Biller | Label | Account number | Due (IQD) | Due date |
-|---|---|---|---|---|---|
-| 1 | electricity | البيت | 10000000001 | 45,000 | 2026-10-25 |
-| 1 | electricity | الدكان | 10000000002 | 120,000 | 2026-10-20 |
-| 1 | water | البيت | 20000000001 | 15,000 | none |
-| 1 | internet | البيت | 30000000001 | 0 (nothing due) | none |
-| 2 | electricity | البيت | 10000000003 | 60,000 | none |
-
-## Store catalogue
-
-| Id | Provider | Type | Name | Face value (IQD) | Price (IQD) |
-|---|---|---|---|---|---|
-| 1 | Zain | Credit | رصيد زين ٥٠٠٠ | 5,000 | 5,000 |
-| 2 | Zain | Credit | رصيد زين ١٠٠٠٠ | 10,000 | 10,000 |
-| 3 | Zain | Internet | انترنت زين ١٠ جيجا | 0 | 15,000 |
-| 4 | Asiacell | Credit | رصيد آسياسيل ٥٠٠٠ | 5,000 | 5,000 |
-| 5 | Asiacell | Credit | رصيد آسياسيل ١٠٠٠٠ | 10,000 | 10,000 |
-| 6 | Asiacell | Internet | انترنت آسياسيل ١٠ جيجا | 0 | 15,000 |
-| 7 | Korek | Credit | رصيد كورك ٥٠٠٠ | 5,000 | 5,000 |
-| 8 | Korek | Internet | انترنت كورك ١٠ جيجا | 0 | 15,000 |
-
-## History
-
-19 transactions, all `Done`. Fees are constants frozen with the seed in `SeedData` (`SeedTransferFeeIqd` 1,000, `SeedBillFeeIqd` 500, `SeedPurchaseFeeIqd` 0), not read from `WalletOptions`, so changing the configured fees never rewrites these rows; total = amount + fee. `CompletedAt` equals `CreatedAt`. Keys are `seed-u<user>-<nnn>`, references `ZC-` followed by the transaction id padded to 10 digits. Users 3 to 12 have no history.
-
-| Id | Key | Payer | Type | To | Amount (IQD) | Days before anchor |
-|---|---|---|---|---|---|---|
-| 1 | seed-u1-001 | 1 | Transfer | user 4 | 50,000 | 90 |
-| 2 | seed-u1-002 | 1 | Transfer | user 4 | 50,000 | 60 |
-| 3 | seed-u1-003 | 1 | Transfer | user 4 | 50,000 | 30 |
-| 4 | seed-u1-004 | 1 | Transfer | user 4 | 25,000 | 7 |
-| 5 | seed-u1-005 | 1 | Transfer | user 5 | 20,000 | 45 |
-| 6 | seed-u1-006 | 1 | Transfer | user 6 | 30,000 | 20 |
-| 7 | seed-u1-007 | 1 | Transfer | user 9 | 100,000 | 75 |
-| 8 | seed-u1-008 | 1 | Transfer | user 9 | 100,000 | 40 |
-| 9 | seed-u1-009 | 1 | Transfer | user 9 | 100,000 | 10 |
-| 10 | seed-u1-010 | 1 | Transfer | user 10 | 15,000 | 3 |
-| 11 | seed-u1-011 | 1 | Transfer | user 11 | 10,000 | 50 |
-| 12 | seed-u1-012 | 1 | Bill | electricity, home (10000000001) | 42,000 | 80 |
-| 13 | seed-u1-013 | 1 | Bill | electricity, home (10000000001) | 44,000 | 50 |
-| 14 | seed-u1-014 | 1 | Bill | electricity, home (10000000001) | 46,000 | 18 |
-| 15 | seed-u1-015 | 1 | Bill | water, home (20000000001) | 15,000 | 48 |
-| 16 | seed-u1-016 | 1 | Bill | internet, home (30000000001) | 25,000 | 35 |
-| 17 | seed-u1-017 | 1 | Purchase | Zain credit 5,000 (product 1) | 5,000 | 28 |
-| 18 | seed-u1-018 | 1 | Purchase | Asiacell internet (product 6) | 15,000 | 12 |
-| 19 | seed-u2-001 | 2 | Transfer | user 1 | 200,000 | 15 |
-
-Orders: transaction 17 has purchase code `1234567890001`, transaction 18 has `1234567890002`. Both codes are synthetic.
-
-## Arabic strings for Khalil to review
-
-Every Arabic value in the seed, with its English meaning. Claude drafted these; Khalil reviews them.
-
-Registered names:
-
-| Arabic | English |
-|---|---|
-| أحمد كريم جاسم | Ahmed Karim Jasim |
-| سارة عبد الله حسن | Sara Abdullah Hasan |
-| عمر سعد محمود | Omar Saad Mahmoud |
-| محمود كريم جاسم | Mahmoud Karim Jasim |
-| علي حسن كاظم | Ali Hasan Kadhim |
-| علي كريم عبود | Ali Karim Abboud |
-| حسن علي رشيد | Hasan Ali Rashid |
-| حسين علي رشيد | Husain Ali Rashid |
-| فاطمة جاسم محمد | Fatima Jasim Muhammad |
-| نور صباح فاضل | Noor Sabah Fadhil |
-| زينب طالب حميد | Zainab Talib Hameed |
-| كاظم جبار علي | Kadhim Jabbar Ali |
-
-Contact saved names:
-
-| Arabic | English |
-|---|---|
-| حمودي | Hammoudi, a pet form of Mahmoud |
-| علي | Ali |
-| حسن | Hasan |
-| حسين | Husain |
-| ماما | Mum |
-| نور | Noor |
-| ام محمد | Umm Muhammad, "mother of Muhammad" (written without hamza, as typed on a phone) |
-| ابو علي | Abu Ali, "father of Ali" (written without hamza) |
-| سارة | Sara |
-| احمد | Ahmed (written without hamza) |
-| عمر | Omar |
-
-Aliases and bill account labels:
-
-| Arabic | English |
-|---|---|
-| اخوي | My brother (Iraqi) |
-| البيت | The house, home |
-| الدكان | The shop |
-
-Billers:
-
-| Arabic | English |
-|---|---|
-| الكهرباء | Electricity |
-| الماء | Water |
-| نور نت | Noor Net, a synthetic internet provider |
-
-Products:
-
-| Arabic | English |
-|---|---|
-| رصيد زين ٥٠٠٠ | Zain credit 5,000 |
-| رصيد زين ١٠٠٠٠ | Zain credit 10,000 |
-| انترنت زين ١٠ جيجا | Zain internet 10 GB |
-| رصيد آسياسيل ٥٠٠٠ | Asiacell credit 5,000 |
-| رصيد آسياسيل ١٠٠٠٠ | Asiacell credit 10,000 |
-| انترنت آسياسيل ١٠ جيجا | Asiacell internet 10 GB |
-| رصيد كورك ٥٠٠٠ | Korek credit 5,000 |
-| انترنت كورك ١٠ جيجا | Korek internet 10 GB |
+A database that still holds the milestone 2 seed is cleaned by the migration `AdoptTestSeed`, which deletes every row and restarts the identities before it changes the schema; `migrate` then adds this seed and prints `Database ready: 5 users, 42 accounts, 34 contacts, 86 transactions`.

@@ -8,7 +8,7 @@ Rules: the nine rules that are never broken are listed in [CLAUDE.md](CLAUDE.md)
 
 - `src/`: the four applications: `Wallet.MockApi` (minimal API, EF Core with SQL Server), `Agent.Core` (orchestrator and request pipeline), `Agent.Web` (Blazor Server with MudBlazor), `Agent.Eval` (console that runs the request sets).
 - `tests/`: `Agent.Core.Tests` (xunit.v3 unit and API tests) and `Agent.Web.Journeys` (Playwright screen journeys).
-- `data/`: the synthetic seed specification and the request sets.
+- `data/`: Khalil's exported test-set files: the wallet seed (`data/seed/*.json`, see `data/seed/README.md`) and the request sets.
 - `docs/`: architecture, build plan, failure modes and disclosure.
 
 ## Prerequisites
@@ -86,9 +86,9 @@ Notes:
 
 - The tests use xunit.v3 on Microsoft Testing Platform, selected in the root `global.json`, so test filters go after `--` as shown.
 - The database tests (collection `wallet-api`, fixture `WalletApiFixture`) probe the test server once, with a 3-second timeout. If it answers, they recreate the test database, apply the migrations and the seed, and run the API in process against it. If it does not, every database test reports Skipped with "SQL Server not reachable at <server>; set ConnectionStrings__WalletTest or start SQL Server"; with `ZAINCASH_TEST_SQL=1` set they fail instead. They never read the `Wallet` connection string. By default they use the local default instance with Windows authentication and the database `ZainCashWallet_Test`. On route A or B, set the `ConnectionStrings__WalletTest` environment variable to a connection string whose database name ends in `_Test`; the fixture refuses any other name, because it drops the database at the start of the run. In PowerShell, `ZAINCASH_TEST_SQL` stays set for the rest of the session; clear it with `Remove-Item Env:ZAINCASH_TEST_SQL`.
-- `migrate` applies the migrations and the synthetic seed, prints `Database ready: 12 users, 12 accounts, 12 contacts, 19 transactions` and exits 0. It is safe to run twice. Without a connection string it prints `No connection string 'Wallet'. Set ConnectionStrings:Wallet in appsettings, user secrets or the ConnectionStrings__Wallet environment variable.` and exits 1.
-- `seed-hash` (`dotnet run --project src/Wallet.MockApi -- seed-hash`) prints the hash of the frozen seed, the value kept in `data/seed/seed-hash.txt`, and exits 0. It needs no database. See [data/seed/README.md](data/seed/README.md).
-- The database tests (`SeedApplyTests`) also check that `SeedReset.ResetAsync` restores the seed with identity values from 1.
+- `migrate` applies the migrations and the synthetic seed, prints `Database ready: 5 users, 42 accounts, 34 contacts, 86 transactions` and exits 0. It is safe to run twice. The seed comes from the test-set files in `data/seed/*.json`; a missing or invalid file is printed with its name and exits 1. Without a connection string it prints `No connection string 'Wallet'. Set ConnectionStrings:Wallet in appsettings, user secrets or the ConnectionStrings__Wallet environment variable.` and exits 1.
+- `seed-hash` (`dotnet run --project src/Wallet.MockApi --no-launch-profile -- seed-hash`) prints the hash of the seed files, the value kept in `data/seed/seed-hash.txt`, and exits 0. It needs no database. The hash is the last line printed (without `--no-launch-profile`, `dotnet run` may print other lines first). See [data/seed/README.md](data/seed/README.md).
+- The database tests (`SeedApplyTests.ResetRestoresIdentitiesFromOne`) also check that `SeedReset.ResetAsync` restores the seed with identity values from 1.
 - The mock wallet API listens on http://localhost:5276. `GET /health` returns `ok`, and the OpenAPI document is at `/openapi/v1.json` in Development.
 - The mock wallet API serves plain HTTP on loopback by design and does not redirect to HTTPS.
 - The web app listens on http://localhost:5089.
@@ -97,7 +97,7 @@ Notes:
 
 ## Mock wallet API
 
-The mock wallet is a minimal API on http://localhost:5276 with read endpoints for users, contacts and aliases, bills, balance, history, the store catalogue and orders; `POST /quotes`; `POST /transactions`, the only endpoint that moves money, which requires an `Idempotency-Key` header; `GET /transactions/by-key/{key}` for the status check after a timeout; and the `/admin` routes for the fault switch and the reset. Errors are ProblemDetails with a machine-readable `code`.
+The mock wallet is a minimal API on http://localhost:5276 with read endpoints for users, accounts by phone, contacts and aliases, bills, balance, history, the store catalogue and orders; `POST /users/{id}/consent`; `POST /quotes`; `POST /transactions`, the only endpoint that moves money, which requires an `Idempotency-Key` header; `GET /transactions/by-key/{key}` for the status check after a timeout; and the `/admin` routes for the fault switch and the reset. Errors are ProblemDetails with a machine-readable `code`.
 
 The full contract (every route, field, error code, the idempotency, PIN and balance-floor rules, the fault modes, the reset and the admin key) is in [docs/wallet-api.md](docs/wallet-api.md). Ready-made requests against the seed are in `src/Wallet.MockApi/Wallet.MockApi.http`.
 

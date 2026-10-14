@@ -1,6 +1,6 @@
 # Mock wallet API
 
-The mock wallet stands in for the ZainCash wallet. The agent talks to it over HTTP only. It is a minimal API in `src/Wallet.MockApi`, backed by SQL Server through EF Core, and it starts from the frozen synthetic seed described in [data/seed/README.md](../data/seed/README.md). The first draft of the endpoint list is section 7 of [architecture.md](architecture.md); this file is the contract as built in milestone 2.
+The mock wallet stands in for the ZainCash wallet. The agent talks to it over HTTP only. It is a minimal API in `src/Wallet.MockApi`, backed by SQL Server through EF Core, and it starts from the frozen synthetic seed in `data/seed/*.json`, the test-set files described in [data/seed/README.md](../data/seed/README.md). The first draft of the endpoint list is section 7 of [architecture.md](architecture.md); this file is the contract as built in milestone 2 and changed in milestone 2b, when the seed moved to the test-set files.
 
 Every request below is in [src/Wallet.MockApi/Wallet.MockApi.http](../src/Wallet.MockApi/Wallet.MockApi.http), ready to send from Visual Studio or VS Code with the REST Client extension.
 
@@ -11,15 +11,18 @@ dotnet run --project src/Wallet.MockApi -- migrate   # create and seed the datab
 dotnet run --project src/Wallet.MockApi              # serve on http://localhost:5276
 ```
 
+`migrate` prints `Database ready: 5 users, 42 accounts, 34 contacts, 86 transactions`. Both commands read the seed files first (see Seed); a missing or invalid file stops them with a message that names the file.
+
 The API serves plain HTTP on loopback and does not redirect to HTTPS. `GET /health` returns `ok`. In Development the OpenAPI document is at `/openapi/v1.json`. The connection string and the database routes are in [README.md](../README.md#database).
 
 ## Conventions
 
 - JSON in both directions, camelCase property names (the ASP.NET Core web defaults).
 - Amounts are whole Iraqi dinars, as integers, in fields ending `Iqd`.
-- Times are `DateTimeOffset` in ISO 8601. Seeded rows carry the seed's offset (`+03:00`); rows and clocks written at run time are UTC (`+00:00`). Treat every time as an instant and compare instants, never the text. Bill due dates are dates only (`2026-10-25`) or `null`.
-- Every name the wallet puts on the wire for a type, status or kind is lower case: transaction types `transfer`, `bill`, `purchase`; statuses `executing`, `done`, `failed`; product types `credit`, `internet`. Fault modes are camelCase (`timeoutAfterExecute`).
-- Every user has exactly one default account (D10). Payments are paid from it, and a phone number reaches its holder's default account. In the seed, account ids equal user ids.
+- Times are `DateTimeOffset` in ISO 8601. Seeded rows carry Iraq time (`+03:00`) and are dated relative to the day the seed was applied (see Seed); rows and clocks written at run time are UTC (`+00:00`). Treat every time as an instant and compare instants, never the text.
+- Every name the wallet puts on the wire for a type, status or kind is lower case: transaction types `transfer`, `bill`, `purchase`; statuses `executing`, `done`, `failed`; product types `credit`, `internet`; account statuses `active`, `closed`; provider codes `zain`, `asiacell`, `korek`. Fault modes are camelCase (`timeoutAfterExecute`).
+- Every user has exactly one default account (D10), and payments are paid from it. The wallet also holds accounts that belong to no user (the people behind contacts and other numbers); a phone number reaches the account with that number, whoever holds it. An account is `active` or `closed`; a closed account exists but takes no money. In the seed, user ids 1 to 5 and their account ids 1 to 5 coincide; other accounts start at 6.
+- Seeded rows carry the test set's id as `code` (`U1`, `S01`, `BS1`, `ZN-CR-5`) so answer keys can name them; integer ids are what payments take.
 - Errors are RFC 7807 ProblemDetails (`application/problem+json`). Every error the wallet raises itself carries a machine-readable `code` extension and a fixed English `title`; nothing from the request is echoed back. The agent branches on `code`, never on `title`. The exceptions are errors raised by ASP.NET Core itself: a body that is not valid JSON (400), a route that does not match (404), and an unhandled exception or a lost database connection (500). These are ProblemDetails too, but without `code`.
 
 ## Endpoints
@@ -28,7 +31,8 @@ The API serves plain HTTP on loopback and does not redirect to HTTPS. `GET /heal
 |---|---|---|---|
 | `GET /health` | Liveness | 200 `ok` (text) | none |
 | `GET /users/{id}` | One user | 200 `UserSummary` | 404 `unknown_user` |
-| `GET /users/by-phone/{phone}` | The user behind a phone number (exact match) | 200 `UserSummary` | 404 `unknown_user` |
+| `POST /users/{id}/consent` | Record that the user has given consent (D22). Idempotent | 204, no body | 404 `unknown_user` |
+| `GET /accounts/by-phone/{phone}` | The wallet account behind a phone number (exact match), user or not | 200 `AccountSummary` | 404 `unknown_account` |
 | `GET /users/{id}/contacts?q=` | Contacts and aliases, optionally filtered | 200 `ContactsResponse` | 404 `unknown_user` |
 | `GET /users/{id}/bills` | Bill accounts with the amount due | 200 `BillItem[]` | 404 `unknown_user` |
 | `GET /users/{id}/balance` | Balance of the default account (D22) | 200 `BalanceResponse` | 404 `unknown_user` |
@@ -44,19 +48,36 @@ The API serves plain HTTP on loopback and does not redirect to HTTPS. `GET /heal
 
 `{id}` is an integer; a path with a non-integer id matches no route and returns a ProblemDetails 404 from ASP.NET Core, without `code`.
 
-### The user 404
+Removed in milestone 2b: `GET /users/by-phone/{phone}`. A typed number can belong to an account that is no user's, so the lookup is now by account (`GET /accounts/by-phone/{phone}`). The old path matches no route and returns a 404 without `code`.
 
-Every `/users/...` read route answers a user that does not exist with the same ProblemDetails: status 404, `code` `unknown_user`, title `User not found`. It is built by `WalletProblems.UserNotFound`, like every other wallet error. Quote and execute use the same code for an unknown payer, there as 422. `GET /users/{id}/balance` treats "no default account" as "no such user".
+### The user and account 404s
+
+Every `/users/...` read route, and `POST /users/{id}/consent`, answers a user that does not exist with the same ProblemDetails: status 404, `code` `unknown_user`, title `User not found`. It is built by `WalletProblems.UserNotFound`, like every other wallet error. Quote and execute use the same code for an unknown payer, there as 422. `GET /users/{id}/balance` treats "no default account" as "no such user".
+
+`GET /accounts/by-phone/{phone}` answers a number with no account behind it with status 404, `code` `unknown_account`, title `Account not found` (`WalletProblems.AccountNotFound`). Such a number has no wallet.
 
 ### Read endpoints
 
-`GET /users/{id}` and `GET /users/by-phone/{phone}` return `UserSummary`:
+`GET /users/{id}` returns `UserSummary`:
 
 | Field | Type | Notes |
 |---|---|---|
 | `id` | int | |
-| `phone` | string | `07700001001` form |
+| `code` | string | The test-set id, `U1` to `U5` |
+| `phone` | string | `07805550001` form |
 | `registeredName` | string | The name the wallet holds, in Arabic |
+| `consentGiven` | bool | Whether the user has given consent (D22). False for U5 in the seed |
+
+`POST /users/{id}/consent` (no body) sets `consentGiven` to true and returns 204. Sending it again changes nothing and also returns 204. It is the one route among the reads that writes; a reset restores the seed's value.
+
+`GET /accounts/by-phone/{phone}` returns `AccountSummary`, for any account: a user's, a contact's or another number's. The match is exact on the stored number (`07805550101` form); the wallet does no normalising. It is the lookup D16 needs for a typed number; the registered name is for code and the card, never for the model (rule 5).
+
+| Field | Type | Notes |
+|---|---|---|
+| `accountId` | int | Use as `toAccountId` in a payment |
+| `phone` | string | |
+| `registeredName` | string or null | The name the wallet holds, in Arabic; null when it holds none |
+| `status` | string | `active` or `closed`. A closed account is refused as a recipient (`account_closed`) |
 
 `GET /users/{id}/contacts?q=` returns `ContactsResponse` = `{ contacts: ContactItem[], aliases: AliasItem[] }`. `q` is a raw, case-insensitive substring match on the contact's saved name and on the alias text. The wallet does no Arabic normalising; that is the agent's job. Without `q`, everything is returned. Both lists are ordered by id.
 
@@ -65,34 +86,42 @@ Every `/users/...` read route answers a user that does not exist with the same P
 | Field | Type | Notes |
 |---|---|---|
 | `contactId` | int | |
+| `code` | string | The test-set id (`S01`) |
 | `savedName` | string | The name the user saved |
 | `phone` | string | |
-| `registeredName` | string | The wallet holder behind the phone |
-| `targetAccountId` | int | That holder's default account |
+| `registeredName` | string or null | The name the wallet holds for the account with that phone; null when it holds none |
+| `accountStatus` | string | `active` or `closed` |
+| `targetAccountId` | int | The account with that phone |
 | `lastSentAt` | DateTimeOffset or null | Latest `done` transfer from this user to that account (D3) |
 | `lastSentAmountIqd` | long or null | Its amount |
 
+Two contacts may share one number (S12 and S13 of U1); both then carry the same `targetAccountId`.
+
 `AliasItem` (one alias, one account, D15):
 
-| Field | Type |
-|---|---|
-| `aliasId` | int |
-| `text` | string |
-| `targetAccountId` | int |
-| `phone` | string |
-| `registeredName` | string |
+| Field | Type | Notes |
+|---|---|---|
+| `aliasId` | int | |
+| `text` | string | |
+| `targetAccountId` | int | |
+| `phone` | string | |
+| `registeredName` | string or null | Null when the wallet holds no name |
+| `accountStatus` | string | `active` or `closed` |
 
 `GET /users/{id}/bills` returns `BillItem[]`, ordered by id:
 
 | Field | Type | Notes |
 |---|---|---|
 | `billAccountId` | int | Use as `billAccountId` in a payment |
-| `billerCode` | string | `electricity`, `water`, `internet` |
+| `code` | string | The test-set id (`BS1`) |
+| `billerCode` | string | `electricity`, `water`, `internet`, `school_fees` |
 | `billerName` | string | Arabic |
-| `label` | string | The user's label for the account, Arabic |
-| `accountNumber` | string | |
+| `billerNameEn` | string | English |
+| `label` | string or null | The user's label for the account, Arabic; null when there is none |
+| `accountNumber` | string | The subscriber number as the biller writes it, spaces included (`2204 118 763`) |
 | `amountDueIqd` | long | Zero means nothing is due |
-| `dueDate` | date or null | |
+
+There is no due date: `dueDate` was removed in milestone 2b, since the test set has none.
 
 `GET /users/{id}/balance` returns `BalanceResponse`: `accountId` (int), `balanceIqd` (long), `asOf` (DateTimeOffset, the server's clock). Code reads it for checks and the balance reply; it never reaches the model (CLAUDE.md, rule 5).
 
@@ -100,7 +129,7 @@ Every `/users/...` read route answers a user that does not exist with the same P
 
 | Query | Effect |
 |---|---|
-| `to` | Phone number. Only transfers to that phone holder's default account |
+| `to` | Phone number. Only transfers to the account with that phone |
 | `since` | DateTimeOffset. Only transactions created at or after it |
 | `take` | Number of items. Default 50, clamped to 1..200 |
 
@@ -111,7 +140,8 @@ Every `/users/...` read route answers a user that does not exist with the same P
 | `type` | string | `transfer`, `bill`, `purchase` |
 | `status` | string | `executing`, `done`, `failed` |
 | `amountIqd`, `feeIqd`, `totalIqd` | long | |
-| `counterpartyPhone`, `counterpartyName` | string or null | Transfers only: the recipient |
+| `counterpartyPhone`, `counterpartyName` | string or null | Transfers only: the recipient account's phone and registered name (the name can be null) |
+| `counterpartyAccountId` | int or null | Transfers only: the recipient account |
 | `billAccountId` | int or null | Bills only |
 | `productId` | int or null | Purchases only |
 | `createdAt` | DateTimeOffset | |
@@ -122,13 +152,27 @@ History, products, quotes and transactions all use the same lower-case names.
 
 | Query | Effect |
 |---|---|
-| `provider` | Case-insensitive exact match: `Zain`, `Asiacell`, `Korek` |
+| `provider` | The provider code, exact match in any case: `zain`, `asiacell`, `korek` (`Zain` matches too) |
 | `type` | `credit` or `internet`, any case. An unknown name or a number returns an empty list |
-| `value` | Exact face value in IQD. Internet cards have face value 0 |
+| `value` | Exact face value in IQD (`10000`) |
 
-Fields: `productId` (int), `provider`, `type` (`credit` or `internet`), `name` (Arabic), `faceValueIqd` (long), `priceIqd` (long).
+`ProductItem`:
 
-`GET /users/{id}/orders` returns `OrderItem[]`, newest first: `orderId`, `transactionId`, `productId`, `productName`, `code` (the purchase code), `createdAt`. Purchase codes are for code and the card only, never for the model (rule 5).
+| Field | Type | Notes |
+|---|---|---|
+| `productId` | int | Use as `productId` in a payment |
+| `code` | string | The test-set id (`ZN-CR-5`) |
+| `provider` | string | Lower-case provider code: `zain`, `asiacell`, `korek` |
+| `providerNameEn` | string | `Zain`, `Asiacell`, `Korek` |
+| `providerNameAr` | string | Arabic |
+| `alsoCalled` | string or null | Another name the product is known by, Arabic; null when there is none |
+| `type` | string | `credit` or `internet` |
+| `faceValueIqd` | long | |
+| `priceIqd` | long | |
+
+`name` was removed in milestone 2b; the test set has no product name, only the fields above.
+
+`GET /users/{id}/orders` returns `OrderItem[]`, newest first (`createdAt`, then id): `orderId`, `transactionId`, `productId`, `productCode` (the product's test-set id, which replaced `productName` in milestone 2b), `code` (the purchase code), `createdAt`. Purchase codes are for code and the card only, never for the model (rule 5). Seeded orders have codes `9` followed by 12 digits (see [data/seed/README.md](../data/seed/README.md#codes)).
 
 ### Payment request
 
@@ -139,27 +183,27 @@ Fields: `productId` (int), `provider`, `type` (`credit` or `internet`), `name` (
 | `userId` | int | All. The payer |
 | `type` | string | All. Exactly `transfer`, `bill` or `purchase` (lower case) |
 | `amountIqd` | long or null | Transfer: required, above 0. Bill: optional, must equal the amount due (D9). Purchase: optional, must equal the price (D11) |
-| `toPhone` | string or null | Transfer: recipient by phone (their default account) |
+| `toPhone` | string or null | Transfer: recipient by phone (the account with that number) |
 | `toAccountId` | int or null | Transfer: recipient by account. If both are sent, both must name the same account |
 | `billAccountId` | int or null | Bill: one of the payer's own bill accounts |
 | `productId` | int or null | Purchase |
 | `pin` | string or null | Execute only; see PIN rules. Ignored by quotes |
 
-Examples, all for the demo user 1:
+Examples, all for user 1 (U1, `07805550001`):
 
 ```json
-{ "userId": 1, "type": "transfer", "amountIqd": 50000, "toPhone": "07700001004" }
+{ "userId": 1, "type": "transfer", "amountIqd": 50000, "toPhone": "07805550101" }
 { "userId": 1, "type": "bill", "billAccountId": 1 }
 { "userId": 1, "type": "purchase", "productId": 1 }
 ```
 
-Fees are flat per type and come from configuration: `Wallet:TransferFeeIqd` (1,000), `Wallet:BillFeeIqd` (500), `Wallet:PurchaseFeeIqd` (0). Total = amount + fee. The amount of a bill and of a purchase always comes from the wallet's data, never from the request. (The seeded history uses its own frozen fee constants, so a configuration change never rewrites it.)
+Fees are flat per type and come from configuration: `Wallet:TransferFeeIqd` (1,000), `Wallet:BillFeeIqd` (500), `Wallet:PurchaseFeeIqd` (0). Total = amount + fee. The amount of a bill and of a purchase always comes from the wallet's data, never from the request. (The seeded history stores the fee each row carries in `history.json`, so a configuration change never rewrites it.)
 
 Checks, in order (the same for quote and execute, in `PaymentValidator`):
 
 1. `type` is one of the three names, else `invalid_type`.
 2. The payer exists, else `unknown_user`.
-3. Transfer: `amountIqd` above 0, else `invalid_amount`; a recipient is given and exists, else `unknown_recipient`; the recipient is not the payer's own account, else `same_account`.
+3. Transfer: `amountIqd` above 0, else `invalid_amount`; a recipient is given and exists, else `unknown_recipient`; the recipient account is not closed, else `account_closed` (by phone or by id alike); the recipient is not the payer's own account, else `same_account`.
 4. Bill: the bill account exists and belongs to the payer, else `unknown_recipient`; something is due, else `nothing_due`; an `amountIqd` other than the amount due gives `bills_paid_in_full` with `amountDueIqd`.
 5. Purchase: the product exists, else `unknown_product`; an `amountIqd` other than the price gives `invalid_amount`.
 6. Amount plus fee would overflow: `invalid_amount`.
@@ -178,11 +222,13 @@ Returns 200 `QuoteResponse`. No money moves and nothing is written.
 | `balanceAfterIqd` | long | Before minus total. Negative when funds are short |
 | `sufficient` | bool | Balance covers the total |
 | `pinRequired` | bool | Total above `Wallet:PinRequiredAboveIqd` |
-| `recipientPhone`, `recipientName` | string or null | Transfers only; the registered name |
+| `recipientPhone`, `recipientName` | string or null | Transfers only; the registered name, null when the wallet holds none |
 | `billAccountId` | int or null | Bills only |
 | `productId` | int or null | Purchases only |
 
-Example: user 1 sends 50,000 to Hammoudi (07700001004): fee 1,000, total 51,000, balance 300,000 before and 249,000 after, `sufficient` true, `pinRequired` false (`QuoteTests.TransferQuoteToHammoudiMatchesTheSlideExample`).
+Example: user 1 (U1) sends 50,000 to Hammoudi (`07805550101`, contact S01): fee 1,000, total 51,000, balance 750,000 before and 699,000 after, `sufficient` true, `pinRequired` false (`QuoteTests.TransferQuoteToHammoudiMatchesTheSlideExample`).
+
+A transfer to a closed account (`07805550120`, behind contact S20 of U1, or `07805550193`) is 422 `account_closed` on quote and on execute. It is refused in validation, so nothing moves, no row is written and `by-key` stays 404 (`QuoteTests.QuoteToClosedAccountIsRefused`, `TransactionTests.TransferToClosedAccountIsRefusedAndNothingMoves`).
 
 ### `POST /transactions`
 
@@ -292,15 +338,17 @@ A 404 is final only once the original call has definitely ended. It means the ke
 
 ## Error codes
 
-Every code is the `code` extension of a ProblemDetails. Source: `PaymentErrors` and `PaymentValidator` (`Services/PaymentValidator.cs`), `FaultErrors` (`Services/FaultSwitch.cs`), `AdminErrors` (`Endpoints/AdminEndpoints.cs`); titles in `Endpoints/WalletProblems.cs`.
+Every code is the `code` extension of a ProblemDetails. Source: `PaymentErrors` and `PaymentValidator` (`Services/PaymentValidator.cs`), `WalletProblems.UnknownAccount` (`Endpoints/WalletProblems.cs`), `FaultErrors` (`Services/FaultSwitch.cs`), `AdminErrors` (`Endpoints/AdminEndpoints.cs`); titles in `Endpoints/WalletProblems.cs`.
 
 | Code | Status | Raised by | Meaning | Extensions |
 |---|---|---|---|---|
 | `missing_idempotency_key` | 400 | execute | Header missing, empty or whitespace | |
 | `invalid_idempotency_key` | 400 | execute | Header present but not `^[A-Za-z0-9_-]{1,64}$` | |
 | `invalid_type` | 422 | quote, execute | `type` is not `transfer`, `bill` or `purchase` | |
-| `unknown_user` | 422 / 404 | quote, execute (422); every `/users/...` read (404) | The payer, or the user asked for, does not exist | |
+| `unknown_user` | 422 / 404 | quote, execute (422); every `/users/...` route, consent included (404) | The payer, or the user asked for, does not exist | |
+| `unknown_account` | 404 | `GET /accounts/by-phone/{phone}` | No wallet account has that number | |
 | `unknown_recipient` | 422 | quote, execute | Transfer recipient missing or unknown; bill account missing or not the payer's | |
+| `account_closed` | 422 | quote, execute | The transfer's recipient account is closed. Refused in validation: nothing written | |
 | `same_account` | 422 | quote, execute | Transfer to the payer's own account | |
 | `invalid_amount` | 422 | quote, execute | Transfer amount not above 0; purchase amount not the price; total would overflow | |
 | `nothing_due` | 422 | quote, execute | The bill has nothing due (also stored when a concurrent payment cleared it first) | |
@@ -355,7 +403,7 @@ flowchart TB
 
 - A PIN is required when the total is above `Wallet:PinRequiredAboveIqd` (1,000,000). The quote reports this as `pinRequired`.
 - The PIN is checked on execute only, and only when one is sent or one is required. A PIN sent on a small payment is still verified.
-- Every seeded PIN is `1234`, stored only as a salted PBKDF2 hash.
+- Each seeded user has their own PIN, taken from `data/seed/users.json` and stored only as a salted PBKDF2 hash.
 - Each check first reserves an attempt: one conditional update on the user row that succeeds only while the PIN is unlocked and the failed count is still the one just read, raises the count by one, and locks the PIN when that is the last allowed attempt. Only then does the slow PBKDF2 check run. Concurrent guesses therefore cannot all see the PIN unlocked: at most `Wallet:MaxPinAttempts` wrong PINs are checked before the lock, however many arrive together (`TransactionTests.ConcurrentWrongPinsCannotExceedTheLockout`).
 - A wrong PIN is 422 `pin_invalid` with `attemptsLeft`, counted from that reservation. After `Wallet:MaxPinAttempts` (3) wrong entries the PIN is locked: the call that uses the last attempt still answers `pin_invalid` with `attemptsLeft: 0`, and every later call that checks the PIN, even with the right PIN, is 423 `pin_locked` (`TransactionTests.ThreeWrongPinsLockTheUser`).
 - A right PIN gives its attempt back: it resets the count, and clears the lock only when its own reservation set it (it held the last attempt). A lock set by other wrong PINs after its reservation stands. Only `POST /admin/reset` unlocks a locked PIN.
@@ -404,16 +452,44 @@ flowchart LR
 
 Tests: `FaultTests.ErrorFaultReturns500AndMovesNothing`, `SlowFaultDelaysButSucceeds`, `TimeoutBeforeExecuteMovesNothingAndByKeyIs404`, `TimeoutAfterExecuteIsFoundByKeyWhileTheRequestStillHangs`, `OnceFaultClearsAfterOneRequest`.
 
+## Seed
+
+The wallet's rows come from the eight test-set files in `data/seed` ([data/seed/README.md](../data/seed/README.md) has the counts, the ids and the rules). The project links them into the build output as `seed/*.json`; `Wallet:SeedDirectory` names the folder read.
+
+- At start-up, before anything is served, `SeedSet.Load` reads and validates the files (unique ids, every reference resolves, allowed values, required members present and not null). A missing or invalid file throws `SeedException`, whose message names the file, and the API does not start; `migrate` prints the message and exits 1.
+- `SeedData.Build(seed, now)` turns the files into entities and dates the history: each row's `days_ago` before today in Iraq time (UTC+3), at the row's clock time.
+- `SeedData.Apply` inserts the rows one at a time in a fixed order, in one database transaction, and only into a database with no user. The order fixes the identity values: users 1 to 5 with their accounts 1 to 5, the other accounts 6 to 42, billers, products, contacts, aliases, bill accounts, transactions oldest first (1 to 86), orders.
+- The hash path is separate and needs no database: `SeedHash.Compute` over the files (with `\r` removed) must equal `data/seed/seed-hash.txt`, which `SeedHashTests.SeedHashMatchesCommittedValue` checks; `seed-hash` prints it.
+
+```mermaid
+flowchart TB
+    files["data/seed/*.json<br/>users, accounts, contacts, billers,<br/>bills, store, settings, history"]
+    files -- "linked into the build output" --> out["seed/*.json<br/>Wallet:SeedDirectory"]
+    out --> load["SeedSet.Load<br/>read and validate"]
+    load -- "missing or invalid file" --> fail["SeedException naming the file<br/>start fails, migrate exits 1"]
+    load --> set["SeedSet singleton"]
+    set --> build["SeedData.Build(seed, now)<br/>history dated from today in Iraq time"]
+    build --> apply["SeedData.Apply<br/>one transaction, rows in insert order"]
+    apply --> ids["Identities from 1<br/>users 1-5, accounts 1-42, transactions 1-86"]
+    out --> hash["SeedHash.Compute<br/>SHA-256 over the files, CR removed"]
+    hash --> cmp{"equals seed-hash.txt?"}
+    cmp -- "yes" --> ok["SeedHashTests pass"]
+    cmp -- "no" --> refreeze["Test fails: re-freeze on purpose<br/>or undo the change"]
+```
+
+`migrate` calls `Apply` with the current clock after applying the migrations; the reset (below) deletes everything first and calls it the same way.
+
 ## Reset
 
 `POST /admin/reset` (no body; the admin header, see Admin key) returns the wallet to the frozen seed exactly, and clears the fault switch to `none`.
 
-- In one database transaction it deletes every row, reseeds each identity column so ids start where the seed leaves them (the next transaction after a reset is id 20), and applies the seed. PIN failure counts and locks are back to the seed (unlocked).
+- In one database transaction it deletes every row, reseeds each identity column so ids start where the seed leaves them (the next transaction after a reset is id 87), and applies the seed from the `SeedSet`, dated from the current clock. PIN failure counts, locks and consent are back to the seed (unlocked; consent false for U5 only).
+- Because the history is dated from the day of the reset, a reset on a later day moves every seeded date with it; two resets either side of midnight Iraq time differ by one day.
 - It is serialised with payments: it waits for payments in progress to finish, holds new ones back until it is done, and never runs alongside another reset (`WalletGate`). Fault delays are outside the gate.
 - It returns `ResetResponse`, the row counts read back from the database. For the seed these are:
 
 ```json
-{ "users": 12, "accounts": 12, "contacts": 12, "aliases": 3, "billAccounts": 5, "products": 8, "transactions": 19, "orders": 2 }
+{ "users": 5, "accounts": 42, "contacts": 34, "aliases": 9, "billAccounts": 11, "products": 15, "transactions": 86, "orders": 9 }
 ```
 
 ```mermaid
@@ -434,7 +510,7 @@ sequenceDiagram
     R->>D: BEGIN TRAN
     R->>D: delete Orders, Transactions, BillAccounts, Aliases, Contacts, Accounts, Users, Products, Billers
     R->>D: DBCC CHECKIDENT RESEED 0 on each table that has held rows
-    R->>D: SeedData.Apply, the frozen seed in insert order
+    R->>D: SeedData.Apply with the SeedSet and the clock, rows in insert order
     R->>D: COMMIT
     A->>F: Set none
     A->>D: count the rows
@@ -442,7 +518,7 @@ sequenceDiagram
     A-->>C: 200 ResetResponse
 ```
 
-Tests: `ResetTests.ResetRestoresTheSeedExactly` (compares every table before and after, and the next transaction id), `ResetTests.ResetClearsFaults`.
+Tests: `ResetTests.ResetRestoresTheSeedExactly` (compares every table before and after, the counts above and the next transaction id), `ResetTests.ResetClearsFaults`, `SeedApplyTests.ResetRestoresIdentitiesFromOne`, `SeedApplyTests.HistoryIsDatedRelativeToToday`.
 
 ## Admin key
 
@@ -475,7 +551,10 @@ The `Wallet` section of `src/Wallet.MockApi/appsettings.json`, bound to `WalletO
 | `MaxPinAttempts` | 3 | 1 to 10 |
 | `FaultDelayMs` | 60,000 | 0 to 600,000 (`WalletOptions.MaxFaultDelayMs`, also the limit of `delayMs`) |
 | `AdminKey` | not set | at least 16 characters; user secrets or environment only |
+| `SeedDirectory` | `seed` beside the built assembly, the copy of `data/seed` | required; the folder holding the eight seed files |
+
+The defaults of the fees, the PIN threshold and the attempts match `data/seed/settings.json` (`SeedSetTests.WalletDefaultsMatchTheSettingsFile`).
 
 ## Tests
 
-The API tests are in `tests/Agent.Core.Tests/Wallet/` and run the API in process (`WebApplicationFactory`) against a real SQL Server test database. They probe the server once (3-second timeout) and report Skipped when it does not answer, unless `ZAINCASH_TEST_SQL=1` is set, in which case they fail. They use `ConnectionStrings__WalletTest` (default: the local default instance, database `ZainCashWallet_Test`), refuse any database name that does not end in `_Test`, and never read the `Wallet` connection string. The shared client sends the admin header; every read test starts from a reset. Arabic seed values are referenced through `SeedStrings`, so test code holds no Arabic. Details in [README.md](../README.md#commands).
+The API tests are in `tests/Agent.Core.Tests/Wallet/` and run the API in process (`WebApplicationFactory`) against a real SQL Server test database. They probe the server once (3-second timeout) and report Skipped when it does not answer, unless `ZAINCASH_TEST_SQL=1` is set, in which case they fail. They use `ConnectionStrings__WalletTest` (default: the local default instance, database `ZainCashWallet_Test`), refuse any database name that does not end in `_Test`, and never read the `Wallet` connection string. The shared client sends the admin header; every read test starts from a reset. Seed figures the tests rely on are in `SeedFacts`; Arabic values and PINs are read from the seed files through `SeedSet`, so test code holds no Arabic. The seed files themselves are covered without a database by `SeedSetTests` (loading and validation) and `SeedHashTests` (the frozen hash), and with one by `SeedApplyTests` (apply twice, identities from 1 after a reset, dates relative to today, migrating a database that held the old seed). Details in [README.md](../README.md#commands).
