@@ -483,3 +483,6 @@ $RECYCLE.BIN/
 
 # Local agent scratch space
 .superpowers/
+
+# Playwright MCP scratch output
+.playwright-mcp/
