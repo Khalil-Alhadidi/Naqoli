@@ -141,4 +141,4 @@ Outside Development the agent needs both `Agent:WalletBaseUrl` and `Agent:Wallet
 
 Every `/admin` request also carries the `X-Wallet-Admin-Key` header. In Development with no `Wallet:AdminKey` set, any non-empty value is accepted (the header makes a browser preflight, so a web page cannot reset the wallet). Outside Development, set a key of at least 16 characters in user secrets or the `Wallet__AdminKey` environment variable and send it in that header; never commit it.
 
-Status: milestone 4 of 12 (first slice on screen) tagged, see [docs/build-plan.md](docs/build-plan.md).
+Status: milestone 5 of 12 (test set and runner) tagged, see [docs/build-plan.md](docs/build-plan.md).
