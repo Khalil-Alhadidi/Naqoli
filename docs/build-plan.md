@@ -172,6 +172,19 @@ The runner, the grading rules and the report are described in [agent-eval.md](ag
 - A model outage or timeout shows the handover message.
 - The real parser is used in the chat. The scripted parser is used in the screen journeys.
 
+**Status, 14 Oct 2026:** built and tested; the baseline line is pending the Anthropic key. The design and the figures are in [agent-model.md](agent-model.md).
+
+| Done when | Shown by |
+|---|---|
+| A baseline report on the development set for every candidate, before any prompt tuning, with time and cost per case | **Pending.** Baseline runs: pending; they run on 15 Oct 2026 once the Anthropic key is in user secrets (Task 3 of the plan); this line is filled from the committed reports. Ready: `Agent.Eval dev --parser claude:<haiku\|sonnet\|opus>` prints the estimated cost before and the real cost after, and writes `docs/reports/dev-claude-<candidate>-<date>-<HHmm>.md` with the candidate, model id, prompt version (1, frozen), tokens and cost (`HeldOutGuardTests.TheReportNameAndTheEstimateFollowTheParser`, `ClaudeParserTests.UsageIsMappedToTokensAndCost`) |
+| The model recognises the balance question as its own intent (D22) | `balance` is an intent of the structure and the prompt (`ParsedRequestValidatorTests.EveryIntentInTheSetIsRead`, `ClaudeParserTests.TheSchemaIsClosedAndNamesEverySetValue`); against the real model: `LiveModelTests.TheBalanceQuestionIsItsOwnIntent` (the development set's clean balance cases, gated by `ZAINCASH_MODEL_TESTS=1`; pending the key) |
+| The outbound payload has no phone or account number and nothing fetched from the wallet; the user's own words are the only names | `OutboundPayloadTests.NothingFromTheWalletReachesTheModel` (the whole conversation over a capturing fake client: transfer, typed phone, bill, purchase, balance, with a card pending); `ConversationMaskingTests`; `MaskerTests`; `CaseDriverTests.TheRecordedParserTextIsMasked` |
+| Invalid or unexpected model output becomes a question, never an exception or a card | `ParsedRequestValidatorTests`; `ClaudeParserTests.AReplyOutsideTheSetsIsUnclearWithTheField`, `AReplyThatIsNotTheStructureIsUnclear`, `AReplyCutOffAtTheOutputLimitIsUnclearAsTruncated`; `ConversationMaskingTests.AnInvalidReplyIsNotUnderstoodTracedAndLogged`; `CaseDriverTests.AnInvalidModelReplyIsNotUnderstoodAndGradedAsModelInvalidReply` |
+| A model outage or timeout shows the handover message | `ClaudeParserTests.ATimeoutIsUnavailable`, `AConnectionFailureIsUnavailable`, `AnyOtherFailureIsUnavailable`; `AnthropicAdapterTests.AnHttpFailureIsUnavailableWithTheStatusAndWithoutTheKey` (401, 400, 429, 500, 529); `ConversationTests.AnUnavailableParserGivesModelUnavailableAndNoCard` (the `model_unavailable` reply) |
+| The real parser is used in the chat; the scripted parser in the screen journeys | `ParserFactory.AddAgentParser` in `AddAgentWebServices` (`ParserFactoryTests`): the chat uses `ClaudeParser` when `Agent:Parser` is `claude` (set in user secrets with the key, README "The model"); the journeys pin `Agent:Parser=scripted` (`tests/Agent.Web.Journeys/JourneyHost.cs`). Until the key is set, the console's default stays `scripted` |
+
+Also closed in this milestone: review I3 of milestone 3 (the validator and un-masking), and M1, M2 and R3 of milestone 5 (step errors carry the type only, report names carry the time, the runner records the masked text). The wallet-error ruling (a 5xx with a wallet code is a refusal) is in [wallet-api.md](wallet-api.md).
+
 ## Milestone 7: Transfers and the balance question, complete
 
 **Delivers**

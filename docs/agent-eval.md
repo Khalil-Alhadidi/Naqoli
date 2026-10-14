@@ -80,7 +80,6 @@ These are reported, never faked, so the figures stay honest:
 | `alias_offer`, `final.alias_saved` | 9a | Recorded, not graded |
 | `not_prepared` of a reply | 9c | Recorded, not graded |
 | `external_debit` with an amount not above the transfer fee | A transfer of zero or less cannot be made | The case stops with `external_debit amount` as unsupported |
-| The model faults | Their meaning is fixed in milestone 6, when the real parser and the schema validator exist | Simulated as above |
 
 A step that throws stops its case with `step_error` (the exception's type only, never its message: the observation keeps `CaseDriver.StepErrorOf`, the type name and a fixed sentence, because a model library's exception may echo the input; review M1); a step that outlasts `CaseTimeoutSeconds` stops it with `timeout`. The run goes on with the next case.
 

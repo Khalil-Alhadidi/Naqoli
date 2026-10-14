@@ -127,7 +127,9 @@ dotnet user-secrets set "Agent:Parser" "claude" --project src/Agent.Web
 
 The first command stores the key for both the console and the runner (`Agent.Eval` reads only `Anthropic:ApiKey` from the console's store). The second switches the console to the model; remove it (`dotnet user-secrets remove "Agent:Parser" --project src/Agent.Web`) to go back to the scripted parser. `ANTHROPIC_API_KEY` works instead of the first command. With `Agent:Parser` = `claude` and no key, the console and the runner refuse to start with a message naming both settings (never a value). Another candidate: `dotnet user-secrets set "Model:Candidate" "sonnet" --project src/Agent.Web`. The screen journeys always use the scripted parser.
 
-The live model test is skipped unless asked for: `$env:ZAINCASH_MODEL_TESTS='1'; dotnet test tests/Agent.Core.Tests -- --filter-class "Agent.Core.Tests.Parsing.LiveModelTests"` (clear it afterwards with `Remove-Item Env:ZAINCASH_MODEL_TESTS`). It calls each candidate three times and prints the tokens and the cost.
+A baseline run on the development set (wallet running): `dotnet run --project src/Agent.Eval -- dev --parser claude:haiku` (or `sonnet`, `opus`). It prints the estimated cost first and the real cost at the end. Expect cents on Haiku and about one to three USD per development run on Sonnet or Opus (72 cases; questions and taps make several calls per case, and thinking is billed as output). How the parse call works, its settings and its faults: [docs/agent-model.md](docs/agent-model.md).
+
+The live model test is skipped unless asked for: `$env:ZAINCASH_MODEL_TESTS='1'; dotnet test tests/Agent.Core.Tests -- --filter-class "Agent.Core.Tests.Parsing.LiveModelTests"` (clear it afterwards with `Remove-Item Env:ZAINCASH_MODEL_TESTS`). It sends each candidate three prompt examples and the development set's clean balance questions, and prints the tokens and the cost of each call.
 
 ## Run eval
 
@@ -154,4 +156,4 @@ Outside Development the agent needs both `Agent:WalletBaseUrl` and `Agent:Wallet
 
 Every `/admin` request also carries the `X-Wallet-Admin-Key` header. In Development with no `Wallet:AdminKey` set, any non-empty value is accepted (the header makes a browser preflight, so a web page cannot reset the wallet). Outside Development, set a key of at least 16 characters in user secrets or the `Wallet__AdminKey` environment variable and send it in that header; never commit it.
 
-Status: milestone 5 of 12 (test set and runner) tagged, see [docs/build-plan.md](docs/build-plan.md).
+Status: milestone 6 of 12 (model in) built: masking, the structure validator, the learning log and the Claude parser through Microsoft.Extensions.AI, see [docs/agent-model.md](docs/agent-model.md) and [docs/build-plan.md](docs/build-plan.md). Baseline runs: pending; they run on 15 Oct 2026 once the Anthropic key is in user secrets (Task 3 of the plan); this line is filled from the committed reports.

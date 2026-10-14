@@ -73,7 +73,7 @@ sequenceDiagram
     participant U as Phone (PhoneFrame, CardPanel)
     participant S as ChatSession (adapter)
     participant V as Conversation (Agent.Core)
-    participant P as IParser (ScriptedParser)
+    participant P as IParser (scripted or Claude)
     participant O as Orchestrator (new scope)
     participant C as ConfirmHandler (new scope)
     participant W as Mock wallet
@@ -212,9 +212,10 @@ A tap is accepted only for a value that the open question offered. Anything else
 | Zone | Written by | Steps |
 |---|---|---|
 | User | `Conversation` | `message_received` (length only), `confirm_tapped`, `check_again_tapped`, `cancel_tapped` |
-| Model | `Conversation` | `parse:scripted` (the intent), `parse:unavailable` |
+| Model | `Conversation` | `parse:<parser name>` (`parse:scripted`, `parse:claude:haiku`; the intent), `parse:unavailable` |
+| Model | `ClaudeParser` | `more_than_one_request` (the count) |
 | Code | `Orchestrator` (`TraceSteps`) | `parse_received`, `consent_checked`, `recipient_resolved`, `amount_resolved`, `checks_passed`, `check_failed:<reason>`, `card_created`, `question:<kind>`, `refusal:<code>`, `balance_shown` |
-| Code | `Conversation` | `points_to_confirm`, `option_rejected`, `consent_given`, `error` (the exception type) |
+| Code | `Conversation` | `points_to_confirm`, `option_rejected`, `consent_given`, `error` (the exception type), `model_invalid_reply` (the field), `learning_logged` (the reason) |
 | Write | `ConfirmHandler` (`TraceSteps`) | `begin_execute`, `recheck_ok`, `recheck_failed:<reason>`, `execute_sent`, `outcome:<name>`, `settle_sent`, `settle_outcome:<name>` |
 
 The outcome names are `done`, `not_done`, `checking`, `expired`, `already_handled`, `not_found`, `pin_required`, `pin_wrong`, `pin_malformed`, `cancelled` and `exception`.

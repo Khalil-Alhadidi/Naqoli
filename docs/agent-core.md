@@ -1,6 +1,6 @@
 # Agent.Core: the write path
 
-What `src/Agent.Core` does as built in milestone 3, the first task of milestone 4 and the first task of milestone 5: the structured request and the parser seam that produces it, the pipeline that turns it into one reply, the resolvers, the ordered checks, the card and its view, the pending record and its states, the sweep, Confirm and Checking, the conversation that the phone and the test runner share, the live trace, the audit log, and the learning-log rule. No model call exists yet; the scripted parser and the tests build the structured request. The design it follows is sections 3 to 5 of [architecture.md](architecture.md); the matching and question rules are [matching-rules.md](matching-rules.md); the wallet it calls is [wallet-api.md](wallet-api.md).
+What `src/Agent.Core` does as built in milestones 3 to 6: the structured request and the parser seam that produces it, the pipeline that turns it into one reply, the resolvers, the ordered checks, the card and its view, the pending record and its states, the sweep, Confirm and Checking, the conversation that the phone and the test runner share, the live trace, the audit log,, the learning-log rule and table, the masker, the structure validator and the Claude parser. The model side (the parse call, its settings, faults and cost) is told whole in [agent-model.md](agent-model.md). The design it follows is sections 3 to 5 of [architecture.md](architecture.md); the matching and question rules are [matching-rules.md](matching-rules.md); the wallet it calls is [wallet-api.md](wallet-api.md).
 
 ## Hosts
 
@@ -32,7 +32,7 @@ The test hosts set `SweepIntervalSeconds` to 0 and use `NullTraceSink`, or a rec
 
 ## The structured request
 
-`ParsedRequest` (`src/Agent.Core/Requests/ParsedRequest.cs`) is the strict structure the parse call will return in milestone 6. Today the scripted parser (below) and the tests build it, the tests with the factory methods `Transfer`, `Bill`, `Purchase` and `Balance`, or with an object initialiser. Every text in it is the user's own words.
+`ParsedRequest` (`src/Agent.Core/Requests/ParsedRequest.cs`) is the request the pipeline acts on. The Claude parser builds it from the model's structure through the validator; the scripted parser (below) and the tests build it directly, the tests with the factory methods `Transfer`, `Bill`, `Purchase` and `Balance`, or with an object initialiser. Every text in it is the user's own words.
 
 | Field | Type | Meaning |
 |---|---|---|
@@ -547,7 +547,7 @@ stateDiagram-v2
 | Code | `Orchestrator` | `parse_received` (the intent), `consent_checked` (`given` or `required`), `recipient_resolved` (`contact`, `alias`, `number`, `bill` or `purchase`), `amount_resolved` (the amount), `checks_passed` (the quote's total) or `check_failed:<reason>` (the figure), `card_created` (type, total, `pin` when one is needed), `question:<kind>` (how many options), `refusal:<code>` (the wallet code for `not_done_nothing_taken`, else the figure), `balance_shown` (no figure) |
 | Write | `ConfirmHandler` | `begin_execute` (type and total), `recheck_ok` or `recheck_failed:<reason>` (the wallet code, if any), `execute_sent`, `outcome:<done, not_done, checking, expired, already_handled, not_found, pin_required, pin_wrong, pin_malformed, cancelled or exception>` (the record's state, the reason, or the attempts left), `settle_sent`, `settle_outcome:<the same names>` |
 
-The User and Model zones are written by the `Conversation` (below; `message_received`, `confirm_tapped`, `check_again_tapped`, `cancel_tapped`, `parse:<parser name>` with the intent, `parse:unavailable`) and the Claude parser (`more_than_one_request`, Model zone, with the count). The `Conversation` also writes, in the Code zone, `model_invalid_reply` (the field the validator refused), `learning_logged` (the reason) and `error` (an exception's type). A detail holds codes, states and amounts only: never a PIN, an idempotency key, a purchase code, a phone, a name, a balance or any text the user typed (an unsupported reason stays out until milestone 6 validates it). `TraceSinkTests.NoPinKeyCodeOrPhoneInAnyStep` runs a PIN payment and a purchase through a recording sink and checks every step and detail.
+The User and Model zones are written by the `Conversation` (below; `message_received`, `confirm_tapped`, `check_again_tapped`, `cancel_tapped`, `parse:<parser name>` with the intent, `parse:unavailable`) and the Claude parser (`more_than_one_request`, Model zone, with the count). The `Conversation` also writes, in the Code zone, `model_invalid_reply` (the field the validator refused), `learning_logged` (the reason) and `error` (an exception's type). A detail holds codes, states and amounts only: never a PIN, an idempotency key, a purchase code, a phone, a name, a balance or any text the user typed (the unsupported reason stays out of the trace). `TraceSinkTests.NoPinKeyCodeOrPhoneInAnyStep` runs a PIN payment and a purchase through a recording sink and checks every step and detail.
 
 ```mermaid
 sequenceDiagram
