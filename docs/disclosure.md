@@ -21,6 +21,10 @@ Every model, tool, library, data source and AI coding assistant used in this ent
 - SQL Server (local instance, LocalDB or container) as the mock wallet's database.
 - dotnet-ef 10.0.13 (EF Core command-line tool, pinned in .config/dotnet-tools.json).
 
+## Data sources
+
+- Test-set workbook v0.15 (Khalil, 14 Oct 2026), exported as `data/seed/*.json`, `data/requests.dev.jsonl`, `data/requests.heldout.jsonl` and `docs/matching-rules.md` in commit 462187f33dd18d08b8176ee767a5114ba9a7f1b2. All synthetic. The held-out file is sealed from that commit until the milestone 11 run.
+
 ## External resources
 
 - Roboto from Google Fonts (stylesheet link in src/Agent.Web/Components/App.razor; MudBlazor's default font; falls back to system fonts offline).

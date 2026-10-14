@@ -121,6 +121,8 @@ No dates yet. The organisers' guidelines for the build round have not arrived, s
 
 **After this milestone, the held-out file is not opened, printed or used by anyone, including Claude Code, until milestone 11.**
 
+**Held-out commit:** `462187f33dd18d08b8176ee767a5114ba9a7f1b2` (14 Oct 2026, "Add test data: seed, matching rules, dev set, held-out set (sealed)"). It adds `data/requests.heldout.jsonl` (62 cases, SHA-256 `3e396362fd6cea5fa81e26ad9e4c17e9c4de2066ee186e963690a14c195ca1c1`) together with the development set, the seed files under `data/seed/` and `docs/matching-rules.md`, all exported from the test-set workbook v0.15. The file was copied as bytes and never opened. Any later commit that touches it, other than the milestone 11 run, must be explained in `docs/disclosure.md`.
+
 ## Milestone 6: Model in
 
 **Delivers**
