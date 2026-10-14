@@ -71,6 +71,18 @@ public sealed class CaseDriverTests(AgentHost host) : IAsyncDisposable
         Assert.DoesNotContain("0770", error, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task TheRecordedParserTextIsMasked()
+    {
+        // Review R3: the recording sits behind the conversation's masker, so the outbound check sees what the model sees.
+        var runner = Start();
+
+        var seen = await runner.Driver.PlayAsync(Case("U1", null, Say("send 50000 to " + SeedFacts.HammoudiPhone)), Token);
+
+        Assert.Equal(["send 50000 to <NUM_1>"], seen.ParserTexts);
+    }
+
+    [Fact]
     public async Task ACleanTransferIsPlayedEndToEnd()
     {
         var runner = Start();

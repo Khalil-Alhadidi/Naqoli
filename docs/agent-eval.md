@@ -43,7 +43,7 @@ sequenceDiagram
 
 Code: `src/Agent.Eval/Running/EvalCommand.cs` (the command), `Running/CaseDriver.cs` (one case), `Grading/CaseGrader.cs` (the grade), `Grading/ReportWriter.cs` (the report). `Program.cs` is one line that calls `EvalCommand.RunAsync`.
 
-The host is `Host.CreateApplicationBuilder` with `AddAgentEval`: the `Eval` options, `EvalClock` as the agent's `TimeProvider`, `EvalTrace` as its `ITraceSink`, then `AddAgentCore`. The parser is the `ScriptedParser` inside a `RecordingParser`, which records every text handed to the parse call and each call's usage, and injects the model faults. There is no model and no prompt in this milestone.
+The host is `Host.CreateApplicationBuilder` with `AddAgentEval`: the `Eval` options, `EvalClock` as the agent's `TimeProvider`, `EvalTrace` as its `ITraceSink`, then `AddAgentCore`. The parser is the `ScriptedParser` inside a `RecordingParser`, which records every text handed to the parse call (the masked text: the conversation masks before it calls the parser, review R3) and each call's usage, and injects the model faults. There is no model and no prompt in this milestone.
 
 ## Steps and how each is played
 
@@ -82,7 +82,7 @@ These are reported, never faked, so the figures stay honest:
 | `external_debit` with an amount not above the transfer fee | A transfer of zero or less cannot be made | The case stops with `external_debit amount` as unsupported |
 | The model faults | Their meaning is fixed in milestone 6, when the real parser and the schema validator exist | Simulated as above |
 
-A step that throws stops its case with `step_error` (the exception's type only, never its message); a step that outlasts `CaseTimeoutSeconds` stops it with `timeout`. The run goes on with the next case.
+A step that throws stops its case with `step_error` (the exception's type only, never its message: the observation keeps `CaseDriver.StepErrorOf`, the type name and a fixed sentence, because a model library's exception may echo the input; review M1); a step that outlasts `CaseTimeoutSeconds` stops it with `timeout`. The run goes on with the next case.
 
 ## The grade
 
@@ -124,13 +124,13 @@ The rules, field by field:
 
 ### The three per-case checks (D12)
 
-1. **Outbound text** (`OutboundTextCheck`): every text handed to the parse call is normalised (Arabic-Indic digits to ASCII; spaces, dashes, plus signs and thousands separators removed) and searched for any seed wallet number (also in its `964...` form), any seed bill subscriber number, and the user's balance (before the case, and the balance after every card issued) when it has four digits or more. A hit fails the case, with the kind (`phone`, `account`, `balance`) and never the text. Until milestone 6 masks numbers before the parse call, any case whose user types a seed phone number fails this check; that is the honest result. A number the wallet does not hold cannot be known, so it is not checked.
+1. **Outbound text** (`OutboundTextCheck`): every text handed to the parse call is normalised (Arabic-Indic digits to ASCII; spaces, dashes, plus signs and thousands separators removed) and searched for any seed wallet number (also in its `964...` form), any seed bill subscriber number, and the user's balance (before the case, and the balance after every card issued) when it has four digits or more. A hit fails the case, with the kind (`phone`, `account`, `balance`) and never the text. From milestone 6 the conversation masks every run of 7 or more digits before the parse call and the runner records the masked text, so a typed seed phone number reaches the check as `<NUM_1>` and passes (`CaseDriverTests.TheRecordedParserTextIsMasked`). A number the wallet does not hold cannot be known, so it is not checked.
 2. **Time and cost**: the case's wall time, and the parser's summed cost from `IParserUsage` (input and output tokens, cost in USD, duration). The scripted parser reports zero tokens and zero cost by design; the model parsers of milestone 6 report their own.
-3. **Learning log**: `LearningLogRule.EntryFor(last reply, last request)` derives the entry milestone 6 will persist. A key of null needs no entry; a key with a reason needs that reason, and the detail when the key gives one. The learning table itself arrives in milestone 6.
+3. **Learning log**: `LearningLogRule.EntryFor(last reply, last request)` derives the entry milestone 6 will persist. A key of null needs no entry; a key with a reason needs that reason, and the detail when the key gives one. From milestone 6 the conversation also writes each entry to the `LearningEntries` table (with the masked text); the derived entry stays the graded one, and the table is additional.
 
 ## The report
 
-`ReportWriter` writes `docs/reports/<set>-<parser>-<UTC date>.md` and `.json` (for example `dev-scripted-2026-10-14`; a second run on the same day replaces them). Both hold case ids, categories, codes, figures and verdicts, never a case's text (rule 7).
+`ReportWriter` writes `docs/reports/<set>-<parser>-<UTC date>-<UTC HHmm>.md` and `.json` (for example `dev-scripted-2026-10-14-0900`; from milestone 6 the time is in the name, so a second run on the same day never overwrites a committed report, review M2; the first run's `dev-scripted-2026-10-14` files keep their old name). Both hold case ids, categories, codes, figures and verdicts, never a case's text (rule 7).
 
 - **Header**: the set, the SHA-256 of the case file, the parser, the UTC start, and every `Eval` and `Agent` setting. Keys are shown only as `set` or `not set`, word lists only as a count.
 - **Totals, per category, per type**: cases, passed, percentage, and the Wilson 95% score interval (z = 1.96), shown as `lo–hi %`. For k passes out of n, with p = k/n: centre = (p + z²/2n) / (1 + z²/n), half-width = z·√(p(1−p)/n + z²/4n²) / (1 + z²/n). It stays inside 0 to 100 % and is honest for small groups: 0/10 gives 0.0–27.8 %, 5/10 gives 23.7–76.3 %, 10/10 gives 72.2–100.0 %.
@@ -176,9 +176,11 @@ The runner uses the Development environment unless `DOTNET_ENVIRONMENT` says oth
 
 The console prints one line per case (`CLN-01 passed`, or `CLN-01 failed at cards[0]`), one per category, the total, and the two report paths. Exit codes: 0 the run completed (whatever the pass rate); 2 a wrong command line, a wrong setting or the held-out guard refused; 1 the wallet or the agent database does not answer, the set file is missing or malformed, or the wallet stopped answering during the run (no report is written then).
 
-## For Khalil: FLT-03
+## FLT-03 and the wallet-error ruling
 
-FLT-03's key says a `wallet_error` on Confirm ends as `failed` with `not_done_nothing_taken`. The mock wallet answers that fault with 500 `injected_error`, and [wallet-api.md](wallet-api.md) says nothing was written. The agent, however, maps every 5xx on execute to Checking ([agent-core.md](agent-core.md), outcome mapping; rule 6: an unknown status is "checking", never "failed"); it does not branch on the `injected_error` code. So the card goes to Checking, the settle resends with the same key and gets Done, and the money moves once. Two ways forward, your choice: change the key to Checking then Done (rule 6 as built), or make the fault a definite refusal the agent already reads as "nothing taken" (a 4xx from the wallet, or the agent treating `injected_error` as definite). The key is unchanged until you decide. In today's run FLT-03 fails earlier, at `cards[0]`, because the scripted parser does not know its sentence.
+FLT-03's key says a `wallet_error` on Confirm ends as `failed` with `not_done_nothing_taken`. The mock wallet answers that fault with 500 `injected_error` and writes nothing. Until milestone 6 the agent mapped every 5xx on execute to Checking, so the settle resent under the same key, got Done, and the money moved once against the key. Khalil ruled on 14 Oct 2026: a 5xx whose ProblemDetails carries a wallet `code` means the wallet refused before writing; a bare 5xx means unknown. From milestone 6, `WalletClient.ExecuteAsync` returns `Refused` for a coded 5xx, and the Confirm handler ends the card NotDone `not_done_nothing_taken` with the code as detail, exactly as for a 4xx ([wallet-api.md](wallet-api.md), [agent-core.md](agent-core.md) outcome mapping). On a settle a coded 5xx stays Checking, because the fault switch answers before the key lookup. `CaseDriverTests.AWalletErrorOnConfirmIsNotDoneAndMovesNothing` plays the fault through the runner: status sequence `live`, `not_done`, the reply `not_done_nothing_taken`, no transaction.
+
+Re-run after the ruling (14 Oct 2026, `dotnet run --project src/Agent.Eval -- dev --only FLT-03`, scripted parser, report to a scratch directory and not committed): **FLT-03 failed at `cards[0]`** (expected a bill card, observed none). The scripted parser does not know the case's sentence (its sentences are `TODO-AR` placeholders), so the case stops before the Confirm and the ruling is not reached. FLT-03 is expected to pass once a parser reads its sentence into the water bill (the model parser, milestone 6 Task 2, or Khalil's scripted sentence). Masking failures in that run: 0.
 
 ## The first development run (14 Oct 2026)
 

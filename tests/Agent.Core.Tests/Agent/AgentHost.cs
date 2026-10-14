@@ -110,7 +110,7 @@ public sealed class AgentHost : IAsyncLifetime
 
     /// <summary>
     /// Sets the clock back to the real time (so no test inherits another's moves, or drifts across midnight in Iraq),
-    /// returns the wallet to the seed and empties both agent tables.
+    /// returns the wallet to the seed and empties the agent's tables.
     /// </summary>
     public async Task ResetAsync()
     {
@@ -121,6 +121,7 @@ public sealed class AgentHost : IAsyncLifetime
         var token = TestContext.Current.CancellationToken;
         await db.AuditEntries.ExecuteDeleteAsync(token);
         await db.PendingTransactions.ExecuteDeleteAsync(token);
+        await db.LearningEntries.ExecuteDeleteAsync(token);
     }
 
     /// <summary>

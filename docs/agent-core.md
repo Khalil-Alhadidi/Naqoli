@@ -27,7 +27,7 @@ The test hosts set `SweepIntervalSeconds` to 0 and use `NullTraceSink`, or a rec
 | 2. The model is read only | The model's output is `ParsedRequest`, a record with no behaviour. The `Orchestrator` validates it against the wallet and treats it as a request to check: every name, bill and product is resolved by code, every amount goes through `AmountRule` and the checks |
 | 3. The card is built by code | `CardBuilder` fills `CardDraft` from the wallet's quote and the resolver's choice. No field comes from `ParsedRequest` text except the typed phone, normalised by `PhoneNumbers`, when the user typed a number |
 | 4. Replies are templates | `AgentReply` and `ConfirmOutcome` carry codes, figures and option text from the wallet (reason codes, question kinds, options, amounts); the only user text is the `recipient_not_found` detail. The phone fills a template from its resource file (milestone 4) |
-| 5. Masking (groundwork) | `ParsedRequest` holds only the user's own words. Nothing the orchestrator reads from the wallet is written back into it. The quoted balance stays on the pending record for the card. The audit log has no parameter for a balance, a PIN or a purchase code. Masking itself comes with the model in milestone 6 |
+| 5. Masking | `ParsedRequest` holds only the user's own words. Nothing the orchestrator reads from the wallet is written back into it. The quoted balance stays on the pending record for the card. The audit log and the learning log have no parameter for a balance, a PIN or a purchase code. From milestone 6 the conversation masks every number before the parse call (`Masker`) and un-masks a recipient token from that message's map only; `ParsedRequestValidator` checks the parse call's structure (see Masking and structure validation) |
 | 6. Idempotency | Every pending record gets one key at creation. Every transition is one conditional update on the current state. An unknown outcome is Checking, never failed, and is settled by resending the same body under the same key |
 
 ## The structured request
@@ -37,7 +37,7 @@ The test hosts set `SweepIntervalSeconds` to 0 and use `NullTraceSink`, or a rec
 | Field | Type | Meaning |
 |---|---|---|
 | `Intent` | `RequestIntent` | `Transfer`, `Bill`, `Purchase`, `Balance`, `Unsupported` or `Unclear` |
-| `RecipientText` | string? | The recipient as typed: a name, an alias or a number (a masked number token from milestone 6) |
+| `RecipientText` | string? | The recipient as typed: a name, an alias or a number. The parse call sees a number as a token (`<NUM_1>`); the conversation turns a recipient that is exactly a token of this message back into the number as typed before the orchestrator reads it |
 | `AmountValue` | decimal? | The amount as a number. Rule 19 (a comma is thousands, a dot never is) is applied by the parser |
 | `AmountUnit` | `AmountUnit` | `None` (a bare number), `Dinars`, `Thousand` or `Million` |
 | `BillerCode` | string? | `electricity`, `water`, `internet`, `school_fees`, or null |
@@ -47,10 +47,11 @@ The test hosts set `SweepIntervalSeconds` to 0 and use `NullTraceSink`, or a rec
 | `ProductValue` | long? | The face value the user named, in IQD, or null |
 | `UnsupportedReason` | string? | For `Unsupported`: `withdrawal`, `other_balance`, `other_currency`, `refers_back`, `same_as_last_time`, `choose_account`, `part_of_bill`, `credit_to_own_number`, `change_waiting_card`, `other_language`; otherwise null |
 | `CurrencyText` | string? | A currency other than dinars, as typed. When set, the request is refused with `dinars_only` |
+| `Problem` | string? | Set by `ParsedRequestValidator` when the parse call's structure broke a rule: the field's wire name, with `Intent` `Unclear`. Null from the scripted parser |
 
 ## The parser seam
 
-`IParser.ParseAsync(text, context, cancellationToken)` (`src/Agent.Core/Parsing/IParser.cs`) is the parse call of rule 2: one call per message, read only, returning a `ParsedRequest`. `ParseContext(PendingNote)` is all it may know besides the user's words (D5, rule 5): the one-line note of what is pending, built by code from the type and codes only, or null when nothing is pending.
+`IParser.ParseAsync(text, context, cancellationToken)` (`src/Agent.Core/Parsing/IParser.cs`) is the parse call of rule 2: one call per message, read only, returning a `ParsedRequest`. `ParseContext(PendingNote, Map)` is all it may know besides the user's words (D5, rule 5): the one-line note of what is pending, built by code from the type and codes only, or null when nothing is pending; and the `MaskMap` of this message, which the structure validator needs to accept a token (null when the caller did not mask). The text it receives is already masked.
 
 Until milestone 6 the only implementation is `ScriptedParser` (`src/Agent.Core/Parsing/ScriptedParser.cs`). It reads `scripted-sentences.json`, an embedded resource next to it, as a list of `{ "sentence": ..., "request": { ...ParsedRequest... } }` (web JSON defaults, enums as strings; a `note` field is ignored). A typed text matches a sentence when both are equal, ordinal, after `ArabicText.Normalize` (Arabic-Indic and Eastern Arabic-Indic digits to ASCII, whitespace trimmed and collapsed, and the rest of rule 1); anything else is `Unclear`. It holds no per-user state, so one instance serves the whole app; `AddAgentCore` registers no parser, and the host (`Agent.Web`, Task 2) registers `ScriptedParser` as a singleton.
 
@@ -69,6 +70,33 @@ flowchart LR
     lookup -- no --> unclear["ParsedRequest Intent Unclear"]
     req --> orch["Orchestrator.HandleAsync"]
     unclear --> orch
+```
+
+## Masking and structure validation (milestone 6)
+
+Rule 5 and review I3, in `src/Agent.Core/Masking/` and `src/Agent.Core/Parsing/ParsedRequestValidator.cs`.
+
+- **`Masker.Mask(text)`** returns `MaskedText(Text, Map)`. A number is a run of 7 or more digits (ASCII `0-9`, Arabic-Indic U+0660 to U+0669, Extended Arabic-Indic U+06F0 to U+06F9), with any spaces, dashes or dots between its digits counted inside the run and an optional leading `+`. Each run becomes `<NUM_1>`, `<NUM_2>`, ... in order of appearance; the map keeps each run exactly as typed (separators and `+` included). Six digits or fewer are never masked (`150000`, `1,000,000` with its commas). A seven-digit amount written without separators is masked (see [failure-modes.md](failure-modes.md)).
+- **`MaskMap.TryUnmask(token, out original)`** gives the number only for a token of that map; `MaskMap.IsToken` says whether a text is exactly one token.
+- **The conversation masks before the parse call** and passes the map in `ParseContext`. After the call, a `RecipientText` that is exactly a token of this message's map becomes the number as typed; any other token stays a token, so the contact resolver finds nothing. Un-masking happens there and nowhere else, for every parser. The orchestrator then reads the number as it always did (`PhoneNumbers.LooksLikeNumber`, `TryNormalize`, `invalid_number`).
+- **`ParsedRequestValidator.Validate(ParsedRequestDto dto, MaskMap map)`** returns `ValidationResult(Request, Problem, MoreThanOneRequest)`. `ParsedRequestDto` is the strict structure on the wire (snake_case; a field it does not name is refused when the reply is read, `JsonUnmappedMemberHandling.Disallow`); `ParsedRequestsDto` is the reply's list (D7). The checks, in order: `intent` in `transfer`, `bill`, `purchase`, `balance`, `unsupported`, `unclear`; `amount_unit` in `none`, `dinars`, `thousand`, `million`; `biller_code` null or in `electricity`, `water`, `internet`, `school_fees`; `product_type` null or in `credit`, `internet`; `unsupported_reason` null or one of the ten documented reasons; every text at most 100 characters; `amount_value` null, or finite and not below zero; `product_value` null or above zero; `recipient_text` exactly one token of this message's map, or words with no run of 7 or more digits and no token the map does not hold (the user typed no such number: the parse call invented it). Sets are exact and lower case. A blank text is null. The first violation gives `ParsedRequest { Intent = Unclear, Problem = <field> }`; nothing throws. The list form takes the first request (an empty list is the problem `requests`) and sets `MoreThanOneRequest` when there were more; until milestone 9 the others are dropped.
+- **An invalid structure** reaches the orchestrator as `Unclear`, so the reply is the `not_understood` refusal. The conversation traces `model_invalid_reply` with the field name and writes the learning entry `model_invalid_reply` with the field as detail (in place of `not_understood`).
+
+```mermaid
+flowchart TD
+    typed["Typed text"] --> mask["Masker.Mask: each 7+ digit run to NUM_n, map kept"]
+    mask --> parse["IParser.ParseAsync(masked text, ParseContext(note, map))"]
+    parse --> valid["ParsedRequestValidator (model parser): sets, lengths, figures, recipient"]
+    valid -- "violation" --> unclear["Unclear with Problem = field"]
+    valid -- "valid" --> req["ParsedRequest"]
+    req --> unmask{"RecipientText exactly a token of this map?"}
+    unmask -- yes --> number["RecipientText = the number as typed"]
+    unmask -- no --> keep["unchanged"]
+    number --> orch["Orchestrator.HandleAsync"]
+    keep --> orch
+    unclear --> orch
+    orch --> reply["Reply shown"]
+    reply --> log["LearningLog.WriteAsync(entry, masked text)"]
 ```
 
 ## The pipeline, in order
@@ -488,7 +516,7 @@ stateDiagram-v2
 | Code | `Orchestrator` | `parse_received` (the intent), `consent_checked` (`given` or `required`), `recipient_resolved` (`contact`, `alias`, `number`, `bill` or `purchase`), `amount_resolved` (the amount), `checks_passed` (the quote's total) or `check_failed:<reason>` (the figure), `card_created` (type, total, `pin` when one is needed), `question:<kind>` (how many options), `refusal:<code>` (the wallet code for `not_done_nothing_taken`, else the figure), `balance_shown` (no figure) |
 | Write | `ConfirmHandler` | `begin_execute` (type and total), `recheck_ok` or `recheck_failed:<reason>` (the wallet code, if any), `execute_sent`, `outcome:<done, not_done, checking, expired, already_handled, not_found, pin_required, pin_wrong, pin_malformed, cancelled or exception>` (the record's state, the reason, or the attempts left), `settle_sent`, `settle_outcome:<the same names>` |
 
-The User and Model zones are written by the `Conversation` (below; `message_received`, `confirm_tapped`, `check_again_tapped`, `cancel_tapped`, `parse:scripted`, `parse:unavailable`) and the model parser (milestone 6). A detail holds codes, states and amounts only: never a PIN, an idempotency key, a purchase code, a phone, a name, a balance or any text the user typed (an unsupported reason stays out until milestone 6 validates it). `TraceSinkTests.NoPinKeyCodeOrPhoneInAnyStep` runs a PIN payment and a purchase through a recording sink and checks every step and detail.
+The User and Model zones are written by the `Conversation` (below; `message_received`, `confirm_tapped`, `check_again_tapped`, `cancel_tapped`, `parse:scripted`, `parse:unavailable`) and the model parser (milestone 6). The `Conversation` also writes, in the Code zone, `model_invalid_reply` (the field the validator refused), `learning_logged` (the reason) and `error` (an exception's type). A detail holds codes, states and amounts only: never a PIN, an idempotency key, a purchase code, a phone, a name, a balance or any text the user typed (an unsupported reason stays out until milestone 6 validates it). `TraceSinkTests.NoPinKeyCodeOrPhoneInAnyStep` runs a PIN payment and a purchase through a recording sink and checks every step and detail.
 
 ```mermaid
 sequenceDiagram
@@ -521,7 +549,7 @@ Never stored: a PIN, a balance figure, a purchase code (full or partial), the ty
 
 ## The learning-log rule
 
-`LearningLogRule.EntryFor(AgentReply reply, ParsedRequest request)` (`src/Agent.Core/Learning/`) is the pure function that decides what goes to the learning log (D12). It returns a `LearningEntry(Reason, Detail)`, or null when nothing is logged. The table arrives in milestone 6, which persists exactly this entry; until then the runner grades it against the answer key.
+`LearningLogRule.EntryFor(AgentReply reply, ParsedRequest request)` (`src/Agent.Core/Learning/`) is the pure function that decides what goes to the learning log (D12). It returns a `LearningEntry(Reason, Detail)`, or null when nothing is logged. The conversation persists exactly this entry (The learning log, below); the runner grades the same entry against the answer key.
 
 `LearningLogRule.Logged` and `NotLogged` are the lists of `data/seed/settings.json` (`learning_log`), in the same order. `LearningLogRuleTests.TheListsAreTheSettingsLists` pins them to the seed.
 
@@ -533,7 +561,7 @@ Never stored: a PIN, a balance figure, a purchase code (full or partial), the ty
 | `Unsupported` with any other reason (`withdrawal`, `other_balance`) | `not_supported`, with the reason as detail |
 | A `not_logged` refusal (`insufficient_balance`, the two caps, `nothing_due`, `account_closed`, `number_has_no_wallet`, `consent_required`), any other refusal, a question, a balance, the consent screen, a card | null |
 
-`more_than_three_requests` and `model_invalid_reply` are in the logged list but are not replies. The caller that splits a message (milestone 9c) and the model parser (milestone 6) build those entries.
+`more_than_three_requests` and `model_invalid_reply` are in the logged list but are not replies. The caller that splits a message (milestone 9c) builds the first; the conversation builds the second when the parsed request carries a `Problem` (see The learning log).
 
 ```mermaid
 flowchart TD
@@ -544,6 +572,12 @@ flowchart TD
     kind -- "Unsupported, other reason" --> other["Entry: not_supported, the reason as detail"]
     kind -- "anything else" --> none["null: not logged"]
 ```
+
+### The learning log (milestone 6)
+
+`LearningLog.WriteAsync(userId, entry, maskedText, cancellationToken)` (`src/Agent.Core/Learning/LearningLog.cs`) writes one `LearningEntryRow` (table `LearningEntries`, migration `LearningLog`): `Id`, `At`, `UserId`, `Reason`, `Detail` (up to 100 characters), `MaskedText` (the message as the parse call saw it, up to 1,000 characters) and `Reviewed` (false until a person has looked at it). It masks the detail and the text once more before it stores them, so a number that reached them another way (a typed answer to a question goes to the orchestrator as typed) never reaches a row. It has no parameter for a PIN, a balance or a purchase code (`LearningLogTests.WriteHasNoParameterForAPinABalanceOrAPurchaseCode`).
+
+The conversation calls it after every reply that yields an entry, with the masked text of the last typed message: the `model_invalid_reply` entry when the parsed request carries a `Problem`, otherwise `LearningLogRule.EntryFor(reply, request)`. The reply is shown first; a failed write is traced (`error`, the exception's type) and changes nothing on the screen. The runner's derived entry stays the graded one; the table is additional.
 
 ## The "no tap, no money" test
 

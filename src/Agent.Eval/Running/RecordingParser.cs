@@ -17,7 +17,8 @@ public enum ParserFault
 }
 
 /// <summary>
-/// The runner's parser: it records every text handed to the parse call (for the outbound-text check, D12) and each
+/// The runner's parser: it records every text handed to the parse call (for the outbound-text check, D12), which is
+/// the masked text, since the conversation masks every number before it calls the parser (rule 5, review R3), and each
 /// call's usage, applies an armed <see cref="ParserFault"/>, and otherwise passes the call to the inner parser.
 /// </summary>
 public sealed class RecordingParser(IParser inner) : IParser, IParserUsage

@@ -1,19 +1,28 @@
 using Agent.Core.Audit;
+using Agent.Core.Learning;
 using Agent.Core.Pending;
 using Microsoft.EntityFrameworkCore;
 
 namespace Agent.Core.Data;
 
-/// <summary>The agent's own database: pending payments and the audit trail. The wallet's data lives behind its API.</summary>
+/// <summary>
+/// The agent's own database: pending payments, the audit trail and the learning log. The wallet's data lives behind its
+/// API.
+/// </summary>
 public class AgentDbContext(DbContextOptions<AgentDbContext> options) : DbContext(options)
 {
     public const int IdempotencyKeyLength = 32;
     public const int StateLength = 16;
     public const int TextLength = 100;
 
+    /// <summary>The longest masked message a learning-log row keeps.</summary>
+    public const int LearningTextLength = 1000;
+
     public DbSet<PendingRecord> PendingTransactions => Set<PendingRecord>();
 
     public DbSet<AuditEntry> AuditEntries => Set<AuditEntry>();
+
+    public DbSet<LearningEntryRow> LearningEntries => Set<LearningEntryRow>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -51,6 +60,17 @@ public class AgentDbContext(DbContextOptions<AgentDbContext> options) : DbContex
             e.Property(a => a.Detail).HasMaxLength(TextLength);
             e.HasIndex(a => a.PendingId);
             e.HasIndex(a => a.At);
+        });
+
+        modelBuilder.Entity<LearningEntryRow>(e =>
+        {
+            e.ToTable("LearningEntries");
+            e.HasKey(l => l.Id);
+            e.Property(l => l.Id).UseIdentityColumn();
+            e.Property(l => l.Reason).HasMaxLength(TextLength);
+            e.Property(l => l.Detail).HasMaxLength(TextLength);
+            e.Property(l => l.MaskedText).HasMaxLength(LearningTextLength);
+            e.HasIndex(l => l.At);
         });
     }
 }

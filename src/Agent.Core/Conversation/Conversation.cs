@@ -1,5 +1,7 @@
 using System.Globalization;
 using Agent.Core.Confirm;
+using Agent.Core.Learning;
+using Agent.Core.Masking;
 using Agent.Core.Parsing;
 using Agent.Core.Pending;
 using Agent.Core.Pipeline;
@@ -46,6 +48,7 @@ public sealed class Conversation : IDisposable
 
     private ParsedRequest? lastRequest;
     private string? typedSlot;
+    private string? lastMaskedText;
     private bool disposed;
 
     /// <param name="scopes">Opens one scope per action.</param>
@@ -197,10 +200,14 @@ public sealed class Conversation : IDisposable
                     return;
             }
 
+            // Rule 5: the parse call sees the typed text with every number masked, and nothing else of the user's.
+            var masked = Masker.Mask(typedText);
+            lastMaskedText = masked.Text;
+
             ParsedRequest parsed;
             try
             {
-                parsed = await parser.ParseAsync(typedText, new ParseContext(pendingNote), token);
+                parsed = await parser.ParseAsync(masked.Text, new ParseContext(pendingNote, masked.Map), token);
             }
             catch (ParserUnavailableException)
             {
@@ -211,12 +218,21 @@ public sealed class Conversation : IDisposable
             }
 
             trace.Record(TraceZone.Model, "parse:scripted", parsed.Intent.ToString());
+            parsed = Unmask(parsed, masked.Map);
+
+            // A structure the validator refused: the reply is not_understood, and the log says why (by field name).
+            LearningEntry? invalidReply = null;
+            if (parsed is { Intent: RequestIntent.Unclear, Problem: { } problem })
+            {
+                trace.Record(TraceZone.Code, LearningLogRule.ModelInvalidReply, problem);
+                invalidReply = new LearningEntry(LearningLogRule.ModelInvalidReply, problem);
+            }
 
             var request = parsed;
             if (parsed.Intent == RequestIntent.Unclear && !isYes && !isNo && typedSlot is not null && lastRequest is not null)
                 request = FillTypedSlot(lastRequest, typedSlot, typedText) ?? parsed;
 
-            await HandleCoreAsync(request, token);
+            await HandleCoreAsync(request, token, ReferenceEquals(request, parsed) ? invalidReply : null);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -509,7 +525,12 @@ public sealed class Conversation : IDisposable
         return null;
     }
 
-    private async Task HandleCoreAsync(ParsedRequest request, CancellationToken token)
+    /// <summary>
+    /// Answers <paramref name="request"/> and shows the reply, then writes its learning-log entry:
+    /// <paramref name="invalidReply"/> when the parse call's structure was refused, else what
+    /// <see cref="LearningLogRule.EntryFor"/> returns.
+    /// </summary>
+    private async Task HandleCoreAsync(ParsedRequest request, CancellationToken token, LearningEntry? invalidReply = null)
     {
         lastRequest = request;
         Question = null;
@@ -521,6 +542,42 @@ public sealed class Conversation : IDisposable
             reply = await scope.ServiceProvider.GetRequiredService<Orchestrator>().HandleAsync(userId, request, token);
 
         LastReply = reply;
+        ShowReply(reply);
+        await WriteLearningAsync(invalidReply ?? LearningLogRule.EntryFor(reply, request), token);
+    }
+
+    /// <summary>
+    /// Writes <paramref name="entry"/> with the masked text of the last typed message (rule 5: never the typed text).
+    /// The reply is already shown, so a failed write is traced and does not change it.
+    /// </summary>
+    private async Task WriteLearningAsync(LearningEntry? entry, CancellationToken token)
+    {
+        if (entry is null)
+            return;
+
+        try
+        {
+            await using var scope = scopes.CreateAsyncScope();
+            await scope.ServiceProvider.GetRequiredService<LearningLog>().WriteAsync(userId, entry, lastMaskedText ?? string.Empty, token);
+            trace.Record(TraceZone.Code, "learning_logged", entry.Reason);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            trace.Record(TraceZone.Code, "error", ex.GetType().Name);
+        }
+    }
+
+    /// <summary>
+    /// The request with a recipient that is exactly a token of this message's <paramref name="map"/> turned back into
+    /// the number as typed; any other token stays a token.
+    /// </summary>
+    private static ParsedRequest Unmask(ParsedRequest parsed, MaskMap map)
+        => parsed.RecipientText is { } recipient && map.TryUnmask(recipient.Trim(), out var original)
+            ? parsed with { RecipientText = original }
+            : parsed;
+
+    private void ShowReply(AgentReply reply)
+    {
         switch (reply)
         {
             case AgentReply.Refusal refusal:

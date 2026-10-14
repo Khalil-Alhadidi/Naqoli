@@ -42,6 +42,13 @@ public sealed record ParsedRequest
     /// <summary>A currency other than dinars, as typed; set means the request is refused with <c>dinars_only</c>.</summary>
     public string? CurrencyText { get; init; }
 
+    /// <summary>
+    /// Set by <c>ParsedRequestValidator</c> when the parse call's structure broke a rule: the name of the field, with
+    /// <see cref="Intent"/> <see cref="RequestIntent.Unclear"/>. The conversation logs it as <c>model_invalid_reply</c>.
+    /// Null from the scripted parser and for every valid structure.
+    /// </summary>
+    public string? Problem { get; init; }
+
     /// <summary>A transfer request.</summary>
     public static ParsedRequest Transfer(string? recipientText, decimal? amountValue, AmountUnit unit)
         => new() { Intent = RequestIntent.Transfer, RecipientText = recipientText, AmountValue = amountValue, AmountUnit = unit };
