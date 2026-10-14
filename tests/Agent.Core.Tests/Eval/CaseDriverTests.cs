@@ -62,6 +62,15 @@ public sealed class CaseDriverTests(AgentHost host) : IAsyncDisposable
     private static CaseStep Confirm(string? pin = null, bool twice = false) => new(Tap: "confirm", Pin: pin, Twice: twice);
 
     [Fact]
+    public void AStepErrorKeepsTheExceptionTypeAndNeverItsMessage()
+    {
+        // A model SDK's exception may echo the input (review M1), so the message never reaches the report.
+        var error = CaseDriver.StepErrorOf(new InvalidOperationException("send fifty to 07701234567"));
+
+        Assert.Equal("InvalidOperationException: " + CaseDriver.StepErrorMessage, error);
+        Assert.DoesNotContain("0770", error, StringComparison.Ordinal);
+    }
+
     public async Task ACleanTransferIsPlayedEndToEnd()
     {
         var runner = Start();

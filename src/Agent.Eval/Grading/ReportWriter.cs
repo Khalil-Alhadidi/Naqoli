@@ -96,7 +96,7 @@ public static class ReportWriter
 
     /// <summary>
     /// Writes the JSON and Markdown reports of <paramref name="summary"/> into <paramref name="directory"/>, named
-    /// <c>&lt;set&gt;-&lt;parser&gt;-&lt;UTC date&gt;</c>.
+    /// <c>&lt;set&gt;-&lt;parser&gt;-&lt;UTC date&gt;-&lt;UTC HHmm&gt;</c>.
     /// </summary>
     public static ReportPaths Write(RunSummary summary, string directory)
     {
@@ -104,8 +104,10 @@ public static class ReportWriter
         ArgumentException.ThrowIfNullOrWhiteSpace(directory);
 
         Directory.CreateDirectory(directory);
-        // One report per set, parser and day (dev-scripted-2026-10-14): a later run on the same day replaces it.
-        var stem = summary.SetName + "-" + summary.Parser + "-" + summary.StartedUtc.UtcDateTime.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+        // One report per set, parser and minute (dev-scripted-2026-10-14-0900), so a later run on the same day never
+        // overwrites a committed report (review M2).
+        var stem = summary.SetName + "-" + summary.Parser + "-"
+            + summary.StartedUtc.UtcDateTime.ToString("yyyy-MM-dd-HHmm", CultureInfo.InvariantCulture);
         var jsonPath = Path.Combine(directory, stem + ".json");
         var markdownPath = Path.Combine(directory, stem + ".md");
 

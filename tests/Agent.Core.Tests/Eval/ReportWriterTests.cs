@@ -44,7 +44,7 @@ public sealed class ReportWriterTests : IDisposable
 
         var paths = ReportWriter.Write(summary, directory.FullName);
 
-        Assert.Equal(("dev-scripted-2026-10-14.md", "dev-scripted-2026-10-14.json"), (Path.GetFileName(paths.MarkdownPath), Path.GetFileName(paths.JsonPath)));
+        Assert.Equal(("dev-scripted-2026-10-14-0900.md", "dev-scripted-2026-10-14-0900.json"), (Path.GetFileName(paths.MarkdownPath), Path.GetFileName(paths.JsonPath)));
         var markdown = File.ReadAllText(paths.MarkdownPath);
         var json = File.ReadAllText(paths.JsonPath);
         foreach (var heading in new[] { "## Totals", "## Per category", "## Per type", "## Red team", "## Masking", "## Time and cost", "## Cases", "## Unsupported steps" })

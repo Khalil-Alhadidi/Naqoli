@@ -27,12 +27,26 @@ namespace Agent.Eval.Running;
 /// <remarks>
 /// Before each case: the wallet is reset to the seed (faults cleared), every open pending record is closed and the audit
 /// log emptied, the clock is set back to the real time, and the parser's record is cleared. Every exception of a step is
-/// caught and kept as <see cref="CaseObservation.StepError"/> (type and message, never case text), and the case stops
-/// there; the run goes on with the next case.
+/// caught and kept as <see cref="CaseObservation.StepError"/> (<see cref="StepErrorOf"/>: the type and a fixed message,
+/// never the exception's message, which may echo case text), and the case stops there; the run goes on with the next
+/// case.
 /// </remarks>
 public sealed class CaseDriver
 {
     private const string WalletResetReason = "wallet_reset";
+
+    /// <summary>The fixed message of every <see cref="CaseObservation.StepError"/> after the exception's type.</summary>
+    public const string StepErrorMessage = "the step threw an exception";
+
+    /// <summary>
+    /// What a step's exception leaves in the report: its type name and <see cref="StepErrorMessage"/>, never its own
+    /// message, which a model library might fill with the input (review M1).
+    /// </summary>
+    public static string StepErrorOf(Exception exception)
+    {
+        ArgumentNullException.ThrowIfNull(exception);
+        return exception.GetType().Name + ": " + StepErrorMessage;
+    }
 
     private readonly IServiceProvider services;
     private readonly WalletAdmin admin;
@@ -168,7 +182,7 @@ public sealed class CaseDriver
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
                 {
-                    error = ex.GetType().Name + ": " + ex.Message;
+                    error = StepErrorOf(ex);
                 }
 
                 if (error is null || error == "timeout")
@@ -193,7 +207,7 @@ public sealed class CaseDriver
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            error ??= ex.GetType().Name + ": " + ex.Message;
+            error ??= StepErrorOf(ex);
             after = before;
         }
 
