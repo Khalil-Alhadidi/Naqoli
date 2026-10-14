@@ -18,6 +18,7 @@ public class SeedApplyTests(WalletApiFixture fixture)
     public async Task ApplyTwiceDoesNotDuplicateRows()
     {
         Assert.SkipUnless(fixture.DatabaseAvailable, fixture.SkipReason);
+        await fixture.ResetAsync();
         await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<WalletDbContext>();
         var (seed, now) = SeedAndNow(scope);
