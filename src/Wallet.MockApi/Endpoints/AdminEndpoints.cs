@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.EntityFrameworkCore;
 using Wallet.MockApi.Contracts;
 using Wallet.MockApi.Data;
+using Wallet.MockApi.Data.Seed;
 using Wallet.MockApi.Services;
 
 namespace Wallet.MockApi.Endpoints;
@@ -56,11 +57,16 @@ public static class AdminEndpoints
     /// fault switch; and reports the row counts read back from the database.
     /// </summary>
     private static async Task<Ok<ResetResponse>> ResetAsync(
-        WalletDbContext db, FaultSwitch faults, WalletGate gate, CancellationToken cancellationToken)
+        WalletDbContext db,
+        SeedSet seed,
+        TimeProvider clock,
+        FaultSwitch faults,
+        WalletGate gate,
+        CancellationToken cancellationToken)
     {
         using (await gate.EnterExclusiveAsync(cancellationToken))
         {
-            await SeedReset.ResetAsync(db, cancellationToken);
+            await SeedReset.ResetAsync(db, seed, clock.GetUtcNow(), cancellationToken);
             faults.Set(FaultMode.None, null, once: false);
 
             return TypedResults.Ok(new ResetResponse(

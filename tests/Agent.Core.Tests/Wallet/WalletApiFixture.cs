@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Wallet.MockApi;
 using Wallet.MockApi.Data;
+using Wallet.MockApi.Data.Seed;
 
 namespace Agent.Core.Tests.Wallet;
 
@@ -84,7 +85,10 @@ public sealed class WalletApiFixture : IAsyncLifetime
 
             await db.Database.EnsureDeletedAsync();
             await db.Database.MigrateAsync();
-            SeedData.Apply(db);
+            SeedData.Apply(
+                db,
+                scope.ServiceProvider.GetRequiredService<SeedSet>(),
+                scope.ServiceProvider.GetRequiredService<TimeProvider>().GetUtcNow());
         }
 
         client = factory.CreateClient();
@@ -94,7 +98,7 @@ public sealed class WalletApiFixture : IAsyncLifetime
         DatabaseAvailable = true;
     }
 
-    /// <summary>Returns the test database to the frozen seed and clears the fault switch, through <c>POST /admin/reset</c>.</summary>
+    /// <summary>Returns the test database to the seed and clears the fault switch, through <c>POST /admin/reset</c>.</summary>
     public async Task ResetAsync()
     {
         using var response = await Client.PostAsync("/admin/reset", null, TestContext.Current.CancellationToken);
@@ -112,6 +116,20 @@ public sealed class WalletApiFixture : IAsyncLifetime
     public AsyncServiceScope CreateScope()
         => (factory ?? throw new InvalidOperationException("The wallet API is not running. " + SkipReason))
             .Services.CreateAsyncScope();
+
+    /// <summary>
+    /// The balance of the account with <paramref name="phone"/>, read from the database. Accounts behind contacts
+    /// belong to no user, so <c>/users/{id}/balance</c> cannot report them.
+    /// </summary>
+    public async Task<long> AccountBalanceAsync(string phone)
+    {
+        await using var scope = CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<WalletDbContext>();
+        return await db.Accounts.AsNoTracking()
+            .Where(a => a.Phone == phone)
+            .Select(a => a.BalanceIqd)
+            .SingleAsync(TestContext.Current.CancellationToken);
+    }
 
     public async ValueTask DisposeAsync()
     {

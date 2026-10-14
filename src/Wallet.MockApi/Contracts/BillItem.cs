@@ -5,7 +5,6 @@ public sealed record BillItem(
     int BillAccountId,
     string BillerCode,
     string BillerName,
-    string Label,
+    string? Label,
     string AccountNumber,
-    long AmountDueIqd,
-    DateOnly? DueDate);
+    long AmountDueIqd);

@@ -94,11 +94,9 @@ public static class ReadEndpoints
 
         var contacts = await (
             from contact in contactRows
-            join user in db.Users on contact.Phone equals user.Phone
-            join account in db.Accounts on user.Id equals account.UserId
-            where account.IsDefault
+            join account in db.Accounts on contact.Phone equals account.Phone
             orderby contact.Id
-            select new { contact.Id, contact.SavedName, contact.Phone, user.DisplayName, AccountId = account.Id })
+            select new { contact.Id, contact.SavedName, contact.Phone, account.RegisteredName, AccountId = account.Id })
             .ToListAsync(cancellationToken);
 
         var aliasRows = db.Aliases.AsNoTracking().Where(a => a.OwnerUserId == id);
@@ -107,7 +105,7 @@ public static class ReadEndpoints
 
         var aliases = await aliasRows
             .OrderBy(a => a.Id)
-            .Select(a => new AliasItem(a.Id, a.Text, a.TargetAccountId, a.TargetAccount!.User!.Phone, a.TargetAccount.User.DisplayName))
+            .Select(a => new AliasItem(a.Id, a.Text, a.TargetAccountId, a.TargetAccount!.Phone, a.TargetAccount.RegisteredName))
             .ToListAsync(cancellationToken);
 
         var lastSent = await LastDoneTransfersAsync(
@@ -118,7 +116,7 @@ public static class ReadEndpoints
             {
                 var last = lastSent.GetValueOrDefault(c.AccountId);
                 return new ContactItem(
-                    c.Id, c.SavedName, c.Phone, c.DisplayName, c.AccountId, last?.CreatedAt, last?.AmountIqd);
+                    c.Id, c.SavedName, c.Phone, c.RegisteredName, c.AccountId, last?.CreatedAt, last?.AmountIqd);
             })
             .ToList();
 
@@ -135,7 +133,7 @@ public static class ReadEndpoints
             .Where(b => b.UserId == id)
             .OrderBy(b => b.Id)
             .Select(b => new BillItem(
-                b.Id, b.Biller!.Code, b.Biller.Name, b.Label, b.AccountNumber, b.AmountDueIqd, b.DueDate))
+                b.Id, b.Biller!.Code, b.Biller.Name, b.Label, b.AccountNumber, b.AmountDueIqd))
             .ToListAsync(cancellationToken);
 
         return TypedResults.Ok(bills);
@@ -167,9 +165,7 @@ public static class ReadEndpoints
         var rows = db.Transactions.AsNoTracking().Where(t => t.UserId == id);
         if (!string.IsNullOrEmpty(to))
         {
-            rows = rows.Where(t => t.Type == TransactionType.Transfer
-                && t.ToAccount!.IsDefault
-                && t.ToAccount.User!.Phone == to);
+            rows = rows.Where(t => t.Type == TransactionType.Transfer && t.ToAccount!.Phone == to);
         }
 
         if (since is { } from)
@@ -188,8 +184,8 @@ public static class ReadEndpoints
                 t.AmountIqd,
                 t.FeeIqd,
                 t.TotalIqd,
-                CounterpartyPhone = t.Type == TransactionType.Transfer ? t.ToAccount!.User!.Phone : null,
-                CounterpartyName = t.Type == TransactionType.Transfer ? t.ToAccount!.User!.DisplayName : null,
+                CounterpartyPhone = t.Type == TransactionType.Transfer ? t.ToAccount!.Phone : null,
+                CounterpartyName = t.Type == TransactionType.Transfer ? t.ToAccount!.RegisteredName : null,
                 t.BillAccountId,
                 t.ProductId,
                 t.CreatedAt,
@@ -238,11 +234,11 @@ public static class ReadEndpoints
 
         var products = await rows
             .OrderBy(p => p.Id)
-            .Select(p => new { p.Id, p.Provider, p.Type, p.Name, p.FaceValueIqd, p.PriceIqd })
+            .Select(p => new { p.Id, p.Provider, p.Type, p.FaceValueIqd, p.PriceIqd })
             .ToListAsync(cancellationToken);
 
         return TypedResults.Ok(products
-            .Select(p => new ProductItem(p.Id, p.Provider, ProductTypeNames.Of(p.Type), p.Name, p.FaceValueIqd, p.PriceIqd))
+            .Select(p => new ProductItem(p.Id, p.Provider, ProductTypeNames.Of(p.Type), p.FaceValueIqd, p.PriceIqd))
             .ToList());
     }
 
@@ -256,7 +252,7 @@ public static class ReadEndpoints
             .Where(o => o.UserId == id)
             .OrderByDescending(o => o.CreatedAt)
             .ThenByDescending(o => o.Id)
-            .Select(o => new OrderItem(o.Id, o.TransactionId, o.ProductId, o.Product!.Name, o.Code, o.CreatedAt))
+            .Select(o => new OrderItem(o.Id, o.TransactionId, o.ProductId, o.Code, o.CreatedAt))
             .ToListAsync(cancellationToken);
 
         return TypedResults.Ok(orders);

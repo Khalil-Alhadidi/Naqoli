@@ -5,8 +5,12 @@ public class Biller
 {
     public int Id { get; set; }
 
-    /// <summary>A stable code: <c>electricity</c>, <c>water</c> or <c>internet</c>.</summary>
+    /// <summary>A stable code, such as <c>electricity</c> or <c>school_fees</c>.</summary>
     public required string Code { get; set; }
 
+    /// <summary>The Arabic name.</summary>
     public required string Name { get; set; }
+
+    /// <summary>The English name.</summary>
+    public required string NameEn { get; set; }
 }

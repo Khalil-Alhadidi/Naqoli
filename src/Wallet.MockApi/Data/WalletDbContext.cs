@@ -7,7 +7,10 @@ public class WalletDbContext(DbContextOptions<WalletDbContext> options) : DbCont
 {
     private const int NameLength = 100;
     private const int PhoneLength = 15;
-    private const int AliasLength = 50;
+    private const int AliasLength = 100;
+    private const int LabelLength = 50;
+    private const int SeedCodeLength = 8;
+    private const int ProductCodeLength = 16;
     private const int KeyLength = 64;
     private const int ReferenceLength = 16;
     private const int CodeLength = 32;
@@ -40,6 +43,8 @@ public class WalletDbContext(DbContextOptions<WalletDbContext> options) : DbCont
         modelBuilder.Entity<User>(user =>
         {
             user.ToTable("Users");
+            user.Property(u => u.Code).HasMaxLength(SeedCodeLength);
+            user.HasIndex(u => u.Code).IsUnique();
             user.HasIndex(u => u.Phone).IsUnique();
             user.Property(u => u.Phone).HasMaxLength(PhoneLength);
             user.Property(u => u.DisplayName).HasMaxLength(NameLength);
@@ -49,17 +54,26 @@ public class WalletDbContext(DbContextOptions<WalletDbContext> options) : DbCont
         modelBuilder.Entity<Account>(account =>
         {
             account.ToTable("Accounts");
+            account.Property(a => a.Code).HasMaxLength(SeedCodeLength);
+            account.Property(a => a.Phone).HasMaxLength(PhoneLength);
+            account.HasIndex(a => a.Phone).IsUnique();
+            account.Property(a => a.RegisteredName).HasMaxLength(NameLength);
+            account.Property(a => a.Status).HasConversion<string>().HasMaxLength(EnumLength);
             account.Property(a => a.BalanceIqd).HasColumnType("bigint");
+
+            // Optional: only a user's own account has a user. Deleting the user still removes it.
             account.HasOne(a => a.User)
                 .WithMany(u => u.Accounts)
                 .HasForeignKey(a => a.UserId)
-                .IsRequired()
+                .IsRequired(false)
                 .OnDelete(DeleteBehavior.Cascade);
         });
 
         modelBuilder.Entity<Contact>(contact =>
         {
             contact.ToTable("Contacts");
+            contact.Property(c => c.Code).HasMaxLength(SeedCodeLength);
+            contact.HasIndex(c => c.Code).IsUnique();
             contact.Property(c => c.SavedName).HasMaxLength(NameLength);
             contact.Property(c => c.Phone).HasMaxLength(PhoneLength);
             contact.HasIndex(c => new { c.OwnerUserId, c.SavedName, c.Phone }).IsUnique();
@@ -92,15 +106,17 @@ public class WalletDbContext(DbContextOptions<WalletDbContext> options) : DbCont
             biller.ToTable("Billers");
             biller.Property(b => b.Code).HasMaxLength(CodeLength);
             biller.Property(b => b.Name).HasMaxLength(NameLength);
+            biller.Property(b => b.NameEn).HasMaxLength(NameLength);
             biller.HasIndex(b => b.Code).IsUnique();
         });
 
         modelBuilder.Entity<BillAccount>(bill =>
         {
             bill.ToTable("BillAccounts");
-            bill.Property(b => b.Label).HasMaxLength(AliasLength);
+            bill.Property(b => b.Code).HasMaxLength(SeedCodeLength);
+            bill.HasIndex(b => b.Code).IsUnique();
+            bill.Property(b => b.Label).HasMaxLength(LabelLength);
             bill.Property(b => b.AccountNumber).HasMaxLength(CodeLength);
-            bill.Property(b => b.DueDate).HasColumnType("date");
             bill.HasOne(b => b.User)
                 .WithMany(u => u.BillAccounts)
                 .HasForeignKey(b => b.UserId)
@@ -116,8 +132,12 @@ public class WalletDbContext(DbContextOptions<WalletDbContext> options) : DbCont
         modelBuilder.Entity<Product>(product =>
         {
             product.ToTable("Products");
+            product.Property(p => p.Code).HasMaxLength(ProductCodeLength);
+            product.HasIndex(p => p.Code).IsUnique();
             product.Property(p => p.Provider).HasMaxLength(CodeLength);
-            product.Property(p => p.Name).HasMaxLength(NameLength);
+            product.Property(p => p.ProviderNameEn).HasMaxLength(NameLength);
+            product.Property(p => p.ProviderNameAr).HasMaxLength(NameLength);
+            product.Property(p => p.AlsoCalled).HasMaxLength(NameLength);
             product.Property(p => p.Type).HasConversion<string>().HasMaxLength(EnumLength);
         });
 

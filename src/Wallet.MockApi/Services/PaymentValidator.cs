@@ -170,12 +170,12 @@ public sealed class PaymentValidator(WalletDbContext db, FeeCalculator fees, IOp
         if (request.ToAccountId is { } accountId)
             recipients = recipients.Where(a => a.Id == accountId);
 
-        // A phone number reaches its holder's default account.
+        // A phone number reaches the account with that number.
         if (!string.IsNullOrEmpty(request.ToPhone))
-            recipients = recipients.Where(a => a.IsDefault && a.User!.Phone == request.ToPhone);
+            recipients = recipients.Where(a => a.Phone == request.ToPhone);
 
         var recipient = await recipients
-            .Select(a => new { a.Id, a.User!.Phone, a.User.DisplayName })
+            .Select(a => new { a.Id, a.Phone, a.RegisteredName })
             .SingleOrDefaultAsync(cancellationToken);
         if (recipient is null)
             return Draft.Refused(PaymentErrors.UnknownRecipient);
@@ -183,7 +183,7 @@ public sealed class PaymentValidator(WalletDbContext db, FeeCalculator fees, IOp
         if (recipient.Id == fromAccountId)
             return Draft.Refused(PaymentErrors.SameAccount);
 
-        return new Draft(request.AmountIqd.Value, recipient.Id, recipient.Phone, recipient.DisplayName, null, null, null);
+        return new Draft(request.AmountIqd.Value, recipient.Id, recipient.Phone, recipient.RegisteredName, null, null, null);
     }
 
     private async Task<Draft> BillAsync(PaymentRequest request, CancellationToken cancellationToken)

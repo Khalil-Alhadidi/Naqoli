@@ -13,10 +13,10 @@ namespace Agent.Core.Tests.Wallet;
 [Collection(WalletApiCollection.Name)]
 public class FaultTests(WalletApiFixture fixture)
 {
-    private const string HammoudiPhone = "07700001004";
-    private const int HammoudiId = 4;
-    private const long DemoSeedBalance = 300_000;
-    private const long HammoudiSeedBalance = 80_000;
+    private const string HammoudiPhone = SeedFacts.HammoudiPhone;
+    private const int DemoUserId = SeedFacts.DemoUserId;
+    private const long DemoSeedBalance = SeedFacts.DemoBalance;
+    private const long HammoudiSeedBalance = 100_000;
 
     // At least 16 characters (WalletOptions.MinAdminKeyLength). A test value, not a secret.
     private const string AdminTestKey = "test-admin-key-0123456789";
@@ -24,7 +24,7 @@ public class FaultTests(WalletApiFixture fixture)
     private static CancellationToken Token => TestContext.Current.CancellationToken;
 
     private static PaymentRequest SendFiftyThousandToHammoudi
-        => new(SeedData.DemoUserId, "transfer", 50_000, HammoudiPhone, null, null, null, null);
+        => new(DemoUserId, "transfer", 50_000, HammoudiPhone, null, null, null, null);
 
     [Fact]
     public async Task ErrorFaultReturns500AndMovesNothing()
@@ -37,8 +37,8 @@ public class FaultTests(WalletApiFixture fixture)
 
         Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
         Assert.Equal("injected_error", (await response.ReadProblemAsync(Token)).Code());
-        Assert.Equal(DemoSeedBalance, await BalanceAsync(SeedData.DemoUserId));
-        Assert.Equal(HammoudiSeedBalance, await BalanceAsync(HammoudiId));
+        Assert.Equal(DemoSeedBalance, await BalanceAsync(DemoUserId));
+        Assert.Equal(HammoudiSeedBalance, await fixture.AccountBalanceAsync(HammoudiPhone));
         Assert.Equal(HttpStatusCode.NotFound, (await fixture.Client.GetAsync("/transactions/by-key/f-error", Token)).StatusCode);
     }
 
@@ -56,7 +56,7 @@ public class FaultTests(WalletApiFixture fixture)
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         Assert.True(watch.ElapsedMilliseconds >= 300, $"The slow fault answered after {watch.ElapsedMilliseconds} ms.");
-        Assert.Equal(249_000, await BalanceAsync(SeedData.DemoUserId));
+        Assert.Equal(699_000, await BalanceAsync(DemoUserId));
     }
 
     [Fact]
@@ -70,8 +70,8 @@ public class FaultTests(WalletApiFixture fixture)
 
         Assert.Equal(HttpStatusCode.GatewayTimeout, response.StatusCode);
         Assert.Equal("injected_timeout", (await response.ReadProblemAsync(Token)).Code());
-        Assert.Equal(DemoSeedBalance, await BalanceAsync(SeedData.DemoUserId));
-        Assert.Equal(HammoudiSeedBalance, await BalanceAsync(HammoudiId));
+        Assert.Equal(DemoSeedBalance, await BalanceAsync(DemoUserId));
+        Assert.Equal(HammoudiSeedBalance, await fixture.AccountBalanceAsync(HammoudiPhone));
 
         var lookup = await fixture.Client.GetAsync("/transactions/by-key/f-before", Token);
         Assert.Equal(HttpStatusCode.NotFound, lookup.StatusCode);
@@ -96,9 +96,9 @@ public class FaultTests(WalletApiFixture fixture)
         var lookup = await fixture.Client.GetFromJsonAsync<TransactionResponse>("/transactions/by-key/f-after", Token);
         Assert.NotNull(lookup);
         Assert.Equal("done", lookup.Status);
-        Assert.Equal(249_000, lookup.BalanceAfterIqd);
-        Assert.Equal(249_000, await BalanceAsync(SeedData.DemoUserId));
-        Assert.Equal(130_000, await BalanceAsync(HammoudiId));
+        Assert.Equal(699_000, lookup.BalanceAfterIqd);
+        Assert.Equal(699_000, await BalanceAsync(DemoUserId));
+        Assert.Equal(HammoudiSeedBalance + 50_000, await fixture.AccountBalanceAsync(HammoudiPhone));
 
         await SetFaultAsync(new FaultRequest("none", null));
     }
@@ -119,7 +119,7 @@ public class FaultTests(WalletApiFixture fixture)
         // The retry reuses the key and goes through.
         var retry = await PostAsync(fixture.Client, "f-once", SendFiftyThousandToHammoudi);
         Assert.Equal(HttpStatusCode.Created, retry.StatusCode);
-        Assert.Equal(249_000, await BalanceAsync(SeedData.DemoUserId));
+        Assert.Equal(699_000, await BalanceAsync(DemoUserId));
     }
 
     [Fact]

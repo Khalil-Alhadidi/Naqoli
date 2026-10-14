@@ -1,14 +1,15 @@
 using System.Net;
 using System.Net.Http.Json;
 using Wallet.MockApi.Contracts;
-using Wallet.MockApi.Data;
 
 namespace Agent.Core.Tests.Wallet;
 
 [Collection(WalletApiCollection.Name)]
 public class QuoteTests(WalletApiFixture fixture)
 {
-    private const string HammoudiPhone = "07700001004";
+    private const string HammoudiPhone = SeedFacts.HammoudiPhone;
+    private const int DemoUserId = SeedFacts.DemoUserId;
+    private const long DemoBalance = SeedFacts.DemoBalance;
 
     private static CancellationToken Token => TestContext.Current.CancellationToken;
 
@@ -21,7 +22,7 @@ public class QuoteTests(WalletApiFixture fixture)
         Assert.SkipUnless(fixture.DatabaseAvailable, fixture.SkipReason);
         await fixture.ResetAsync();
 
-        var response = await fixture.Client.PostAsJsonAsync("/quotes", Transfer(SeedData.DemoUserId, 50_000, HammoudiPhone), Token);
+        var response = await fixture.Client.PostAsJsonAsync("/quotes", Transfer(DemoUserId, 50_000, HammoudiPhone), Token);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var quote = await response.Content.ReadFromJsonAsync<QuoteResponse>(Token);
@@ -30,16 +31,16 @@ public class QuoteTests(WalletApiFixture fixture)
         Assert.Equal(50_000, quote.AmountIqd);
         Assert.Equal(1_000, quote.FeeIqd);
         Assert.Equal(51_000, quote.TotalIqd);
-        Assert.Equal(300_000, quote.BalanceBeforeIqd);
-        Assert.Equal(249_000, quote.BalanceAfterIqd);
+        Assert.Equal(DemoBalance, quote.BalanceBeforeIqd);
+        Assert.Equal(699_000, quote.BalanceAfterIqd);
         Assert.True(quote.Sufficient);
         Assert.False(quote.PinRequired);
         Assert.Equal(HammoudiPhone, quote.RecipientPhone);
-        Assert.Equal(SeedStrings.User4RegisteredName, quote.RecipientName);
+        Assert.Equal(SeedFacts.Account(HammoudiPhone).RegisteredName, quote.RecipientName);
 
         // A quote moves no money.
-        var balance = await fixture.Client.GetFromJsonAsync<BalanceResponse>($"/users/{SeedData.DemoUserId}/balance", Token);
-        Assert.Equal(300_000, balance!.BalanceIqd);
+        var balance = await fixture.Client.GetFromJsonAsync<BalanceResponse>($"/users/{DemoUserId}/balance", Token);
+        Assert.Equal(DemoBalance, balance!.BalanceIqd);
     }
 
     [Fact]
@@ -48,7 +49,7 @@ public class QuoteTests(WalletApiFixture fixture)
         Assert.SkipUnless(fixture.DatabaseAvailable, fixture.SkipReason);
         await fixture.ResetAsync();
 
-        var response = await fixture.Client.PostAsJsonAsync("/quotes", Transfer(2, 1_500_000, toAccountId: 1), Token);
+        var response = await fixture.Client.PostAsJsonAsync("/quotes", Transfer(SeedFacts.TightUserId, 1_500_000, toAccountId: SeedFacts.DemoAccountId), Token);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var quote = await response.Content.ReadFromJsonAsync<QuoteResponse>(Token);
@@ -58,7 +59,7 @@ public class QuoteTests(WalletApiFixture fixture)
 
         // Quotes report a shortfall but never refuse on funds; only execute does.
         Assert.False(quote.Sufficient);
-        Assert.Equal(1_250_000 - 1_501_000, quote.BalanceAfterIqd);
+        Assert.Equal(18_500 - 1_501_000, quote.BalanceAfterIqd);
     }
 
     [Fact]
@@ -68,24 +69,24 @@ public class QuoteTests(WalletApiFixture fixture)
         await fixture.ResetAsync();
 
         var full = await fixture.Client.PostAsJsonAsync(
-            "/quotes", new PaymentRequest(SeedData.DemoUserId, "bill", null, null, null, 1, null, null), Token);
+            "/quotes", new PaymentRequest(DemoUserId, "bill", null, null, null, 1, null, null), Token);
 
         Assert.Equal(HttpStatusCode.OK, full.StatusCode);
         var quote = await full.Content.ReadFromJsonAsync<QuoteResponse>(Token);
         Assert.NotNull(quote);
         Assert.Equal("bill", quote.Type);
-        Assert.Equal(45_000, quote.AmountIqd);
+        Assert.Equal(43_750, quote.AmountIqd);
         Assert.Equal(500, quote.FeeIqd);
-        Assert.Equal(45_500, quote.TotalIqd);
+        Assert.Equal(44_250, quote.TotalIqd);
         Assert.Equal(1, quote.BillAccountId);
 
         var partial = await fixture.Client.PostAsJsonAsync(
-            "/quotes", new PaymentRequest(SeedData.DemoUserId, "bill", 20_000, null, null, 1, null, null), Token);
+            "/quotes", new PaymentRequest(DemoUserId, "bill", 20_000, null, null, 1, null, null), Token);
 
         Assert.Equal(HttpStatusCode.UnprocessableEntity, partial.StatusCode);
         var problem = await partial.ReadProblemAsync(Token);
         Assert.Equal("bills_paid_in_full", problem.Code());
-        Assert.Equal(45_000, problem.Long("amountDueIqd"));
+        Assert.Equal(43_750, problem.Long("amountDueIqd"));
     }
 
     [Fact]
@@ -94,8 +95,9 @@ public class QuoteTests(WalletApiFixture fixture)
         Assert.SkipUnless(fixture.DatabaseAvailable, fixture.SkipReason);
         await fixture.ResetAsync();
 
+        // U2's bill account 5 (BZ1) has nothing due.
         var response = await fixture.Client.PostAsJsonAsync(
-            "/quotes", new PaymentRequest(SeedData.DemoUserId, "bill", null, null, null, 4, null, null), Token);
+            "/quotes", new PaymentRequest(SeedFacts.TightUserId, "bill", null, null, null, 5, null, null), Token);
 
         Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
         Assert.Equal("nothing_due", (await response.ReadProblemAsync(Token)).Code());
@@ -108,7 +110,7 @@ public class QuoteTests(WalletApiFixture fixture)
         await fixture.ResetAsync();
 
         var response = await fixture.Client.PostAsJsonAsync(
-            "/quotes", new PaymentRequest(SeedData.DemoUserId, "purchase", null, null, null, null, 1, null), Token);
+            "/quotes", new PaymentRequest(DemoUserId, "purchase", null, null, null, null, 1, null), Token);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var quote = await response.Content.ReadFromJsonAsync<QuoteResponse>(Token);
@@ -117,7 +119,7 @@ public class QuoteTests(WalletApiFixture fixture)
         Assert.Equal(5_000, quote.AmountIqd);
         Assert.Equal(0, quote.FeeIqd);
         Assert.Equal(5_000, quote.TotalIqd);
-        Assert.Equal(295_000, quote.BalanceAfterIqd);
+        Assert.Equal(745_000, quote.BalanceAfterIqd);
         Assert.Equal(1, quote.ProductId);
     }
 
@@ -127,7 +129,7 @@ public class QuoteTests(WalletApiFixture fixture)
         Assert.SkipUnless(fixture.DatabaseAvailable, fixture.SkipReason);
         await fixture.ResetAsync();
 
-        var response = await fixture.Client.PostAsJsonAsync("/quotes", Transfer(SeedData.DemoUserId, 10_000, "07700009999"), Token);
+        var response = await fixture.Client.PostAsJsonAsync("/quotes", Transfer(DemoUserId, 10_000, "07805559999"), Token);
 
         Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
         Assert.Equal("unknown_recipient", (await response.ReadProblemAsync(Token)).Code());
@@ -139,7 +141,7 @@ public class QuoteTests(WalletApiFixture fixture)
         Assert.SkipUnless(fixture.DatabaseAvailable, fixture.SkipReason);
         await fixture.ResetAsync();
 
-        var response = await fixture.Client.PostAsJsonAsync("/quotes", Transfer(SeedData.DemoUserId, 10_000, "07700001001"), Token);
+        var response = await fixture.Client.PostAsJsonAsync("/quotes", Transfer(DemoUserId, 10_000, SeedFacts.DemoPhone), Token);
 
         Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
         Assert.Equal("same_account", (await response.ReadProblemAsync(Token)).Code());

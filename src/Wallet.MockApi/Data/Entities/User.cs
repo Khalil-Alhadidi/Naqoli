@@ -5,6 +5,9 @@ public class User
 {
     public int Id { get; set; }
 
+    /// <summary>The seed id (<c>U1</c>).</summary>
+    public required string Code { get; set; }
+
     public required string Phone { get; set; }
 
     /// <summary>The registered name, in Arabic.</summary>
@@ -16,6 +19,9 @@ public class User
     public int PinFailedAttempts { get; set; }
 
     public bool PinLocked { get; set; }
+
+    /// <summary>Whether the user has agreed to the agent acting for them.</summary>
+    public bool ConsentGiven { get; set; }
 
     public List<Account> Accounts { get; set; } = new();
 

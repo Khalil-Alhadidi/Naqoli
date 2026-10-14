@@ -1,5 +1,6 @@
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using Wallet.MockApi;
 using Wallet.MockApi.Data;
 using Wallet.MockApi.Data.Seed;
@@ -35,6 +36,8 @@ builder.Services.AddOptions<WalletOptions>()
     .PostConfigure(o => o.AdminKey = string.IsNullOrEmpty(o.AdminKey) ? null : o.AdminKey)
     .ValidateDataAnnotations()
     .ValidateOnStart();
+// The seed files, read and validated once; a missing or invalid file fails the start (see below).
+builder.Services.AddSingleton(sp => SeedSet.Load(sp.GetRequiredService<IOptions<WalletOptions>>().Value.SeedDirectory));
 builder.Services.AddSingleton<FeeCalculator>();
 builder.Services.AddScoped<PaymentValidator>();
 builder.Services.AddScoped<TransactionService>();
@@ -50,8 +53,9 @@ if (args is ["migrate", ..])
     {
         using var scope = app.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<WalletDbContext>();
+        var seed = scope.ServiceProvider.GetRequiredService<SeedSet>();
         db.Database.Migrate();
-        SeedData.Apply(db);
+        SeedData.Apply(db, seed, TimeProvider.System.GetUtcNow());
         Console.WriteLine(
             $"Database ready: {db.Users.Count()} users, {db.Accounts.Count()} accounts, "
             + $"{db.Contacts.Count()} contacts, {db.Transactions.Count()} transactions");
@@ -62,7 +66,15 @@ if (args is ["migrate", ..])
         Console.Error.WriteLine($"Cannot reach SQL Server using connection string '{WalletConnection.ConnectionStringName}': {ex.Message} See README, section Database.");
         return 1;
     }
+    catch (SeedException ex)
+    {
+        Console.Error.WriteLine(ex.Message);
+        return 1;
+    }
 }
+
+// Read the seed files now, so a missing or invalid file stops the start with its message, not the first reset.
+app.Services.GetRequiredService<SeedSet>();
 
 // Configure the HTTP request pipeline.
 // Errors become RFC 7807 problem details. The API serves plain HTTP on loopback, so there is no HTTPS redirection.

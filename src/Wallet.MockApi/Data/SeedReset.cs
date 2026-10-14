@@ -1,22 +1,25 @@
 using Microsoft.EntityFrameworkCore;
 using Wallet.MockApi.Data.Entities;
+using Wallet.MockApi.Data.Seed;
 
 namespace Wallet.MockApi.Data;
 
-/// <summary>Returns the wallet database to the frozen seed, with identity values starting again at 1.</summary>
+/// <summary>Returns the wallet database to the seed, with identity values starting again at 1.</summary>
 public static class SeedReset
 {
     /// <summary>
     /// In one database transaction: deletes every row in dependency order, reseeds each identity column,
-    /// then applies <see cref="SeedData"/>. Pure data; no HTTP.
+    /// then applies <see cref="SeedData"/> built from <paramref name="seed"/>, with history dated from <paramref name="now"/>.
+    /// Pure data; no HTTP.
     /// </summary>
     /// <remarks>
     /// <see cref="SeedData.Apply"/> stays synchronous (it is shared with <c>migrate</c>) and runs inside this
     /// transaction; its PIN hashes are computed once per process, so it does little more than insert rows.
     /// </remarks>
-    public static async Task ResetAsync(WalletDbContext db, CancellationToken cancellationToken)
+    public static async Task ResetAsync(WalletDbContext db, SeedSet seed, DateTimeOffset now, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(db);
+        ArgumentNullException.ThrowIfNull(seed);
 
         await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
 
@@ -39,7 +42,7 @@ public static class SeedReset
             await ReseedAsync(db, entity, cancellationToken);
 
         db.ChangeTracker.Clear();
-        SeedData.Apply(db);
+        SeedData.Apply(db, seed, now);
 
         await transaction.CommitAsync(cancellationToken);
     }

@@ -1,173 +1,242 @@
-using System.Security.Cryptography;
-using System.Text;
-using System.Text.Encodings.Web;
-using System.Text.Json;
+using System.Collections.Concurrent;
+using System.Globalization;
 using Microsoft.EntityFrameworkCore;
 using Wallet.MockApi.Data.Entities;
+using Wallet.MockApi.Data.Seed;
 using Wallet.MockApi.Services;
 
 namespace Wallet.MockApi.Data;
 
 /// <summary>
-/// The frozen synthetic seed of the mock wallet: users, accounts, contacts, aliases, billers, bill accounts,
-/// the store catalogue and three months of history. Every name, number and code is invented.
-/// Any change alters <see cref="ComputeHash"/> and fails the seed-hash test on purpose
-/// (see <c>data/seed/README.md</c>).
+/// Builds the wallet's rows from the exported test-set seed (<see cref="SeedSet"/>) and inserts them. Every name,
+/// number and code comes from the seed files; history is dated relative to "now" in Iraq time.
 /// </summary>
 public static class SeedData
 {
-    /// <summary>The demo user the agent acts for (Ahmed).</summary>
-    public const int DemoUserId = 1;
+    /// <summary>Iraq time: UTC+3, no daylight saving.</summary>
+    public static readonly TimeSpan IraqOffset = TimeSpan.FromHours(3);
 
-    /// <summary>The fixed "now" of the seed. History dates are counted back from it.</summary>
-    public static readonly DateTimeOffset Anchor = new(2026, 10, 14, 9, 0, 0, TimeSpan.FromHours(3));
+    private const string HistoryTimeFormat = "HH:mm";
+    private const string SeedKeyPrefix = "seed-";
+    private const int OrderCodeDigits = 12;
 
-    private const string PinPlaceholder = "***";
+    // PBKDF2 is slow on purpose, so each distinct seed PIN is hashed once per process and the hash is shared by
+    // every Build: seeding and resets stop paying one hash per user each time.
+    private static readonly ConcurrentDictionary<string, string> PinHashes = new(StringComparer.Ordinal);
 
-    // The fees of the seeded history, frozen with the seed. They are deliberately not read from WalletOptions,
-    // so a change to the configured fees never rewrites the frozen rows (or the seed hash).
-    private const long SeedTransferFeeIqd = 1000;
-    private const long SeedBillFeeIqd = 500;
-    private const long SeedPurchaseFeeIqd = 0;
-
-    private const string SeedPin = "1234";
-    private const int SeedUserCount = 12;
-
-    // PBKDF2 is slow on purpose, so the twelve seed PIN hashes are computed once per process, each with its own salt,
-    // and shared by every Build: seeding, resets and the accessors below stop paying 12 hashes each.
-    private static readonly Lazy<string[]> SeedPinHashes = new(
-        () => Enumerable.Range(0, SeedUserCount).Select(_ => PinHasher.Hash(SeedPin)).ToArray());
-
-    private static readonly JsonSerializerOptions HashJsonOptions = new()
-    {
-        WriteIndented = false,
-        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
-    };
-
-    /// <summary>Returns a fresh, untracked graph on every call: users with accounts, contacts, aliases and bill accounts.</summary>
-    public static IReadOnlyList<User> Users() => Build(SeedPinHashes.Value).Users;
-
-    /// <summary>Returns a fresh, untracked list on every call.</summary>
-    public static IReadOnlyList<Biller> Billers() => Build(SeedPinHashes.Value).Billers;
-
-    /// <summary>Returns a fresh, untracked list on every call.</summary>
-    public static IReadOnlyList<Product> Products() => Build(SeedPinHashes.Value).Products;
-
-    /// <summary>The seeded history, in insert order, linked to its users, accounts, bill accounts and products.</summary>
-    public static IReadOnlyList<Transaction> Transactions() => Build(SeedPinHashes.Value).Transactions;
-
-    /// <summary>The seeded store orders, linked to their transactions.</summary>
-    public static IReadOnlyList<Order> Orders() => Build(SeedPinHashes.Value).Orders;
+    /// <summary>The calendar date in Iraq at <paramref name="now"/>.</summary>
+    public static DateOnly TodayIn(DateTimeOffset now) => DateOnly.FromDateTime(now.ToOffset(IraqOffset).DateTime);
 
     /// <summary>
-    /// Adds the seed once. Does nothing if any user already exists. Rows are inserted one at a time,
-    /// users (with accounts) first, then billers, products, contacts, aliases, bill accounts, transactions
-    /// and orders, so identity values are the same on every fresh database. Runs in a database
-    /// transaction unless the caller already opened one.
+    /// The moment <paramref name="daysAgo"/> days before <paramref name="today"/> at <paramref name="time"/>
+    /// (<c>HH:mm</c>), Iraq time.
     /// </summary>
-    public static void Apply(WalletDbContext db)
+    public static DateTimeOffset At(DateOnly today, int daysAgo, string time)
+    {
+        var clock = TimeOnly.ParseExact(time, HistoryTimeFormat, CultureInfo.InvariantCulture);
+        return new DateTimeOffset(today.AddDays(-daysAgo).ToDateTime(clock), IraqOffset);
+    }
+
+    /// <summary>
+    /// The purchase code of a seeded order: <c>9</c> and the digits of the history id, left-padded with zeros to 12
+    /// (<c>H0086</c> gives <c>9000000000086</c>).
+    /// </summary>
+    public static string OrderCodeFor(string historyId)
+    {
+        ArgumentNullException.ThrowIfNull(historyId);
+        return "9" + new string(historyId.Where(char.IsAsciiDigit).ToArray()).PadLeft(OrderCodeDigits, '0');
+    }
+
+    /// <summary>
+    /// Adds the seed once. Does nothing if any user already exists. Rows are inserted one at a time in a fixed
+    /// order (users with their own account, the other accounts, billers, products, contacts, aliases, bill
+    /// accounts, transactions, orders), so identity values are the same on every fresh database. Runs in a
+    /// database transaction unless the caller already opened one.
+    /// </summary>
+    public static void Apply(WalletDbContext db, SeedSet seed, DateTimeOffset now)
     {
         ArgumentNullException.ThrowIfNull(db);
+        ArgumentNullException.ThrowIfNull(seed);
 
         if (db.Users.Any())
             return;
 
-        var seed = Build(SeedPinHashes.Value);
-
-        // Take the rows each user owns off the graph so that adding a user inserts only the user and its accounts.
-        var contacts = seed.Users.SelectMany(u => u.Contacts).ToList();
-        var aliases = seed.Users.SelectMany(u => u.Aliases).ToList();
-        var billAccounts = seed.Users.SelectMany(u => u.BillAccounts).ToList();
-        foreach (var user in seed.Users)
-        {
-            user.Contacts.Clear();
-            user.Aliases.Clear();
-            user.BillAccounts.Clear();
-        }
+        var graph = Build(seed, now);
 
         using var transaction = db.Database.CurrentTransaction is null ? db.Database.BeginTransaction() : null;
 
-        InsertInOrder(db, seed.Users);
-        InsertInOrder(db, seed.Billers);
-        InsertInOrder(db, seed.Products);
-        InsertInOrder(db, contacts);
-        InsertInOrder(db, aliases);
-        InsertInOrder(db, billAccounts);
-        InsertInOrder(db, seed.Transactions);
-        InsertInOrder(db, seed.Orders);
+        // Adding a user inserts its own account with it; the remaining accounts have no user.
+        InsertInOrder(db, graph.Users);
+        InsertInOrder(db, graph.Accounts.Where(a => a.User is null));
+        InsertInOrder(db, graph.Billers);
+        InsertInOrder(db, graph.Products);
+        InsertInOrder(db, graph.Contacts);
+        InsertInOrder(db, graph.Aliases);
+        InsertInOrder(db, graph.BillAccounts);
+        InsertInOrder(db, graph.Transactions);
+        InsertInOrder(db, graph.Orders);
 
         transaction?.Commit();
     }
 
     /// <summary>
-    /// SHA-256 (lower-case hex) of a canonical JSON form of every seed row, in seed order.
-    /// PIN hashes are salted, so the hash carries a placeholder instead.
+    /// Maps the seed files to a fresh, untracked graph of entities, each list in insert order. History rows are
+    /// dated from the Iraq date of <paramref name="now"/>.
     /// </summary>
-    public static string ComputeHash()
+    public static SeedGraph Build(SeedSet seed, DateTimeOffset now)
     {
-        var seed = Build(Enumerable.Repeat(PinPlaceholder, SeedUserCount).ToArray());
+        ArgumentNullException.ThrowIfNull(seed);
 
-        var canonical = new
+        var seedAccounts = seed.Accounts.ToDictionary(a => a.Number, StringComparer.Ordinal);
+
+        // Users, each with its own account.
+        List<User> users = [];
+        List<Account> accounts = [];
+        foreach (var u in seed.Users)
         {
-            users = seed.Users.Select(u => new
+            var user = new User
             {
-                phone = u.Phone,
-                displayName = u.DisplayName,
-                pin = PinPlaceholder,
-                pinFailedAttempts = u.PinFailedAttempts,
-                pinLocked = u.PinLocked,
-                accounts = u.Accounts.Select(a => new { isDefault = a.IsDefault, balanceIqd = a.BalanceIqd }),
-                contacts = u.Contacts.Select(c => new { savedName = c.SavedName, phone = c.Phone }),
-                aliases = u.Aliases.Select(a => new { text = a.Text, targetPhone = a.TargetAccount!.User!.Phone }),
-                billAccounts = u.BillAccounts.Select(b => new
-                {
-                    biller = b.Biller!.Code,
-                    label = b.Label,
-                    accountNumber = b.AccountNumber,
-                    amountDueIqd = b.AmountDueIqd,
-                    dueDate = b.DueDate,
-                }),
-            }),
-            billers = seed.Billers.Select(b => new { code = b.Code, name = b.Name }),
-            products = seed.Products.Select(p => new
-            {
-                provider = p.Provider,
-                type = p.Type.ToString(),
-                name = p.Name,
-                faceValueIqd = p.FaceValueIqd,
-                priceIqd = p.PriceIqd,
-            }),
-            transactions = seed.Transactions.Select(t => new
-            {
-                idempotencyKey = t.IdempotencyKey,
-                reference = t.Reference,
-                user = t.User!.Phone,
-                from = t.FromAccount!.User!.Phone,
-                type = t.Type.ToString(),
-                status = t.Status.ToString(),
-                errorCode = t.ErrorCode,
-                amountIqd = t.AmountIqd,
-                feeIqd = t.FeeIqd,
-                totalIqd = t.TotalIqd,
-                to = t.ToAccount?.User?.Phone,
-                billAccount = t.BillAccount?.AccountNumber,
-                product = t.Product?.Name,
-                createdAt = t.CreatedAt,
-                completedAt = t.CompletedAt,
-            }),
-            orders = seed.Orders.Select(o => new
-            {
-                user = o.User!.Phone,
-                product = o.Product!.Name,
-                transaction = o.Transaction!.IdempotencyKey,
-                code = o.Code,
-                createdAt = o.CreatedAt,
-            }),
-        };
+                Code = u.Id,
+                Phone = u.Number,
+                DisplayName = u.Name,
+                PinHash = PinHashes.GetOrAdd(u.Pin, PinHasher.Hash),
+                ConsentGiven = u.ConsentGiven,
+            };
+            var account = NewAccount(seedAccounts[u.Number]);
+            account.User = user;
+            account.IsDefault = true;
+            user.Accounts.Add(account);
+            users.Add(user);
+            accounts.Add(account);
+        }
 
-        var json = JsonSerializer.Serialize(canonical, HashJsonOptions);
-        return Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(json)));
+        // The other accounts (behind contacts and other numbers), in file order.
+        var userPhones = users.Select(u => u.Phone).ToHashSet(StringComparer.Ordinal);
+        accounts.AddRange(seed.Accounts.Where(a => !userPhones.Contains(a.Number)).Select(NewAccount));
+
+        var accountsByPhone = accounts.ToDictionary(a => a.Phone, StringComparer.Ordinal);
+        var usersByCode = users.ToDictionary(u => u.Code, StringComparer.Ordinal);
+
+        var billers = seed.Billers
+            .Select(b => new Biller { Code = b.Code, Name = b.NameAr, NameEn = b.NameEn })
+            .ToList();
+        var billersByCode = billers.ToDictionary(b => b.Code, StringComparer.Ordinal);
+
+        var products = seed.Products
+            .Select(p => new Product
+            {
+                Code = p.Id,
+                Provider = p.Provider,
+                ProviderNameEn = p.ProviderNameEn,
+                ProviderNameAr = p.ProviderNameAr,
+                AlsoCalled = p.AlsoCalled,
+                Type = ProductTypeOf(p.Type),
+                FaceValueIqd = p.FaceValue,
+                PriceIqd = p.Price,
+            })
+            .ToList();
+        var productsByCode = products.ToDictionary(p => p.Code, StringComparer.Ordinal);
+
+        var contacts = seed.Contacts
+            .Select(c => new Contact { Code = c.Id, Owner = usersByCode[c.User], SavedName = c.SavedName, Phone = c.Number })
+            .ToList();
+
+        // One alias, one account (D15): an alias points at the account behind its contact's number.
+        List<Alias> aliases = [];
+        foreach (var c in seed.Contacts)
+        {
+            if (c.Alias is { } text)
+                aliases.Add(new Alias { Owner = usersByCode[c.User], Text = text, TargetAccount = accountsByPhone[c.Number] });
+        }
+
+        var billAccounts = seed.Bills
+            .Select(b => new BillAccount
+            {
+                Code = b.Id,
+                User = usersByCode[b.User],
+                Biller = billersByCode[b.Biller],
+                Label = b.Label,
+                AccountNumber = b.SubscriberNumber,
+                AmountDueIqd = b.AmountDue,
+            })
+            .ToList();
+        var billAccountsByCode = billAccounts.ToDictionary(b => b.Code, StringComparer.Ordinal);
+
+        // History in chronological order: oldest day first, then earliest time; ties keep file order (stable sort).
+        var today = TodayIn(now);
+        var history = seed.History
+            .OrderByDescending(h => h.DaysAgo)
+            .ThenBy(h => TimeOnly.ParseExact(h.Time, HistoryTimeFormat, CultureInfo.InvariantCulture))
+            .ToList();
+
+        List<Transaction> transactions = [];
+        List<Order> orders = [];
+        foreach (var row in history)
+        {
+            var payer = usersByCode[row.User];
+            var at = At(today, row.DaysAgo, row.Time);
+
+            // The fee is the file's, not WalletOptions', so a change to the configured fees never rewrites history.
+            var transaction = new Transaction
+            {
+                IdempotencyKey = SeedKeyPrefix + row.Id,
+                Reference = $"ZC-{transactions.Count + 1:D10}",
+                User = payer,
+                FromAccount = payer.Accounts.Single(a => a.IsDefault),
+                Type = TransactionTypeOf(row.Type),
+                Status = TransactionStatus.Done,
+                AmountIqd = row.Amount,
+                FeeIqd = row.Fee,
+                TotalIqd = row.Amount + row.Fee,
+                ToAccount = row.ToNumber is null ? null : accountsByPhone[row.ToNumber],
+                BillAccount = row.Bill is null ? null : billAccountsByCode[row.Bill],
+                Product = row.Product is null ? null : productsByCode[row.Product],
+                CreatedAt = at,
+                CompletedAt = at,
+            };
+            transactions.Add(transaction);
+
+            if (transaction.Type == TransactionType.Purchase)
+            {
+                orders.Add(new Order
+                {
+                    User = payer,
+                    Product = transaction.Product,
+                    Transaction = transaction,
+                    Code = OrderCodeFor(row.Id),
+                    CreatedAt = at,
+                });
+            }
+        }
+
+        return new SeedGraph(users, accounts, billers, products, contacts, aliases, billAccounts, transactions, orders);
     }
+
+    private static Account NewAccount(SeedAccount account) => new()
+    {
+        Code = account.Id,
+        Phone = account.Number,
+        RegisteredName = account.RegisteredName,
+        Status = account.Status switch
+        {
+            "active" => AccountStatus.Active,
+            "closed" => AccountStatus.Closed,
+            _ => throw new SeedException($"{SeedFiles.Accounts}: account {account.Number} has status {account.Status}"),
+        },
+        BalanceIqd = account.Balance,
+    };
+
+    private static ProductType ProductTypeOf(string type) => type switch
+    {
+        "credit" => ProductType.Credit,
+        "internet" => ProductType.Internet,
+        _ => throw new SeedException($"{SeedFiles.Store}: unknown product type {type}"),
+    };
+
+    private static TransactionType TransactionTypeOf(string type)
+        => TransactionNames.TryParse(type, out var parsed)
+            ? parsed
+            : throw new SeedException($"{SeedFiles.History}: unknown transaction type {type}");
 
     private static void InsertInOrder<T>(DbContext db, IEnumerable<T> rows) where T : class
     {
@@ -177,188 +246,25 @@ public static class SeedData
             db.SaveChanges();
         }
     }
-
-    private sealed record SeedGraph(
-        List<User> Users,
-        List<Biller> Billers,
-        List<Product> Products,
-        List<Transaction> Transactions,
-        List<Order> Orders);
-
-    private static SeedGraph Build(IReadOnlyList<string> pinHashes)
-    {
-        var nextPin = 0;
-        string PinHash() => pinHashes[nextPin++];
-
-        // Users 1 to 12, in identity order. Display names are the registered names.
-        List<User> users =
-        [
-            NewUser("07700001001", SeedStrings.User1RegisteredName, 300000, PinHash),
-            NewUser("07700001002", SeedStrings.User2RegisteredName, 1250000, PinHash),
-            NewUser("07700001003", "عمر سعد محمود", 0, PinHash),
-            NewUser("07700001004", SeedStrings.User4RegisteredName, 80000, PinHash),
-            NewUser("07700001005", "علي حسن كاظم", 45000, PinHash),
-            NewUser("07700001006", "علي كريم عبود", 120000, PinHash),
-            NewUser("07700001007", "حسن علي رشيد", 10000, PinHash),
-            NewUser("07700001008", "حسين علي رشيد", 10000, PinHash),
-            NewUser("07700001009", "فاطمة جاسم محمد", 500000, PinHash),
-            NewUser("07700001010", "نور صباح فاضل", 25000, PinHash),
-            NewUser("07700001011", "زينب طالب حميد", 60000, PinHash),
-            NewUser("07700001012", "كاظم جبار علي", 15000, PinHash),
-        ];
-
-        User UserNo(int id) => users[id - 1];
-        Account AccountOf(int id) => users[id - 1].Accounts.Single(a => a.IsDefault);
-
-        var ahmed = UserNo(1);
-        var sara = UserNo(2);
-
-        // Contacts. User 1 has a planted duplicate (two contacts saved as Ali) and a planted near name (Hasan, Husain).
-        AddContacts(ahmed,
-            (SeedStrings.SavedNameHammoudi, 4),
-            (SeedStrings.SavedNameAli, 5),
-            (SeedStrings.SavedNameAli, 6),
-            ("حسن", 7),
-            ("حسين", 8),
-            ("ماما", 9),
-            ("نور", 10),
-            ("ام محمد", 11),
-            (SeedStrings.SavedNameAbuAli, 12),
-            ("سارة", 2));
-        AddContacts(sara,
-            ("احمد", 1),
-            ("عمر", 3));
-
-        void AddContacts(User owner, params (string SavedName, int UserId)[] entries)
-        {
-            foreach (var (savedName, userId) in entries)
-                owner.Contacts.Add(new Contact { Owner = owner, SavedName = savedName, Phone = UserNo(userId).Phone });
-        }
-
-        // Aliases of user 1: one alias, one account (D15).
-        foreach (var (text, userId) in new[] { (SeedStrings.AliasBrother, 4), (SeedStrings.AliasHome, 9), ("الدكان", 12) })
-            ahmed.Aliases.Add(new Alias { Owner = ahmed, Text = text, TargetAccount = AccountOf(userId) });
-
-        // Billers.
-        var electricity = new Biller { Code = "electricity", Name = SeedStrings.BillerElectricity };
-        var water = new Biller { Code = "water", Name = "الماء" };
-        var internet = new Biller { Code = "internet", Name = "نور نت" };
-        List<Biller> billers = [electricity, water, internet];
-
-        // Bill accounts.
-        var ahmedElectricityHome = NewBill(ahmed, electricity, SeedStrings.BillLabelHome, "10000000001", 45000, new DateOnly(2026, 10, 25));
-        NewBill(ahmed, electricity, "الدكان", "10000000002", 120000, new DateOnly(2026, 10, 20));
-        var ahmedWaterHome = NewBill(ahmed, water, SeedStrings.BillLabelHome, "20000000001", 15000, null);
-        var ahmedInternetHome = NewBill(ahmed, internet, SeedStrings.BillLabelHome, "30000000001", 0, null);
-        NewBill(sara, electricity, SeedStrings.BillLabelHome, "10000000003", 60000, null);
-
-        // Store catalogue: Provider, Type, Name, FaceValue, Price.
-        List<Product> products =
-        [
-            new() { Provider = "Zain", Type = ProductType.Credit, Name = "رصيد زين ٥٠٠٠", FaceValueIqd = 5000, PriceIqd = 5000 },
-            new() { Provider = "Zain", Type = ProductType.Credit, Name = "رصيد زين ١٠٠٠٠", FaceValueIqd = 10000, PriceIqd = 10000 },
-            new() { Provider = "Zain", Type = ProductType.Internet, Name = "انترنت زين ١٠ جيجا", FaceValueIqd = 0, PriceIqd = 15000 },
-            new() { Provider = "Asiacell", Type = ProductType.Credit, Name = "رصيد آسياسيل ٥٠٠٠", FaceValueIqd = 5000, PriceIqd = 5000 },
-            new() { Provider = "Asiacell", Type = ProductType.Credit, Name = "رصيد آسياسيل ١٠٠٠٠", FaceValueIqd = 10000, PriceIqd = 10000 },
-            new() { Provider = "Asiacell", Type = ProductType.Internet, Name = SeedStrings.ProductAsiacellInternet10Gb, FaceValueIqd = 0, PriceIqd = 15000 },
-            new() { Provider = "Korek", Type = ProductType.Credit, Name = "رصيد كورك ٥٠٠٠", FaceValueIqd = 5000, PriceIqd = 5000 },
-            new() { Provider = "Korek", Type = ProductType.Internet, Name = "انترنت كورك ١٠ جيجا", FaceValueIqd = 0, PriceIqd = 15000 },
-        ];
-        var zainCredit5000 = products[0];
-        var asiacellInternet = products[5];
-
-        // History. Balances above are frozen values; they are not recomputed from these rows.
-        List<Transaction> transactions = [];
-        List<Order> orders = [];
-        var keyCounters = new Dictionary<User, int>();
-
-        Transaction History(User payer, TransactionType type, long amountIqd, int daysAgo,
-            Account? to = null, BillAccount? bill = null, Product? product = null)
-        {
-            keyCounters[payer] = keyCounters.GetValueOrDefault(payer) + 1;
-            var fee = type switch
-            {
-                TransactionType.Transfer => SeedTransferFeeIqd,
-                TransactionType.Bill => SeedBillFeeIqd,
-                _ => SeedPurchaseFeeIqd,
-            };
-            var createdAt = Anchor.AddDays(-daysAgo);
-            var row = new Transaction
-            {
-                IdempotencyKey = $"seed-u{users.IndexOf(payer) + 1}-{keyCounters[payer]:D3}",
-                Reference = $"ZC-{transactions.Count + 1:D10}",
-                User = payer,
-                FromAccount = payer.Accounts.Single(a => a.IsDefault),
-                Type = type,
-                Status = TransactionStatus.Done,
-                AmountIqd = amountIqd,
-                FeeIqd = fee,
-                TotalIqd = amountIqd + fee,
-                ToAccount = to,
-                BillAccount = bill,
-                Product = product,
-                CreatedAt = createdAt,
-                CompletedAt = createdAt,
-            };
-            transactions.Add(row);
-            return row;
-        }
-
-        void Purchase(User payer, Product product, int daysAgo, string code)
-        {
-            var row = History(payer, TransactionType.Purchase, product.PriceIqd, daysAgo, product: product);
-            orders.Add(new Order { User = payer, Product = product, Transaction = row, Code = code, CreatedAt = row.CreatedAt });
-        }
-
-        // User 1: transfers.
-        History(ahmed, TransactionType.Transfer, 50000, 90, to: AccountOf(4));
-        History(ahmed, TransactionType.Transfer, 50000, 60, to: AccountOf(4));
-        History(ahmed, TransactionType.Transfer, 50000, 30, to: AccountOf(4));
-        History(ahmed, TransactionType.Transfer, 25000, 7, to: AccountOf(4));
-        History(ahmed, TransactionType.Transfer, 20000, 45, to: AccountOf(5));
-        History(ahmed, TransactionType.Transfer, 30000, 20, to: AccountOf(6));
-        History(ahmed, TransactionType.Transfer, 100000, 75, to: AccountOf(9));
-        History(ahmed, TransactionType.Transfer, 100000, 40, to: AccountOf(9));
-        History(ahmed, TransactionType.Transfer, 100000, 10, to: AccountOf(9));
-        History(ahmed, TransactionType.Transfer, 15000, 3, to: AccountOf(10));
-        History(ahmed, TransactionType.Transfer, 10000, 50, to: AccountOf(11));
-
-        // User 1: bills.
-        History(ahmed, TransactionType.Bill, 42000, 80, bill: ahmedElectricityHome);
-        History(ahmed, TransactionType.Bill, 44000, 50, bill: ahmedElectricityHome);
-        History(ahmed, TransactionType.Bill, 46000, 18, bill: ahmedElectricityHome);
-        History(ahmed, TransactionType.Bill, 15000, 48, bill: ahmedWaterHome);
-        History(ahmed, TransactionType.Bill, 25000, 35, bill: ahmedInternetHome);
-
-        // User 1: purchases, each with an order and its code.
-        Purchase(ahmed, zainCredit5000, 28, "1234567890001");
-        Purchase(ahmed, asiacellInternet, 12, "1234567890002");
-
-        // User 2: one transfer to user 1.
-        History(sara, TransactionType.Transfer, 200000, 15, to: AccountOf(1));
-
-        return new SeedGraph(users, billers, products, transactions, orders);
-    }
-
-    private static User NewUser(string phone, string displayName, long balanceIqd, Func<string> pinHash)
-    {
-        var user = new User { Phone = phone, DisplayName = displayName, PinHash = pinHash() };
-        user.Accounts.Add(new Account { User = user, IsDefault = true, BalanceIqd = balanceIqd });
-        return user;
-    }
-
-    private static BillAccount NewBill(User user, Biller biller, string label, string accountNumber, long amountDueIqd, DateOnly? dueDate)
-    {
-        var bill = new BillAccount
-        {
-            User = user,
-            Biller = biller,
-            Label = label,
-            AccountNumber = accountNumber,
-            AmountDueIqd = amountDueIqd,
-            DueDate = dueDate,
-        };
-        user.BillAccounts.Add(bill);
-        return bill;
-    }
 }
+
+/// <summary>The entities built from the seed files, each list in insert order.</summary>
+/// <param name="Users">The users; each holds its own account in <see cref="User.Accounts"/>.</param>
+/// <param name="Accounts">Every account: the users' own accounts first, then the others in file order.</param>
+/// <param name="Billers">The billers, in file order.</param>
+/// <param name="Products">The store catalogue, in file order.</param>
+/// <param name="Contacts">The contacts, in file order.</param>
+/// <param name="Aliases">One alias per contact that has one, in contact order.</param>
+/// <param name="BillAccounts">The bill accounts, in file order.</param>
+/// <param name="Transactions">The history, oldest first.</param>
+/// <param name="Orders">One order per purchase, in transaction order.</param>
+public sealed record SeedGraph(
+    List<User> Users,
+    List<Account> Accounts,
+    List<Biller> Billers,
+    List<Product> Products,
+    List<Contact> Contacts,
+    List<Alias> Aliases,
+    List<BillAccount> BillAccounts,
+    List<Transaction> Transactions,
+    List<Order> Orders);

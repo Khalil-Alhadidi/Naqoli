@@ -5,13 +5,22 @@ public class Product
 {
     public int Id { get; set; }
 
+    /// <summary>The seed id (<c>ZN-CR-5</c>).</summary>
+    public required string Code { get; set; }
+
+    /// <summary>The lower-case provider code: <c>zain</c>, <c>asiacell</c> or <c>korek</c>.</summary>
     public required string Provider { get; set; }
+
+    public required string ProviderNameEn { get; set; }
+
+    public required string ProviderNameAr { get; set; }
+
+    /// <summary>Another name people use for the product, if any.</summary>
+    public string? AlsoCalled { get; set; }
 
     public ProductType Type { get; set; }
 
-    public required string Name { get; set; }
-
-    /// <summary>The credit value in dinars; zero for internet cards.</summary>
+    /// <summary>The value of the credit or card in dinars.</summary>
     public long FaceValueIqd { get; set; }
 
     /// <summary>The price in dinars. The price always comes from the catalogue.</summary>

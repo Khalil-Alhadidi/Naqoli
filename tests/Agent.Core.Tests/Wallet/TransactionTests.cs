@@ -11,20 +11,28 @@ namespace Agent.Core.Tests.Wallet;
 [Collection(WalletApiCollection.Name)]
 public class TransactionTests(WalletApiFixture fixture)
 {
-    private const string HammoudiPhone = "07700001004";
-    private const int HammoudiId = 4;
+    private const string HammoudiPhone = SeedFacts.HammoudiPhone;
+    private const int DemoUserId = SeedFacts.DemoUserId;
+    private const int DemoAccountId = SeedFacts.DemoAccountId;
+    private const long DemoBalance = SeedFacts.DemoBalance;
+    private const int TraderUserId = SeedFacts.TraderUserId;
+    private const int TightUserId = SeedFacts.TightUserId;
+    private const long TraderBalance = 12_500_000;
+    private const long TightBalance = 18_500;
+    private const long HammoudiBalance = 100_000;
 
-    // The demo user's default account. In the seed, account ids equal user ids.
-    private const int DemoAccountId = 1;
-    private const string SeedPin = "1234";
+    // Any PIN that is not U3's.
+    private const string WrongPin = "0000";
     private const int ConcurrencyRounds = 3;
+
+    private static string TraderPin => SeedFacts.PinOf("U3");
 
     private static CancellationToken Token => TestContext.Current.CancellationToken;
 
     private static PaymentRequest Transfer(int userId, long amount, string? toPhone = null, int? toAccountId = null, string? pin = null)
         => new(userId, "transfer", amount, toPhone, toAccountId, null, null, pin);
 
-    private static PaymentRequest SendFiftyThousandToHammoudi => Transfer(SeedData.DemoUserId, 50_000, HammoudiPhone);
+    private static PaymentRequest SendFiftyThousandToHammoudi => Transfer(DemoUserId, 50_000, HammoudiPhone);
 
     [Fact]
     public async Task MissingKeyIs400()
@@ -40,7 +48,7 @@ public class TransactionTests(WalletApiFixture fixture)
         Assert.Equal(HttpStatusCode.BadRequest, blank.StatusCode);
         Assert.Equal("missing_idempotency_key", (await blank.ReadProblemAsync(Token)).Code());
 
-        Assert.Equal(300_000, await BalanceAsync(SeedData.DemoUserId));
+        Assert.Equal(DemoBalance, await BalanceAsync(DemoUserId));
     }
 
     [Theory]
@@ -56,7 +64,7 @@ public class TransactionTests(WalletApiFixture fixture)
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.Equal("invalid_idempotency_key", (await response.ReadProblemAsync(Token)).Code());
-        Assert.Equal(300_000, await BalanceAsync(SeedData.DemoUserId));
+        Assert.Equal(DemoBalance, await BalanceAsync(DemoUserId));
 
         // By-key applies the same format: a malformed key is simply unknown.
         var lookup = await fixture.Client.GetAsync($"/transactions/by-key/{Uri.EscapeDataString(key)}", Token);
@@ -76,18 +84,18 @@ public class TransactionTests(WalletApiFixture fixture)
         Assert.Equal("/transactions/by-key/t-transfer-1", response.Headers.Location?.OriginalString);
         var body = await response.Content.ReadFromJsonAsync<TransactionResponse>(Token);
         Assert.NotNull(body);
-        Assert.Equal(20, body.TransactionId);
-        Assert.Equal("ZC-0000000020", body.Reference);
+        Assert.Equal(87, body.TransactionId);
+        Assert.Equal("ZC-0000000087", body.Reference);
         Assert.Equal("transfer", body.Type);
         Assert.Equal("done", body.Status);
         Assert.Equal(50_000, body.AmountIqd);
         Assert.Equal(1_000, body.FeeIqd);
         Assert.Equal(51_000, body.TotalIqd);
-        Assert.Equal(249_000, body.BalanceAfterIqd);
+        Assert.Equal(699_000, body.BalanceAfterIqd);
         Assert.Null(body.Code);
 
-        Assert.Equal(249_000, await BalanceAsync(SeedData.DemoUserId));
-        Assert.Equal(130_000, await BalanceAsync(HammoudiId));
+        Assert.Equal(699_000, await BalanceAsync(DemoUserId));
+        Assert.Equal(HammoudiBalance + 50_000, await fixture.AccountBalanceAsync(HammoudiPhone));
     }
 
     [Fact]
@@ -105,8 +113,8 @@ public class TransactionTests(WalletApiFixture fixture)
         var secondBody = await second.Content.ReadFromJsonAsync<TransactionResponse>(Token);
         Assert.Equal(firstBody, secondBody);
 
-        Assert.Equal(249_000, await BalanceAsync(SeedData.DemoUserId));
-        Assert.Equal(130_000, await BalanceAsync(HammoudiId));
+        Assert.Equal(699_000, await BalanceAsync(DemoUserId));
+        Assert.Equal(HammoudiBalance + 50_000, await fixture.AccountBalanceAsync(HammoudiPhone));
         Assert.Equal(1, await RowsWithKeyAsync("t-same-key"));
     }
 
@@ -128,8 +136,8 @@ public class TransactionTests(WalletApiFixture fixture)
             Assert.Single(statuses, HttpStatusCode.Created);
             Assert.Single(statuses, s => s is HttpStatusCode.OK or HttpStatusCode.Conflict);
 
-            Assert.Equal(249_000, await BalanceAsync(SeedData.DemoUserId));
-            Assert.Equal(130_000, await BalanceAsync(HammoudiId));
+            Assert.Equal(699_000, await BalanceAsync(DemoUserId));
+            Assert.Equal(HammoudiBalance + 50_000, await fixture.AccountBalanceAsync(HammoudiPhone));
             Assert.Equal(1, await RowsWithKeyAsync(key));
         }
     }
@@ -140,13 +148,14 @@ public class TransactionTests(WalletApiFixture fixture)
         Assert.SkipUnless(fixture.DatabaseAvailable, fixture.SkipReason);
         await fixture.ResetAsync();
 
-        var request = Transfer(3, 1_000, toAccountId: DemoAccountId);
+        // U2 holds 18,500; 18,000 plus the 1,000 fee is 19,000.
+        var request = Transfer(TightUserId, 18_000, toAccountId: DemoAccountId);
         var response = await PostAsync("t-empty", request);
 
         Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
         Assert.Equal("insufficient_funds", (await response.ReadProblemAsync(Token)).Code());
-        Assert.Equal(0, await BalanceAsync(3));
-        Assert.Equal(300_000, await BalanceAsync(SeedData.DemoUserId));
+        Assert.Equal(TightBalance, await BalanceAsync(TightUserId));
+        Assert.Equal(DemoBalance, await BalanceAsync(DemoUserId));
 
         // The failure is stored against the key, and a retry gets the same answer without executing.
         var lookup = await fixture.Client.GetFromJsonAsync<TransactionResponse>("/transactions/by-key/t-empty", Token);
@@ -168,8 +177,8 @@ public class TransactionTests(WalletApiFixture fixture)
         {
             await fixture.ResetAsync();
 
-            // User 7 holds 10,000. Each transfer costs 6,000 plus the 1,000 fee: one fits, two do not.
-            var request = Transfer(7, 6_000, toAccountId: 8);
+            // U2 holds 18,500. Each transfer costs 9,000 plus the 1,000 fee: one fits, two do not.
+            var request = Transfer(TightUserId, 9_000, toAccountId: DemoAccountId);
             var responses = await Task.WhenAll(
                 PostAsync($"t-overdraw-a-{round}", request),
                 PostAsync($"t-overdraw-b-{round}", request));
@@ -178,8 +187,8 @@ public class TransactionTests(WalletApiFixture fixture)
             var refused = Assert.Single(responses, r => r.StatusCode == HttpStatusCode.UnprocessableEntity);
             Assert.Equal("insufficient_funds", (await refused.ReadProblemAsync(Token)).Code());
 
-            Assert.Equal(3_000, await BalanceAsync(7));
-            Assert.Equal(16_000, await BalanceAsync(8));
+            Assert.Equal(8_500, await BalanceAsync(TightUserId));
+            Assert.Equal(759_000, await BalanceAsync(DemoUserId));
         }
     }
 
@@ -192,8 +201,8 @@ public class TransactionTests(WalletApiFixture fixture)
         {
             await fixture.ResetAsync();
 
-            // Bill account 1 has 45,000 due. Two payments with different keys race; the bill is cleared once.
-            var request = new PaymentRequest(SeedData.DemoUserId, "bill", null, null, null, 1, null, null);
+            // Bill account 1 (BS1) has 43,750 due. Two payments with different keys race; the bill is cleared once.
+            var request = new PaymentRequest(DemoUserId, "bill", null, null, null, 1, null, null);
             var responses = await Task.WhenAll(
                 PostAsync($"bill-a-{round}", request),
                 PostAsync($"bill-b-{round}", request));
@@ -202,8 +211,8 @@ public class TransactionTests(WalletApiFixture fixture)
             var refused = Assert.Single(responses, r => r.StatusCode == HttpStatusCode.UnprocessableEntity);
             Assert.Equal("nothing_due", (await refused.ReadProblemAsync(Token)).Code());
 
-            Assert.Equal(300_000 - 45_000 - 500, await BalanceAsync(SeedData.DemoUserId));
-            var bills = await fixture.Client.GetFromJsonAsync<List<BillItem>>($"/users/{SeedData.DemoUserId}/bills", Token);
+            Assert.Equal(705_750, await BalanceAsync(DemoUserId));
+            var bills = await fixture.Client.GetFromJsonAsync<List<BillItem>>($"/users/{DemoUserId}/bills", Token);
             Assert.Equal(0, Assert.Single(bills!, b => b.BillAccountId == 1).AmountDueIqd);
         }
     }
@@ -214,25 +223,25 @@ public class TransactionTests(WalletApiFixture fixture)
         Assert.SkipUnless(fixture.DatabaseAvailable, fixture.SkipReason);
         await fixture.ResetAsync();
 
-        var request = new PaymentRequest(SeedData.DemoUserId, "bill", null, null, null, 1, null, null);
+        var request = new PaymentRequest(DemoUserId, "bill", null, null, null, 1, null, null);
         var response = await PostAsync("t-bill", request);
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         var body = await response.Content.ReadFromJsonAsync<TransactionResponse>(Token);
         Assert.NotNull(body);
         Assert.Equal("bill", body.Type);
-        Assert.Equal(45_000, body.AmountIqd);
-        Assert.Equal(45_500, body.TotalIqd);
-        Assert.Equal(254_500, body.BalanceAfterIqd);
+        Assert.Equal(43_750, body.AmountIqd);
+        Assert.Equal(44_250, body.TotalIqd);
+        Assert.Equal(705_750, body.BalanceAfterIqd);
 
-        var bills = await fixture.Client.GetFromJsonAsync<List<BillItem>>($"/users/{SeedData.DemoUserId}/bills", Token);
+        var bills = await fixture.Client.GetFromJsonAsync<List<BillItem>>($"/users/{DemoUserId}/bills", Token);
         Assert.Equal(0, Assert.Single(bills!, b => b.BillAccountId == 1).AmountDueIqd);
 
         // A retry after the bill is paid still returns the stored result, not "nothing due".
         var replay = await PostAsync("t-bill", request);
         Assert.Equal(HttpStatusCode.OK, replay.StatusCode);
         Assert.Equal(body, await replay.Content.ReadFromJsonAsync<TransactionResponse>(Token));
-        Assert.Equal(254_500, await BalanceAsync(SeedData.DemoUserId));
+        Assert.Equal(705_750, await BalanceAsync(DemoUserId));
     }
 
     [Fact]
@@ -241,7 +250,7 @@ public class TransactionTests(WalletApiFixture fixture)
         Assert.SkipUnless(fixture.DatabaseAvailable, fixture.SkipReason);
         await fixture.ResetAsync();
 
-        var request = new PaymentRequest(SeedData.DemoUserId, "purchase", null, null, null, null, 1, null);
+        var request = new PaymentRequest(DemoUserId, "purchase", null, null, null, null, 1, null);
         var response = await PostAsync("t-purchase", request);
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
@@ -249,11 +258,11 @@ public class TransactionTests(WalletApiFixture fixture)
         Assert.NotNull(body);
         Assert.Equal("purchase", body.Type);
         Assert.Equal(5_000, body.TotalIqd);
-        Assert.Equal(295_000, body.BalanceAfterIqd);
+        Assert.Equal(745_000, body.BalanceAfterIqd);
         Assert.NotNull(body.Code);
         Assert.Matches("^[0-9]{13}$", body.Code);
 
-        var orders = await fixture.Client.GetFromJsonAsync<List<OrderItem>>($"/users/{SeedData.DemoUserId}/orders", Token);
+        var orders = await fixture.Client.GetFromJsonAsync<List<OrderItem>>($"/users/{DemoUserId}/orders", Token);
         var order = Assert.Single(orders!, o => o.TransactionId == body.TransactionId);
         Assert.Equal(body.Code, order.Code);
         Assert.Equal(1, order.ProductId);
@@ -269,16 +278,16 @@ public class TransactionTests(WalletApiFixture fixture)
         Assert.SkipUnless(fixture.DatabaseAvailable, fixture.SkipReason);
         await fixture.ResetAsync();
 
-        // Sara holds 1,250,000; 1,100,000 plus the fee is above the 1,000,000 PIN threshold.
-        var withoutPin = await PostAsync("t-pin-none", Transfer(2, 1_100_000, toAccountId: DemoAccountId));
+        // U3 holds 12,500,000; 1,100,000 plus the fee is above the 1,000,000 PIN threshold.
+        var withoutPin = await PostAsync("t-pin-none", Transfer(TraderUserId, 1_100_000, toAccountId: DemoAccountId));
         Assert.Equal(HttpStatusCode.UnprocessableEntity, withoutPin.StatusCode);
         Assert.Equal("pin_required", (await withoutPin.ReadProblemAsync(Token)).Code());
-        Assert.Equal(1_250_000, await BalanceAsync(2));
+        Assert.Equal(TraderBalance, await BalanceAsync(TraderUserId));
 
-        var withPin = await PostAsync("t-pin-ok", Transfer(2, 1_100_000, toAccountId: DemoAccountId, pin: SeedPin));
+        var withPin = await PostAsync("t-pin-ok", Transfer(TraderUserId, 1_100_000, toAccountId: DemoAccountId, pin: TraderPin));
         Assert.Equal(HttpStatusCode.Created, withPin.StatusCode);
-        Assert.Equal(149_000, await BalanceAsync(2));
-        Assert.Equal(1_400_000, await BalanceAsync(SeedData.DemoUserId));
+        Assert.Equal(11_399_000, await BalanceAsync(TraderUserId));
+        Assert.Equal(1_850_000, await BalanceAsync(DemoUserId));
     }
 
     [Fact]
@@ -289,7 +298,7 @@ public class TransactionTests(WalletApiFixture fixture)
 
         for (var attempt = 1; attempt <= 3; attempt++)
         {
-            var wrong = await PostAsync($"t-wrong-{attempt}", Transfer(2, 1_100_000, toAccountId: DemoAccountId, pin: "9999"));
+            var wrong = await PostAsync($"t-wrong-{attempt}", Transfer(TraderUserId, 1_100_000, toAccountId: DemoAccountId, pin: WrongPin));
 
             Assert.Equal(HttpStatusCode.UnprocessableEntity, wrong.StatusCode);
             var problem = await wrong.ReadProblemAsync(Token);
@@ -298,16 +307,16 @@ public class TransactionTests(WalletApiFixture fixture)
         }
 
         // Once locked, even the right PIN is refused, and nothing moves.
-        var locked = await PostAsync("t-locked", Transfer(2, 1_100_000, toAccountId: DemoAccountId, pin: SeedPin));
+        var locked = await PostAsync("t-locked", Transfer(TraderUserId, 1_100_000, toAccountId: DemoAccountId, pin: TraderPin));
         Assert.Equal(HttpStatusCode.Locked, locked.StatusCode);
         Assert.Equal("pin_locked", (await locked.ReadProblemAsync(Token)).Code());
-        Assert.Equal(1_250_000, await BalanceAsync(2));
+        Assert.Equal(TraderBalance, await BalanceAsync(TraderUserId));
 
         await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<WalletDbContext>();
-        var sara = await db.Users.AsNoTracking().SingleAsync(u => u.Id == 2, Token);
-        Assert.True(sara.PinLocked);
-        Assert.Equal(3, sara.PinFailedAttempts);
+        var trader = await db.Users.AsNoTracking().SingleAsync(u => u.Id == TraderUserId, Token);
+        Assert.True(trader.PinLocked);
+        Assert.Equal(3, trader.PinFailedAttempts);
     }
 
     [Theory]
@@ -318,8 +327,7 @@ public class TransactionTests(WalletApiFixture fixture)
         Assert.SkipUnless(fixture.DatabaseAvailable, fixture.SkipReason);
         const int maxPinAttempts = 3;
         const int wrongGuesses = 20;
-        const long saraSeedBalance = 1_250_000;
-        const long saraAfterOnePayment = saraSeedBalance - 1_100_000 - 1_000;
+        const long traderAfterOnePayment = TraderBalance - 1_100_000 - 1_000;
         var slotsLeft = maxPinAttempts - priorWrongPins;
 
         for (var round = 0; round < ConcurrencyRounds; round++)
@@ -329,14 +337,14 @@ public class TransactionTests(WalletApiFixture fixture)
             // Wrong PINs entered one at a time first, so the race starts with fewer slots left.
             for (var prior = 0; prior < priorWrongPins; prior++)
             {
-                var wrong = await PostAsync($"pin-race-{round}-prior-{prior}", Transfer(2, 1_100_000, toAccountId: DemoAccountId, pin: "9999"));
+                var wrong = await PostAsync($"pin-race-{round}-prior-{prior}", Transfer(TraderUserId, 1_100_000, toAccountId: DemoAccountId, pin: WrongPin));
                 Assert.Equal("pin_invalid", (await wrong.ReadProblemAsync(Token)).Code());
             }
 
-            // Sara (user 2) sends 1,100,000, above the PIN threshold: 20 wrong PINs and the right one, all at once.
+            // U3 sends 1,100,000, above the PIN threshold: 20 wrong PINs and the right one, all at once.
             var calls = Enumerable.Range(0, wrongGuesses)
-                .Select(i => PostAsync($"pin-race-{round}-wrong-{i}", Transfer(2, 1_100_000, toAccountId: DemoAccountId, pin: "9999")))
-                .Append(PostAsync($"pin-race-{round}-right", Transfer(2, 1_100_000, toAccountId: DemoAccountId, pin: SeedPin)))
+                .Select(i => PostAsync($"pin-race-{round}-wrong-{i}", Transfer(TraderUserId, 1_100_000, toAccountId: DemoAccountId, pin: WrongPin)))
+                .Append(PostAsync($"pin-race-{round}-right", Transfer(TraderUserId, 1_100_000, toAccountId: DemoAccountId, pin: TraderPin)))
                 .ToList();
             var responses = await Task.WhenAll(calls);
 
@@ -362,19 +370,19 @@ public class TransactionTests(WalletApiFixture fixture)
 
             await using var scope = fixture.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<WalletDbContext>();
-            var sara = await db.Users.AsNoTracking().SingleAsync(u => u.Id == 2, Token);
+            var trader = await db.Users.AsNoTracking().SingleAsync(u => u.Id == TraderUserId, Token);
             var report = $"attemptsLeft [{string.Join(", ", attemptsLeft.Order())}], the right PIN {(rightWon ? "paid" : "was locked out")}, "
-                + $"PinFailedAttempts {sara.PinFailedAttempts}, PinLocked {sara.PinLocked}";
+                + $"PinFailedAttempts {trader.PinFailedAttempts}, PinLocked {trader.PinLocked}";
 
             // Never more counted attempts than the limit.
-            Assert.True(sara.PinFailedAttempts <= maxPinAttempts, report);
+            Assert.True(trader.PinFailedAttempts <= maxPinAttempts, report);
 
             if (!rightWon)
             {
                 // Locked out: the wrong PINs checked are exactly the slots that were left, each attempt number once,
                 // and the PIN is locked.
                 Assert.True(attemptsLeft.Order().SequenceEqual(Enumerable.Range(0, slotsLeft).Select(n => (long)n)), report);
-                Assert.True(sara.PinLocked, report);
+                Assert.True(trader.PinLocked, report);
             }
             else if (slotsLeft == 1)
             {
@@ -389,10 +397,10 @@ public class TransactionTests(WalletApiFixture fixture)
                 Assert.True(attemptsLeft.Count <= slotsLeft - 1 + maxPinAttempts, report);
             }
 
-            if (sara.PinLocked)
+            if (trader.PinLocked)
             {
                 // Locked: even the right PIN is refused now.
-                var final = await PostAsync($"pin-race-{round}-final", Transfer(2, 1_100_000, toAccountId: DemoAccountId, pin: SeedPin));
+                var final = await PostAsync($"pin-race-{round}-final", Transfer(TraderUserId, 1_100_000, toAccountId: DemoAccountId, pin: TraderPin));
                 Assert.Equal(HttpStatusCode.Locked, final.StatusCode);
                 Assert.Equal("pin_locked", (await final.ReadProblemAsync(Token)).Code());
             }
@@ -408,7 +416,7 @@ public class TransactionTests(WalletApiFixture fixture)
             var done = await db.Transactions.CountAsync(
                 t => t.IdempotencyKey.StartsWith(keyPrefix) && t.Status == TransactionStatus.Done, Token);
             Assert.Equal(rightWon ? 1 : 0, done);
-            Assert.Equal(rightWon ? saraAfterOnePayment : saraSeedBalance, await BalanceAsync(2));
+            Assert.Equal(rightWon ? traderAfterOnePayment : TraderBalance, await BalanceAsync(TraderUserId));
         }
     }
 
