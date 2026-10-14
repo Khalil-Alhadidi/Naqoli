@@ -43,7 +43,7 @@ If a task seems to need breaking one of these, stop and ask.
 - Inside the phone frame: Iraqi Arabic, right to left, Arabic-Indic digits. Typed input is accepted in either digit form.
 - Everything else on the page (grids, settings, log, learning data), plus code, comments, commit messages and docs: English, left to right.
 - Page layout B: side menu, selected component in the middle, live trace always visible, phone frame on the right.
-- Arabic in C# appears only as seed values in `src/Wallet.MockApi/Data/SeedData.cs` and `SeedStrings.cs`; tests refer to seed text through `SeedStrings`, never by literal.
+- No Arabic in C#. The seed's Arabic values live in `data/seed/*.json` (Khalil's test-set export; never edited by Claude); tests take seed text from the loaded `SeedSet` through `SeedFacts` (`Contact("S01").SavedName`), never as a literal.
 
 ## Working habits
 
@@ -61,8 +61,8 @@ Run from the repository root. Solution: `ZainCashAgent.slnx`. The two database r
 - Build: `dotnet build`
 - Test: `dotnet test` (all) or `dotnet test tests/Agent.Core.Tests`; one class: `dotnet test tests/Agent.Core.Tests -- --filter-class "<Namespace.Class>"`
 - Database tests (collection `wallet-api`; run with `dotnet test` when the test server answers, Skipped otherwise; do not read the `Wallet` string; default is the local default instance, database `ZainCashWallet_Test`; on LocalDB or a container set `ConnectionStrings__WalletTest` to a string whose database name ends in `_Test`). To make an unreachable server fail instead of skip: `$env:ZAINCASH_TEST_SQL='1'; dotnet test tests/Agent.Core.Tests` (clear afterwards with `Remove-Item Env:ZAINCASH_TEST_SQL`)
-- Create and seed: `dotnet run --project src/Wallet.MockApi -- migrate` (prints `Database ready: 12 users, 12 accounts, 12 contacts, 19 transactions`)
-- Seed hash: `dotnet run --project src/Wallet.MockApi -- seed-hash` (prints the hash in `data/seed/seed-hash.txt`; no database needed)
+- Create and seed: `dotnet run --project src/Wallet.MockApi -- migrate` (prints `Database ready: 5 users, 42 accounts, 34 contacts, 86 transactions`; the seed is `data/seed/*.json`, loaded and validated at start, history dated relative to today in Iraq time)
+- Seed hash: `dotnet run --project src/Wallet.MockApi --no-launch-profile -- seed-hash` (prints the SHA-256 of the eight seed files, the value in `data/seed/seed-hash.txt`; the hash is the last line of the output; no database needed; a changed seed file fails `SeedHashTests` until the file is re-frozen and every answer key re-checked)
 - The default `Wallet` connection string is in `src/Wallet.MockApi/appsettings.Development.json` and applies only in Development (what `dotnet run` uses).
 - Add a migration: `dotnet ef migrations add <Name> --project src/Wallet.MockApi`
 - Run API: `dotnet run --project src/Wallet.MockApi` (http://localhost:5276, `/health`)
