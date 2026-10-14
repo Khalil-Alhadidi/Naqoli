@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.13" />
@@ -7,6 +7,14 @@
   <ItemGroup>
     <ProjectReference Include="..\Agent.Core\Agent.Core.csproj" />
   </ItemGroup>
+
+  <!--
+    The runner reads its settings next to the executable, whatever directory it is started from. Copied by a target, not
+    by CopyToOutputDirectory, so the file does not flow into the output of the test project that references this one.
+  -->
+  <Target Name="CopyEvalSettings" AfterTargets="Build">
+    <Copy SourceFiles="appsettings.json" DestinationFolder="$(OutDir)" SkipUnchangedFiles="true" />
+  </Target>
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>

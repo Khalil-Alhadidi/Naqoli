@@ -97,7 +97,7 @@ Run every command from the repository root. The solution file is `ZainCashAgent.
 | Add an agent migration | `dotnet ef migrations add <Name> --project src/Agent.Core --startup-project src/Agent.Web --output-dir Data/Migrations` |
 | Run the mock wallet API | `dotnet run --project src/Wallet.MockApi` |
 | Run the web app | `dotnet run --project src/Agent.Web` |
-| Run the eval console | `dotnet run --project src/Agent.Eval` |
+| Run the eval on the development set | `dotnet run --project src/Agent.Eval -- dev` |
 | Run the screen journeys | `dotnet test tests/Agent.Web.Journeys` |
 
 Notes:
@@ -112,9 +112,22 @@ Notes:
 - The mock wallet API serves plain HTTP on loopback by design and does not redirect to HTTPS.
 - The web app listens on http://localhost:5089. Run order: create both databases (`migrate` for the wallet and for the agent), start the mock wallet, then start the web app; the console reads the wallet at `Agent:WalletBaseUrl` (http://localhost:5276 in Development). Type the scripted sentence in the phone; the console is described in [docs/agent-web.md](docs/agent-web.md).
 - Every text the phone shows comes from `src/Agent.Web/Resources/PhoneStrings.resx`, and the scripted parser's sentences from `src/Agent.Core/Parsing/scripted-sentences.json`. Until Khalil writes the Iraqi Arabic, every value is an English placeholder marked `TODO-AR`; the list is in [docs/agent-web.md](docs/agent-web.md).
-- The eval console prints a usage line for now. It runs the request sets from milestone 5.
+- The eval console is described under [Run eval](#run-eval).
 - Install the Playwright browser once, after the first build: `pwsh tests/Agent.Web.Journeys/bin/Debug/net10.0/playwright.ps1 install chromium`.
 - The screen journeys (`tests/Agent.Web.Journeys`, collection `journeys`, fixture `JourneyHost`) host the mock wallet and the web console in process on Kestrel, on dynamic loopback ports, and drive them with headless Chromium through the scripted parser (never a live model). The wallet uses `ZainCashWalletJourneys_Test` (override `ConnectionStrings__WalletJourneysTest`) and the console `ZainCashAgent_Journeys_Test` (override `ConnectionStrings__AgentJourneysTest`); both are dropped and recreated at the start of a run, so both names must end in `_Test`. Two consoles run: one with the default card timer and one with a 4-second timer for the timer journey. The journeys skip when SQL Server does not answer the 3-second probe, or when Chromium is not installed (the skip message gives the install command). A run takes about 20 seconds.
+
+## Run eval
+
+`Agent.Eval` plays a request set through the same conversation logic as the phone (the scripted parser, never a live model), grades every case against its answer key and writes a report.
+
+1. Create the wallet database once (`dotnet run --project src/Wallet.MockApi -- migrate`) and start the wallet: `dotnet run --project src/Wallet.MockApi`.
+2. Run the development set: `dotnet run --project src/Agent.Eval -- dev`.
+
+Options: `--only CLN-01,CLN-02` runs some cases; `--wallet http://localhost:5276` points at another wallet; `--out <dir>` writes the report elsewhere. The settings are in `src/Agent.Eval/appsettings.json` (sections `Eval` and `Agent`); the runner uses its own agent database, `ZainCashAgent_Eval` (`ConnectionStrings:Agent`), which it creates and migrates, because before every case it resets the wallet to the seed, closes open pending records and empties the audit log. It runs in the Development environment unless `DOTNET_ENVIRONMENT` says otherwise.
+
+The console prints one line per case (id, passed or the first failing field) and one per category, then the report paths: `docs/reports/dev-scripted-<UTC date>.md` and `.json` (a second run on the same day replaces them). A report holds case ids, categories, codes, figures and verdicts, never a case's text. Exit codes: 0 the run completed (whatever the pass rate), 2 the command line is wrong or the held-out guard refused, 1 the wallet or the agent database does not answer, or the set file is missing.
+
+The held-out set (`data/requests.heldout.jsonl`) is sealed (rule 7). `dotnet run --project src/Agent.Eval -- heldout` refuses and prints the rule without opening any file. Only the milestone 11 run uses `heldout --milestone-11-run`, which hashes the file and refuses unless the SHA-256 equals the one recorded in `docs/disclosure.md`.
 
 ## Mock wallet API
 

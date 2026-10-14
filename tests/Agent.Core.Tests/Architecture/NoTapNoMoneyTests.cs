@@ -6,6 +6,7 @@ using System.Runtime.CompilerServices;
 using Agent.Core.Confirm;
 using Agent.Core.Wallet;
 using AgentWeb::Agent.Web.Services;
+using Agent.Eval.Running;
 using AgentConversation = Agent.Core.Conversation.Conversation;
 
 namespace Agent.Core.Tests.Architecture;
@@ -14,7 +15,8 @@ namespace Agent.Core.Tests.Architecture;
 /// Rule 1, "no tap, no money", checked on the compiled code: the IL of every method in <c>Agent.Core</c> is decoded and
 /// the only methods that call <see cref="WalletClient"/>'s execute are the two Confirm handler methods; in
 /// <c>Agent.Core</c> only the conversation's Confirm and settle call those two; in <c>Agent.Web</c> nothing calls the
-/// handler and only the session's Confirm and settle call the conversation's; only the wallet client names the
+/// handler and only the session's Confirm and settle call the conversation's; in <c>Agent.Eval</c> nothing calls the
+/// handler and only the driver's Confirm step and settle loop call the conversation's; only the wallet client names the
 /// <c>transactions</c> routes; and nothing invokes a method by reflection. Pure: no database, no wallet.
 /// </summary>
 public class NoTapNoMoneyTests
@@ -27,6 +29,8 @@ public class NoTapNoMoneyTests
     private static readonly Assembly AgentCore = typeof(WalletClient).Assembly;
 
     private static readonly Assembly AgentWeb = typeof(ChatSession).Assembly;
+
+    private static readonly Assembly AgentEval = typeof(CaseDriver).Assembly;
 
     /// <summary>The opcodes whose operand is a method token.</summary>
     private static readonly HashSet<short> MethodOperandOpCodes =
@@ -116,6 +120,49 @@ public class NoTapNoMoneyTests
             callers.SetEquals(expected),
             "The methods in Agent.Web that reach the conversation's Confirm or settle must be exactly the session's two. Found: "
             + string.Join(", ", callers.Order(StringComparer.Ordinal)));
+    }
+
+    /// <summary>Nothing in <c>Agent.Eval</c> calls the Confirm handler itself; the runner goes through the conversation.</summary>
+    [Fact]
+    public void NothingInAgentEvalCallsTheConfirmHandler()
+    {
+        var callers = CallersOf(IsConfirmHandlerEntry, AgentEval);
+
+        Assert.True(
+            callers.Count == 0,
+            "Nothing in Agent.Eval may call the Confirm handler. Found: " + string.Join(", ", callers.Order(StringComparer.Ordinal)));
+    }
+
+    /// <summary>
+    /// In <c>Agent.Eval</c> the conversation's Confirm and settle are reached only by the driver's step player (a
+    /// <c>tap confirm</c> step, the case's tap) and its settle loop (the "check again" after a Checking outcome). No
+    /// grading, report or command-line path calls either.
+    /// </summary>
+    [Fact]
+    public void OnlyTheDriversConfirmStepAndSettleCallTheConversationsFromTheRunner()
+    {
+        var callers = CallersOf(IsConversationConfirmEntry, AgentEval);
+
+        var expected = new HashSet<string>(StringComparer.Ordinal)
+        {
+            $"{typeof(CaseDriver).FullName}.PlayStepAsync",
+            $"{typeof(CaseDriver).FullName}.SettleCheckingAsync",
+        };
+        Assert.True(
+            callers.SetEquals(expected),
+            "The methods in Agent.Eval that reach the conversation's Confirm or settle must be exactly the driver's two. Found: "
+            + string.Join(", ", callers.Order(StringComparer.Ordinal)));
+    }
+
+    /// <summary>Nothing in <c>Agent.Eval</c> invokes a method by reflection.</summary>
+    [Fact]
+    public void NothingInAgentEvalInvokesByReflection()
+    {
+        var callers = CallersOf(IsReflectionInvoke, AgentEval);
+
+        Assert.True(
+            callers.Count == 0,
+            "Nothing in Agent.Eval may invoke a method by reflection. Found: " + string.Join(", ", callers.Order(StringComparer.Ordinal)));
     }
 
     /// <summary>Nothing in <c>Agent.Web</c> invokes a method by reflection, so nothing reaches the handler that way.</summary>

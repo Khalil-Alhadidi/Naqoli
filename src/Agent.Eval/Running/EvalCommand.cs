@@ -1,0 +1,256 @@
+using System.Globalization;
+using System.Text.Json;
+using Agent.Core;
+using Agent.Core.Data;
+using Agent.Core.Parsing;
+using Agent.Core.Wallet;
+using Agent.Eval.Cases;
+using Agent.Eval.Grading;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Options;
+
+namespace Agent.Eval.Running;
+
+/// <summary>
+/// The eval command line: builds the host (<c>AddAgentEval</c>: the agent's services, <see cref="EvalClock"/> as the
+/// <see cref="TimeProvider"/>), runs the held-out guard before any set file is opened, plays every case through a
+/// <see cref="CaseDriver"/> with the <see cref="ScriptedParser"/> inside a <see cref="RecordingParser"/>, grades it with
+/// the <see cref="CaseGrader"/>, and writes the report. It prints case ids, codes and figures, never case text.
+/// </summary>
+public static class EvalCommand
+{
+    /// <summary>The run completed (whatever its pass rate).</summary>
+    public const int Completed = 0;
+
+    /// <summary>The wallet or the agent database is unreachable, or the set file is missing or invalid.</summary>
+    public const int Unavailable = 1;
+
+    /// <summary>The held-out guard refused, or the command line or the settings are wrong.</summary>
+    public const int Refused = 2;
+
+    /// <summary>The parser this milestone measures.</summary>
+    public const string ParserName = "scripted";
+
+    private static readonly TimeSpan AdminTimeout = TimeSpan.FromMinutes(2);
+
+    /// <summary>Runs the command of <paramref name="args"/>; returns the exit code.</summary>
+    public static async Task<int> RunAsync(string[] args, TextWriter output, TextWriter errors, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(args);
+        ArgumentNullException.ThrowIfNull(output);
+        ArgumentNullException.ThrowIfNull(errors);
+
+        var parsed = EvalArguments.Parse(args, out var usageError);
+        if (parsed is null)
+        {
+            await errors.WriteLineAsync(usageError);
+            await errors.WriteLineAsync(EvalArguments.Usage);
+            return Refused;
+        }
+
+        using var host = BuildHost(parsed);
+        EvalOptions options;
+        try
+        {
+            options = host.Services.GetRequiredService<IOptions<EvalOptions>>().Value;
+        }
+        catch (OptionsValidationException ex)
+        {
+            await errors.WriteLineAsync("Invalid settings: " + ex.Message);
+            return Refused;
+        }
+
+        var root = EvalPaths.RepositoryRoot();
+        var setDirectory = EvalPaths.Resolve(options.SetDirectory, root);
+
+        // Rule 7: the guard decides first, before any set file is opened and before the agent's settings are checked.
+        var decision = HeldOutGuard.Check(args, setDirectory, Path.Combine(root, "docs", "disclosure.md"));
+        if (!decision.Allowed)
+        {
+            await errors.WriteLineAsync(decision.Message);
+            return parsed.Milestone11Run && !File.Exists(Path.Combine(setDirectory, HeldOutGuard.HeldOutFileName)) ? Unavailable : Refused;
+        }
+
+        AgentOptions agentOptions;
+        try
+        {
+            await host.StartAsync(cancellationToken);
+            agentOptions = host.Services.GetRequiredService<IOptions<AgentOptions>>().Value;
+        }
+        catch (OptionsValidationException ex)
+        {
+            await errors.WriteLineAsync("Invalid settings: " + ex.Message);
+            return Refused;
+        }
+
+        if (decision.FileHash is not null)
+            await output.WriteLineAsync(decision.Message);
+
+        var setPath = Path.Combine(setDirectory, "requests." + parsed.Set + ".jsonl");
+        if (!File.Exists(setPath))
+        {
+            await errors.WriteLineAsync("The set file " + setPath + " is missing.");
+            return Unavailable;
+        }
+
+        IReadOnlyList<EvalCase> cases;
+        string setHash;
+        try
+        {
+            setHash = decision.FileHash ?? HeldOutGuard.FileHash(setPath);
+            cases = CaseLoader.Load(setPath);
+        }
+        catch (CaseFileException ex)
+        {
+            await errors.WriteLineAsync(ex.Message);
+            return Unavailable;
+        }
+
+        if (parsed.Only is { } only)
+        {
+            var unknown = only.Where(id => cases.All(c => c.Id != id)).ToList();
+            if (unknown.Count > 0)
+            {
+                await errors.WriteLineAsync("Unknown case id(s): " + string.Join(",", unknown) + ".");
+                return Refused;
+            }
+
+            cases = [.. cases.Where(c => only.Contains(c.Id, StringComparer.Ordinal))];
+        }
+
+        var seed = SeedPins.Load(EvalPaths.SeedDirectory(options, root));
+        using var http = new HttpClient { BaseAddress = agentOptions.WalletBaseUrl, Timeout = AdminTimeout };
+        http.DefaultRequestHeaders.Add(WalletClient.ClientKeyHeader, agentOptions.WalletClientKey ?? AgentOptions.DevelopmentWalletClientKey);
+
+        if (!await WalletAnswersAsync(http, cancellationToken))
+        {
+            await errors.WriteLineAsync("The wallet does not answer at " + agentOptions.WalletBaseUrl + ". Start it with: dotnet run --project src/Wallet.MockApi");
+            return Unavailable;
+        }
+
+        try
+        {
+            await using var scope = host.Services.CreateAsyncScope();
+            await scope.ServiceProvider.GetRequiredService<AgentDbContext>().Database.MigrateAsync(cancellationToken);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            await errors.WriteLineAsync("The agent database is not reachable (ConnectionStrings:Agent): " + ex.GetType().Name + ".");
+            return Unavailable;
+        }
+
+        var admin = new WalletAdmin(http, options.WalletAdminKey, seed);
+        var parser = new RecordingParser(new ScriptedParser());
+        var driver = new CaseDriver(host.Services, admin, seed, host.Services.GetRequiredService<EvalClock>(), parser, options);
+        var grader = new CaseGrader(seed);
+
+        var started = TimeProvider.System.GetUtcNow();
+        var results = new List<CaseResult>(cases.Count);
+        foreach (var evalCase in cases)
+        {
+            CaseObservation observation;
+            try
+            {
+                observation = await driver.PlayAsync(evalCase, cancellationToken);
+            }
+            catch (HttpRequestException)
+            {
+                await errors.WriteLineAsync("The wallet stopped answering during case " + evalCase.Id + ".");
+                return Unavailable;
+            }
+
+            var result = grader.Grade(evalCase, observation);
+            results.Add(result);
+            await output.WriteLineAsync(evalCase.Id + " " + (result.Passed ? "passed" : "failed" + (result.FirstFailing is { } f ? " at " + f.Field : string.Empty)));
+        }
+
+        var summary = new RunSummary(parsed.Set, setHash, ParserName, started, Settings(options, agentOptions), results);
+        var paths = ReportWriter.Write(summary, EvalPaths.Resolve(parsed.Out ?? options.ReportDirectory, root));
+
+        foreach (var score in ReportWriter.Scores(results, r => r.Category))
+        {
+            await output.WriteLineAsync(string.Create(
+                CultureInfo.InvariantCulture,
+                $"{score.Name}: {score.Passed}/{score.Cases} passed ({score.Percent:0.0} %, Wilson 95% {ReportWriter.Interval(score)})"));
+        }
+
+        var total = ReportWriter.Score("All cases", results);
+        await output.WriteLineAsync(string.Create(CultureInfo.InvariantCulture, $"All cases: {total.Passed}/{total.Cases} passed ({total.Percent:0.0} %)"));
+        await output.WriteLineAsync("Report: " + paths.MarkdownPath);
+        await output.WriteLineAsync("Report: " + paths.JsonPath);
+
+        await host.StopAsync(cancellationToken);
+        return Completed;
+    }
+
+    /// <summary>
+    /// The settings the report header shows: every simple <see cref="EvalOptions"/> and <see cref="AgentOptions"/>
+    /// value; keys are shown only as set or not, and word lists only as their count.
+    /// </summary>
+    public static IReadOnlyDictionary<string, string> Settings(EvalOptions options, AgentOptions agentOptions)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        ArgumentNullException.ThrowIfNull(agentOptions);
+        var settings = new Dictionary<string, string>(StringComparer.Ordinal);
+        Add(settings, EvalOptions.SectionName, options);
+        Add(settings, AgentOptions.SectionName, agentOptions);
+        return settings;
+    }
+
+    private static void Add<T>(Dictionary<string, string> settings, string section, T options)
+    {
+        // Serialised, not read by reflection: the effective values (defaults included), as JSON scalars.
+        foreach (var property in JsonSerializer.SerializeToElement(options).EnumerateObject())
+        {
+            var value = property.Value;
+            settings[section + ":" + property.Name] = value.ValueKind switch
+            {
+                _ when property.Name.Contains("Key", StringComparison.Ordinal) => value.ValueKind == JsonValueKind.Null ? "not set" : "set",
+                JsonValueKind.Array => value.GetArrayLength().ToString(CultureInfo.InvariantCulture) + " word(s)",
+                JsonValueKind.String => value.GetString() ?? string.Empty,
+                JsonValueKind.Null => "null",
+                _ => value.GetRawText(),
+            };
+        }
+    }
+
+    private static IHost BuildHost(EvalArguments parsed)
+    {
+        // The parsed arguments are applied below; the raw ones are not handed to the configuration, so 'dev' or a flag
+        // never becomes a setting. The runner works against the local mock wallet, so Development is the default
+        // environment (any non-empty client key works there); DOTNET_ENVIRONMENT overrides it.
+        var builder = Host.CreateApplicationBuilder(new HostApplicationBuilderSettings
+        {
+            Args = [],
+            ContentRootPath = AppContext.BaseDirectory,
+            EnvironmentName = Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT") ?? Environments.Development,
+        });
+
+        var overrides = new Dictionary<string, string?>(StringComparer.Ordinal);
+        if (parsed.Wallet is { } wallet)
+            overrides[AgentOptions.SectionName + ":" + nameof(AgentOptions.WalletBaseUrl)] = wallet.ToString();
+        if (overrides.Count > 0)
+            builder.Configuration.AddInMemoryCollection(overrides);
+
+        builder.Services.AddAgentEval(builder.Configuration);
+        return builder.Build();
+    }
+
+    private static async Task<bool> WalletAnswersAsync(HttpClient http, CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            timeout.CancelAfter(TimeSpan.FromSeconds(5));
+            using var response = await http.GetAsync(new Uri("health", UriKind.Relative), timeout.Token);
+            return response.IsSuccessStatusCode;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException && !cancellationToken.IsCancellationRequested)
+        {
+            return false;
+        }
+    }
+}

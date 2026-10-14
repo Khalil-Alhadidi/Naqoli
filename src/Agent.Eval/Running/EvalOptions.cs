@@ -3,6 +3,12 @@ using System.ComponentModel.DataAnnotations;
 namespace Agent.Eval.Running;
 
 /// <summary>The runner's settings, bound from the <c>Eval</c> section and shown in the report header.</summary>
+/// <remarks>
+/// The runner's <c>Agent</c> section (<c>src/Agent.Eval/appsettings.json</c>) carries the D6 words in
+/// <c>Agent:YesWords</c> and <c>Agent:NoWords</c>, because <c>Agent.Eval</c> cannot read the web console's resource file.
+/// They must equal <c>Word_yes</c> and <c>Word_no</c> of <c>src/Agent.Web/Resources/PhoneStrings.resx</c> (a test
+/// compares them) until Khalil writes the words; then both change together.
+/// </remarks>
 public sealed class EvalOptions
 {
     public const string SectionName = "Eval";
@@ -34,7 +40,11 @@ public sealed class EvalOptions
     [Range(0, 60_000)]
     public int SettleDelayMs { get; set; } = 200;
 
-    /// <summary>The <c>delayMs</c> of the wallet's timeout faults (<c>wallet_timeout_*</c>).</summary>
+    /// <summary>
+    /// The <c>delayMs</c> of the wallet's timeout faults (<c>wallet_timeout_*</c>). It must be above the agent's wallet
+    /// timeout (<c>Agent:WalletTimeoutSeconds</c>, 10 s by default): a shorter delay only slows the call down, and the
+    /// agent never sees the timeout that the fault is meant to cause (so the card would never reach Checking).
+    /// </summary>
     [Range(0, 600_000)]
-    public int FaultDelayMs { get; set; } = 3_000;
+    public int FaultDelayMs { get; set; } = 12_000;
 }
