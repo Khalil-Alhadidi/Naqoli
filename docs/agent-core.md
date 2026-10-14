@@ -343,7 +343,7 @@ Never stored: a PIN, a balance figure, a purchase code (full or partial), the ty
 | `HistoryDays` | 90 | `CardBuilder`, first time |
 | `WalletBaseUrl` | none (required); `http://localhost:5276` in Development | `WalletClient` |
 | `WalletClientKey` | none; at least 16 characters when set. Null sends `dev` in Development and stops the start elsewhere | `WalletClient`, header `X-Wallet-Client-Key` |
-| `WalletTimeoutSeconds` | 10 | `WalletClient`; past it an execute is `Unknown("timeout")`. The stale-Executing sweep (milestone 4 host) moves Executing records older than this plus a margin |
+| `WalletTimeoutSeconds` | 10 | `WalletClient`; past it an execute is `Unknown("timeout")`. The stale-Executing sweep (milestone 4 host) must use `olderThan` of at least three times this value plus a margin, because a Confirm makes three timed wallet calls (balance, history, execute) while the record is Executing |
 | `SettleWindowSeconds` | 610 (the wallet timeout, 10 s, plus the wallet's longest fault delay, 600 s) | `ConfirmHandler.SettleCheckingAsync`: within it a PIN refusal leaves a record Checking; after it, NotDone |
 | `HistoryPageSize` | 200 | Daily cap, recheck and card history reads |
 
