@@ -70,10 +70,12 @@ public class AnthropicAdapterTests
         Assert.Equal(ParsedRequest.Bill("water", null, null, AmountUnit.None), parsed);
         var body = Assert.Single(handler.Bodies);
         Assert.Equal("claude-haiku-5-5", body.GetProperty("model").GetString());
-        Assert.Equal(400, body.GetProperty("max_tokens").GetInt32());
+        Assert.Equal(1500, body.GetProperty("max_tokens").GetInt32());
         Assert.False(body.TryGetProperty("temperature", out _));
 
         // The adapter maps ChatOptions.ResponseFormat (a JSON schema) to Anthropic structured outputs.
+        // The candidate's effort and the structured output share output_config.
+        Assert.Equal("low", body.GetProperty("output_config").GetProperty("effort").GetString());
         var format = body.GetProperty("output_config").GetProperty("format");
         Assert.Equal("json_schema", format.GetProperty("type").GetString());
         var schema = format.GetProperty("schema");

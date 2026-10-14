@@ -46,6 +46,7 @@
             var prefix = "Model:" + name + ":";
             yield return (prefix + nameof(ModelCandidate.ModelId), c.Provider + " " + c.ModelId);
             yield return (prefix + nameof(ModelCandidate.MaxOutputTokens), Number(c.MaxOutputTokens));
+            yield return (prefix + nameof(ModelCandidate.Effort), c.Effort);
             yield return (prefix + nameof(ModelCandidate.Temperature), c.Temperature?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "not sent");
             yield return (prefix + nameof(ModelCandidate.TimeoutSeconds), Number(c.TimeoutSeconds));
             yield return (prefix + "PricePerMTok", c.InputPricePerMTok.ToString(System.Globalization.CultureInfo.InvariantCulture) + " in, " + c.OutputPricePerMTok.ToString(System.Globalization.CultureInfo.InvariantCulture) + " out (USD)");

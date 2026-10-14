@@ -187,7 +187,7 @@ public sealed class HeldOutGuardTests : IDisposable
 
         Assert.Equal("claude-haiku", EvalCommand.ReportParserName("claude:haiku"));
         Assert.Equal("scripted", EvalCommand.ReportParserName("scripted"));
-        // 72 cases x (1,500 x 0.10 + 150 x 0.50) / 1,000,000.
-        Assert.Equal(0.0162m, EvalCommand.EstimatedCostUsd(72, haiku));
+        // 72 cases x (1,500 x 0.10 + 400 x 0.50) / 1,000,000.
+        Assert.Equal(0.0252m, EvalCommand.EstimatedCostUsd(72, haiku));
     }
 }

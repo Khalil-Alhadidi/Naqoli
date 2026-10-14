@@ -14,6 +14,9 @@ public sealed class ModelOptions
     /// <summary>The only provider built: Anthropic, through <c>Microsoft.Extensions.AI</c>.</summary>
     public const string AnthropicProvider = "anthropic";
 
+    /// <summary>The effort levels the API accepts in <c>output_config.effort</c>.</summary>
+    public static IReadOnlyList<string> EffortLevels { get; } = ["low", "medium", "high", "xhigh", "max"];
+
     /// <summary>The name of the candidate in use (a key of <see cref="Candidates"/>).</summary>
     public string? Candidate { get; set; }
 
@@ -40,6 +43,8 @@ public sealed class ModelOptions
             problems.Add(prefix + "MaxOutputTokens must be above 0.");
         if (candidate.TimeoutSeconds <= 0)
             problems.Add(prefix + "TimeoutSeconds must be above 0.");
+        if (!EffortLevels.Contains(candidate.Effort, StringComparer.Ordinal))
+            problems.Add(prefix + "Effort must be one of " + string.Join(", ", EffortLevels) + ".");
         if (candidate.Temperature is < 0f or > 1f)
             problems.Add(prefix + "Temperature must be from 0 to 1, or unset.");
         if (candidate.InputPricePerMTok < 0 || candidate.OutputPricePerMTok < 0)
@@ -55,12 +60,21 @@ public sealed class ModelCandidate
 
     public string ModelId { get; set; } = string.Empty;
 
-    /// <summary>The most tokens the model may write in one parse reply.</summary>
-    public int MaxOutputTokens { get; set; } = 400;
+    /// <summary>
+    /// The most tokens the model may write in one parse reply. The 5.5 models think by default and thinking counts against
+    /// this limit, so it leaves room for both; a reply cut off at it is <c>Problem</c> <c>truncated</c>.
+    /// </summary>
+    public int MaxOutputTokens { get; set; } = 1500;
 
     /// <summary>
-    /// The sampling temperature, or null to send none. The Claude 5.5 models reject a non-default temperature (Opus 5.5
-    /// rejects any), so the shipped candidates leave it unset.
+    /// How much the model thinks (<c>output_config.effort</c>): <c>low</c> (the default), <c>medium</c>, <c>high</c>,
+    /// <c>xhigh</c> or <c>max</c>. Parsing one message needs little; the models' own default is <c>medium</c> or <c>high</c>.
+    /// </summary>
+    public string Effort { get; set; } = "low";
+
+    /// <summary>
+    /// The sampling temperature, or null to send none (the default). Keep it unset for the Claude 5.5 models: Haiku 5.5 and
+    /// Sonnet 5.5 answer a non-default temperature with HTTP 400, and Opus 5.5 answers any temperature with 400.
     /// </summary>
     public float? Temperature { get; set; }
 
@@ -79,5 +93,5 @@ public sealed class ModelCandidate
 
     /// <summary>A short invariant description for logs and reports (no key).</summary>
     public override string ToString()
-        => string.Create(CultureInfo.InvariantCulture, $"{Provider} {ModelId} (max {MaxOutputTokens} tokens, {TimeoutSeconds} s)");
+        => string.Create(CultureInfo.InvariantCulture, $"{Provider} {ModelId} (effort {Effort}, max {MaxOutputTokens} tokens, {TimeoutSeconds} s)");
 }

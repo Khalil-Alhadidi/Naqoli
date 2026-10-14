@@ -30,7 +30,8 @@ public class ClaudeParserTests
             {
                 Provider = "anthropic",
                 ModelId = "claude-haiku-5-5",
-                MaxOutputTokens = 400,
+                MaxOutputTokens = 1500,
+                Effort = "low",
                 Temperature = temperature,
                 TimeoutSeconds = timeoutSeconds,
                 InputPricePerMTok = 0.10m,
@@ -88,7 +89,8 @@ public class ClaudeParserTests
 
         var options = Assert.IsType<ChatOptions>(client.Calls[0].Options);
         Assert.Equal("claude-haiku-5-5", options.ModelId);
-        Assert.Equal(400, options.MaxOutputTokens);
+        Assert.Equal(1500, options.MaxOutputTokens);
+        Assert.NotNull(options.RawRepresentationFactory);
         // Not configured: no temperature is sent (Claude 5.5 models reject a non-default one).
         Assert.Null(options.Temperature);
         var format = Assert.IsType<ChatResponseFormatJson>(options.ResponseFormat);
@@ -190,6 +192,23 @@ public class ClaudeParserTests
 
         Assert.Equal((RequestIntent.Unclear, ClaudeParser.JsonProblem), (parsed.Intent, parsed.Problem));
         Assert.Equal(10, parser.LastUsage?.InputTokens);
+    }
+
+    [Fact]
+    public async Task AReplyCutOffAtTheOutputLimitIsUnclearAsTruncated()
+    {
+        var (parser, client, _) = Start();
+        client.Reply = (_, _, _) =>
+        {
+            var response = FakeChatClient.Json(Transfer[..40], 1_000, 1_500);
+            response.FinishReason = ChatFinishReason.Length;
+            return Task.FromResult(response);
+        };
+
+        var parsed = await parser.ParseAsync("x", new ParseContext(null, MaskMap.Empty), Token);
+
+        Assert.Equal((RequestIntent.Unclear, ClaudeParser.TruncatedProblem), (parsed.Intent, parsed.Problem));
+        Assert.Equal(1_500, parser.LastUsage?.OutputTokens);
     }
 
     [Fact]

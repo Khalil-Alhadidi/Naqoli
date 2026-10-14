@@ -8,6 +8,7 @@ using Agent.Core.Masking;
 using Agent.Core.Requests;
 using Agent.Core.Trace;
 using Anthropic.Exceptions;
+using Anthropic.Models.Messages;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -35,6 +36,9 @@ public sealed partial class ClaudeParser : IParser, IParserUsage
 {
     /// <summary>The <see cref="ParsedRequest.Problem"/> of a reply that is not the structure (not JSON, an unknown field).</summary>
     public const string JsonProblem = "json";
+
+    /// <summary>The <see cref="ParsedRequest.Problem"/> of a reply cut off at the candidate's output limit.</summary>
+    public const string TruncatedProblem = "truncated";
 
     /// <summary>The Model-zone trace step when the reply listed more than one request (detail: how many).</summary>
     public const string MoreThanOneRequestStep = "more_than_one_request";
@@ -124,6 +128,16 @@ public sealed partial class ClaudeParser : IParser, IParserUsage
             MaxOutputTokens = candidate.MaxOutputTokens,
             Temperature = candidate.Temperature,
             ResponseFormat = ChatResponseFormat.ForJsonSchema(Schema, "parse", "The requests in the user's message, in the order spoken."),
+            // The adapter has no option for output_config.effort (ChatOptions.Reasoning cannot say max, and would also set
+            // the thinking mode), so the candidate's effort goes in the SDK's own parameters; the adapter fills in the rest,
+            // the JSON-schema format included (AnthropicAdapterTests reads both from the request body).
+            RawRepresentationFactory = _ => new MessageCreateParams
+            {
+                MaxTokens = candidate.MaxOutputTokens,
+                Messages = [],
+                Model = candidate.ModelId,
+                OutputConfig = new OutputConfig { Effort = EffortOf(candidate.Effort) },
+            },
         };
 
         var started = clock.GetTimestamp();
@@ -151,6 +165,10 @@ public sealed partial class ClaudeParser : IParser, IParserUsage
         var cost = candidate.CostUsd(inputTokens, outputTokens);
         Volatile.Write(ref lastUsage, new ParseUsage(ToInt(inputTokens), ToInt(outputTokens), cost, duration));
         LogParsed(candidate.ModelId, (long)duration.TotalMilliseconds, inputTokens, outputTokens, cost, response.FinishReason?.Value ?? "none");
+
+        // Cut off at MaxOutputTokens (thinking counts against it): whatever text came is incomplete.
+        if (response.FinishReason == ChatFinishReason.Length)
+            return new ParsedRequest { Intent = RequestIntent.Unclear, Problem = TruncatedProblem };
 
         if (!TryRead(response.Text, out var reply))
             return new ParsedRequest { Intent = RequestIntent.Unclear, Problem = JsonProblem };
@@ -195,6 +213,16 @@ public sealed partial class ClaudeParser : IParser, IParserUsage
         LogUnavailable(candidate.ModelId, reason, (long)clock.GetElapsedTime(started).TotalMilliseconds);
         return new ParserUnavailableException("The model did not answer (" + reason + ").");
     }
+
+    private static Effort EffortOf(string effort) => effort switch
+    {
+        "low" => Effort.Low,
+        "medium" => Effort.Medium,
+        "high" => Effort.High,
+        "xhigh" => Effort.Xhigh,
+        "max" => Effort.Max,
+        _ => throw new InvalidOperationException("Unknown effort level; the start-up validation lists the accepted ones."),
+    };
 
     private static int ToInt(long tokens) => tokens > int.MaxValue ? int.MaxValue : (int)Math.Max(0, tokens);
 

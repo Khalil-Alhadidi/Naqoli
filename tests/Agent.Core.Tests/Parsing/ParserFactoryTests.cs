@@ -57,7 +57,7 @@ public class ParserFactoryTests
         var parser = Assert.IsType<ClaudeParser>(scope.ServiceProvider.GetRequiredService<IParser>());
         Assert.Equal("claude:haiku", parser.Name);
         var options = provider.GetRequiredService<IOptions<ModelOptions>>().Value.Selected;
-        Assert.Equal((400, 20, (float?)null), (options?.MaxOutputTokens, options?.TimeoutSeconds, options?.Temperature));
+        Assert.Equal((1500, 20, (float?)null, "low"), (options?.MaxOutputTokens, options?.TimeoutSeconds, options?.Temperature, options?.Effort));
     }
 
     [Fact]
@@ -90,6 +90,7 @@ public class ParserFactoryTests
     [InlineData("Model:Candidates:haiku:MaxOutputTokens", "0")]
     [InlineData("Model:Candidates:haiku:Provider", "openai")]
     [InlineData("Model:Candidates:haiku:ModelId", "")]
+    [InlineData("Model:Candidates:haiku:Effort", "extreme")]
     public void AWrongCandidateFailsAndNeverShowsTheKey(string setting, string value)
     {
         var settings = Haiku();

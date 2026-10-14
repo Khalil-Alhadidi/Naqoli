@@ -34,8 +34,8 @@ public static class EvalCommand
     /// <summary>The input tokens one case is estimated to take before a model run (the prompt and one message).</summary>
     public const int EstimatedInputTokensPerCase = 1_500;
 
-    /// <summary>The output tokens one case is estimated to take before a model run.</summary>
-    public const int EstimatedOutputTokensPerCase = 150;
+    /// <summary>The output tokens one case is estimated to take before a model run (thinking is billed as output).</summary>
+    public const int EstimatedOutputTokensPerCase = 400;
 
     /// <summary>The web console's user-secrets id (<c>src/Agent.Web/Agent.Web.csproj</c>), where Khalil sets the key once.</summary>
     public const string WebUserSecretsId = "2caa1826-0a12-43da-8479-d86df1b92e41";
@@ -49,7 +49,7 @@ public static class EvalCommand
         return parserName.Replace(':', '-');
     }
 
-    /// <summary>The cost estimated before a run: <paramref name="cases"/> × (1,500 input + 150 output tokens) at the candidate's prices.</summary>
+    /// <summary>The cost estimated before a run: <paramref name="cases"/> × (1,500 input + 400 output tokens) at the candidate's prices.</summary>
     public static decimal EstimatedCostUsd(int cases, ModelCandidate candidate)
     {
         ArgumentNullException.ThrowIfNull(candidate);
