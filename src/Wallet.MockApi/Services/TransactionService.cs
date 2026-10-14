@@ -48,11 +48,18 @@ public sealed partial class TransactionService(
     // Generous: each failed try means another call changed the same user row in between.
     private const int MaxPinReserveTries = 50;
 
+    /// <summary>The prefix of the seeded rows' keys; no caller may use a key that starts with it.</summary>
+    public const string SeedKeyPrefix = "seed-";
+
     /// <summary>
     /// True when <paramref name="key"/> is 1 to <see cref="MaxIdempotencyKeyLength"/> characters of ASCII letters,
-    /// digits, <c>_</c> and <c>-</c> (a GUID in "N" or "D" form fits).
+    /// digits, <c>_</c> and <c>-</c> (a GUID in "N" or "D" form fits), and does not start with
+    /// <see cref="SeedKeyPrefix"/>: seeded rows can be neither replayed nor looked up by key.
     /// </summary>
-    public static bool IsValidIdempotencyKey(string? key) => key is not null && IdempotencyKeyFormat().IsMatch(key);
+    public static bool IsValidIdempotencyKey(string? key)
+        => key is not null
+            && IdempotencyKeyFormat().IsMatch(key)
+            && !key.StartsWith(SeedKeyPrefix, StringComparison.Ordinal);
 
     /// <summary>
     /// Applies the injected fault, if any; then, inside the gate, replays a known key, or validates, checks the PIN,
@@ -108,51 +115,64 @@ public sealed partial class TransactionService(
 
     private async Task<ExecuteResult> ExecuteCoreAsync(string idempotencyKey, PaymentRequest request, CancellationToken cancellationToken)
     {
+        // What was asked, from the body as received; a known key answers only the same request.
+        var fingerprint = RequestFingerprint.Of(request);
+
         // A known key is answered from its record at once: no validation, no PIN check (so no attempt is counted
-        // and no user row changes), no insert. A retry never depends on the body or on data the first call changed.
+        // and no user row changes), no insert. A retry never depends on data the first call changed.
         if (await LoadAsync(idempotencyKey, cancellationToken) is { } existing)
-            return await ReplayAsync(existing, cancellationToken);
+            return await ReplayAsync(existing, fingerprint, cancellationToken);
 
         // The key was unknown a moment ago; a call with the same key may still commit while this one is checked, so
         // a refusal looks the key up once more before it is returned.
         var check = await validator.ValidateAsync(request, cancellationToken);
         if (!check.IsValid)
-            return await RefuseUnlessKnownAsync(idempotencyKey, check.Refusal, cancellationToken);
+            return await RefuseUnlessKnownAsync(idempotencyKey, fingerprint, check.Refusal, cancellationToken);
 
         var plan = check.Plan;
         if (request.Pin is not null || plan.PinRequired)
         {
-            var pinRefusal = await CheckPinAsync(idempotencyKey, plan.UserId, request.Pin, cancellationToken);
+            var pinRefusal = await CheckPinAsync(idempotencyKey, fingerprint, plan.UserId, request.Pin, cancellationToken);
             if (pinRefusal is not null)
                 return pinRefusal;
         }
 
-        return await RunAsync(idempotencyKey, plan, cancellationToken);
+        return await RunAsync(idempotencyKey, fingerprint, plan, cancellationToken);
     }
 
-    /// <summary>The transaction recorded under a key, with the payer's current balance; null when the key is unknown.</summary>
-    public async Task<TransactionResponse?> FindAsync(string idempotencyKey, CancellationToken cancellationToken)
+    /// <summary>
+    /// The transaction <paramref name="userId"/> recorded under a key; null when the key is unknown or belongs to
+    /// another user, so a wrong user learns nothing. <see cref="TransactionResponse.BalanceAfterIqd"/> is the stored
+    /// balance right after that payment.
+    /// </summary>
+    public async Task<TransactionResponse?> FindAsync(string idempotencyKey, int userId, CancellationToken cancellationToken)
     {
-        var row = await LoadAsync(idempotencyKey, cancellationToken);
+        var row = await db.Transactions.AsNoTracking()
+            .SingleOrDefaultAsync(t => t.IdempotencyKey == idempotencyKey && t.UserId == userId, cancellationToken);
         return row is null ? null : await ToResponseAsync(row, cancellationToken);
     }
 
     /// <summary>
     /// Reserves an attempt before the slow PBKDF2 check, so concurrent guesses cannot all see the PIN unlocked: at most
     /// <see cref="WalletOptions.MaxPinAttempts"/> checks are counted before the lock, however many arrive together.
-    /// A right PIN gives its attempt back.
+    /// A right PIN gives its attempt back. A PIN that is not 4 to 6 ASCII digits is refused before any attempt is
+    /// reserved, so it counts no attempt and changes no user row.
     /// </summary>
-    private async Task<ExecuteResult?> CheckPinAsync(string key, int userId, string? pin, CancellationToken cancellationToken)
+    private async Task<ExecuteResult?> CheckPinAsync(
+        string key, string fingerprint, int userId, string? pin, CancellationToken cancellationToken)
     {
         if (pin is null)
-            return await RefuseUnlessKnownAsync(key, PaymentRefusal.Unprocessable(PaymentErrors.PinRequired), cancellationToken);
+            return await RefuseUnlessKnownAsync(key, fingerprint, PaymentRefusal.Unprocessable(PaymentErrors.PinRequired), cancellationToken);
+
+        if (!PinFormat().IsMatch(pin))
+            return await RefuseUnlessKnownAsync(key, fingerprint, PaymentRefusal.Unprocessable(PaymentErrors.PinMalformed), cancellationToken);
 
         var maxAttempts = options.Value.MaxPinAttempts;
         var reservation = await ReservePinAttemptAsync(userId, maxAttempts, cancellationToken);
         if (reservation is null)
         {
             return await RefuseUnlessKnownAsync(
-                key, new PaymentRefusal(StatusCodes.Status423Locked, PaymentErrors.PinLocked), cancellationToken);
+                key, fingerprint, new PaymentRefusal(StatusCodes.Status423Locked, PaymentErrors.PinLocked), cancellationToken);
         }
 
         if (PinHasher.Verify(pin, reservation.PinHash))
@@ -210,13 +230,14 @@ public sealed partial class TransactionService(
         throw new InvalidOperationException($"Could not reserve a PIN attempt for user {userId}.");
     }
 
-    private async Task<ExecuteResult> RunAsync(string key, PaymentPlan plan, CancellationToken cancellationToken)
+    private async Task<ExecuteResult> RunAsync(string key, string fingerprint, PaymentPlan plan, CancellationToken cancellationToken)
     {
         await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted, cancellationToken);
 
         var row = new Transaction
         {
             IdempotencyKey = key,
+            RequestFingerprint = fingerprint,
             UserId = plan.UserId,
             FromAccountId = plan.FromAccountId,
             Type = plan.Type,
@@ -243,7 +264,7 @@ public sealed partial class TransactionService(
             db.ChangeTracker.Clear();
             var existing = await LoadAsync(key, cancellationToken)
                 ?? throw new InvalidOperationException("The idempotency key was reported as taken, but no transaction holds it.");
-            return await ReplayAsync(existing, cancellationToken);
+            return await ReplayAsync(existing, fingerprint, cancellationToken);
         }
 
         row.Reference = ReferenceGenerator.ForId(row.Id);
@@ -293,14 +314,16 @@ public sealed partial class TransactionService(
                 break;
         }
 
+        // The balance after the debit and any credit, read inside the transaction and stored, so a replay or a
+        // lookup later reports this payment's figure, not whatever the balance has become.
         row.Status = TransactionStatus.Done;
         row.CompletedAt = clock.GetUtcNow();
+        row.BalanceAfterIqd = await BalanceAsync(plan.FromAccountId, toCommit);
         await db.SaveChangesAsync(toCommit);
-        var balanceAfter = await BalanceAsync(plan.FromAccountId, toCommit);
         await transaction.CommitAsync(toCommit);
 
         LogExecuted(logger, row.Id, row.Type, row.Status);
-        return new ExecuteResult.Executed(ToResponse(row, balanceAfter, code));
+        return new ExecuteResult.Executed(ToResponse(row, row.BalanceAfterIqd.Value, code));
     }
 
     private async Task CreditAsync(int accountId, long amountIqd, CancellationToken cancellationToken)
@@ -321,6 +344,7 @@ public sealed partial class TransactionService(
         row.Status = TransactionStatus.Failed;
         row.ErrorCode = errorCode;
         row.CompletedAt = clock.GetUtcNow();
+        row.BalanceAfterIqd = await BalanceAsync(row.FromAccountId, CancellationToken.None);
         await db.SaveChangesAsync(CancellationToken.None);
         await transaction.CommitAsync(CancellationToken.None);
 
@@ -328,15 +352,26 @@ public sealed partial class TransactionService(
         return new ExecuteResult.Refused(StoredFailure(errorCode));
     }
 
-    private async Task<ExecuteResult> RefuseUnlessKnownAsync(string key, PaymentRefusal refusal, CancellationToken cancellationToken)
+    private async Task<ExecuteResult> RefuseUnlessKnownAsync(
+        string key, string fingerprint, PaymentRefusal refusal, CancellationToken cancellationToken)
     {
         var existing = await LoadAsync(key, cancellationToken);
-        return existing is null ? new ExecuteResult.Refused(refusal) : await ReplayAsync(existing, cancellationToken);
+        return existing is null ? new ExecuteResult.Refused(refusal) : await ReplayAsync(existing, fingerprint, cancellationToken);
     }
 
-    /// <summary>The stored outcome of a key: the original response, the original refusal, or "in progress".</summary>
-    private async Task<ExecuteResult> ReplayAsync(Transaction row, CancellationToken cancellationToken)
+    /// <summary>
+    /// The stored outcome of a key: the original response, the original refusal, or "in progress". Only for the same
+    /// request: a different <paramref name="fingerprint"/> (another user, type, amount, recipient, bill or product) is
+    /// refused with 422 <c>idempotency_key_reused</c>, and nothing of the stored row is returned.
+    /// </summary>
+    private async Task<ExecuteResult> ReplayAsync(Transaction row, string fingerprint, CancellationToken cancellationToken)
     {
+        if (!string.Equals(row.RequestFingerprint, fingerprint, StringComparison.Ordinal))
+        {
+            LogKeyReused(logger, row.Id);
+            return new ExecuteResult.Refused(PaymentRefusal.Unprocessable(PaymentErrors.IdempotencyKeyReused));
+        }
+
         LogReplayed(logger, row.Id, row.Status);
         return row.Status switch
         {
@@ -356,6 +391,10 @@ public sealed partial class TransactionService(
     private Task<long> BalanceAsync(int accountId, CancellationToken cancellationToken)
         => db.Accounts.AsNoTracking().Where(a => a.Id == accountId).Select(a => a.BalanceIqd).SingleAsync(cancellationToken);
 
+    /// <summary>
+    /// The response for a stored row. The balance is the one stored right after the payment; only seeded rows, which
+    /// have none, report the payer's balance now.
+    /// </summary>
     private async Task<TransactionResponse> ToResponseAsync(Transaction row, CancellationToken cancellationToken)
     {
         var code = row.Type == TransactionType.Purchase
@@ -364,7 +403,8 @@ public sealed partial class TransactionService(
                 .Select(o => o.Code)
                 .SingleOrDefaultAsync(cancellationToken)
             : null;
-        return ToResponse(row, await BalanceAsync(row.FromAccountId, cancellationToken), code);
+        var balanceAfter = row.BalanceAfterIqd ?? await BalanceAsync(row.FromAccountId, cancellationToken);
+        return ToResponse(row, balanceAfter, code);
     }
 
     private static TransactionResponse ToResponse(Transaction row, long balanceAfterIqd, string? code) => new(
@@ -387,6 +427,10 @@ public sealed partial class TransactionService(
     [GeneratedRegex(@"^[A-Za-z0-9_-]{1,64}\z")]
     private static partial Regex IdempotencyKeyFormat();
 
+    // ASCII digits only: the agent turns Arabic-Indic digits into ASCII before it sends a PIN. \z, not $, as above.
+    [GeneratedRegex(@"^[0-9]{4,6}\z")]
+    private static partial Regex PinFormat();
+
     private sealed record PinReservation(string PinHash, int Attempts);
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Transaction {TransactionId} ({Type}) ended {Status}")]
@@ -394,6 +438,9 @@ public sealed partial class TransactionService(
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Idempotency key reused; returning the stored outcome of transaction {TransactionId} ({Status})")]
     private static partial void LogReplayed(ILogger logger, int transactionId, TransactionStatus status);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Idempotency key of transaction {TransactionId} reused for a different request; refused")]
+    private static partial void LogKeyReused(ILogger logger, int transactionId);
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Injected fault {Mode} ({DelayMs} ms) applied to a payment")]
     private static partial void LogFault(ILogger logger, FaultMode mode, int delayMs);

@@ -45,6 +45,19 @@ public class Transaction
 
     public Product? Product { get; set; }
 
+    /// <summary>
+    /// SHA-256, lower-case hex, of what the caller asked for under <see cref="IdempotencyKey"/> (see
+    /// <c>Services/RequestFingerprint.cs</c>). A later call with the same key and a different fingerprint is refused,
+    /// not answered with this row. Seeded rows hold the fingerprint of their own fields; their keys are never accepted.
+    /// </summary>
+    public string RequestFingerprint { get; set; } = string.Empty;
+
+    /// <summary>
+    /// The payer's balance right after this payment (after the debit and any credit, or after a failure was stored),
+    /// written in the same database transaction. Null for seeded rows, whose responses report the balance now.
+    /// </summary>
+    public long? BalanceAfterIqd { get; set; }
+
     public DateTimeOffset CreatedAt { get; set; }
 
     public DateTimeOffset? CompletedAt { get; set; }

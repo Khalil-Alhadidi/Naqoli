@@ -308,6 +308,9 @@ namespace Wallet.MockApi.Migrations
                     b.Property<long>("AmountIqd")
                         .HasColumnType("bigint");
 
+                    b.Property<long?>("BalanceAfterIqd")
+                        .HasColumnType("bigint");
+
                     b.Property<int?>("BillAccountId")
                         .HasColumnType("int");
 
@@ -338,6 +341,12 @@ namespace Wallet.MockApi.Migrations
                     b.Property<string>("Reference")
                         .HasMaxLength(16)
                         .HasColumnType("nvarchar(16)");
+
+                    b.Property<string>("RequestFingerprint")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(64)");
 
                     b.Property<string>("Status")
                         .IsRequired()

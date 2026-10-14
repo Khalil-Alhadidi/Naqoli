@@ -149,7 +149,7 @@ public class QuoteTests(WalletApiFixture fixture)
             Assert.Equal(HttpStatusCode.UnprocessableEntity, byPhone.StatusCode);
             var problem = await byPhone.ReadProblemAsync(Token);
             Assert.Equal("account_closed", problem.Code());
-            Assert.Equal("Recipient account is closed", problem.Title);
+            Assert.Equal("Account is closed", problem.Title);
 
             // Naming the account by id is refused the same way.
             var account = await fixture.Client.GetFromJsonAsync<AccountSummary>($"/accounts/by-phone/{phone}", Token);

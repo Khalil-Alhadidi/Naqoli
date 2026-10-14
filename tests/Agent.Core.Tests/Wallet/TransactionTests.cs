@@ -69,7 +69,7 @@ public class TransactionTests(WalletApiFixture fixture)
         Assert.Equal(DemoBalance, await BalanceAsync(DemoUserId));
 
         // By-key applies the same format: a malformed key is simply unknown.
-        var lookup = await fixture.Client.GetAsync($"/transactions/by-key/{Uri.EscapeDataString(key)}", Token);
+        var lookup = await fixture.Client.GetAsync($"/transactions/by-key/{Uri.EscapeDataString(key)}?userId={DemoUserId}", Token);
         Assert.Equal(HttpStatusCode.NotFound, lookup.StatusCode);
         Assert.Equal("unknown_key", (await lookup.ReadProblemAsync(Token)).Code());
     }
@@ -160,7 +160,7 @@ public class TransactionTests(WalletApiFixture fixture)
         Assert.Equal(DemoBalance, await BalanceAsync(DemoUserId));
 
         // The failure is stored against the key, and a retry gets the same answer without executing.
-        var lookup = await fixture.Client.GetFromJsonAsync<TransactionResponse>("/transactions/by-key/t-empty", Token);
+        var lookup = await fixture.Client.GetFromJsonAsync<TransactionResponse>($"/transactions/by-key/t-empty?userId={TightUserId}", Token);
         Assert.Equal("failed", lookup!.Status);
         Assert.Equal("insufficient_funds", lookup.ErrorCode);
 
@@ -186,7 +186,7 @@ public class TransactionTests(WalletApiFixture fixture)
         Assert.Equal(ClosedContactBalance, await fixture.AccountBalanceAsync(ClosedContactPhone));
 
         // Refused in validation, before any row is stored against the key.
-        var lookup = await fixture.Client.GetAsync("/transactions/by-key/t-closed", Token);
+        var lookup = await fixture.Client.GetAsync($"/transactions/by-key/t-closed?userId={DemoUserId}", Token);
         Assert.Equal(HttpStatusCode.NotFound, lookup.StatusCode);
         Assert.Equal("unknown_key", (await lookup.ReadProblemAsync(Token)).Code());
         Assert.Equal(0, await RowsWithKeyAsync("t-closed"));
@@ -449,6 +449,74 @@ public class TransactionTests(WalletApiFixture fixture)
         }
     }
 
+    [Theory]
+    [InlineData("12")]
+    [InlineData("1234567")]
+    [InlineData("12ab")]
+    [InlineData("١٢٣٤")]
+    public async Task MalformedPinIs422AndCostsNoAttempt(string pin)
+    {
+        Assert.SkipUnless(fixture.DatabaseAvailable, fixture.SkipReason);
+        await fixture.ResetAsync();
+
+        // Arabic-Indic digits are malformed at the wallet: the agent converts digits before it sends a PIN.
+        var malformed = await PostAsync("t-pin-malformed", Transfer(TraderUserId, 1_100_000, toAccountId: DemoAccountId, pin: pin));
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, malformed.StatusCode);
+        Assert.Equal("pin_malformed", (await malformed.ReadProblemAsync(Token)).Code());
+        Assert.Equal(TraderBalance, await BalanceAsync(TraderUserId));
+        Assert.Equal(0, await RowsWithKeyAsync("t-pin-malformed"));
+
+        await using (var scope = fixture.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<WalletDbContext>();
+            var trader = await db.Users.AsNoTracking().SingleAsync(u => u.Id == TraderUserId, Token);
+            Assert.Equal(0, trader.PinFailedAttempts);
+            Assert.False(trader.PinLocked);
+        }
+
+        var paid = await PostAsync("t-pin-after-malformed", Transfer(TraderUserId, 1_100_000, toAccountId: DemoAccountId, pin: TraderPin));
+        Assert.Equal(HttpStatusCode.Created, paid.StatusCode);
+        Assert.Equal(11_399_000, await BalanceAsync(TraderUserId));
+    }
+
+    [Fact]
+    public async Task ClosedPayerIsRefused()
+    {
+        Assert.SkipUnless(fixture.DatabaseAvailable, fixture.SkipReason);
+        await fixture.ResetAsync();
+
+        try
+        {
+            await using (var scope = fixture.CreateScope())
+            {
+                var db = scope.ServiceProvider.GetRequiredService<WalletDbContext>();
+                var closed = await db.Accounts
+                    .Where(a => a.UserId == TightUserId && a.IsDefault)
+                    .ExecuteUpdateAsync(s => s.SetProperty(a => a.Status, AccountStatus.Closed), Token);
+                Assert.Equal(1, closed);
+            }
+
+            var request = Transfer(TightUserId, 1_000, toAccountId: DemoAccountId);
+
+            var quote = await fixture.Client.PostAsJsonAsync("/quotes", request, Token);
+            Assert.Equal(HttpStatusCode.UnprocessableEntity, quote.StatusCode);
+            Assert.Equal("account_closed", (await quote.ReadProblemAsync(Token)).Code());
+
+            var execute = await PostAsync("t-closed-payer", request);
+            Assert.Equal(HttpStatusCode.UnprocessableEntity, execute.StatusCode);
+            Assert.Equal("account_closed", (await execute.ReadProblemAsync(Token)).Code());
+
+            Assert.Equal(TightBalance, await BalanceAsync(TightUserId));
+            Assert.Equal(DemoBalance, await BalanceAsync(DemoUserId));
+            Assert.Equal(0, await RowsWithKeyAsync("t-closed-payer"));
+        }
+        finally
+        {
+            await fixture.ResetAsync();
+        }
+    }
+
     [Fact]
     public async Task ByKeyFindsADoneTransaction()
     {
@@ -458,7 +526,7 @@ public class TransactionTests(WalletApiFixture fixture)
         var created = await PostAsync("t-lookup", SendFiftyThousandToHammoudi);
         var createdBody = await created.Content.ReadFromJsonAsync<TransactionResponse>(Token);
 
-        var lookup = await fixture.Client.GetAsync("/transactions/by-key/t-lookup", Token);
+        var lookup = await fixture.Client.GetAsync($"/transactions/by-key/t-lookup?userId={DemoUserId}", Token);
 
         Assert.Equal(HttpStatusCode.OK, lookup.StatusCode);
         var body = await lookup.Content.ReadFromJsonAsync<TransactionResponse>(Token);
@@ -472,7 +540,7 @@ public class TransactionTests(WalletApiFixture fixture)
         Assert.SkipUnless(fixture.DatabaseAvailable, fixture.SkipReason);
         await fixture.ResetAsync();
 
-        var response = await fixture.Client.GetAsync("/transactions/by-key/no-such-key", Token);
+        var response = await fixture.Client.GetAsync($"/transactions/by-key/no-such-key?userId={DemoUserId}", Token);
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
         Assert.Equal("unknown_key", (await response.ReadProblemAsync(Token)).Code());

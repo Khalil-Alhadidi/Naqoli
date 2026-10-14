@@ -24,6 +24,12 @@ public sealed class WalletApiFixture : IAsyncLifetime
     /// <summary>The value <see cref="Client"/> sends in <c>X-Wallet-Admin-Key</c>; any non-empty value opens <c>/admin</c> in Development.</summary>
     public const string DevelopmentAdminHeaderValue = "tests";
 
+    /// <summary>
+    /// The value every client of this fixture sends in <c>X-Wallet-Client-Key</c>; with no client key configured, any
+    /// non-empty value opens the wallet routes in Development.
+    /// </summary>
+    public const string DevelopmentClientHeaderValue = "tests";
+
     private const int ProbeTimeoutSeconds = 3;
 
     private WebApplicationFactory<Program>? factory;
@@ -37,10 +43,13 @@ public sealed class WalletApiFixture : IAsyncLifetime
     public string SkipReason { get; private set; } = string.Empty;
 
     /// <summary>
-    /// A client of the API under test, sending the <c>X-Wallet-Admin-Key</c> header on every request. Only valid when
-    /// <see cref="DatabaseAvailable"/> is true.
+    /// A client of the API under test, sending the <c>X-Wallet-Client-Key</c> and <c>X-Wallet-Admin-Key</c> headers on
+    /// every request. Only valid when <see cref="DatabaseAvailable"/> is true.
     /// </summary>
     public HttpClient Client => client ?? throw new InvalidOperationException("The wallet API is not running. " + SkipReason);
+
+    private WebApplicationFactory<Program> Factory
+        => factory ?? throw new InvalidOperationException("The wallet API is not running. " + SkipReason);
 
     private static bool DatabaseRequired => Environment.GetEnvironmentVariable("ZAINCASH_TEST_SQL") == "1";
 
@@ -67,8 +76,9 @@ public sealed class WalletApiFixture : IAsyncLifetime
         factory = new WebApplicationFactory<Program>().WithWebHostBuilder(host =>
         {
             host.UseSetting("ConnectionStrings:Wallet", TestConnectionString);
-            // No admin key (empty overrides any key in user secrets and means none): the Development rule applies.
+            // No admin or client key (empty overrides any key in user secrets and means none): the Development rule applies.
             host.UseSetting("Wallet:AdminKey", string.Empty);
+            host.UseSetting("Wallet:ClientKey", string.Empty);
         });
 
         await using (var scope = factory.Services.CreateAsyncScope())
@@ -91,7 +101,7 @@ public sealed class WalletApiFixture : IAsyncLifetime
                 scope.ServiceProvider.GetRequiredService<TimeProvider>().GetUtcNow());
         }
 
-        client = factory.CreateClient();
+        client = CreateClient();
 
         // In Development with no admin key, the /admin routes still need the header, with any value.
         client.DefaultRequestHeaders.Add(AdminKeyFilter.HeaderName, DevelopmentAdminHeaderValue);
@@ -106,16 +116,24 @@ public sealed class WalletApiFixture : IAsyncLifetime
     }
 
     /// <summary>
-    /// A new client of the API under test, for tests that need their own timeout. It sends no admin header.
-    /// The caller disposes it.
+    /// A new client of the API under test, for tests that need their own timeout. It sends the
+    /// <c>X-Wallet-Client-Key</c> header and no admin header. The caller disposes it.
     /// </summary>
     public HttpClient CreateClient()
-        => (factory ?? throw new InvalidOperationException("The wallet API is not running. " + SkipReason)).CreateClient();
+    {
+        var created = Factory.CreateClient();
+        created.DefaultRequestHeaders.Add(ClientKeyFilter.HeaderName, DevelopmentClientHeaderValue);
+        return created;
+    }
+
+    /// <summary>
+    /// A handler that sends requests straight to the API under test, for an agent-side client built on its own
+    /// <see cref="HttpClient"/>. It adds no headers. The caller disposes the client built on it.
+    /// </summary>
+    public HttpMessageHandler CreateHandler() => Factory.Server.CreateHandler();
 
     /// <summary>A service scope of the API under test, for tests that work on the database directly.</summary>
-    public AsyncServiceScope CreateScope()
-        => (factory ?? throw new InvalidOperationException("The wallet API is not running. " + SkipReason))
-            .Services.CreateAsyncScope();
+    public AsyncServiceScope CreateScope() => Factory.Services.CreateAsyncScope();
 
     /// <summary>
     /// The balance of the account with <paramref name="phone"/>, read from the database. Accounts behind contacts

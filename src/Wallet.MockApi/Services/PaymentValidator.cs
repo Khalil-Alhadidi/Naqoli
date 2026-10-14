@@ -27,6 +27,9 @@ public static class PaymentErrors
     public const string PinLocked = "pin_locked";
     public const string InProgress = "in_progress";
     public const string UnknownKey = "unknown_key";
+    public const string IdempotencyKeyReused = "idempotency_key_reused";
+    public const string MissingUserId = "missing_user_id";
+    public const string PinMalformed = "pin_malformed";
 }
 
 /// <summary>Why the wallet refused a request: the HTTP status, the code, and the extra figures some codes carry.</summary>
@@ -122,10 +125,14 @@ public sealed class PaymentValidator(WalletDbContext db, FeeCalculator fees, IOp
         // Every user has exactly one default account (D10); the payer pays from it.
         var payer = await db.Accounts.AsNoTracking()
             .Where(a => a.UserId == request.UserId && a.IsDefault)
-            .Select(a => new { a.Id, a.BalanceIqd })
+            .Select(a => new { a.Id, a.BalanceIqd, a.Status })
             .SingleOrDefaultAsync(cancellationToken);
         if (payer is null)
             return Refuse(PaymentErrors.UnknownUser);
+
+        // A closed account pays nothing, as it receives nothing.
+        if (payer.Status == AccountStatus.Closed)
+            return Refuse(PaymentErrors.AccountClosed);
 
         var draft = type switch
         {

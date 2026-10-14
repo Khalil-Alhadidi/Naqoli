@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Globalization;
 using Microsoft.EntityFrameworkCore;
+using Wallet.MockApi.Contracts;
 using Wallet.MockApi.Data.Entities;
 using Wallet.MockApi.Data.Seed;
 using Wallet.MockApi.Services;
@@ -17,7 +18,6 @@ public static class SeedData
     public static readonly TimeSpan IraqOffset = TimeSpan.FromHours(3);
 
     private const string HistoryTimeFormat = "HH:mm";
-    private const string SeedKeyPrefix = "seed-";
     private const int OrderCodeDigits = 12;
 
     // PBKDF2 is slow on purpose, so each distinct seed PIN is hashed once per process and the hash is shared by
@@ -73,6 +73,11 @@ public static class SeedData
         InsertInOrder(db, graph.Contacts);
         InsertInOrder(db, graph.Aliases);
         InsertInOrder(db, graph.BillAccounts);
+
+        // Users, accounts, bill accounts and products now have their ids, so each history row can carry the
+        // fingerprint of its own fields (its key is never accepted from a caller, so it is never compared).
+        foreach (var t in graph.Transactions)
+            t.RequestFingerprint = SeedFingerprint(t);
         InsertInOrder(db, graph.Transactions);
         InsertInOrder(db, graph.Orders);
 
@@ -179,7 +184,7 @@ public static class SeedData
             // The fee is the file's, not WalletOptions', so a change to the configured fees never rewrites history.
             var transaction = new Transaction
             {
-                IdempotencyKey = SeedKeyPrefix + row.Id,
+                IdempotencyKey = TransactionService.SeedKeyPrefix + row.Id,
                 Reference = $"ZC-{transactions.Count + 1:D10}",
                 User = payer,
                 FromAccount = payer.Accounts.Single(a => a.IsDefault),
@@ -211,6 +216,20 @@ public static class SeedData
 
         return new SeedGraph(users, accounts, billers, products, contacts, aliases, billAccounts, transactions, orders);
     }
+
+    /// <summary>
+    /// The fingerprint of a seeded row: its payer, type and amount, the recipient's phone for a transfer, and its bill
+    /// account or product id. Needs the ids, so it runs once the rows they belong to are inserted.
+    /// </summary>
+    private static string SeedFingerprint(Transaction t) => RequestFingerprint.Of(new PaymentRequest(
+        t.User!.Id,
+        TransactionNames.Of(t.Type),
+        t.AmountIqd,
+        t.ToAccount?.Phone,
+        null,
+        t.BillAccount?.Id,
+        t.Product?.Id,
+        null));
 
     private static Account NewAccount(SeedAccount account) => new()
     {

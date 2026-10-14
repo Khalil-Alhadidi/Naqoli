@@ -32,8 +32,12 @@ builder.Services.AddDbContext<WalletDbContext>(o => o.UseSqlServer(connectionStr
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddOptions<WalletOptions>()
     .BindConfiguration(WalletOptions.SectionName)
-    // An empty admin key means none, as an absent one does; post-configuration runs before validation.
-    .PostConfigure(o => o.AdminKey = string.IsNullOrEmpty(o.AdminKey) ? null : o.AdminKey)
+    // An empty admin or client key means none, as an absent one does; post-configuration runs before validation.
+    .PostConfigure(o =>
+    {
+        o.AdminKey = string.IsNullOrEmpty(o.AdminKey) ? null : o.AdminKey;
+        o.ClientKey = string.IsNullOrEmpty(o.ClientKey) ? null : o.ClientKey;
+    })
     .ValidateDataAnnotations()
     .ValidateOnStart();
 // The seed files, read and validated once; a missing or invalid file fails the start (see below).
@@ -86,10 +90,14 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
 }
 
+// Only /health is open; every other route needs the client key (ClientKeyFilter), and /admin the admin key as well.
 app.MapGet("/health", () => "ok");
-app.MapReadEndpoints();
-app.MapTransactionEndpoints();
-app.MapAdminEndpoints();
+var api = app.MapGroup(string.Empty)
+    .AddEndpointFilter<ClientKeyFilter>()
+    .ProducesProblem(StatusCodes.Status403Forbidden);
+api.MapReadEndpoints();
+api.MapTransactionEndpoints();
+api.MapAdminEndpoints();
 
 app.Run();
 return 0;

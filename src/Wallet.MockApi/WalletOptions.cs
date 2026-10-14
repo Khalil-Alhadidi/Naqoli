@@ -20,6 +20,9 @@ public sealed class WalletOptions
     /// <summary>The shortest <see cref="AdminKey"/> accepted.</summary>
     public const int MinAdminKeyLength = 16;
 
+    /// <summary>The shortest <see cref="ClientKey"/> accepted.</summary>
+    public const int MinClientKeyLength = 16;
+
     [Range(typeof(long), "0", "1000000", ParseLimitsInInvariantCulture = true)]
     public long TransferFeeIqd { get; set; } = 1000;
 
@@ -48,6 +51,15 @@ public sealed class WalletOptions
     /// </summary>
     [MinLength(MinAdminKeyLength)]
     public string? AdminKey { get; set; }
+
+    /// <summary>
+    /// The key every caller of the wallet routes (all but <c>/health</c>) sends in <c>X-Wallet-Client-Key</c>, at least
+    /// <see cref="MinClientKeyLength"/> characters. The agent holds the same value. Never stored in the repository; set
+    /// it in user secrets or the environment. Unset or empty means no key (an empty value is turned into null before
+    /// validation, in <c>Program.cs</c>), which opens the routes in Development only.
+    /// </summary>
+    [MinLength(MinClientKeyLength)]
+    public string? ClientKey { get; set; }
 
     /// <summary>
     /// The directory holding the eight seed files (see <c>data/README.md</c>). Defaults to the copy of

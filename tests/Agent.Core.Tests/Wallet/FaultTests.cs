@@ -20,6 +20,7 @@ public class FaultTests(WalletApiFixture fixture)
 
     // At least 16 characters (WalletOptions.MinAdminKeyLength). A test value, not a secret.
     private const string AdminTestKey = "test-admin-key-0123456789";
+    private const string ProductionClientKey = "test-client-key-0123456789";
 
     private static CancellationToken Token => TestContext.Current.CancellationToken;
 
@@ -39,7 +40,7 @@ public class FaultTests(WalletApiFixture fixture)
         Assert.Equal("injected_error", (await response.ReadProblemAsync(Token)).Code());
         Assert.Equal(DemoSeedBalance, await BalanceAsync(DemoUserId));
         Assert.Equal(HammoudiSeedBalance, await fixture.AccountBalanceAsync(HammoudiPhone));
-        Assert.Equal(HttpStatusCode.NotFound, (await fixture.Client.GetAsync("/transactions/by-key/f-error", Token)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await fixture.Client.GetAsync($"/transactions/by-key/f-error?userId={DemoUserId}", Token)).StatusCode);
     }
 
     [Fact]
@@ -73,7 +74,7 @@ public class FaultTests(WalletApiFixture fixture)
         Assert.Equal(DemoSeedBalance, await BalanceAsync(DemoUserId));
         Assert.Equal(HammoudiSeedBalance, await fixture.AccountBalanceAsync(HammoudiPhone));
 
-        var lookup = await fixture.Client.GetAsync("/transactions/by-key/f-before", Token);
+        var lookup = await fixture.Client.GetAsync($"/transactions/by-key/f-before?userId={DemoUserId}", Token);
         Assert.Equal(HttpStatusCode.NotFound, lookup.StatusCode);
         Assert.Equal("unknown_key", (await lookup.ReadProblemAsync(Token)).Code());
     }
@@ -93,7 +94,7 @@ public class FaultTests(WalletApiFixture fixture)
         }
 
         // The original request is still waiting on the server; the money has moved and the key says so.
-        var lookup = await fixture.Client.GetFromJsonAsync<TransactionResponse>("/transactions/by-key/f-after", Token);
+        var lookup = await fixture.Client.GetFromJsonAsync<TransactionResponse>($"/transactions/by-key/f-after?userId={DemoUserId}", Token);
         Assert.NotNull(lookup);
         Assert.Equal("done", lookup.Status);
         Assert.Equal(699_000, lookup.BalanceAfterIqd);
@@ -156,8 +157,10 @@ public class FaultTests(WalletApiFixture fixture)
         {
             host.UseSetting("ConnectionStrings:Wallet", fixture.TestConnectionString);
             host.UseSetting("Wallet:AdminKey", AdminTestKey);
+            host.UseSetting("Wallet:ClientKey", string.Empty);
         });
         using var client = keyed.CreateClient();
+        client.DefaultRequestHeaders.Add(ClientKeyFilter.HeaderName, WalletApiFixture.DevelopmentClientHeaderValue);
 
         var without = await client.GetAsync("/admin/faults", Token);
         Assert.Equal(HttpStatusCode.Forbidden, without.StatusCode);
@@ -188,8 +191,11 @@ public class FaultTests(WalletApiFixture fixture)
             host.UseEnvironment("Production");
             host.UseSetting("ConnectionStrings:Wallet", fixture.TestConnectionString);
             host.UseSetting("Wallet:AdminKey", string.Empty);
+            // A configured client key, sent, so the admin filter is the one that answers.
+            host.UseSetting("Wallet:ClientKey", ProductionClientKey);
         });
         using var client = production.CreateClient();
+        client.DefaultRequestHeaders.Add(ClientKeyFilter.HeaderName, ProductionClientKey);
         client.DefaultRequestHeaders.Add(AdminKeyFilter.HeaderName, "any-value");
 
         // Closed on every admin route, even with the header: outside Development only a configured key opens them.

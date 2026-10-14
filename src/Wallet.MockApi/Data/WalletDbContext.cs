@@ -16,6 +16,7 @@ public class WalletDbContext(DbContextOptions<WalletDbContext> options) : DbCont
     private const int CodeLength = 32;
     private const int EnumLength = 16;
     private const int PinHashLength = 128;
+    private const int FingerprintLength = 64;
 
     public DbSet<User> Users => Set<User>();
 
@@ -154,6 +155,7 @@ public class WalletDbContext(DbContextOptions<WalletDbContext> options) : DbCont
             transaction.Property(t => t.Type).HasConversion<string>().HasMaxLength(EnumLength);
             transaction.Property(t => t.Status).HasConversion<string>().HasMaxLength(EnumLength);
             transaction.Property(t => t.ErrorCode).HasMaxLength(CodeLength);
+            transaction.Property(t => t.RequestFingerprint).HasMaxLength(FingerprintLength).IsUnicode(false);
             transaction.HasOne(t => t.User)
                 .WithMany()
                 .HasForeignKey(t => t.UserId)

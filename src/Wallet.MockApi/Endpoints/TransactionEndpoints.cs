@@ -33,6 +33,7 @@ public static class TransactionEndpoints
 
         app.MapGet("/transactions/by-key/{key}", GetByKeyAsync)
             .WithName("GetTransactionByKey")
+            .ProducesProblem(StatusCodes.Status400BadRequest)
             .ProducesProblem(StatusCodes.Status404NotFound);
 
         return app;
@@ -68,11 +69,15 @@ public static class TransactionEndpoints
     }
 
     private static async Task<Results<Ok<TransactionResponse>, ProblemHttpResult>> GetByKeyAsync(
-        string key, TransactionService transactions, CancellationToken cancellationToken)
+        string key, [FromQuery] int? userId, TransactionService transactions, CancellationToken cancellationToken)
     {
-        // A malformed key can never have been stored, so it is simply unknown.
+        // The caller names whose key it is; another user's key is simply unknown.
+        if (userId is not { } owner)
+            return WalletProblems.Create(StatusCodes.Status400BadRequest, PaymentErrors.MissingUserId);
+
+        // A malformed or seeded key can never be a caller's, so it is simply unknown.
         var found = TransactionService.IsValidIdempotencyKey(key)
-            ? await transactions.FindAsync(key, cancellationToken)
+            ? await transactions.FindAsync(key, owner, cancellationToken)
             : null;
         return found is null
             ? WalletProblems.Create(StatusCodes.Status404NotFound, PaymentErrors.UnknownKey)
