@@ -55,7 +55,7 @@ Area 6 beyond M5, R1, R4; area 5 beyond R7, R8. Findings by area: 1 → M3, M4, 
 Conditional pass; the milestone 2 and 2b items are closed. Before milestone 4 builds on the write path: I1, I2, I4 and the DbContext-factory change. Before milestone 6: I3. Same pass if cheap: M1, M4. Can wait: M2, M3, M5, M6, R1-R8.
 
 ## Controller's disposition (14 Oct 2026)
-- I1, I2 (sweep, catch-all, `ExecutingSince`), I4 (callers of `ConfirmAsync`, `ldstr "transactions"`), M1, M4, M6: fixed in the milestone 3 final fix wave (see the git history after e90ab70).
+- I1 (settle window, `Agent:SettleWindowSeconds`), I2 (sweep `MarkStaleExecutingAsync`, catch-all, `ExecutingSince`; the sweep's hosted service is milestone 4), I4 (callers of `ConfirmAsync`, `ldstr "transactions"`, reflection; the `Agent.Web` scan is milestone 4), M1, M4, M6: fixed in this fix wave, code commit ec6a3b5 (see the git history after 92e57e6).
 - I3: milestone 6 plan (the `ParsedRequestValidator` and un-masking), with the length and set checks noted there.
 - DbContext factory, R7 card view model, PIN field and `<bdi>` rules: milestone 4 plan.
 - M2, M3, M5, R1-R6, R8: milestone 3 carry-forwards.

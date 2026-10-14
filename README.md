@@ -122,6 +122,8 @@ The full contract (every route, field, error code, the idempotency, PIN and bala
 
 Every request except `GET /health` carries the `X-Wallet-Client-Key` header. In Development with no `Wallet:ClientKey` set, any non-empty value is accepted. Outside Development both apps (the wallet and the agent) need `Wallet:ClientKey`, at least 16 characters, in user secrets or the environment: `dotnet user-secrets set "Wallet:ClientKey" "<value>" --project src/Wallet.MockApi` for the wallet, and the same value for the agent with `dotnet user-secrets set "Agent:WalletClientKey" "<value>" --project src/Agent.Web` (or `Agent__WalletClientKey`). In Development with no `Agent:WalletClientKey`, the agent sends `dev`; outside Development it refuses to start without one. Never commit it.
 
+Outside Development the agent needs both `Agent:WalletBaseUrl` and `Agent:WalletClientKey` set (user secrets or the environment); it has no default for either there.
+
 Every `/admin` request also carries the `X-Wallet-Admin-Key` header. In Development with no `Wallet:AdminKey` set, any non-empty value is accepted (the header makes a browser preflight, so a web page cannot reset the wallet). Outside Development, set a key of at least 16 characters in user secrets or the `Wallet__AdminKey` environment variable and send it in that header; never commit it.
 
 Status: milestone 3 of 12 (write path, no model) under final review, see [docs/build-plan.md](docs/build-plan.md).
