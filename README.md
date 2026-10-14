@@ -112,7 +112,8 @@ Notes:
 - The mock wallet API serves plain HTTP on loopback by design and does not redirect to HTTPS.
 - The web app listens on http://localhost:5089.
 - The eval console prints a usage line for now. It runs the request sets from milestone 5.
-- Install the Playwright browsers once, after the first build: `pwsh tests/Agent.Web.Journeys/bin/Debug/net10.0/playwright.ps1 install`.
+- Install the Playwright browser once, after the first build: `pwsh tests/Agent.Web.Journeys/bin/Debug/net10.0/playwright.ps1 install chromium`.
+- The screen journeys (`tests/Agent.Web.Journeys`, collection `journeys`, fixture `JourneyHost`) host the mock wallet and the web console in process on Kestrel, on dynamic loopback ports, and drive them with headless Chromium through the scripted parser (never a live model). The wallet uses `ZainCashWalletJourneys_Test` (override `ConnectionStrings__WalletJourneysTest`) and the console `ZainCashAgent_Journeys_Test` (override `ConnectionStrings__AgentJourneysTest`); both are dropped and recreated at the start of a run, so both names must end in `_Test`. Two consoles run: one with the default card timer and one with a 4-second timer for the timer journey. The journeys skip when SQL Server does not answer the 3-second probe, or when Chromium is not installed (the skip message gives the install command). A run takes about 20 seconds.
 
 ## Mock wallet API
 

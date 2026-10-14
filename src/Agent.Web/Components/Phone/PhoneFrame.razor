@@ -2,7 +2,7 @@
 
 @* The phone (D20): right to left, Arabic, Arabic-Indic digits. Every text comes from the resource file (rule 4). *@
 <MudRTLProvider RightToLeft="true">
-    <div class="phone-frame" data-testid="phone-frame" dir="rtl" lang="ar">
+    <div class="phone-frame" data-testid="phone-frame" dir="rtl" lang="ar" data-interactive="@(interactive ? "true" : "false")">
         <div class="phone-screen">
             <ChatPanel />
         </div>
@@ -20,6 +20,18 @@
 
 @code {
     private string typed = string.Empty;
+
+    // True once the circuit is live (OnAfterRender never runs while prerendering), so the journeys know input will land.
+    private bool interactive;
+
+    protected override void OnAfterRender(bool firstRender)
+    {
+        if (firstRender)
+        {
+            interactive = true;
+            StateHasChanged();
+        }
+    }
 
     private async Task OnKeyDownAsync(KeyboardEventArgs e)
     {

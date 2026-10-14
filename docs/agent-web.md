@@ -83,3 +83,14 @@ sequenceDiagram
 - `LiveTrace`: the circuit's trace, newest first, coloured by zone.
 - `SettingsPlaceholder`: the settings, read only until milestone 7.
 - `Placeholder`: Log (milestone 7) and Learning data (milestone 10).
+
+## The journeys
+
+`tests/Agent.Web.Journeys` hosts the wallet and two consoles in process on Kestrel and drives them with headless Chromium. One console has the default card timer and the other a 4-second timer. The journeys type the transfer sentence of `ScriptedParser.EmbeddedSentences()`, so they keep working when Khalil replaces the placeholder. They wait for `data-interactive="true"` on the phone frame before typing.
+
+| Journey | Checks |
+|---|---|
+| `HammoudiHappyPath` | The card's figures in Arabic-Indic digits (`PhoneFormat.Amount`). The display and registered names read from the wallet. Confirm gives one done outcome with the reference. The wallet panel shows 699,000 (ASCII) and the new history row. The trace has entries in all four zones. The phone is `rtl` and the console `ltr` |
+| `TimerKillsTheButton` | With a 4-second timer, Confirm becomes disabled and the expired outcome appears. The balance is still 750,000 and there is no new history row |
+| `DoubleTapExecutesOnce` | Two forced clicks at once give one done outcome, one wallet row, a balance of 699,000 and one `done` audit row |
+

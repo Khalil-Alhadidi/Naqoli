@@ -28,8 +28,20 @@ public sealed class ScriptedParser : IParser
 
     /// <summary>The sentences of the embedded <c>scripted-sentences.json</c>.</summary>
     public ScriptedParser()
-        : this(LoadEmbedded())
+        : this(EmbeddedSentences())
     {
+    }
+
+    /// <summary>
+    /// The sentences of the embedded <c>scripted-sentences.json</c>, as written (the screen journeys type them, so they
+    /// keep working when Khalil replaces the placeholders).
+    /// </summary>
+    public static IReadOnlyList<ScriptedSentence> EmbeddedSentences()
+    {
+        using var stream = typeof(ScriptedParser).Assembly.GetManifestResourceStream(ResourceName)
+            ?? throw new InvalidOperationException($"Embedded resource {ResourceName} is missing.");
+        return JsonSerializer.Deserialize<List<ScriptedSentence>>(stream, Json)
+            ?? throw new InvalidOperationException($"Embedded resource {ResourceName} is empty.");
     }
 
     /// <summary>The given sentences (tests).</summary>
@@ -55,13 +67,5 @@ public sealed class ScriptedParser : IParser
             ? request
             : new ParsedRequest { Intent = RequestIntent.Unclear };
         return Task.FromResult(parsed);
-    }
-
-    private static List<ScriptedSentence> LoadEmbedded()
-    {
-        using var stream = typeof(ScriptedParser).Assembly.GetManifestResourceStream(ResourceName)
-            ?? throw new InvalidOperationException($"Embedded resource {ResourceName} is missing.");
-        return JsonSerializer.Deserialize<List<ScriptedSentence>>(stream, Json)
-            ?? throw new InvalidOperationException($"Embedded resource {ResourceName} is empty.");
     }
 }
