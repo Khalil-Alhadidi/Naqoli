@@ -1,7 +1,8 @@
-using Wallet.MockApi.Data;
+using Wallet.MockApi.Data.Seed;
 
 namespace Agent.Core.Tests.Wallet;
 
+/// <summary>The hash over the seed files: committed value, output copy, line endings and sensitivity.</summary>
 public class SeedHashTests
 {
     [Fact]
@@ -10,13 +11,66 @@ public class SeedHashTests
         var committed = File.ReadAllText(Path.Combine(RepositoryRoot(), "data", "seed", "seed-hash.txt")).Trim();
 
         Assert.True(
-            string.Equals(committed, SeedData.ComputeHash(), StringComparison.Ordinal),
-            "The seed changed. If that is intended, update data/seed/seed-hash.txt and re-check every answer key (build plan, milestone 2).");
+            string.Equals(committed, SeedHash.Compute(SeedSetTests.SeedDirectory), StringComparison.Ordinal),
+            "The seed files changed. If that is intended, run `dotnet run --project src/Wallet.MockApi -- seed-hash`, write the value to data/seed/seed-hash.txt and re-check every answer key.");
     }
 
     [Fact]
-    public void SeedHashIsStableAcrossCalls()
-        => Assert.Equal(SeedData.ComputeHash(), SeedData.ComputeHash());
+    public void OutputCopyHashesTheSame()
+        => Assert.Equal(SeedHash.Compute(SeedSetTests.SeedDirectory), SeedHash.Compute(SeedFiles.DefaultDirectory));
+
+    [Fact]
+    public void CrlfAndLfHashTheSame()
+    {
+        var dir = SeedSetTests.CopySeed();
+        try
+        {
+            foreach (var file in SeedFiles.All)
+            {
+                var path = Path.Combine(dir.FullName, file);
+                var lf = File.ReadAllText(path).Replace("\r\n", "\n", StringComparison.Ordinal);
+                File.WriteAllText(path, lf.Replace("\n", "\r\n", StringComparison.Ordinal));
+            }
+
+            Assert.Contains((byte)'\r', File.ReadAllBytes(Path.Combine(dir.FullName, SeedFiles.Users)));
+            Assert.Equal(SeedHash.Compute(SeedSetTests.SeedDirectory), SeedHash.Compute(dir.FullName));
+        }
+        finally
+        {
+            dir.Delete(true);
+        }
+    }
+
+    [Fact]
+    public void OneChangedByteChangesTheHash()
+    {
+        var dir = SeedSetTests.CopySeed();
+        try
+        {
+            SeedSetTests.ReplaceFirst(dir, SeedFiles.Users, "750000", "750001");
+
+            Assert.NotEqual(SeedHash.Compute(SeedSetTests.SeedDirectory), SeedHash.Compute(dir.FullName));
+        }
+        finally
+        {
+            dir.Delete(true);
+        }
+    }
+
+    [Fact]
+    public void MissingFileNamesTheFile()
+    {
+        var dir = Directory.CreateTempSubdirectory();
+        try
+        {
+            var ex = Assert.Throws<FileNotFoundException>(() => SeedHash.Compute(dir.FullName));
+            Assert.Contains(SeedFiles.Users, ex.Message);
+        }
+        finally
+        {
+            dir.Delete(true);
+        }
+    }
 
     internal static string RepositoryRoot()
     {

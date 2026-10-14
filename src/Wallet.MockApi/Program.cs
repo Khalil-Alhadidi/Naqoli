@@ -2,13 +2,15 @@ using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Wallet.MockApi;
 using Wallet.MockApi.Data;
+using Wallet.MockApi.Data.Seed;
 using Wallet.MockApi.Endpoints;
 using Wallet.MockApi.Services;
 
-// "seed-hash": print the hash of the frozen seed and exit. Never touches the database.
+// "seed-hash [directory]": print the hash of the seed files and exit. Never touches the database.
 if (args is ["seed-hash", ..])
 {
-    Console.WriteLine(SeedData.ComputeHash());
+    var directory = args.Length > 1 ? args[1] : SeedFiles.DefaultDirectory;
+    Console.WriteLine(SeedHash.Compute(directory));
     return 0;
 }
 

@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using Wallet.MockApi.Data.Seed;
 
 namespace Wallet.MockApi;
 
@@ -47,4 +48,11 @@ public sealed class WalletOptions
     /// </summary>
     [MinLength(MinAdminKeyLength)]
     public string? AdminKey { get; set; }
+
+    /// <summary>
+    /// The directory holding the eight seed files (see <c>data/README.md</c>). Defaults to the copy of
+    /// <c>data/seed</c> in the build output.
+    /// </summary>
+    [Required]
+    public string SeedDirectory { get; set; } = SeedFiles.DefaultDirectory;
 }

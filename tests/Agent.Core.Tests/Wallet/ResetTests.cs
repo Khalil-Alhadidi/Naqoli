@@ -64,9 +64,6 @@ public class ResetTests(WalletApiFixture fixture)
             new PaymentRequest(SeedData.DemoUserId, "transfer", 50_000, HammoudiPhone, null, null, null, null));
         var body = await next.Content.ReadFromJsonAsync<TransactionResponse>(Token);
         Assert.Equal(SeedData.Transactions().Count + 1, body!.TransactionId);
-
-        var committed = File.ReadAllText(Path.Combine(SeedHashTests.RepositoryRoot(), "data", "seed", "seed-hash.txt")).Trim();
-        Assert.Equal(committed, SeedData.ComputeHash());
     }
 
     [Fact]

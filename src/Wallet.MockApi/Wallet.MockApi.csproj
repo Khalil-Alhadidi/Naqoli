@@ -15,4 +15,10 @@
     <PackageReference Include="System.Security.Cryptography.Pkcs" Version="10.0.13" />
   </ItemGroup>
 
+  <!-- The exported test-set seed (data/seed) is the source of the wallet's rows; copy it to the output so
+       migrate, seed-hash, the running app and the tests all read the same bytes as the repository. -->
+  <ItemGroup>
+    <Content Include="..\..\data\seed\*.json" Link="seed\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>
