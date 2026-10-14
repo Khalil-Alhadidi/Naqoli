@@ -1,0 +1,57 @@
+# ZainCash Agentic AI Challenge Iraq · Topic 04 · Bill Pay & Transfer Agent
+
+An agent that turns one sentence in Iraqi Arabic ("send fifty thousand to my brother Hammoudi") into one confirmation card and one tap, against a mock wallet API. Four request types: transfer, bill, store purchase, and the balance question, which is read only and has no card and no tap. Hackathon entry by Khalil Ahmed Ibrahim.
+
+## Read before you write code
+
+- `docs/architecture.md` is the agreed design. Decisions D1 to D22 are settled. Do not reopen or work around them. If one seems wrong or blocks you, stop and ask Khalil.
+- `docs/build-plan.md` is the order of work. Do one milestone at a time. A milestone is finished only when every "Done when" line is true and shown by a test or a committed file.
+
+Read the section you need from those files when you start a task. Do not rely on this summary for detail.
+
+## Rules that are never broken
+
+1. **No tap, no money.** Only the Confirm handler, given one pending ID, can reach the wallet's execute call. Words never execute. Keep the test that proves this passing.
+2. **The model is read only.** It has no tools that write. It makes one parse call per message and returns a strict structure. Code validates that structure and treats it as a request to check, not a command.
+3. **The card is built by code.** No field on the confirmation card, and no figure in any reply, comes from model text.
+4. **Replies are templates.** Everything the agent says comes from the phone resource file. Never show generated text to the user.
+5. **Masking.** Phone and account numbers become tokens before text reaches the model. The model sees the user's own words and a one-line note of what is pending, and nothing fetched from the wallet: no balances, no stored contact names or aliases, no purchase codes, no PINs.
+6. **Idempotency.** Every execute carries a key. A pending record leaves Pending only once. Unknown status is "checking", never "failed", and a retry reuses the same key.
+7. **The held-out set is sealed.** After it is committed in milestone 5, do not open, print, search or summarise `data/requests.heldout.jsonl`. Only `Agent.Eval` reads it, once, in milestone 11. Tune on `data/requests.dev.jsonl` only. The test-set workbook (`zaincash_testset_v0.10.xlsx`) holds the same held-out cases, so do not open it either. Its matching and question rules reach you as `docs/matching-rules.md`.
+8. **Synthetic data only.** No real names, numbers, documents or transactions anywhere in the repository.
+9. **No secrets in the repository.** Model keys and connection strings go in user secrets or environment variables.
+
+If a task seems to need breaking one of these, stop and ask.
+
+## Things only Khalil writes
+
+- **Iraqi Arabic wording.** Phone strings and test requests are written by Khalil. When a new string is needed, add the key to the resource file with an English placeholder marked `TODO-AR` and list it in your summary. Do not write or "improve" the Arabic.
+- **Answer keys, targets and matching rules.** Do not change an answer key, a target or `docs/matching-rules.md` to make a test pass. Report the mismatch.
+- **Scope.** Do not add features, request types or settings that the architecture does not name. Suggest them instead.
+
+## Stack
+
+- .NET 10. Blazor Server with MudBlazor 9. SQL Server through EF Core, created and seeded by migrations.
+- Model access through `Microsoft.Extensions.AI`, so a candidate model is a configuration change.
+- Playwright for .NET for screen journeys. Journeys use the scripted parser, never a live model.
+- Projects: `Wallet.MockApi`, `Agent.Core`, `Agent.Web`, `Agent.Eval`, `Agent.Core.Tests`, `Agent.Web.Journeys`. The agent talks to the mock wallet over HTTP only.
+- Anything not named here or in the architecture (test framework, logging library, and so on) is Khalil's choice. Ask once, then record the answer in this file.
+- Chosen by Khalil on 14 Oct 2026: tests use xUnit; logging uses the built-in Microsoft.Extensions.Logging with no third-party sink.
+
+## Language and layout
+
+- Inside the phone frame: Iraqi Arabic, right to left, Arabic-Indic digits. Typed input is accepted in either digit form.
+- Everything else on the page (grids, settings, log, learning data), plus code, comments, commit messages and docs: English, left to right.
+- Page layout B: side menu, selected component in the middle, live trace always visible, phone frame on the right.
+
+## Working habits
+
+- Small commits with clear messages. The organisers check that the commit history spans the build period.
+- When you add a library, tool, model or data source, add a line to `docs/disclosure.md` in the same commit. Claude Code itself is listed there.
+- When you find a new way the system can fail, add it to `docs/failure-modes.md` with how it is handled.
+- Limits, thresholds and timers are configuration, shown in the settings component. Do not hard-code them.
+- At the end of a task, say which "Done when" lines are now true, which are not, and what you were unsure about.
+
+## Commands
+
+To be filled in at milestone 1: build, test, create and seed the database, run the two apps, run the eval console, run the screen journeys.
