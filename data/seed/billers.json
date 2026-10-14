@@ -1,0 +1,22 @@
+[
+  {
+    "code": "electricity",
+    "name_en": "Electricity",
+    "name_ar": "الكهرباء"
+  },
+  {
+    "code": "water",
+    "name_en": "Water",
+    "name_ar": "الماء"
+  },
+  {
+    "code": "internet",
+    "name_en": "Internet (Earthlink subscription)",
+    "name_ar": "اشتراك الانترنت (ايرثلنك)"
+  },
+  {
+    "code": "school_fees",
+    "name_en": "School fees",
+    "name_ar": "قسط المدرسة"
+  }
+]

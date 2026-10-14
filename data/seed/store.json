@@ -1,0 +1,152 @@
+[
+  {
+    "id": "ZN-CR-5",
+    "provider": "zain",
+    "provider_name_en": "Zain",
+    "provider_name_ar": "زين",
+    "also_called": "اثير",
+    "type": "credit",
+    "face_value": 5000,
+    "price": 5000
+  },
+  {
+    "id": "ZN-CR-10",
+    "provider": "zain",
+    "provider_name_en": "Zain",
+    "provider_name_ar": "زين",
+    "also_called": "اثير",
+    "type": "credit",
+    "face_value": 10000,
+    "price": 10000
+  },
+  {
+    "id": "ZN-CR-25",
+    "provider": "zain",
+    "provider_name_en": "Zain",
+    "provider_name_ar": "زين",
+    "also_called": "اثير",
+    "type": "credit",
+    "face_value": 25000,
+    "price": 25000
+  },
+  {
+    "id": "ZN-NET-10",
+    "provider": "zain",
+    "provider_name_en": "Zain",
+    "provider_name_ar": "زين",
+    "also_called": "اثير",
+    "type": "internet",
+    "face_value": 10000,
+    "price": 10000
+  },
+  {
+    "id": "ZN-NET-25",
+    "provider": "zain",
+    "provider_name_en": "Zain",
+    "provider_name_ar": "زين",
+    "also_called": "اثير",
+    "type": "internet",
+    "face_value": 25000,
+    "price": 25000
+  },
+  {
+    "id": "ZN-NET-40",
+    "provider": "zain",
+    "provider_name_en": "Zain",
+    "provider_name_ar": "زين",
+    "also_called": "اثير",
+    "type": "internet",
+    "face_value": 40000,
+    "price": 40000
+  },
+  {
+    "id": "AC-CR-5",
+    "provider": "asiacell",
+    "provider_name_en": "Asiacell",
+    "provider_name_ar": "آسياسيل",
+    "also_called": "اسيا",
+    "type": "credit",
+    "face_value": 5000,
+    "price": 5000
+  },
+  {
+    "id": "AC-CR-10",
+    "provider": "asiacell",
+    "provider_name_en": "Asiacell",
+    "provider_name_ar": "آسياسيل",
+    "also_called": "اسيا",
+    "type": "credit",
+    "face_value": 10000,
+    "price": 10000
+  },
+  {
+    "id": "AC-CR-25",
+    "provider": "asiacell",
+    "provider_name_en": "Asiacell",
+    "provider_name_ar": "آسياسيل",
+    "also_called": "اسيا",
+    "type": "credit",
+    "face_value": 25000,
+    "price": 25000
+  },
+  {
+    "id": "AC-NET-10",
+    "provider": "asiacell",
+    "provider_name_en": "Asiacell",
+    "provider_name_ar": "آسياسيل",
+    "also_called": "اسيا",
+    "type": "internet",
+    "face_value": 10000,
+    "price": 10000
+  },
+  {
+    "id": "AC-NET-25",
+    "provider": "asiacell",
+    "provider_name_en": "Asiacell",
+    "provider_name_ar": "آسياسيل",
+    "also_called": "اسيا",
+    "type": "internet",
+    "face_value": 25000,
+    "price": 25000
+  },
+  {
+    "id": "KR-CR-5",
+    "provider": "korek",
+    "provider_name_en": "Korek",
+    "provider_name_ar": "كورك",
+    "also_called": null,
+    "type": "credit",
+    "face_value": 5000,
+    "price": 5000
+  },
+  {
+    "id": "KR-CR-10",
+    "provider": "korek",
+    "provider_name_en": "Korek",
+    "provider_name_ar": "كورك",
+    "also_called": null,
+    "type": "credit",
+    "face_value": 10000,
+    "price": 10000
+  },
+  {
+    "id": "KR-NET-15",
+    "provider": "korek",
+    "provider_name_en": "Korek",
+    "provider_name_ar": "كورك",
+    "also_called": null,
+    "type": "internet",
+    "face_value": 15000,
+    "price": 15000
+  },
+  {
+    "id": "KR-NET-30",
+    "provider": "korek",
+    "provider_name_en": "Korek",
+    "provider_name_ar": "كورك",
+    "also_called": null,
+    "type": "internet",
+    "face_value": 30000,
+    "price": 30000
+  }
+]

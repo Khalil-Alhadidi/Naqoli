@@ -1,0 +1,101 @@
+[
+  {
+    "user": "U1",
+    "id": "BS1",
+    "biller": "electricity",
+    "label": "البيت",
+    "subscriber_number": "2204 118 763",
+    "amount_due": 43750,
+    "note": "Two electricity accounts: 'pay the electricity' must ask which"
+  },
+  {
+    "user": "U1",
+    "id": "BS2",
+    "biller": "electricity",
+    "label": "المحل",
+    "subscriber_number": "2204 990 412",
+    "amount_due": 127500,
+    "note": null
+  },
+  {
+    "user": "U1",
+    "id": "BS3",
+    "biller": "water",
+    "label": null,
+    "subscriber_number": "5510 37 291",
+    "amount_due": 9250,
+    "note": "Not a round number, so it can only come from the biller"
+  },
+  {
+    "user": "U1",
+    "id": "BS4",
+    "biller": "internet",
+    "label": null,
+    "subscriber_number": "EL-448201",
+    "amount_due": 35000,
+    "note": "'Pay the internet' is a bill for this user"
+  },
+  {
+    "user": "U2",
+    "id": "BZ1",
+    "biller": "electricity",
+    "label": null,
+    "subscriber_number": "2204 305 118",
+    "amount_due": 0,
+    "note": "Nothing due: no card"
+  },
+  {
+    "user": "U2",
+    "id": "BZ2",
+    "biller": "water",
+    "label": null,
+    "subscriber_number": "5510 82 640",
+    "amount_due": 12000,
+    "note": "No internet bill on purpose: for her 'the internet' can only be a store card"
+  },
+  {
+    "user": "U3",
+    "id": "BT1",
+    "biller": "electricity",
+    "label": "المحل",
+    "subscriber_number": "2204 771 059",
+    "amount_due": 312000,
+    "note": null
+  },
+  {
+    "user": "U3",
+    "id": "BT2",
+    "biller": "water",
+    "label": null,
+    "subscriber_number": "5510 14 903",
+    "amount_due": 18500,
+    "note": null
+  },
+  {
+    "user": "U3",
+    "id": "BT3",
+    "biller": "internet",
+    "label": null,
+    "subscriber_number": "EL-902377",
+    "amount_due": 65000,
+    "note": null
+  },
+  {
+    "user": "U4",
+    "id": "BK1",
+    "biller": "electricity",
+    "label": null,
+    "subscriber_number": "2204 640 226",
+    "amount_due": 28000,
+    "note": null
+  },
+  {
+    "user": "U2",
+    "id": "BZ3",
+    "biller": "school_fees",
+    "label": null,
+    "subscriber_number": "SC-2026-0417",
+    "amount_due": 250000,
+    "note": "Added for NOGO-11: a bill larger than her balance"
+  }
+]

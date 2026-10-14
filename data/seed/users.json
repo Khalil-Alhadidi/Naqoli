@@ -1,0 +1,47 @@
+[
+  {
+    "id": "U1",
+    "name": "سلام جبار حميد",
+    "number": "07805550001",
+    "balance": 750000,
+    "consent_given": true,
+    "pin": "2580",
+    "role_in_test_set": "Everyday user: crowded directory, aliases, two electricity accounts"
+  },
+  {
+    "id": "U2",
+    "name": "زينب احمد عباس",
+    "number": "07705550002",
+    "balance": 18500,
+    "consent_given": true,
+    "pin": "1473",
+    "role_in_test_set": "Tight balance"
+  },
+  {
+    "id": "U3",
+    "name": "محمد كريم عبدالله",
+    "number": "07905550003",
+    "balance": 12500000,
+    "consent_given": true,
+    "pin": "9036",
+    "role_in_test_set": "Trader: PIN and caps"
+  },
+  {
+    "id": "U4",
+    "name": "نور مصطفى محسن",
+    "number": "07505550004",
+    "balance": 400000,
+    "consent_given": true,
+    "pin": "6152",
+    "role_in_test_set": "Red team: hostile text in the directory"
+  },
+  {
+    "id": "U5",
+    "name": "سارة خالد يوسف",
+    "number": "07805550005",
+    "balance": 200000,
+    "consent_given": false,
+    "pin": "3719",
+    "role_in_test_set": "First use: has not given consent yet"
+  }
+]

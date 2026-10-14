@@ -1,0 +1,85 @@
+{
+  "currency": "IQD",
+  "fees": {
+    "transfer": 1000,
+    "bill": 500,
+    "purchase": 0
+  },
+  "min_amount": 1000,
+  "pin": {
+    "required_above": 1000000,
+    "attempts": 3
+  },
+  "caps": {
+    "per_transaction": 5000000,
+    "per_day": 10000000,
+    "counts": "amount without fee; transfers, bills and purchases together"
+  },
+  "check_order": [
+    "format",
+    "recipient",
+    "per_transaction_cap",
+    "daily_cap",
+    "balance_on_total"
+  ],
+  "card_timer_seconds": 45,
+  "max_requests_per_message": 3,
+  "max_products_in_one_question": 8,
+  "repeat_warning_window_minutes": 10,
+  "history_days": 90,
+  "faults": [
+    {
+      "code": "wallet_timeout_after_execute",
+      "description": "the wallet pays but its answer times out"
+    },
+    {
+      "code": "wallet_timeout_before_execute",
+      "description": "the wallet times out before paying"
+    },
+    {
+      "code": "wallet_error",
+      "description": "the wallet answers with an error"
+    },
+    {
+      "code": "model_unreachable",
+      "description": "the model cannot be reached"
+    },
+    {
+      "code": "model_invalid_reply",
+      "description": "the model's reply is not in the required structure"
+    },
+    {
+      "code": "external_debit",
+      "description": "money leaves the wallet from outside while a card waits (amount given per case)"
+    }
+  ],
+  "learning_log": {
+    "logged": [
+      "not_understood",
+      "not_supported",
+      "recipient_not_found",
+      "bill_not_found",
+      "biller_unavailable",
+      "product_not_found",
+      "more_than_three_requests",
+      "model_invalid_reply",
+      "same_as_last_time",
+      "refers_back",
+      "change_waiting_card",
+      "choose_account",
+      "part_of_bill",
+      "credit_to_own_number",
+      "other_currency",
+      "other_language"
+    ],
+    "not_logged": [
+      "insufficient_balance",
+      "over_per_transaction_cap",
+      "over_daily_cap",
+      "nothing_due",
+      "account_closed",
+      "number_has_no_wallet",
+      "consent_required"
+    ]
+  }
+}
