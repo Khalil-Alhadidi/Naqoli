@@ -1,0 +1,35 @@
+@inherits SessionComponent
+
+@if (Session.Question is { } question && question.Options.Count > 0)
+{
+    <div class="phone-options">
+        @foreach (var option in question.Options)
+        {
+            <MudButton data-testid="question-option" data-value="@option.Value" Variant="Variant.Outlined" FullWidth="true"
+                       Disabled="@Session.Busy" OnClick="@(() => Session.TapOptionAsync(option.Value))">
+                <span class="phone-option">
+                    <bdi>@Label(option)</bdi>
+                    @if (option.RegisteredName is not null)
+                    {
+                        <small><bdi>@option.RegisteredName</bdi></small>
+                    }
+                    @if (option.LastSentAmountIqd is { } last)
+                    {
+                        <small>@PhoneFormat.Amount(last, Text)</small>
+                    }
+                </span>
+            </MudButton>
+        }
+    </div>
+}
+
+@code {
+    private string Label(Option option)
+    {
+        if (option.Value == Option.StoreInternet)
+            return Text["Option_store_internet"];
+        if (option.Display is { } display)
+            return option.AmountIqd is { } price ? display + " " + PhoneFormat.Amount(price, Text) : display;
+        return option.AmountIqd is { } amount ? PhoneFormat.Amount(amount, Text) : option.Value;
+    }
+}

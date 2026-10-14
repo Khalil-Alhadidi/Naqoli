@@ -1,4 +1,4 @@
-/* Template error UI styles. MudBlazor provides all other styling. */
+/* Template error UI styles, then the console and phone layout. MudBlazor provides all other styling. */
 
 h1:focus {
     outline: none;
@@ -34,3 +34,186 @@ h1:focus {
     .blazor-error-boundary::after {
         content: "An error has occurred."
     }
+
+/* Layout B (D17): the console (middle component and live trace) on the left, the phone frame fixed on the right. */
+.layout-b {
+    display: flex;
+    gap: 16px;
+    align-items: flex-start;
+}
+
+.console-columns {
+    flex: 1 1 auto;
+    display: grid;
+    grid-template-columns: minmax(0, 3fr) minmax(260px, 2fr);
+    gap: 16px;
+    min-width: 0;
+}
+
+.console-middle,
+.console-trace-column {
+    min-width: 0;
+}
+
+.console-menu-active {
+    background-color: var(--mud-palette-action-default-hover);
+}
+
+.console-trace {
+    max-height: calc(100vh - 100px);
+    display: flex;
+    flex-direction: column;
+}
+
+.console-trace-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.console-trace-list {
+    overflow-y: auto;
+    font-family: Consolas, "Cascadia Mono", monospace;
+    font-size: 12px;
+}
+
+.trace-entry {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 2px 6px;
+    border-left: 4px solid transparent;
+}
+
+.trace-entry.zone-user { border-left-color: #1e88e5; }
+.trace-entry.zone-code { border-left-color: #43a047; }
+.trace-entry.zone-model { border-left-color: #8e24aa; }
+.trace-entry.zone-write { border-left-color: #e53935; }
+
+.trace-time { color: #757575; }
+.trace-zone { font-weight: 600; min-width: 44px; }
+.trace-detail { color: #616161; }
+
+/* The phone frame (D20): 390 x 780, right to left, Arabic font stack. */
+.phone-column {
+    flex: 0 0 auto;
+    position: sticky;
+    top: 64px;
+}
+
+.phone-frame {
+    width: 390px;
+    height: 780px;
+    border: 12px solid #212121;
+    border-radius: 36px;
+    background: #fafafa;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    font-family: "Noto Naskh Arabic", "Segoe UI", Tahoma, Arial, sans-serif;
+    direction: rtl;
+}
+
+.phone-screen {
+    flex: 1 1 auto;
+    overflow-y: auto;
+    padding: 12px;
+}
+
+.phone-messages {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.phone-message {
+    max-width: 85%;
+    padding: 8px 12px;
+    border-radius: 14px;
+    line-height: 1.5;
+    unicode-bidi: plaintext;
+}
+
+.phone-message.from-user {
+    align-self: flex-start;
+    background: #c8e6c9;
+}
+
+.phone-message.from-agent {
+    align-self: flex-end;
+    background: #ffffff;
+    border: 1px solid #e0e0e0;
+}
+
+.phone-message-action {
+    margin-top: 6px;
+}
+
+.phone-card {
+    border-radius: 14px;
+}
+
+.phone-card-title {
+    font-weight: 600;
+    margin-bottom: 8px;
+}
+
+.phone-card-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 2px 0;
+}
+
+.phone-card-total {
+    font-weight: 600;
+}
+
+.phone-card-note,
+.phone-card-warning,
+.phone-card-state,
+.phone-card-timer {
+    margin-top: 6px;
+    font-size: 0.9em;
+}
+
+.phone-card-warning {
+    color: #e65100;
+}
+
+.phone-options {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.phone-option {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    text-transform: none;
+}
+
+.phone-compose {
+    display: flex;
+    gap: 8px;
+    padding: 8px;
+    border-top: 1px solid #e0e0e0;
+    background: #ffffff;
+}
+
+.phone-input {
+    flex: 1 1 auto;
+    min-width: 0;
+    padding: 8px 12px;
+    border: 1px solid #bdbdbd;
+    border-radius: 18px;
+    font: inherit;
+}
+
+.phone-pin {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-top: 8px;
+}

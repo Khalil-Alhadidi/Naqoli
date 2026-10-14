@@ -1,0 +1,13 @@
+@* A console component that arrives in a later milestone. *@
+<MudPaper Class="pa-3" Elevation="1">
+    <MudText Typo="Typo.h6">@Title</MudText>
+    <MudText Typo="Typo.body2">Arrives in milestone @Milestone.</MudText>
+</MudPaper>
+
+@code {
+    [Parameter, EditorRequired]
+    public string Title { get; set; } = string.Empty;
+
+    [Parameter, EditorRequired]
+    public string Milestone { get; set; } = string.Empty;
+}

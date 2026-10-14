@@ -1,0 +1,20 @@
+@* The PIN (rule 5 groundwork): a password field with a numeric keypad that the browser never fills. The value lives
+   only in the card component's field and the Confirm call; the card clears it after every call. *@
+<label class="phone-pin">
+    <span>@Label</span>
+    <input data-testid="card-pin" class="phone-input" type="password" inputmode="numeric" autocomplete="off"
+           maxlength="6" value="@Value" @oninput="OnInputAsync" />
+</label>
+
+@code {
+    [Parameter]
+    public string? Label { get; set; }
+
+    [Parameter]
+    public string? Value { get; set; }
+
+    [Parameter]
+    public EventCallback<string?> ValueChanged { get; set; }
+
+    private Task OnInputAsync(ChangeEventArgs e) => ValueChanged.InvokeAsync(e.Value?.ToString());
+}

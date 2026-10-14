@@ -1,6 +1,7 @@
 using Agent.Core;
 using Agent.Core.Data;
 using Agent.Web.Components;
+using Agent.Web.Services;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using MudBlazor.Services;
@@ -11,7 +12,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 builder.Services.AddMudServices();
-builder.Services.AddAgentCore(builder.Configuration);
+builder.Services.AddAgentWebServices(builder.Configuration);
 
 var app = builder.Build();
 

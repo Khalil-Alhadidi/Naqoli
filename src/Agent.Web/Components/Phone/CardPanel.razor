@@ -1,0 +1,152 @@
+@inherits SessionComponent
+
+@* Every field comes from the CardView the session holds (rule 3); names from the wallet render inside bdi. *@
+@if (Session.Card is { } card)
+{
+    <MudCard Class="phone-card" Elevation="2" data-testid="card" data-state="@StateName">
+        <MudCardContent>
+            <div class="phone-card-title">@Text["Card_Title"] <small>@Text["Type_" + card.Type]</small></div>
+            <div class="phone-card-row">
+                <span>@Text["Card_To"]</span>
+                <span data-testid="card-display"><bdi>@PhoneFormat.Digits(card.DisplayName ?? string.Empty)</bdi></span>
+            </div>
+            @if (card.RegisteredName is not null)
+            {
+                <div class="phone-card-row">
+                    <span>@Text["Card_Registered"]</span>
+                    <span data-testid="card-registered"><bdi>@card.RegisteredName</bdi></span>
+                </div>
+            }
+            <div class="phone-card-row">
+                <span>@Text["Card_Amount"]</span>
+                <span data-testid="card-amount">@PhoneFormat.Amount(card.AmountIqd, Text)</span>
+            </div>
+            <div class="phone-card-row">
+                <span>@Text["Card_Fee"]</span>
+                <span data-testid="card-fee">@PhoneFormat.Amount(card.FeeIqd, Text)</span>
+            </div>
+            <div class="phone-card-row phone-card-total">
+                <span>@Text["Card_Total"]</span>
+                <span data-testid="card-total">@PhoneFormat.Amount(card.TotalIqd, Text)</span>
+            </div>
+            <div class="phone-card-row">
+                <span>@Text["Card_BalanceAfter"]</span>
+                <span data-testid="card-balance-after">@PhoneFormat.Amount(card.BalanceAfterIqd, Text)</span>
+            </div>
+            @if (card.FirstTime)
+            {
+                <div class="phone-card-note" data-testid="card-first-time">@Text["Card_FirstTime"]</div>
+            }
+            @if (card.Warning is not null)
+            {
+                <div class="phone-card-warning" data-testid="card-warning">@Text["Card_Warning_" + card.Warning]</div>
+            }
+
+            @if (IsLive)
+            {
+                <div class="phone-card-timer" data-testid="card-timer">@Text["Card_Timer", PhoneFormat.Number(remaining)]</div>
+                <MudProgressLinear Value="@Progress" Color="@(remaining <= 10 ? Color.Warning : Color.Primary)" />
+                @if (Session.PinVisible)
+                {
+                    <PinField Label="@Text["Card_Pin"]" @bind-Value="pin" />
+                }
+            }
+            else if (Session.CardState == CardStatus.Expired || (Session.CardState == CardStatus.Live && remaining == 0))
+            {
+                <div class="phone-card-state">@Text["Card_Expired"]</div>
+            }
+            else if (Session.CardState == CardStatus.Cancelled)
+            {
+                <div class="phone-card-state">@Text["Card_Cancelled"]</div>
+            }
+        </MudCardContent>
+        <MudCardActions>
+            <MudButton data-testid="card-confirm" Variant="Variant.Filled" Color="Color.Primary"
+                       Disabled="@(!CanAct)" OnClick="ConfirmAsync">@Text["Card_Confirm"]</MudButton>
+            <MudButton data-testid="card-cancel" Variant="Variant.Text"
+                       Disabled="@(!CanAct)" OnClick="CancelAsync">@Text["Card_Cancel"]</MudButton>
+        </MudCardActions>
+    </MudCard>
+}
+
+@code {
+    private Timer? timer;
+    private int remaining;
+    private int total = 1;
+    private string? pin;
+    private bool acting;
+    private bool refreshRequested;
+
+    private bool IsLive => Session.CardState == CardStatus.Live && remaining > 0;
+
+    private bool CanAct => IsLive && !Session.Busy && !acting;
+
+    private double Progress => total <= 0 ? 0 : 100.0 * remaining / total;
+
+    private string StateName => Session.CardState?.ToString().ToLowerInvariant() ?? "none";
+
+    protected override void OnInitialized()
+    {
+        base.OnInitialized();
+        Tick();
+        total = Math.Max(1, remaining);
+
+        // The countdown is a display tick; the timer itself is CardTimerSeconds, enforced by the store.
+        timer = new Timer(_ => _ = InvokeAsync(TickAsync), null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
+    }
+
+    private void Tick()
+    {
+        remaining = Session.Card is { } card
+            ? Math.Max(0, (int)Math.Ceiling((card.ExpiresAt - Session.Now).TotalSeconds))
+            : 0;
+    }
+
+    private async Task TickAsync()
+    {
+        Tick();
+        StateHasChanged();
+        if (remaining == 0 && Session.CardState == CardStatus.Live && !refreshRequested)
+        {
+            // The timer has ended on screen: the session reads the record and marks the card expired.
+            refreshRequested = true;
+            await Session.RefreshAsync();
+        }
+    }
+
+    private async Task ConfirmAsync()
+    {
+        // Disabled at once, before the first await renders, so a double tap sends one call from this card. The PIN is
+        // handed to the call and cleared from the component.
+        acting = true;
+        var typedPin = pin;
+        pin = null;
+        try
+        {
+            await Session.ConfirmAsync(typedPin);
+        }
+        finally
+        {
+            acting = false;
+        }
+    }
+
+    private async Task CancelAsync()
+    {
+        acting = true;
+        try
+        {
+            await Session.CancelAsync();
+        }
+        finally
+        {
+            acting = false;
+        }
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+            timer?.Dispose();
+    }
+}

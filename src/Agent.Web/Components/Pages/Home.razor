@@ -1,6 +1,41 @@
 ﻿@page "/"
+@implements IDisposable
+@inject ConsoleNavigation Navigation
 
 <PageTitle>ZainCash agent console</PageTitle>
 
-<MudText Typo="Typo.h5">Milestone 1: skeleton</MudText>
-<MudText>The phone frame, live trace and console components arrive in milestone 4.</MudText>
+<div class="layout-b">
+    <div class="console-columns" data-testid="console" dir="ltr" lang="en">
+        <section class="console-middle">
+            @switch (Navigation.Selected)
+            {
+                case ConsolePanel.Settings:
+                    <SettingsPlaceholder />
+                    break;
+                case ConsolePanel.Log:
+                    <Placeholder Title="Log" Milestone="7" />
+                    break;
+                case ConsolePanel.LearningData:
+                    <Placeholder Title="Learning data" Milestone="10" />
+                    break;
+                default:
+                    <WalletDataPanel />
+                    break;
+            }
+        </section>
+        <section class="console-trace-column">
+            <LiveTrace />
+        </section>
+    </div>
+    <section class="phone-column">
+        <PhoneFrame />
+    </section>
+</div>
+
+@code {
+    protected override void OnInitialized() => Navigation.Changed += OnNavigationChanged;
+
+    public void Dispose() => Navigation.Changed -= OnNavigationChanged;
+
+    private void OnNavigationChanged() => _ = InvokeAsync(StateHasChanged);
+}

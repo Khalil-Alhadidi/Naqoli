@@ -33,6 +33,7 @@ public sealed class AgentHost : IAsyncLifetime
     public const string WalletBaseUrl = "http://localhost";
 
     private ServiceProvider? services;
+    private IConfiguration? configuration;
 
     /// <summary>
     /// The wallet database of this collection. The <c>wallet-api</c> collection runs in parallel on its own database,
@@ -70,7 +71,7 @@ public sealed class AgentHost : IAsyncLifetime
         if (!Wallet.DatabaseAvailable)
             return;
 
-        var configuration = new ConfigurationBuilder()
+        configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["Agent:WalletBaseUrl"] = WalletBaseUrl,
@@ -81,13 +82,7 @@ public sealed class AgentHost : IAsyncLifetime
             })
             .Build();
 
-        var collection = new ServiceCollection();
-        collection.AddLogging();
-        // Registered before AddAgentCore, so its TryAddSingleton(TimeProvider.System) keeps this clock.
-        collection.AddSingleton<TimeProvider>(Clock);
-        collection.AddAgentCore(configuration);
-        collection.AddHttpClient<WalletClient>().ConfigurePrimaryHttpMessageHandler(() => Wallet.CreateHandler());
-        services = collection.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true, ValidateOnBuild = true });
+        services = BuildProvider((collection, settings) => collection.AddAgentCore(settings));
 
         await using var scope = services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<AgentDbContext>();
@@ -117,6 +112,25 @@ public sealed class AgentHost : IAsyncLifetime
         var token = TestContext.Current.CancellationToken;
         await db.AuditEntries.ExecuteDeleteAsync(token);
         await db.PendingTransactions.ExecuteDeleteAsync(token);
+    }
+
+    /// <summary>
+    /// A new service provider over the host's configuration, clock and in-process wallet, with the services
+    /// <paramref name="register"/> adds (<c>AddAgentCore</c> for the host itself; <c>AddAgentWebServices</c> for the web
+    /// session tests). It shares the host's databases, so <see cref="ResetAsync"/> resets it too. The caller disposes it.
+    /// </summary>
+    public ServiceProvider BuildProvider(Action<IServiceCollection, IConfiguration> register)
+    {
+        ArgumentNullException.ThrowIfNull(register);
+        var settings = configuration ?? throw new InvalidOperationException("The agent host is not running. " + SkipReason);
+
+        var collection = new ServiceCollection();
+        collection.AddLogging();
+        // Registered before the agent's services, so their TryAddSingleton(TimeProvider.System) keeps this clock.
+        collection.AddSingleton<TimeProvider>(Clock);
+        register(collection, settings);
+        collection.AddHttpClient<WalletClient>().ConfigurePrimaryHttpMessageHandler(() => Wallet.CreateHandler());
+        return collection.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true, ValidateOnBuild = true });
     }
 
     /// <summary>

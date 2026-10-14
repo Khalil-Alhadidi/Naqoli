@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <!-- The phone strings (rule 4). Every value is Khalil's to write: TODO-AR marks an English placeholder. -->
+  <resheader name="resmimetype"><value>text/microsoft-resx</value></resheader>
+  <resheader name="version"><value>2.0</value></resheader>
+  <resheader name="reader"><value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value></resheader>
+  <resheader name="writer"><value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value></resheader>
+  <data name="Card_Title" xml:space="preserve"><value>TODO-AR: Confirm this payment</value></data>
+  <data name="Card_To" xml:space="preserve"><value>TODO-AR: To</value></data>
+  <data name="Card_Registered" xml:space="preserve"><value>TODO-AR: Registered name</value></data>
+  <data name="Card_Amount" xml:space="preserve"><value>TODO-AR: Amount</value></data>
+  <data name="Card_Fee" xml:space="preserve"><value>TODO-AR: Fee</value></data>
+  <data name="Card_Total" xml:space="preserve"><value>TODO-AR: Total</value></data>
+  <data name="Card_BalanceAfter" xml:space="preserve"><value>TODO-AR: Balance after</value></data>
+  <data name="Card_FirstTime" xml:space="preserve"><value>TODO-AR: First time you send to this number</value></data>
+  <data name="Card_Warning_repeat" xml:space="preserve"><value>TODO-AR: You sent the same amount to this person a few minutes ago</value></data>
+  <data name="Card_Confirm" xml:space="preserve"><value>TODO-AR: Confirm</value></data>
+  <data name="Card_Cancel" xml:space="preserve"><value>TODO-AR: Cancel</value></data>
+  <data name="Card_Pin" xml:space="preserve"><value>TODO-AR: PIN</value></data>
+  <data name="Card_Expired" xml:space="preserve"><value>TODO-AR: This card has expired. Nothing was sent</value></data>
+  <data name="Card_Cancelled" xml:space="preserve"><value>TODO-AR: Cancelled</value></data>
+  <data name="Card_Timer" xml:space="preserve"><value>TODO-AR: {0} seconds left</value></data>
+  <data name="Outcome_done" xml:space="preserve"><value>TODO-AR: Done. Reference {0}. Your balance is now {1}</value></data>
+  <data name="Outcome_checking" xml:space="preserve"><value>TODO-AR: Checking with the wallet. Nothing is shown as failed</value></data>
+  <data name="Outcome_check_again" xml:space="preserve"><value>TODO-AR: Check again</value></data>
+  <data name="Outcome_not_done" xml:space="preserve"><value>TODO-AR: Not done: {0}</value></data>
+  <data name="Outcome_pin_required" xml:space="preserve"><value>TODO-AR: Enter your PIN, then confirm</value></data>
+  <data name="Outcome_pin_wrong" xml:space="preserve"><value>TODO-AR: Wrong PIN. {0} attempts left</value></data>
+  <data name="Outcome_pin_malformed" xml:space="preserve"><value>TODO-AR: The PIN is 4 to 6 digits</value></data>
+  <data name="Outcome_already_handled" xml:space="preserve"><value>TODO-AR: This card was already handled</value></data>
+  <data name="Reply_balance" xml:space="preserve"><value>TODO-AR: Your balance is {0}</value></data>
+  <data name="Reply_consent" xml:space="preserve"><value>TODO-AR: Before I can help, please allow me to act on your wallet</value></data>
+  <data name="Reply_consent_button" xml:space="preserve"><value>TODO-AR: I agree</value></data>
+  <data name="Question_which_contact" xml:space="preserve"><value>TODO-AR: Which person do you mean?</value></data>
+  <data name="Question_did_you_mean" xml:space="preserve"><value>TODO-AR: Did you mean</value></data>
+  <data name="Question_which_product" xml:space="preserve"><value>TODO-AR: Which product?</value></data>
+  <data name="Question_which_bill" xml:space="preserve"><value>TODO-AR: Which bill?</value></data>
+  <data name="Question_which_amount" xml:space="preserve"><value>TODO-AR: How much?</value></data>
+  <data name="Question_bill_or_store" xml:space="preserve"><value>TODO-AR: Pay the bill, or buy a card from the store?</value></data>
+  <data name="Question_which_operator" xml:space="preserve"><value>TODO-AR: Which operator?</value></data>
+  <data name="Option_store_internet" xml:space="preserve"><value>TODO-AR: A card from the store</value></data>
+  <data name="Refusal_insufficient_balance" xml:space="preserve"><value>TODO-AR: Your balance is not enough. You are {0} short</value></data>
+  <data name="Refusal_recipient_not_found" xml:space="preserve"><value>TODO-AR: I could not find this person in your contacts</value></data>
+  <data name="Refusal_number_has_no_wallet" xml:space="preserve"><value>TODO-AR: This number has no wallet</value></data>
+  <data name="Refusal_invalid_number" xml:space="preserve"><value>TODO-AR: This is not a complete phone number</value></data>
+  <data name="Refusal_over_per_transaction_cap" xml:space="preserve"><value>TODO-AR: One payment can be at most {0}</value></data>
+  <data name="Refusal_over_daily_cap" xml:space="preserve"><value>TODO-AR: That passes your daily limit. {0} left today</value></data>
+  <data name="Refusal_account_closed" xml:space="preserve"><value>TODO-AR: This account is closed</value></data>
+  <data name="Refusal_consent_required" xml:space="preserve"><value>TODO-AR: Consent is needed first</value></data>
+  <data name="Refusal_nothing_due" xml:space="preserve"><value>TODO-AR: Nothing is due on this bill</value></data>
+  <data name="Refusal_bill_not_found" xml:space="preserve"><value>TODO-AR: I could not find this bill</value></data>
+  <data name="Refusal_biller_unavailable" xml:space="preserve"><value>TODO-AR: This biller is not available now</value></data>
+  <data name="Refusal_product_not_found" xml:space="preserve"><value>TODO-AR: I could not find this product</value></data>
+  <data name="Refusal_not_supported" xml:space="preserve"><value>TODO-AR: I cannot do this</value></data>
+  <data name="Refusal_not_understood" xml:space="preserve"><value>TODO-AR: I did not understand. Please say it again</value></data>
+  <data name="Refusal_only_own_balance" xml:space="preserve"><value>TODO-AR: I can only show your own balance</value></data>
+  <data name="Refusal_model_unavailable" xml:space="preserve"><value>TODO-AR: I cannot read messages right now. Please try again later</value></data>
+  <data name="Refusal_dinars_only" xml:space="preserve"><value>TODO-AR: I work in Iraqi dinars only</value></data>
+  <data name="Refusal_bills_paid_in_full" xml:space="preserve"><value>TODO-AR: Bills are paid in full: {0}</value></data>
+  <data name="Refusal_balance" xml:space="preserve"><value>TODO-AR: Your balance is {0}</value></data>
+  <data name="Refusal_points_to_confirm" xml:space="preserve"><value>TODO-AR: Please use the Confirm button on the card</value></data>
+  <data name="Refusal_card_cancelled" xml:space="preserve"><value>TODO-AR: The card was cancelled</value></data>
+  <data name="Refusal_cannot_change_card" xml:space="preserve"><value>TODO-AR: A card cannot be changed. Cancel it and ask again</value></data>
+  <data name="Refusal_account_choice_unavailable" xml:space="preserve"><value>TODO-AR: Choosing the account is not available</value></data>
+  <data name="Refusal_code_entered_by_user" xml:space="preserve"><value>TODO-AR: The code is entered by you</value></data>
+  <data name="Refusal_max_three_requests" xml:space="preserve"><value>TODO-AR: At most three requests in one message</value></data>
+  <data name="Refusal_not_done_nothing_taken" xml:space="preserve"><value>TODO-AR: Not done. Nothing was taken from your balance</value></data>
+  <data name="Refusal_amount_below_minimum" xml:space="preserve"><value>TODO-AR: The smallest amount is {0}</value></data>
+  <data name="Refusal_pin_locked" xml:space="preserve"><value>TODO-AR: Your PIN is locked</value></data>
+  <data name="Refusal_caller_cancelled" xml:space="preserve"><value>TODO-AR: Stopped before sending. Nothing was taken</value></data>
+  <data name="Word_yes" xml:space="preserve"><value>TODO-AR: yes</value></data>
+  <data name="Word_no" xml:space="preserve"><value>TODO-AR: no</value></data>
+  <data name="Unsupported_withdrawal" xml:space="preserve"><value>TODO-AR: I cannot do cash withdrawals</value></data>
+  <data name="Unsupported_other_balance" xml:space="preserve"><value>TODO-AR: I can only show your own balance</value></data>
+  <data name="Unsupported_other_currency" xml:space="preserve"><value>TODO-AR: I work in Iraqi dinars only</value></data>
+  <data name="Unsupported_refers_back" xml:space="preserve"><value>TODO-AR: Please say the full request again</value></data>
+  <data name="Unsupported_same_as_last_time" xml:space="preserve"><value>TODO-AR: Please say the full request again</value></data>
+  <data name="Unsupported_choose_account" xml:space="preserve"><value>TODO-AR: Choosing the account is not available</value></data>
+  <data name="Unsupported_part_of_bill" xml:space="preserve"><value>TODO-AR: Bills are paid in full</value></data>
+  <data name="Unsupported_credit_to_own_number" xml:space="preserve"><value>TODO-AR: I cannot send credit to your own number</value></data>
+  <data name="Unsupported_change_waiting_card" xml:space="preserve"><value>TODO-AR: A card cannot be changed. Cancel it and ask again</value></data>
+  <data name="Unsupported_other_language" xml:space="preserve"><value>TODO-AR: Please write in Iraqi Arabic</value></data>
+  <data name="Purchase_code" xml:space="preserve"><value>TODO-AR: Your code: {0}</value></data>
+  <data name="Type_transfer" xml:space="preserve"><value>TODO-AR: Transfer</value></data>
+  <data name="Type_bill" xml:space="preserve"><value>TODO-AR: Bill</value></data>
+  <data name="Type_purchase" xml:space="preserve"><value>TODO-AR: Purchase</value></data>
+  <data name="Currency_iqd" xml:space="preserve"><value>TODO-AR: IQD</value></data>
+  <data name="Phone_Placeholder" xml:space="preserve"><value>TODO-AR: Write your request</value></data>
+  <data name="Phone_Send" xml:space="preserve"><value>TODO-AR: Send</value></data>
+</root>

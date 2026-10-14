@@ -1,0 +1,40 @@
+@inject IOptions<AgentOptions> Options
+
+@* The settings, read only until the settings component of milestone 7. The wallet client key is never shown. *@
+<MudPaper Class="pa-3" Elevation="1">
+    <MudText Typo="Typo.h6">Settings (read only)</MudText>
+    <MudText Typo="Typo.body2" Class="mb-2">Editable in milestone 7. Values come from the Agent configuration section.</MudText>
+    <MudSimpleTable Dense="true">
+        <tbody>
+            @foreach (var (name, value) in Rows())
+            {
+                <tr data-testid="setting-row" data-name="@name"><td>@name</td><td>@value</td></tr>
+            }
+        </tbody>
+    </MudSimpleTable>
+</MudPaper>
+
+@code {
+    private IEnumerable<(string Name, string Value)> Rows()
+    {
+        var o = Options.Value;
+        yield return (nameof(AgentOptions.DemoUserId), Number(o.DemoUserId));
+        yield return (nameof(AgentOptions.MinAmountIqd), Number(o.MinAmountIqd));
+        yield return (nameof(AgentOptions.PerTransactionCapIqd), Number(o.PerTransactionCapIqd));
+        yield return (nameof(AgentOptions.PerDayCapIqd), Number(o.PerDayCapIqd));
+        yield return (nameof(AgentOptions.CardTimerSeconds), Number(o.CardTimerSeconds));
+        yield return (nameof(AgentOptions.MaxRequestsPerMessage), Number(o.MaxRequestsPerMessage));
+        yield return (nameof(AgentOptions.MaxProductsInOneQuestion), Number(o.MaxProductsInOneQuestion));
+        yield return (nameof(AgentOptions.RepeatWarningWindowMinutes), Number(o.RepeatWarningWindowMinutes));
+        yield return (nameof(AgentOptions.HistoryDays), Number(o.HistoryDays));
+        yield return (nameof(AgentOptions.HistoryPageSize), Number(o.HistoryPageSize));
+        yield return (nameof(AgentOptions.WalletBaseUrl), o.WalletBaseUrl?.ToString() ?? "-");
+        yield return (nameof(AgentOptions.WalletTimeoutSeconds), Number(o.WalletTimeoutSeconds));
+        yield return (nameof(AgentOptions.SettleWindowSeconds), Number(o.SettleWindowSeconds));
+        yield return (nameof(AgentOptions.SweepIntervalSeconds), Number(o.SweepIntervalSeconds));
+        yield return (nameof(AgentOptions.StaleExecutingAfterSeconds), Number(o.StaleExecutingAfterSeconds));
+        yield return (nameof(AgentOptions.MinSubstringWordLength), Number(o.MinSubstringWordLength));
+    }
+
+    private static string Number(long value) => PhoneFormat.Console(value);
+}

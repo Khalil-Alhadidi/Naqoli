@@ -1,8 +1,11 @@
+extern alias AgentWeb;
+
 using System.Reflection;
 using System.Reflection.Emit;
 using System.Runtime.CompilerServices;
 using Agent.Core.Confirm;
 using Agent.Core.Wallet;
+using AgentWeb::Agent.Web.Services;
 
 namespace Agent.Core.Tests.Architecture;
 
@@ -20,6 +23,8 @@ public class NoTapNoMoneyTests
         BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly;
 
     private static readonly Assembly AgentCore = typeof(WalletClient).Assembly;
+
+    private static readonly Assembly AgentWeb = typeof(ChatSession).Assembly;
 
     /// <summary>The opcodes whose operand is a method token.</summary>
     private static readonly HashSet<short> MethodOperandOpCodes =
@@ -61,20 +66,47 @@ public class NoTapNoMoneyTests
 
     /// <summary>
     /// Nothing in <c>Agent.Core</c> calls <see cref="ConfirmHandler.ConfirmAsync"/> or
-    /// <see cref="ConfirmHandler.SettleCheckingAsync"/>: no parse or reply path can turn words into a Confirm. Milestone 4
-    /// adds exactly the card component's Confirm handler and the settle timer in <c>Agent.Web</c> as callers, and must
-    /// extend this scan to that assembly with them as the only allowed callers.
+    /// <see cref="ConfirmHandler.SettleCheckingAsync"/>: no parse or reply path can turn words into a Confirm.
     /// </summary>
     [Fact]
     public void NothingInAgentCoreCallsTheConfirmHandler()
     {
-        var callers = CallersOf(callee =>
-            callee.DeclaringType == typeof(ConfirmHandler)
-            && callee.Name is nameof(ConfirmHandler.ConfirmAsync) or nameof(ConfirmHandler.SettleCheckingAsync));
+        var callers = CallersOf(IsConfirmHandlerEntry);
 
         Assert.True(
             callers.Count == 0,
             "Nothing in Agent.Core may call the Confirm handler. Found: " + string.Join(", ", callers.Order(StringComparer.Ordinal)));
+    }
+
+    /// <summary>
+    /// In <c>Agent.Web</c> the Confirm handler is reached only by the session's Confirm (the card's button) and its settle
+    /// (the "check again" button). The components call the session, never the handler, and no typed text reaches either.
+    /// </summary>
+    [Fact]
+    public void OnlyTheSessionsConfirmAndSettleCallTheConfirmHandlerFromTheWeb()
+    {
+        var callers = CallersOf(IsConfirmHandlerEntry, AgentWeb);
+
+        var expected = new HashSet<string>(StringComparer.Ordinal)
+        {
+            $"{typeof(ChatSession).FullName}.{nameof(ChatSession.ConfirmAsync)}",
+            $"{typeof(ChatSession).FullName}.{nameof(ChatSession.SettleAsync)}",
+        };
+        Assert.True(
+            callers.SetEquals(expected),
+            "The methods in Agent.Web that reach the Confirm handler must be exactly the session's two. Found: "
+            + string.Join(", ", callers.Order(StringComparer.Ordinal)));
+    }
+
+    /// <summary>Nothing in <c>Agent.Web</c> invokes a method by reflection, so nothing reaches the handler that way.</summary>
+    [Fact]
+    public void NothingInAgentWebInvokesByReflection()
+    {
+        var callers = CallersOf(IsReflectionInvoke, AgentWeb);
+
+        Assert.True(
+            callers.Count == 0,
+            "Nothing in Agent.Web may invoke a method by reflection. Found: " + string.Join(", ", callers.Order(StringComparer.Ordinal)));
     }
 
     /// <summary>
@@ -137,11 +169,18 @@ public class NoTapNoMoneyTests
     private static IEnumerable<MethodBase> MethodsOf(Type type)
         => type.GetMethods(Everything).Cast<MethodBase>().Concat(type.GetConstructors(Everything));
 
-    /// <summary>The user-facing names of every method in <c>Agent.Core</c> whose IL references a method matching <paramref name="target"/>.</summary>
-    private static HashSet<string> CallersOf(Func<MethodBase, bool> target)
+    private static bool IsConfirmHandlerEntry(MethodBase callee)
+        => callee.DeclaringType == typeof(ConfirmHandler)
+            && callee.Name is nameof(ConfirmHandler.ConfirmAsync) or nameof(ConfirmHandler.SettleCheckingAsync);
+
+    /// <summary>
+    /// The user-facing names of every method in <paramref name="assembly"/> (<c>Agent.Core</c> by default) whose IL
+    /// references a method matching <paramref name="target"/>.
+    /// </summary>
+    private static HashSet<string> CallersOf(Func<MethodBase, bool> target, Assembly? assembly = null)
     {
         var callers = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var type in AgentCore.GetTypes())
+        foreach (var type in (assembly ?? AgentCore).GetTypes())
         {
             foreach (var method in MethodsOf(type))
             {

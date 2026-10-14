@@ -1,0 +1,57 @@
+@inherits SessionComponent
+
+<div class="phone-messages">
+    @foreach (var message in Session.Messages)
+    {
+        <div class="phone-message @(message.Role == ChatRole.User ? "from-user" : "from-agent")"
+             data-testid="chat-message" data-role="@RoleName(message)" data-kind="@KindName(message)">
+            @if (message.Outcome is not null)
+            {
+                <span data-testid="outcome" data-outcome="@message.Outcome"><bdi>@message.Text</bdi></span>
+            }
+            else
+            {
+                <bdi>@message.Text</bdi>
+            }
+
+            @if (message.Action == ChatAction.CheckAgain && message.Id == Session.ActionMessageId && Session.CardState == CardStatus.Checking)
+            {
+                <div class="phone-message-action">
+                    <MudButton data-testid="check-again" Variant="Variant.Outlined" Size="Size.Small" Disabled="@Session.Busy"
+                               OnClick="CheckAgainAsync">@Text["Outcome_check_again"]</MudButton>
+                </div>
+            }
+            @if (message.Action == ChatAction.Consent && message.Id == Session.ActionMessageId)
+            {
+                <div class="phone-message-action">
+                    <MudButton data-testid="consent-button" Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
+                               Disabled="@Session.Busy" OnClick="Session.GiveConsentAsync">@Text["Reply_consent_button"]</MudButton>
+                </div>
+            }
+        </div>
+
+        @if (message.Kind == ChatMessageKind.Card && message.Id == Session.CardMessageId && Session.Card is not null)
+        {
+            <CardPanel @key="Session.Card.PendingId" />
+        }
+        @if (message.Kind == ChatMessageKind.Question && message.Id == Session.QuestionMessageId && Session.Question is not null)
+        {
+            <QuestionPanel />
+        }
+    }
+</div>
+
+@code {
+    private static string RoleName(ChatMessage message) => message.Role == ChatRole.User ? "user" : "agent";
+
+    private static string KindName(ChatMessage message) => message.Kind switch
+    {
+        ChatMessageKind.Card => "card",
+        ChatMessageKind.Question => "question",
+        ChatMessageKind.Outcome => "outcome",
+        _ => "text",
+    };
+
+    // The session, not the handler: the "check again" button reaches the Confirm handler only through it (rule 1).
+    private Task CheckAgainAsync() => Session.SettleAsync();
+}

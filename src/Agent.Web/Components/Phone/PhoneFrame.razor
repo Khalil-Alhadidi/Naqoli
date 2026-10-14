@@ -1,0 +1,39 @@
+@inherits SessionComponent
+
+@* The phone (D20): right to left, Arabic, Arabic-Indic digits. Every text comes from the resource file (rule 4). *@
+<MudRTLProvider RightToLeft="true">
+    <div class="phone-frame" data-testid="phone-frame" dir="rtl" lang="ar">
+        <div class="phone-screen">
+            <ChatPanel />
+        </div>
+        <div class="phone-compose">
+            <input class="phone-input" data-testid="phone-input" type="text" autocomplete="off"
+                   placeholder="@Text["Phone_Placeholder"]"
+                   @bind="typed" @bind:event="oninput" @onkeydown="OnKeyDownAsync" />
+            <MudButton data-testid="phone-send" Variant="Variant.Filled" Color="Color.Primary"
+                       Disabled="@(Session.Busy || string.IsNullOrWhiteSpace(typed))" OnClick="SendAsync">
+                @Text["Phone_Send"]
+            </MudButton>
+        </div>
+    </div>
+</MudRTLProvider>
+
+@code {
+    private string typed = string.Empty;
+
+    private async Task OnKeyDownAsync(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+            await SendAsync();
+    }
+
+    private async Task SendAsync()
+    {
+        if (string.IsNullOrWhiteSpace(typed))
+            return;
+
+        var message = typed;
+        typed = string.Empty;
+        await Session.SendAsync(message);
+    }
+}
