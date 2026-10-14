@@ -1,0 +1,17 @@
+<Solution>
+  <Configurations>
+    <Platform Name="Any CPU" />
+    <Platform Name="x64" />
+    <Platform Name="x86" />
+  </Configurations>
+  <Folder Name="/src/">
+    <Project Path="src/Agent.Core/Agent.Core.csproj" />
+    <Project Path="src/Agent.Eval/Agent.Eval.csproj" />
+    <Project Path="src/Agent.Web/Agent.Web.csproj" />
+    <Project Path="src/Wallet.MockApi/Wallet.MockApi.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Agent.Core.Tests/Agent.Core.Tests.csproj" />
+    <Project Path="tests/Agent.Web.Journeys/Agent.Web.Journeys.csproj" />
+  </Folder>
+</Solution>

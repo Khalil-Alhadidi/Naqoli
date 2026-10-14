@@ -1,0 +1,3 @@
+@Wallet.MockApi_HostAddress = http://localhost:5276
+
+###
