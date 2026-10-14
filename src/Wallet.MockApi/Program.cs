@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Wallet.MockApi;
 using Wallet.MockApi.Data;
 using Wallet.MockApi.Endpoints;
+using Wallet.MockApi.Services;
 
 // "seed-hash": print the hash of the frozen seed and exit. Never touches the database.
 if (args is ["seed-hash", ..])
@@ -30,6 +31,9 @@ builder.Services.AddOptions<WalletOptions>()
     .BindConfiguration(WalletOptions.SectionName)
     .ValidateDataAnnotations()
     .ValidateOnStart();
+builder.Services.AddSingleton<FeeCalculator>();
+builder.Services.AddScoped<PaymentValidator>();
+builder.Services.AddScoped<TransactionService>();
 
 var app = builder.Build();
 
@@ -66,6 +70,7 @@ if (app.Environment.IsDevelopment())
 
 app.MapGet("/health", () => "ok");
 app.MapReadEndpoints();
+app.MapTransactionEndpoints();
 
 app.Run();
 return 0;
