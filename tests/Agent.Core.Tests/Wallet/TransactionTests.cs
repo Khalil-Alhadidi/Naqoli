@@ -453,7 +453,7 @@ public class TransactionTests(WalletApiFixture fixture)
     [InlineData("12")]
     [InlineData("1234567")]
     [InlineData("12ab")]
-    [InlineData("١٢٣٤")]
+    [InlineData("\u0661\u0662\u0663\u0664")] // Arabic-Indic digits one, two, three, four
     public async Task MalformedPinIs422AndCostsNoAttempt(string pin)
     {
         Assert.SkipUnless(fixture.DatabaseAvailable, fixture.SkipReason);

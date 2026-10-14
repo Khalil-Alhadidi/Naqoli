@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 
 namespace Agent.Core.Text;
@@ -23,8 +24,9 @@ public static class ArabicText
     private const char Lam = '\u0644';              // ARABIC LETTER LAM
 
     /// <summary>
-    /// NFC; drops tatweel and harakat; unifies alef forms, alef maksura and teh marbuta; digits to ASCII; trims and
-    /// collapses whitespace; then maps each kinship variant to its canonical form.
+    /// NFC; drops Unicode format characters (zero-width joiner and non-joiner, zero-width space, bidi controls),
+    /// tatweel and harakat; unifies alef forms, alef maksura and teh marbuta; digits to ASCII; trims and collapses
+    /// whitespace; then maps each kinship variant to its canonical form.
     /// </summary>
     public static string Normalize(string text)
     {
@@ -101,6 +103,10 @@ public static class ArabicText
         var pendingSpace = false;
         foreach (var c in composed)
         {
+            // Invisible format characters would split a key or reorder the text on the card (category Cf).
+            if (CharUnicodeInfo.GetUnicodeCategory(c) == UnicodeCategory.Format)
+                continue;
+
             if (char.IsWhiteSpace(c))
             {
                 pendingSpace = builder.Length > 0;

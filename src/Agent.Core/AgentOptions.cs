@@ -63,6 +63,15 @@ public sealed class AgentOptions
     [Range(1, 300)]
     public int WalletTimeoutSeconds { get; set; } = 10;
 
+    /// <summary>
+    /// How long after a card was created a settle may still treat a PIN refusal (<c>pin_required</c>,
+    /// <c>pin_invalid</c>, <c>pin_malformed</c>, <c>pin_locked</c>) as "the original call may still be running" and
+    /// leave the record Checking. The default, 610, is the wallet timeout (10 s) plus the wallet's longest fault delay
+    /// (600 s): past it the original call can no longer be running, so such a refusal finalises the record NotDone.
+    /// </summary>
+    [Range(1, 86_400)]
+    public int SettleWindowSeconds { get; set; } = 610;
+
     /// <summary>The most history items read in one call; the wallet clamps <c>take</c> to 200.</summary>
     [Range(1, 200)]
     public int HistoryPageSize { get; set; } = 200;

@@ -121,7 +121,7 @@ public class WalletClientTests(AgentHost host)
             Assert.Equal("http_500", error.Reason);
 
             // The wallet holds the answer longer than the client waits: unknown, and nothing moved.
-            await SetFaultAsync(new FaultRequest("timeoutBeforeExecute", 20_000));
+            await SetFaultAsync(new FaultRequest("timeoutBeforeExecute", 3_000));
             var impatient = host.CreateClient(TimeSpan.FromSeconds(1));
             var timeout = Assert.IsType<ExecuteOutcome.Unknown>(await impatient.ExecuteAsync("agent-k4", send, Token));
             Assert.Equal("timeout", timeout.Reason);

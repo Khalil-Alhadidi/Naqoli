@@ -86,19 +86,15 @@ public sealed class Checks
             return new CheckResult.Fail(ReasonCodes.OverPerTransactionCap, null, options.PerTransactionCapIqd);
 
         // 4. Daily cap.
-        var since = AgentClock.StartOfIraqDay(clock.GetUtcNow());
-        var history = await wallet.GetHistoryAsync(input.UserId, since, toPhone: null, options.HistoryPageSize, cancellationToken);
         long spent;
-        switch (history)
+        switch (await DailySpentAsync(input.UserId, cancellationToken))
         {
-            case WalletResult<IReadOnlyList<WalletHistoryItem>>.Ok ok:
-                spent = ok.Value
-                    .Where(h => string.Equals(h.Status, DoneStatus, StringComparison.OrdinalIgnoreCase))
-                    .Sum(h => h.AmountIqd);
+            case WalletResult<long>.Ok ok:
+                spent = ok.Value;
                 break;
-            case WalletResult<IReadOnlyList<WalletHistoryItem>>.Unavailable unavailable:
+            case WalletResult<long>.Unavailable unavailable:
                 return NothingTaken(unavailable.Reason);
-            case WalletResult<IReadOnlyList<WalletHistoryItem>>.Refused refused:
+            case WalletResult<long>.Refused refused:
                 return new CheckResult.Fail(ReasonCodes.NotDoneNothingTaken, refused.Problem.Code, null);
             default:
                 throw new InvalidOperationException("Unknown wallet result.");
@@ -118,6 +114,26 @@ public sealed class Checks
             WalletResult<WalletQuote>.Ok ok => new CheckResult.Pass(ok.Value, spent),
             WalletResult<WalletQuote>.Refused refused => FromRefusal(refused.Problem),
             WalletResult<WalletQuote>.Unavailable unavailable => NothingTaken(unavailable.Reason),
+            _ => throw new InvalidOperationException("Unknown wallet result."),
+        };
+    }
+
+    /// <summary>
+    /// What <paramref name="userId"/> has paid today: the amounts (without fees) of every <c>done</c> transaction since
+    /// midnight in Iraq, of every type, read in one page of <see cref="AgentOptions.HistoryPageSize"/> items. Used by
+    /// the daily-cap check here and by the Confirm recheck. The history read's refusal or missing answer is passed on.
+    /// </summary>
+    public async Task<WalletResult<long>> DailySpentAsync(int userId, CancellationToken cancellationToken)
+    {
+        var since = AgentClock.StartOfIraqDay(clock.GetUtcNow());
+        return await wallet.GetHistoryAsync(userId, since, toPhone: null, options.HistoryPageSize, cancellationToken) switch
+        {
+            WalletResult<IReadOnlyList<WalletHistoryItem>>.Ok ok => new WalletResult<long>.Ok(
+                ok.Value
+                    .Where(h => string.Equals(h.Status, DoneStatus, StringComparison.OrdinalIgnoreCase))
+                    .Sum(h => h.AmountIqd)),
+            WalletResult<IReadOnlyList<WalletHistoryItem>>.Unavailable unavailable => new WalletResult<long>.Unavailable(unavailable.Reason),
+            WalletResult<IReadOnlyList<WalletHistoryItem>>.Refused refused => new WalletResult<long>.Refused(refused.Problem),
             _ => throw new InvalidOperationException("Unknown wallet result."),
         };
     }

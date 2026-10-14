@@ -5,6 +5,7 @@ using Agent.Core.Tests.Agent;
 using Agent.Core.Tests.Wallet;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 
 namespace Agent.Core.Tests.Pending;
 
@@ -15,10 +16,12 @@ namespace Agent.Core.Tests.Pending;
 [Collection(AgentCollection.Name)]
 public class PendingStoreTests(AgentHost host)
 {
+    private const int User = SeedFacts.DemoUserId;
+
     private static CancellationToken Token => TestContext.Current.CancellationToken;
 
     private static CardDraft Draft(long amount = 50_000) => new(
-        UserId: SeedFacts.DemoUserId,
+        UserId: User,
         Type: "transfer",
         AmountIqd: amount,
         FeeIqd: 0,
@@ -61,9 +64,9 @@ public class PendingStoreTests(AgentHost host)
         return await db.AuditEntries.AsNoTracking().Where(a => a.PendingId == id).OrderBy(a => a.Id).ToListAsync(Token);
     }
 
-    private Task<PendingRecord?> FindAsync(Guid id) => InScopeAsync(s => s.FindAsync(id, Token));
+    private Task<PendingRecord?> FindAsync(Guid id) => InScopeAsync(s => s.FindAsync(id, User, Token));
 
-    private Task<TransitionResult> BeginAsync(Guid id) => InScopeAsync(s => s.TryBeginExecuteAsync(id, Token));
+    private Task<TransitionResult> BeginAsync(Guid id) => InScopeAsync(s => s.TryBeginExecuteAsync(id, User, Token));
 
     [Fact]
     public async Task CreateAssignsKeyAndExpiry()
@@ -93,6 +96,7 @@ public class PendingStoreTests(AgentHost host)
         var begun = Assert.IsType<TransitionResult.Begun>(first);
         Assert.Equal(PendingState.Executing, begun.Record.State);
         Assert.Equal(1, begun.Record.Attempts);
+        Assert.Equal(host.Clock.GetUtcNow(), begun.Record.ExecutingSince);
         Assert.Equal(new TransitionResult.AlreadyLeft(PendingState.Executing), second);
     }
 
@@ -133,8 +137,8 @@ public class PendingStoreTests(AgentHost host)
         await StartAsync();
         var record = await InScopeAsync(s => s.CreateAsync(Draft(), Token));
 
-        Assert.True(await InScopeAsync(s => s.CancelAsync(record.Id, Token)));
-        Assert.False(await InScopeAsync(s => s.CancelAsync(record.Id, Token)));
+        Assert.True(await InScopeAsync(s => s.CancelAsync(record.Id, User, Token)));
+        Assert.False(await InScopeAsync(s => s.CancelAsync(record.Id, User, Token)));
 
         Assert.Equal(new TransitionResult.AlreadyLeft(PendingState.Cancelled), await BeginAsync(record.Id));
         var rows = await AuditAsync(record.Id);
@@ -197,8 +201,8 @@ public class PendingStoreTests(AgentHost host)
         var record = await InScopeAsync(s => s.CreateAsync(Draft(), Token));
 
         Assert.IsType<TransitionResult.Begun>(await BeginAsync(record.Id));
-        await InScopeAsync(s => s.MarkCheckingAsync(record.Id, "timeout", Token));
-        await InScopeAsync(s => s.CompleteAsync(record.Id, PendingState.Done, null, "TX-1", 950_000, null, Token));
+        await InScopeAsync(s => s.MarkCheckingAsync(record.Id, User, "timeout", Token));
+        await InScopeAsync(s => s.CompleteAsync(record.Id, User, PendingState.Done, null, "TX-1", 950_000, null, Token));
 
         var rows = await AuditAsync(record.Id);
         Assert.Equal(
@@ -227,10 +231,11 @@ public class PendingStoreTests(AgentHost host)
         var record = await InScopeAsync(s => s.CreateAsync(Draft(), Token));
         Assert.IsType<TransitionResult.Begun>(await BeginAsync(record.Id));
 
-        await InScopeAsync(s => s.BackToPendingAsync(record.Id, "wrong_pin", Token));
+        await InScopeAsync(s => s.BackToPendingAsync(record.Id, User, "wrong_pin", Token));
 
         var stored = await FindAsync(record.Id);
         Assert.Equal(PendingState.Pending, stored!.State);
+        Assert.Null(stored.ExecutingSince);
         Assert.Equal(record.ExpiresAt, stored.ExpiresAt);
         Assert.Equal(record.IdempotencyKey, stored.IdempotencyKey);
         var last = (await AuditAsync(record.Id))[^1];
@@ -246,8 +251,11 @@ public class PendingStoreTests(AgentHost host)
         await StartAsync();
         var record = await InScopeAsync(s => s.CreateAsync(Draft(), Token));
 
-        await Assert.ThrowsAsync<InvalidOperationException>(
-            () => InScopeAsync(s => s.CompleteAsync(record.Id, PendingState.Done, null, "TX-1", null, null, Token)));
+        Assert.Equal(
+            new TransitionResult.AlreadyLeft(PendingState.Pending),
+            await InScopeAsync(s => s.CompleteAsync(record.Id, User, PendingState.Done, null, "TX-1", null, null, Token)));
+        Assert.IsType<TransitionResult.NotFound>(
+            await InScopeAsync(s => s.CompleteAsync(Guid.NewGuid(), User, PendingState.Done, null, "TX-1", null, null, Token)));
         Assert.Single(await AuditAsync(record.Id));
         Assert.Equal(PendingState.Pending, (await FindAsync(record.Id))!.State);
     }
@@ -260,10 +268,51 @@ public class PendingStoreTests(AgentHost host)
         Assert.IsType<TransitionResult.Begun>(await BeginAsync(record.Id));
 
         await Assert.ThrowsAsync<ArgumentException>(
-            () => InScopeAsync(s => s.CompleteAsync(record.Id, PendingState.Done, null, "TX-1", null, "12345", Token)));
-        await InScopeAsync(s => s.CompleteAsync(record.Id, PendingState.Done, null, "TX-1", null, "2345", Token));
+            () => InScopeAsync(s => s.CompleteAsync(record.Id, User, PendingState.Done, null, "TX-1", null, "12345", Token)));
+        await InScopeAsync(s => s.CompleteAsync(record.Id, User, PendingState.Done, null, "TX-1", null, "2345", Token));
 
         Assert.Equal("2345", (await FindAsync(record.Id))!.PurchaseCodeLast4);
+    }
+
+    [Fact]
+    public async Task StaleExecutingBecomesChecking()
+    {
+        await StartAsync();
+        var walletTimeout = host.Services.GetRequiredService<IOptions<AgentOptions>>().Value.WalletTimeoutSeconds;
+        var olderThan = TimeSpan.FromSeconds(walletTimeout + 5);
+
+        var stale = await InScopeAsync(s => s.CreateAsync(Draft(), Token));
+        Assert.IsType<TransitionResult.Begun>(await BeginAsync(stale.Id));
+        host.Clock.Advance(olderThan + TimeSpan.FromSeconds(1));
+        var fresh = await InScopeAsync(s => s.CreateAsync(Draft(), Token));
+        Assert.IsType<TransitionResult.Begun>(await BeginAsync(fresh.Id));
+
+        Assert.Equal(1, await InScopeAsync(s => s.MarkStaleExecutingAsync(olderThan, Token)));
+
+        Assert.Equal(PendingState.Checking, (await FindAsync(stale.Id))!.State);
+        Assert.Equal(PendingState.Executing, (await FindAsync(fresh.Id))!.State);
+        var last = (await AuditAsync(stale.Id))[^1];
+        Assert.Equal(
+            (AuditEvents.Checking, "Executing", "Checking", PendingStore.StaleExecuting),
+            (last.Event, last.FromState, last.ToState, last.Reason));
+        Assert.Equal(AuditEvents.Executing, (await AuditAsync(fresh.Id))[^1].Event);
+
+        // A second sweep finds nothing more to move.
+        Assert.Equal(0, await InScopeAsync(s => s.MarkStaleExecutingAsync(olderThan, Token)));
+    }
+
+    [Fact]
+    public async Task AnotherUsersRecordIsNotFound()
+    {
+        await StartAsync();
+        var record = await InScopeAsync(s => s.CreateAsync(Draft(), Token));
+        const int other = SeedFacts.TightUserId;
+
+        Assert.Null(await InScopeAsync(s => s.FindAsync(record.Id, other, Token)));
+        Assert.False(await InScopeAsync(s => s.CancelAsync(record.Id, other, Token)));
+        Assert.IsType<TransitionResult.NotFound>(await InScopeAsync(s => s.TryBeginExecuteAsync(record.Id, other, Token)));
+        Assert.Equal(PendingState.Pending, (await FindAsync(record.Id))!.State);
+        Assert.Single(await AuditAsync(record.Id));
     }
 
     [Fact]
@@ -290,7 +339,7 @@ public class PendingStoreTests(AgentHost host)
         var checking = await InScopeAsync(s => s.CreateAsync(Draft(), Token));
         var executing = await InScopeAsync(s => s.CreateAsync(Draft(), Token));
         Assert.IsType<TransitionResult.Begun>(await BeginAsync(checking.Id));
-        await InScopeAsync(s => s.MarkCheckingAsync(checking.Id, "timeout", Token));
+        await InScopeAsync(s => s.MarkCheckingAsync(checking.Id, User, "timeout", Token));
         Assert.IsType<TransitionResult.Begun>(await BeginAsync(executing.Id));
 
         Assert.Equal(2, await InScopeAsync(s => s.ExpireAllOpenAsync("wallet_reset", Token)));

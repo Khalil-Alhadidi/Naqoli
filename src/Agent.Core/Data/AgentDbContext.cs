@@ -48,6 +48,7 @@ public class AgentDbContext(DbContextOptions<AgentDbContext> options) : DbContex
             e.Property(a => a.ToState).HasMaxLength(StateLength);
             e.Property(a => a.Reason).HasMaxLength(TextLength);
             e.Property(a => a.Reference).HasMaxLength(TextLength);
+            e.Property(a => a.Detail).HasMaxLength(TextLength);
             e.HasIndex(a => a.PendingId);
             e.HasIndex(a => a.At);
         });

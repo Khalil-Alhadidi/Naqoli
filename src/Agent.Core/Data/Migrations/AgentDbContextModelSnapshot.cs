@@ -36,6 +36,10 @@ namespace Agent.Core.Data.Migrations
                     b.Property<DateTimeOffset>("At")
                         .HasColumnType("datetimeoffset");
 
+                    b.Property<string>("Detail")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
                     b.Property<string>("Event")
                         .IsRequired()
                         .HasMaxLength(100)
@@ -102,6 +106,9 @@ namespace Agent.Core.Data.Migrations
                     b.Property<string>("DisplayName")
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTimeOffset?>("ExecutingSince")
+                        .HasColumnType("datetimeoffset");
 
                     b.Property<DateTimeOffset>("ExpiresAt")
                         .HasColumnType("datetimeoffset");

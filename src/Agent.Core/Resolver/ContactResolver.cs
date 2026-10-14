@@ -10,7 +10,7 @@ namespace Agent.Core.Resolver;
 public static class ContactResolver
 {
     /// <summary>
-    /// A typed word shorter than this (normalised) must equal a whole word of the candidate in the partial step;
+    /// A typed word whose key (normalised, leading al stripped) is shorter than this must equal a whole word of the candidate in the partial step;
     /// longer words may occur anywhere inside the candidate's key. Provisional reading of rule 4 (rule 4 does not say
     /// how short a fragment may be), reported to Khalil.
     /// </summary>
@@ -43,10 +43,12 @@ public static class ContactResolver
             return new Resolution.NotFound();
 
         // 2. Partial (rules 4, 5, 7): every typed word is inside the candidate's key; a short typed word must equal
-        // one of the candidate's words (both compared after the per-word leading al strip).
+        // one of the candidate's words (both compared after the per-word leading al strip). A word's length is measured
+        // on its key, after that strip.
         var wordKeys = typedWords
-            .Select(w => (Key: ArabicText.Key(w), WholeWordOnly: w.Length < MinSubstringWordLength))
-            .Where(w => w.Key.Length > 0)
+            .Select(ArabicText.Key)
+            .Where(key => key.Length > 0)
+            .Select(key => (Key: key, WholeWordOnly: key.Length < MinSubstringWordLength))
             .ToList();
         var typedHasTitle = typedWords.Any(ArabicText.IsTitle);
         var partial = keyed

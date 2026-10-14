@@ -1,3 +1,4 @@
+using Agent.Core.Tests.Wallet;
 using Agent.Core.Text;
 
 namespace Agent.Core.Tests.Text;
@@ -140,5 +141,17 @@ public class ArabicTextTests
     {
         Assert.Equal("50000", ArabicDigits.ToAscii("\u0665\u0660\u0660\u0660\u0660"));
         Assert.Equal("\u0665\u0660,\u0660\u0660\u0660", ArabicDigits.ToArabicIndic("50,000"));
+    }
+
+    [Fact]
+    public void FormatCharactersAreDropped()
+    {
+        // A seed name with a right-to-left override in front, a zero-width joiner and a zero-width space inside.
+        var name = SeedFacts.Contact("S01").SavedName;
+        Assert.True(name.Length >= 3);
+        var dirty = "\u202E" + name[..1] + "\u200D" + name[1..2] + "\u200B" + name[2..];
+
+        Assert.Equal(ArabicText.Key(name), ArabicText.Key(dirty));
+        Assert.Equal(ArabicText.Normalize(name), ArabicText.Normalize(dirty));
     }
 }

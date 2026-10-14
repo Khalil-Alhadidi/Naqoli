@@ -330,11 +330,14 @@ public sealed class Orchestrator
         return new AgentReply.Question(kind, QuestionKinds.AnswerFor(kind, choices.Count), choices);
     }
 
-    /// <summary>A refusal and its audit row; the row keeps the code only (no detail, no figure).</summary>
+    /// <summary>
+    /// A refusal and its audit row; the row keeps the code, and the detail only for <c>not_done_nothing_taken</c>
+    /// (a wallet code), never a figure.
+    /// </summary>
     private async Task<AgentReply> RefuseAsync(
         int userId, string code, string? detail, long? amountIqd, CancellationToken cancellationToken)
     {
-        await audit.WriteAsync(userId, null, AuditEvents.Refused, null, null, code, null, null, cancellationToken);
+        await audit.WriteRefusalAsync(userId, code, detail, cancellationToken);
         return new AgentReply.Refusal(code, detail, amountIqd);
     }
 

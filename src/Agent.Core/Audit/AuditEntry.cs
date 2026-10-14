@@ -24,5 +24,11 @@ public sealed class AuditEntry
 
     public string? Reference { get; set; }
 
+    /// <summary>
+    /// The detail of a <c>refused</c> row whose reason is <c>not_done_nothing_taken</c>: the wallet's code or
+    /// <c>wallet_</c> and the reason. Null on every other row.
+    /// </summary>
+    public string? Detail { get; set; }
+
     public long? AmountIqd { get; set; }
 }

@@ -57,6 +57,12 @@ public sealed class PendingRecord
 
     public DateTimeOffset? ClosedAt { get; set; }
 
+    /// <summary>
+    /// When the record last entered Executing: set by <see cref="PendingStore.TryBeginExecuteAsync"/>, cleared when it
+    /// goes back to Pending. The stale-Executing sweep (<see cref="PendingStore.MarkStaleExecutingAsync"/>) reads it.
+    /// </summary>
+    public DateTimeOffset? ExecutingSince { get; set; }
+
     public string? Reference { get; set; }
 
     public long? BalanceAfterIqd { get; set; }

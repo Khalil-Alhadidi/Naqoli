@@ -102,9 +102,13 @@ public sealed class AgentHost : IAsyncLifetime
         await db.Database.MigrateAsync();
     }
 
-    /// <summary>Returns the wallet to the seed and empties both agent tables.</summary>
+    /// <summary>
+    /// Sets the clock back to the real time (so no test inherits another's moves, or drifts across midnight in Iraq),
+    /// returns the wallet to the seed and empties both agent tables.
+    /// </summary>
     public async Task ResetAsync()
     {
+        Clock.Now = TimeProvider.System.GetUtcNow();
         await Wallet.ResetAsync();
         await using var scope = Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<AgentDbContext>();
@@ -117,10 +121,16 @@ public sealed class AgentHost : IAsyncLifetime
     /// A wallet client over its own <see cref="HttpClient"/> with <paramref name="timeout"/>, sending to the in-process
     /// wallet with the same options as the registered one. The host disposes nothing it returns; the client lives for the test.
     /// </summary>
-    public WalletClient CreateClient(TimeSpan timeout)
+    public WalletClient CreateClient(TimeSpan timeout) => CreateClient(Wallet.CreateHandler(), timeout);
+
+    /// <summary>
+    /// A wallet client over <paramref name="handler"/> (a stub, usually wrapping <see cref="WalletApiFixture.CreateHandler"/>)
+    /// with <paramref name="timeout"/> and the same options as the registered one.
+    /// </summary>
+    public WalletClient CreateClient(HttpMessageHandler handler, TimeSpan timeout)
     {
         var options = Services.GetRequiredService<IOptions<AgentOptions>>().Value;
-        var http = new HttpClient(Wallet.CreateHandler());
+        var http = new HttpClient(handler);
         WalletClient.Configure(http, options, environment: null);
         http.Timeout = timeout;
         return new WalletClient(http, NullLogger<WalletClient>.Instance);

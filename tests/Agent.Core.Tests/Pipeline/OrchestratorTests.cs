@@ -36,7 +36,6 @@ public class OrchestratorTests(AgentHost host)
     private async Task StartAsync()
     {
         Assert.SkipUnless(host.DatabaseAvailable, host.SkipReason);
-        host.Clock.Now = TimeProvider.System.GetUtcNow();
         await host.ResetAsync();
     }
 
@@ -398,7 +397,7 @@ public class OrchestratorTests(AgentHost host)
         Assert.Null(first.Warning);
         await using (var scope = host.Services.CreateAsyncScope())
         {
-            var outcome = await scope.ServiceProvider.GetRequiredService<ConfirmHandler>().ConfirmAsync(first.Id, null, Token);
+            var outcome = await scope.ServiceProvider.GetRequiredService<ConfirmHandler>().ConfirmAsync(U1, first.Id, null, Token);
             Assert.IsType<ConfirmOutcome.Done>(outcome);
         }
 
