@@ -486,3 +486,7 @@ $RECYCLE.BIN/
 
 # Playwright MCP scratch output
 .playwright-mcp/
+
+# Raw test-set exports must never be committed (rule 7); the committed copy is data/ and docs/matching-rules.md
+docs/zaincash-testdata-export-*/
+docs/zaincash-testdata-export-*.zip
