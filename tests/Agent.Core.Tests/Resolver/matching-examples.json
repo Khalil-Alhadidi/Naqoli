@@ -1,0 +1,20 @@
+[
+  { "rule": 1, "user": "U1", "typed": "عبدالله", "expect": "card", "account_of": "S17" },
+  { "rule": 1, "user": "U1", "typed": "عبد الله", "expect": "card", "account_of": "S17" },
+  { "rule": 1, "user": "U1", "typed": "احمد", "expect": "options", "kind": "which_contact", "options": ["S10", "S11"] },
+  { "rule": 1, "user": "U1", "typed": "أحمد", "expect": "options", "kind": "which_contact", "options": ["S10", "S11"] },
+  { "rule": 1, "user": "U1", "typed": "اخي حمودي", "expect": "card", "account_of": "S01" },
+  { "rule": 1, "user": "U1", "typed": "اخوية حمودي", "expect": "card", "account_of": "S01" },
+  { "rule": 2, "user": "U1", "typed": "سجاد", "expect": "card", "account_of": "S18" },
+  { "rule": 3, "user": "U1", "typed": "حسين", "expect": "options", "kind": "which_contact", "options": ["S08", "S09"] },
+  { "rule": 4, "user": "U1", "typed": "عبدالله", "expect": "card", "account_of": "S17" },
+  { "rule": 4, "user": "U1", "typed": "علي", "expect": "options", "kind": "which_contact", "options": ["S04", "S05", "S06", "S07"] },
+  { "rule": 4, "user": "U3", "typed": "ابو حيدر ابو الجملة", "expect": "card", "account_of": "T01" },
+  { "rule": 5, "user": "U1", "typed": "مصطفى", "expect": "options", "kind": "which_contact", "options": ["S16"] },
+  { "rule": 6, "user": "U1", "typed": "اخوية حمدي", "expect": "options", "kind": "did_you_mean", "options": ["S01"] },
+  { "rule": 6, "user": "U1", "typed": "علي ابن خاتي", "expect": "options", "kind": "did_you_mean", "options": ["S06"] },
+  { "rule": 7, "user": "U1", "typed": "المولدة", "expect": "card", "account_of": "S13" },
+  { "rule": 8, "user": "U1", "typed": "حول لياسر", "expect": "not_found" },
+  { "rule": 15, "user": "U1", "typed": "علي الحلاق", "expect": "options", "kind": "which_contact", "options": ["S04", "S05", "S06", "S07"] },
+  { "rule": 15, "user": "U1", "typed": "محمد ابو الصيدلية", "expect": "options", "kind": "which_contact", "options": ["S01", "S03"] }
+]
