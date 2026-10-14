@@ -12,7 +12,7 @@ public class SeedHashTests
 
         Assert.True(
             string.Equals(committed, SeedHash.Compute(SeedSetTests.SeedDirectory), StringComparison.Ordinal),
-            "The seed files changed. If that is intended, run `dotnet run --project src/Wallet.MockApi -- seed-hash`, write the value to data/seed/seed-hash.txt and re-check every answer key.");
+            "The seed files changed. If that is intended, run `dotnet run --project src/Wallet.MockApi --no-launch-profile -- seed-hash`, write the hash (the last line of the output) to data/seed/seed-hash.txt and re-check every answer key.");
     }
 
     [Fact]

@@ -74,13 +74,20 @@ public static class ReadEndpoints
         return user is null ? WalletProblems.UserNotFound() : TypedResults.Ok(user);
     }
 
-    /// <summary>Records that the user has given consent. Giving it again changes nothing and also returns 204.</summary>
+    /// <summary>
+    /// Records that the user has given consent. Giving it again changes nothing and also returns 204. The write takes
+    /// the wallet gate shared, so a reset never interleaves with a consent write.
+    /// </summary>
     private static async Task<Results<NoContent, ProblemHttpResult>> GiveConsentAsync(
-        int id, WalletDbContext db, CancellationToken cancellationToken)
+        int id, WalletDbContext db, WalletGate gate, CancellationToken cancellationToken)
     {
-        var updated = await db.Users
-            .Where(u => u.Id == id)
-            .ExecuteUpdateAsync(setters => setters.SetProperty(u => u.ConsentGiven, true), cancellationToken);
+        int updated;
+        using (await gate.EnterSharedAsync(cancellationToken))
+        {
+            updated = await db.Users
+                .Where(u => u.Id == id)
+                .ExecuteUpdateAsync(setters => setters.SetProperty(u => u.ConsentGiven, true), cancellationToken);
+        }
 
         return updated == 0 ? WalletProblems.UserNotFound() : TypedResults.NoContent();
     }

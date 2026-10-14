@@ -125,7 +125,7 @@ public class SeedApplyTests(WalletApiFixture fixture)
     }
 
     [Fact]
-    public async Task MigrateOnTheOldSeedWipesAndReseeds()
+    public async Task ResetRemovesRowsThatApplyLeaves()
     {
         // Not a migration replay (the old schema is gone). The migration's wipe is proven by the fixture's
         // EnsureDeleted + Migrate + Apply path producing exactly the seed counts; here, a row the seed does not hold

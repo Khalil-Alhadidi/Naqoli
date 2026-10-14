@@ -219,6 +219,43 @@ public class SeedSetTests
         }
     }
 
+    [Fact]
+    public void ClosedUserAccountIsRejected()
+    {
+        var dir = CopySeed();
+        try
+        {
+            // U1's own account.
+            ReplaceFirstAfter(dir, SeedFiles.Accounts, "\"number\": \"07805550001\"", "\"status\": \"active\"", "\"status\": \"closed\"");
+
+            var ex = Assert.Throws<SeedException>(() => SeedSet.Load(dir.FullName));
+            Assert.StartsWith("accounts.json", ex.Message, StringComparison.Ordinal);
+            Assert.Contains("07805550001", ex.Message);
+        }
+        finally
+        {
+            dir.Delete(true);
+        }
+    }
+
+    [Fact]
+    public void UserAccountWithoutAUserIsRejected()
+    {
+        var dir = CopySeed();
+        try
+        {
+            ReplaceFirstAfter(dir, SeedFiles.Accounts, "\"number\": \"07805550190\"", "\"kind\": \"other\"", "\"kind\": \"user\"");
+
+            var ex = Assert.Throws<SeedException>(() => SeedSet.Load(dir.FullName));
+            Assert.StartsWith("accounts.json", ex.Message, StringComparison.Ordinal);
+            Assert.Contains("07805550190", ex.Message);
+        }
+        finally
+        {
+            dir.Delete(true);
+        }
+    }
+
     /// <summary>Copies the eight seed files to a new temporary directory. The caller deletes it.</summary>
     internal static DirectoryInfo CopySeed()
     {
@@ -235,6 +272,21 @@ public class SeedSetTests
         var text = File.ReadAllText(path);
         var index = text.IndexOf(oldValue, StringComparison.Ordinal);
         Assert.True(index >= 0, $"{oldValue} not found in {file}");
+        File.WriteAllText(path, string.Concat(text.AsSpan(0, index), newValue, text.AsSpan(index + oldValue.Length)));
+    }
+
+    /// <summary>
+    /// Replaces the first occurrence of <paramref name="oldValue"/> that follows <paramref name="anchor"/> in one copied
+    /// seed file.
+    /// </summary>
+    internal static void ReplaceFirstAfter(DirectoryInfo dir, string file, string anchor, string oldValue, string newValue)
+    {
+        var path = Path.Combine(dir.FullName, file);
+        var text = File.ReadAllText(path);
+        var at = text.IndexOf(anchor, StringComparison.Ordinal);
+        Assert.True(at >= 0, $"{anchor} not found in {file}");
+        var index = text.IndexOf(oldValue, at, StringComparison.Ordinal);
+        Assert.True(index >= 0, $"{oldValue} not found after {anchor} in {file}");
         File.WriteAllText(path, string.Concat(text.AsSpan(0, index), newValue, text.AsSpan(index + oldValue.Length)));
     }
 }

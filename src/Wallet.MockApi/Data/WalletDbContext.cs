@@ -57,6 +57,9 @@ public class WalletDbContext(DbContextOptions<WalletDbContext> options) : DbCont
             account.Property(a => a.Code).HasMaxLength(SeedCodeLength);
             account.Property(a => a.Phone).HasMaxLength(PhoneLength);
             account.HasIndex(a => a.Phone).IsUnique();
+
+            // D10: one default account per user.
+            account.HasIndex(a => a.UserId).IsUnique().HasFilter("[IsDefault] = 1");
             account.Property(a => a.RegisteredName).HasMaxLength(NameLength);
             account.Property(a => a.Status).HasConversion<string>().HasMaxLength(EnumLength);
             account.Property(a => a.BalanceIqd).HasColumnType("bigint");

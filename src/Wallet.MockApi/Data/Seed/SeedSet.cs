@@ -150,16 +150,22 @@ public sealed class SeedSet
                 throw Fail(SeedFiles.History, $"row {h.Id} has time {h.Time}, expected HH:mm");
         }
 
-        // 2. Every user is a user account with the same name and balance.
+        // 2. Every user is an active user account with the same name and balance, and every user account is a user's.
         foreach (var u in Users)
         {
             if (!accounts.TryGetValue(u.Number, out var account) || account.Kind != "user")
                 throw Fail(SeedFiles.Users, $"user {u.Id} has number {u.Number}, which is not an account of kind user");
+            if (account.Status != "active")
+                throw Fail(SeedFiles.Accounts, $"account {u.Number} of user {u.Id} has status {account.Status}, expected active");
             if (!string.Equals(account.RegisteredName, u.Name, StringComparison.Ordinal))
                 throw Fail(SeedFiles.Users, $"user {u.Id} has a different name from account {u.Number}");
             if (account.Balance != u.Balance)
                 throw Fail(SeedFiles.Users, $"user {u.Id} has balance {u.Balance}, account {u.Number} has {account.Balance}");
         }
+
+        var userNumbers = Users.Select(u => u.Number).ToHashSet(StringComparer.Ordinal);
+        foreach (var a in Accounts.Where(a => a.Kind == "user" && !userNumbers.Contains(a.Number)))
+            throw Fail(SeedFiles.Accounts, $"account {a.Number} has kind user, but no user has that number");
 
         // 3. Contacts, bills and history belong to users; contact numbers are accounts.
         foreach (var c in Contacts)

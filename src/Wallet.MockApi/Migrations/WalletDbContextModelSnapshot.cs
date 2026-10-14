@@ -62,7 +62,9 @@ namespace Wallet.MockApi.Migrations
                     b.HasIndex("Phone")
                         .IsUnique();
 
-                    b.HasIndex("UserId");
+                    b.HasIndex("UserId")
+                        .IsUnique()
+                        .HasFilter("[IsDefault] = 1");
 
                     b.ToTable("Accounts", (string)null);
                 });
