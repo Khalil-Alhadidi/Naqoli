@@ -6,14 +6,16 @@ using System.Runtime.CompilerServices;
 using Agent.Core.Confirm;
 using Agent.Core.Wallet;
 using AgentWeb::Agent.Web.Services;
+using AgentConversation = Agent.Core.Conversation.Conversation;
 
 namespace Agent.Core.Tests.Architecture;
 
 /// <summary>
 /// Rule 1, "no tap, no money", checked on the compiled code: the IL of every method in <c>Agent.Core</c> is decoded and
-/// the only methods that call <see cref="WalletClient"/>'s execute are the two Confirm handler methods; nothing in
-/// <c>Agent.Core</c> calls those two; only the wallet client names the <c>transactions</c> routes; and nothing invokes a
-/// method by reflection. Pure: no database, no wallet.
+/// the only methods that call <see cref="WalletClient"/>'s execute are the two Confirm handler methods; in
+/// <c>Agent.Core</c> only the conversation's Confirm and settle call those two; in <c>Agent.Web</c> nothing calls the
+/// handler and only the session's Confirm and settle call the conversation's; only the wallet client names the
+/// <c>transactions</c> routes; and nothing invokes a method by reflection. Pure: no database, no wallet.
 /// </summary>
 public class NoTapNoMoneyTests
 {
@@ -65,27 +67,45 @@ public class NoTapNoMoneyTests
     }
 
     /// <summary>
-    /// Nothing in <c>Agent.Core</c> calls <see cref="ConfirmHandler.ConfirmAsync"/> or
-    /// <see cref="ConfirmHandler.SettleCheckingAsync"/>: no parse or reply path can turn words into a Confirm.
+    /// In <c>Agent.Core</c> only <see cref="AgentConversation.ConfirmAsync"/> (the card's Confirm button) and
+    /// <see cref="AgentConversation.SettleAsync"/> (the "check again" button) call <see cref="ConfirmHandler.ConfirmAsync"/>
+    /// or <see cref="ConfirmHandler.SettleCheckingAsync"/>: no parse or reply path can turn words into a Confirm.
     /// </summary>
     [Fact]
-    public void NothingInAgentCoreCallsTheConfirmHandler()
+    public void OnlyTheConversationsConfirmAndSettleCallTheConfirmHandler()
     {
         var callers = CallersOf(IsConfirmHandlerEntry);
 
+        var expected = new HashSet<string>(StringComparer.Ordinal)
+        {
+            $"{typeof(AgentConversation).FullName}.{nameof(AgentConversation.ConfirmAsync)}",
+            $"{typeof(AgentConversation).FullName}.{nameof(AgentConversation.SettleAsync)}",
+        };
+        Assert.True(
+            callers.SetEquals(expected),
+            "The methods in Agent.Core that reach the Confirm handler must be exactly the conversation's two. Found: "
+            + string.Join(", ", callers.Order(StringComparer.Ordinal)));
+    }
+
+    /// <summary>Nothing in <c>Agent.Web</c> calls the Confirm handler itself; it goes through the conversation.</summary>
+    [Fact]
+    public void NothingInAgentWebCallsTheConfirmHandler()
+    {
+        var callers = CallersOf(IsConfirmHandlerEntry, AgentWeb);
+
         Assert.True(
             callers.Count == 0,
-            "Nothing in Agent.Core may call the Confirm handler. Found: " + string.Join(", ", callers.Order(StringComparer.Ordinal)));
+            "Nothing in Agent.Web may call the Confirm handler. Found: " + string.Join(", ", callers.Order(StringComparer.Ordinal)));
     }
 
     /// <summary>
-    /// In <c>Agent.Web</c> the Confirm handler is reached only by the session's Confirm (the card's button) and its settle
-    /// (the "check again" button). The components call the session, never the handler, and no typed text reaches either.
+    /// In <c>Agent.Web</c> the conversation's Confirm and settle are reached only by the session's Confirm (the card's
+    /// button) and its settle (the "check again" button). The components call the session, and no typed text reaches either.
     /// </summary>
     [Fact]
-    public void OnlyTheSessionsConfirmAndSettleCallTheConfirmHandlerFromTheWeb()
+    public void OnlyTheSessionsConfirmAndSettleCallTheConversationsFromTheWeb()
     {
-        var callers = CallersOf(IsConfirmHandlerEntry, AgentWeb);
+        var callers = CallersOf(IsConversationConfirmEntry, AgentWeb);
 
         var expected = new HashSet<string>(StringComparer.Ordinal)
         {
@@ -94,7 +114,7 @@ public class NoTapNoMoneyTests
         };
         Assert.True(
             callers.SetEquals(expected),
-            "The methods in Agent.Web that reach the Confirm handler must be exactly the session's two. Found: "
+            "The methods in Agent.Web that reach the conversation's Confirm or settle must be exactly the session's two. Found: "
             + string.Join(", ", callers.Order(StringComparer.Ordinal)));
     }
 
@@ -172,6 +192,10 @@ public class NoTapNoMoneyTests
     private static bool IsConfirmHandlerEntry(MethodBase callee)
         => callee.DeclaringType == typeof(ConfirmHandler)
             && callee.Name is nameof(ConfirmHandler.ConfirmAsync) or nameof(ConfirmHandler.SettleCheckingAsync);
+
+    private static bool IsConversationConfirmEntry(MethodBase callee)
+        => callee.DeclaringType == typeof(AgentConversation)
+            && callee.Name is nameof(AgentConversation.ConfirmAsync) or nameof(AgentConversation.SettleAsync);
 
     /// <summary>
     /// The user-facing names of every method in <paramref name="assembly"/> (<c>Agent.Core</c> by default) whose IL

@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Agent.Core.Requests;
@@ -13,9 +14,9 @@ public sealed record ScriptedSentence(string Sentence, ParsedRequest Request);
 /// written next to it in <c>scripted-sentences.json</c> (an embedded resource; the sentences are Khalil's to write).
 /// The typed text and each sentence are compared after <see cref="ArabicText.Normalize"/> (digits to ASCII, whitespace
 /// collapsed), ordinal and whole; anything else is <see cref="RequestIntent.Unclear"/>. It never calls a model and
-/// holds no state per user, so one instance serves everyone.
+/// holds no state per user, so one instance serves everyone. Its <see cref="LastUsage"/> is zero tokens and zero cost.
 /// </summary>
-public sealed class ScriptedParser : IParser
+public sealed class ScriptedParser : IParser, IParserUsage
 {
     private const string ResourceName = "Agent.Core.Parsing.scripted-sentences.json";
 
@@ -25,6 +26,8 @@ public sealed class ScriptedParser : IParser
     };
 
     private readonly Dictionary<string, ParsedRequest> sentences;
+
+    private ParseUsage? lastUsage;
 
     /// <summary>The sentences of the embedded <c>scripted-sentences.json</c>.</summary>
     public ScriptedParser()
@@ -58,14 +61,19 @@ public sealed class ScriptedParser : IParser
         }
     }
 
+    /// <summary>The last parse: no tokens, no cost, and the time the lookup took.</summary>
+    public ParseUsage? LastUsage => Volatile.Read(ref lastUsage);
+
     public Task<ParsedRequest> ParseAsync(string text, ParseContext context, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(text);
         ArgumentNullException.ThrowIfNull(context);
 
+        var started = Stopwatch.GetTimestamp();
         var parsed = sentences.TryGetValue(ArabicText.Normalize(text), out var request)
             ? request
             : new ParsedRequest { Intent = RequestIntent.Unclear };
+        Volatile.Write(ref lastUsage, new ParseUsage(0, 0, 0m, Stopwatch.GetElapsedTime(started)));
         return Task.FromResult(parsed);
     }
 }

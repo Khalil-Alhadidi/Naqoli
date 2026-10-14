@@ -32,6 +32,12 @@ public sealed class AgentHost : IAsyncLifetime
     /// </summary>
     public const string WalletBaseUrl = "http://localhost";
 
+    /// <summary>The D6 yes word of the test configuration (the web console sets its own from the resource file).</summary>
+    public const string TestYesWord = "yes";
+
+    /// <summary>The D6 no word of the test configuration.</summary>
+    public const string TestNoWord = "no";
+
     private ServiceProvider? services;
     private IConfiguration? configuration;
 
@@ -79,6 +85,9 @@ public sealed class AgentHost : IAsyncLifetime
                 ["ConnectionStrings:Agent"] = TestConnectionString,
                 // No hosted sweep: the tests sweep by hand (PendingSweeperTests).
                 ["Agent:SweepIntervalSeconds"] = "0",
+                // D6 words for the conversation tests; Agent.Core holds no phone text of its own.
+                ["Agent:YesWords:0"] = TestYesWord,
+                ["Agent:NoWords:0"] = TestNoWord,
             })
             .Build();
 

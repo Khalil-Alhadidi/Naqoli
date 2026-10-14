@@ -110,7 +110,7 @@ Note, 14 Oct 2026: all six lines are shown by tests in `tests/Agent.Core.Tests`.
 
 | Done when | Shown by |
 |---|---|
-| The Hammoudi request, typed in the phone, shows the card, and Confirm moves the money | Journey `HammoudiHappyPath`; `ChatSessionTests.TheHammoudiSentenceGivesTheCardAndConfirmMovesTheMoney` |
+| The Hammoudi request, typed in the phone, shows the card, and Confirm moves the money | Journey `HammoudiHappyPath`; `ConversationTests.TheHammoudiSentenceGivesTheCardAndConfirmMovesTheMoney` (milestone 4: `ChatSessionTests`) |
 | The wallet data component shows the new balance and the new history row | Journey `HammoudiHappyPath` |
 | The live trace shows each step with its zone | Journey `HammoudiHappyPath` (entries in the User, Model, Code and Write zones); `TraceSinkTests.ATransferTracesEveryStepInItsZone` |
 | Three Playwright journeys pass | `HammoudiHappyPath`, `TimerKillsTheButton`, `DoubleTapExecutesOnce` (`dotnet test tests/Agent.Web.Journeys`, about 20 s) |

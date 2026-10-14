@@ -1,6 +1,6 @@
 # Agent.Web: the console and the phone
 
-This document describes what `src/Agent.Web` does as built in milestone 4. It covers:
+This document describes what `src/Agent.Web` does as built in milestone 4. In milestone 5 the session's logic moved into `Agent.Core` as `Conversation` (see [agent-core.md](agent-core.md), "The conversation"), so the test runner drives the same logic; `ChatSession` is now the phone's adapter over it. It covers:
 
 - page layout B (D17);
 - the phone and its session;
@@ -43,34 +43,36 @@ The side menu sits in the layout outside the `console` element, and it is Englis
 | `TraceLog` | scoped (one per circuit) | The circuit's live trace; it implements `ITraceSink` |
 | `ITraceSink` | scoped | `TraceLog.Current.Value ?? sp.GetRequiredService<TraceLog>()` (see "The live trace") |
 | `IParser` | singleton | `new ScriptedParser()`, through a factory, because DI would pick the constructor that takes a sentence list and pass an empty one |
-| `ChatSession` | scoped (one per circuit) | The phone's state and actions |
+| `ChatSession` | scoped (one per circuit) | The phone's adapter over a `Conversation`: localised messages, the circuit's trace, `Changed` |
+| `AgentOptions` post-configuration | options | `YesWords` and `NoWords` (D6) from the resource values `Word_yes` and `Word_no`, so `Agent.Core` holds no phone text |
 | `ConsoleNavigation` | scoped | The side menu's selection |
 
 ## The session flow
 
-`ChatSession` (`Services/ChatSession.cs`) holds the following state:
+`ChatSession` (`Services/ChatSession.cs`) is the adapter. It builds one `Conversation` for the circuit (with the circuit's `TraceLog` as its sink and `DemoUserId` as the user) and passes its state through to the components:
 
-- the messages;
-- the card as a `CardView` and its status (`CardStatus`: Live, Done, NotDone, Checking, Expired, Cancelled);
+- the messages, localised (below);
+- the card as a `CardView` and its status (`CardStatus`, from `Agent.Core.Conversation`: Live, Done, NotDone, Checking, Expired, Cancelled);
 - the open question;
 - the PIN-field flag;
-- the message whose button is live;
+- the messages the card, the question's options and the live button are shown under (`CardMessageId`, `QuestionMessageId`, `ActionMessageId`, mapped from the conversation's positions);
 - `Busy`;
 - `WalletVersion`.
 
-It raises `Changed` after every change. Components never see a `PendingRecord`, an idempotency key or a quoted balance.
+It raises `Changed` after every change of the conversation. Components never see a `PendingRecord`, an idempotency key or a quoted balance, and the component contract (`ChatMessage`, the ids, the actions) is the same as in milestone 4.
 
-Every action follows the same pattern:
+Every action of the session follows the same pattern:
 
 1. Set `TraceLog.Current` to the circuit's log.
-2. Wait on the session's `SemaphoreSlim(1,1)`, so a timer refresh and a tap never run together.
-3. Open its own `IServiceScopeFactory.CreateAsyncScope()`, so no two UI events share an `AgentDbContext`.
-4. Resolve the agent's service from that scope.
+2. Call the conversation's action of the same name. The conversation waits on its `SemaphoreSlim(1,1)`, so a timer refresh and a tap never run together, and opens its own `IServiceScopeFactory.CreateAsyncScope()` for the agent's services, so no two UI events share an `AgentDbContext`.
+
+The conversation's messages are codes and figures, and a user message holds no text. The session keeps the typed words itself: `SendAsync` puts them in an `AsyncLocal`, and the conversation adds the user's message and raises `Changed` on that same async flow, while the action holds its turn. The session's `Changed` handler localises every new conversation message there and then.
 
 ```mermaid
 sequenceDiagram
     participant U as Phone (PhoneFrame, CardPanel)
-    participant S as ChatSession
+    participant S as ChatSession (adapter)
+    participant V as Conversation (Agent.Core)
     participant P as IParser (ScriptedParser)
     participant O as Orchestrator (new scope)
     participant C as ConfirmHandler (new scope)
@@ -78,24 +80,30 @@ sequenceDiagram
     participant D as WalletDataPanel
 
     U->>S: SendAsync(typed text)
-    S->>P: ParseAsync(text, ParseContext(pending note))
-    P-->>S: ParsedRequest
-    S->>O: HandleAsync(DemoUserId, request)
+    S->>V: SendAsync(typed text)
+    V->>P: ParseAsync(text, ParseContext(pending note))
+    P-->>V: ParsedRequest
+    V->>O: HandleAsync(DemoUserId, request)
     O->>W: reads, quote
-    O-->>S: AgentReply.CardIssued
-    S-->>U: Card = CardIssued.View, card message
+    O-->>V: AgentReply.CardIssued
+    V-->>S: Changed (message Card)
+    S-->>U: card message (Card_Title), Card = CardIssued.View
     U->>S: ConfirmAsync(pin), the Confirm button only
-    S->>C: ConfirmAsync(DemoUserId, Card.PendingId, pin)
+    S->>V: ConfirmAsync(pin)
+    V->>C: ConfirmAsync(DemoUserId, Card.PendingId, pin)
     C->>W: balance and history recheck, then POST /transactions under the record's key
     W-->>C: 201 Done
-    C-->>S: ConfirmOutcome.Done(reference, balance after, code)
+    C-->>V: ConfirmOutcome.Done(reference, balance after, code)
+    V->>V: WalletVersion + 1
+    V-->>S: Changed (Outcome done, reference, balance after, code)
     S-->>U: outcome message (data-outcome done)
-    S->>S: WalletVersion + 1, Changed
     S-->>D: Changed
     D->>W: balance, contacts, bills, history (fresh scope)
 ```
 
 ### Actions
+
+Each action below is the conversation's action of the same name ([agent-core.md](agent-core.md), "The conversation"):
 
 | Action | Called by | What it does |
 |---|---|---|
@@ -107,22 +115,22 @@ sequenceDiagram
 | `CancelAsync()` | The card's Cancel button | `PendingStore.CancelAsync` |
 | `RefreshAsync()` | The card's countdown at zero | Reads the record; marks the card expired when it is Pending past `ExpiresAt`, Expired, or gone |
 
-Rule 1: in `Agent.Web` only `ChatSession.ConfirmAsync` and `ChatSession.SettleAsync` call the Confirm handler. `NoTapNoMoneyTests.OnlyTheSessionsConfirmAndSettleCallTheConfirmHandlerFromTheWeb` checks this on the IL, and `NothingInAgentWebInvokesByReflection` checks the web assembly for reflection calls.
+Rule 1: nothing in `Agent.Web` calls the Confirm handler, and only `ChatSession.ConfirmAsync` and `ChatSession.SettleAsync` call `Conversation.ConfirmAsync` and `Conversation.SettleAsync`, which are the handler's only callers in `Agent.Core`. `NoTapNoMoneyTests.NothingInAgentWebCallsTheConfirmHandler` and `OnlyTheSessionsConfirmAndSettleCallTheConversationsFromTheWeb` check this on the IL, and `NothingInAgentWebInvokesByReflection` checks the web assembly for reflection calls.
 
 ### How replies become messages
 
-Every text comes from the resource file (rule 4).
+The conversation turns each reply into a `ConversationMessage` of codes and figures; the session turns each of those into the `ChatMessage` the components render. Every text comes from the resource file (rule 4). A user's typed message shows the words as typed; a tapped option shows the option's display text, its amount, or `Option_store_internet`.
 
 | Reply | Message |
 |---|---|
-| `Refusal(code, detail, amount)` | `Refusal_<code>`, filled with the figure when there is one; an unknown code falls back to `Refusal_not_done_nothing_taken`. The detail is never shown |
+| `Refusal(code, detail, amount)` | `Refusal_<code>`, filled with the figure when there is one; an unknown code falls back to `Refusal_not_done_nothing_taken`. The detail is never shown. A parser that is unavailable gives `Refusal_model_unavailable` |
 | `Question(kind, answer, options)` | `Question_<kind>`, with the options under it |
 | `BalanceReply(balance)` | `Reply_balance` |
 | `ConsentScreen` | `Reply_consent`, with the consent button |
 | `CardIssued` | `Card_Title`, with the card under it |
 | `Unsupported(reason)` | `Unsupported_<reason>`, or `Refusal_not_supported` for a reason without a key |
 
-`ConfirmOutcome` becomes an outcome message with `data-outcome`:
+`ConfirmOutcome` becomes an outcome message with `data-outcome` (the conversation's outcome code in brackets where it differs):
 
 | Outcome | `data-outcome` | Text |
 |---|---|---|
@@ -130,8 +138,8 @@ Every text comes from the resource file (rule 4).
 | `NotDone` | `not_done` | `Outcome_not_done` with the reason's `Refusal_` text and its figure |
 | `Checking` | `checking` | `Outcome_checking`, with the "check again" button |
 | `Expired` | `expired` | `Card_Expired` |
-| `AlreadyHandled`, `NotFound` | `already_handled` | `Outcome_already_handled` |
-| `PinRequired`, `PinWrong(n)`, `PinMalformed` | `pin` | `Outcome_pin_required`, `Outcome_pin_wrong` (attempts left), `Outcome_pin_malformed`; the PIN field shows |
+| `AlreadyHandled`, `NotFound` (`not_found`) | `already_handled` | `Outcome_already_handled` |
+| `PinRequired`, `PinWrong(n)`, `PinMalformed` (`pin_required`, `pin_wrong`, `pin_malformed`) | `pin` | `Outcome_pin_required`, `Outcome_pin_wrong` (attempts left), `Outcome_pin_malformed`; the PIN field shows |
 | Cancelled by the user or a new request | `cancelled` | `Refusal_card_cancelled` |
 
 When the handler throws, the session reads the record:
@@ -141,7 +149,7 @@ When the handler throws, the session reads the record:
 
 ### D6 as implemented
 
-When a card is live, `SendAsync` first compares the typed text, after `ArabicText.Normalize`, with the resource values `Word_yes` and `Word_no`:
+The conversation does D6 ([agent-core.md](agent-core.md), "D6, the typed yes and no"). Its words are `AgentOptions.YesWords` and `NoWords`, which `AddAgentWebServices` post-configures from the resource values `Word_yes` and `Word_no`. When a card is live, `SendAsync` first compares the typed text, after `ArabicText.Normalize`, with those words:
 
 - **The yes word** never confirms. The reply is `Refusal_points_to_confirm`, the card stays open, and nothing reaches the wallet.
 - **The no word** cancels the card (`PendingStore.CancelAsync`, message `Refusal_card_cancelled`).
@@ -199,14 +207,14 @@ A tap is accepted only for a value that the open question offered. Anything else
 - The scoped `ITraceSink` registration returns `TraceLog.Current.Value` when it is set, and otherwise the scope's own `TraceLog`. That makes it the same instance as `TraceLog` in the circuit's scope.
 - An `AsyncLocal` value set in an async method flows into the calls it awaits and is gone when the method returns, so one circuit's steps never reach another's trace.
 
-`LiveTrace` lists the entries newest first. Each entry is a `trace-entry` with `data-zone`, and its colour marks the zone. Details hold codes, states and amounts only: never a PIN, an idempotency key, a purchase code, a phone or typed text. `TraceSinkTests.NoPinKeyCodeOrPhoneInAnyStep` and `ChatSessionTests.TheTraceKeepsNoPinKeyOrCodeAfterAPinPaymentAndAPurchase` check this.
+`LiveTrace` lists the entries newest first. Each entry is a `trace-entry` with `data-zone`, and its colour marks the zone. Details hold codes, states and amounts only: never a PIN, an idempotency key, a purchase code, a phone or typed text. `TraceSinkTests.NoPinKeyCodeOrPhoneInAnyStep` and `ConversationTests.TheTraceKeepsNoPinKeyOrCodeAfterAPinPaymentAndAPurchase` check this, and `ChatSessionTests.ChangedIsRaisedAndTheAgentWritesToTheCircuitsTrace` checks that the agent's steps reach the circuit's log.
 
 | Zone | Written by | Steps |
 |---|---|---|
-| User | `ChatSession` | `message_received` (length only), `confirm_tapped`, `check_again_tapped`, `cancel_tapped` |
-| Model | `ChatSession` | `parse:scripted` (the intent) |
+| User | `Conversation` | `message_received` (length only), `confirm_tapped`, `check_again_tapped`, `cancel_tapped` |
+| Model | `Conversation` | `parse:scripted` (the intent), `parse:unavailable` |
 | Code | `Orchestrator` (`TraceSteps`) | `parse_received`, `consent_checked`, `recipient_resolved`, `amount_resolved`, `checks_passed`, `check_failed:<reason>`, `card_created`, `question:<kind>`, `refusal:<code>`, `balance_shown` |
-| Code | `ChatSession` | `points_to_confirm`, `option_rejected`, `consent_given`, `error` (the exception type) |
+| Code | `Conversation` | `points_to_confirm`, `option_rejected`, `consent_given`, `error` (the exception type) |
 | Write | `ConfirmHandler` (`TraceSteps`) | `begin_execute`, `recheck_ok`, `recheck_failed:<reason>`, `execute_sent`, `outcome:<name>`, `settle_sent`, `settle_outcome:<name>` |
 
 The outcome names are `done`, `not_done`, `checking`, `expired`, `already_handled`, `not_found`, `pin_required`, `pin_wrong`, `pin_malformed`, `cancelled` and `exception`.

@@ -1,6 +1,6 @@
 # Agent.Core: the write path
 
-What `src/Agent.Core` does as built in milestone 3 and the first task of milestone 4: the structured request and the parser seam that produces it, the pipeline that turns it into one reply, the resolvers, the ordered checks, the card and its view, the pending record and its states, the sweep, Confirm and Checking, the live trace, and the audit log. No model call exists yet; the scripted parser and the tests build the structured request. The design it follows is sections 3 to 5 of [architecture.md](architecture.md); the matching and question rules are [matching-rules.md](matching-rules.md); the wallet it calls is [wallet-api.md](wallet-api.md).
+What `src/Agent.Core` does as built in milestone 3, the first task of milestone 4 and the first task of milestone 5: the structured request and the parser seam that produces it, the pipeline that turns it into one reply, the resolvers, the ordered checks, the card and its view, the pending record and its states, the sweep, Confirm and Checking, the conversation that the phone and the test runner share, the live trace, the audit log, and the learning-log rule. No model call exists yet; the scripted parser and the tests build the structured request. The design it follows is sections 3 to 5 of [architecture.md](architecture.md); the matching and question rules are [matching-rules.md](matching-rules.md); the wallet it calls is [wallet-api.md](wallet-api.md).
 
 ## Hosts
 
@@ -8,7 +8,10 @@ What `src/Agent.Core` does as built in milestone 3 and the first task of milesto
 
 - the parser (`IParser`; the console registers `ScriptedParser`);
 - the trace sink (`ITraceSink`; the console routes each action's steps to the circuit's `TraceLog`);
-- whether the sweeper runs (`SweepIntervalSeconds`).
+- whether the sweeper runs (`SweepIntervalSeconds`);
+- the D6 yes and no words (`YesWords`, `NoWords`; the console sets them from its resource file).
+
+A host that talks to a user builds a `Conversation` (below) per user: the console's `ChatSession` builds one per circuit, and the test runner (milestone 5) one per case.
 
 The test hosts set `SweepIntervalSeconds` to 0 and use `NullTraceSink`, or a recording sink.
 
@@ -18,7 +21,7 @@ The test hosts set `SweepIntervalSeconds` to 0 and use `NullTraceSink`, or a rec
 
 | Rule (CLAUDE.md) | How milestone 3 enforces it |
 |---|---|
-| 1. No tap, no money | `WalletClient.ExecuteAsync` is `internal`. Only `ConfirmHandler.ConfirmAsync` and `ConfirmHandler.SettleCheckingAsync` call it, given one pending ID and its user. `NoTapNoMoneyTests` scans the compiled IL and fails if any other method reaches it, if anything in `Agent.Core` calls those two, if any other method names the `transactions` route, or if any method invokes by reflection |
+| 1. No tap, no money | `WalletClient.ExecuteAsync` is `internal`. Only `ConfirmHandler.ConfirmAsync` and `ConfirmHandler.SettleCheckingAsync` call it, given one pending ID and its user. `NoTapNoMoneyTests` scans the compiled IL and fails if any other method reaches it, if anything in `Agent.Core` other than `Conversation.ConfirmAsync` and `Conversation.SettleAsync` calls those two, if any other method names the `transactions` route, or if any method invokes by reflection |
 | 2. The model is read only | The model's output is `ParsedRequest`, a record with no behaviour. The `Orchestrator` validates it against the wallet and treats it as a request to check: every name, bill and product is resolved by code, every amount goes through `AmountRule` and the checks |
 | 3. The card is built by code | `CardBuilder` fills `CardDraft` from the wallet's quote and the resolver's choice. No field comes from `ParsedRequest` text except the typed phone, normalised by `PhoneNumbers`, when the user typed a number |
 | 4. Replies are templates | `AgentReply` and `ConfirmOutcome` carry codes, figures and option text from the wallet (reason codes, question kinds, options, amounts); the only user text is the `recipient_not_found` detail. The phone fills a template from its resource file (milestone 4) |
@@ -49,7 +52,12 @@ The test hosts set `SweepIntervalSeconds` to 0 and use `NullTraceSink`, or a rec
 
 Until milestone 6 the only implementation is `ScriptedParser` (`src/Agent.Core/Parsing/ScriptedParser.cs`). It reads `scripted-sentences.json`, an embedded resource next to it, as a list of `{ "sentence": ..., "request": { ...ParsedRequest... } }` (web JSON defaults, enums as strings; a `note` field is ignored). A typed text matches a sentence when both are equal, ordinal, after `ArabicText.Normalize` (Arabic-Indic and Eastern Arabic-Indic digits to ASCII, whitespace trimmed and collapsed, and the rest of rule 1); anything else is `Unclear`. It holds no per-user state, so one instance serves the whole app; `AddAgentCore` registers no parser, and the host (`Agent.Web`, Task 2) registers `ScriptedParser` as a singleton.
 
-The file is Khalil's to write. Today it holds two English placeholders marked `TODO-AR`: `send fifty thousand to my brother Hammoudi`, which parses to a transfer to S01's alias (copied character for character from `data/seed/contacts.json`) of 50 thousand, and `balance`, the balance question. A typed yes or no is not a sentence: D6 is the session's business, and it points to the Confirm button.
+The file is Khalil's to write. Today it holds two English placeholders marked `TODO-AR`: `send fifty thousand to my brother Hammoudi`, which parses to a transfer to S01's alias (copied character for character from `data/seed/contacts.json`) of 50 thousand, and `balance`, the balance question. A typed yes or no is not a sentence: D6 is the conversation's business, and it points to the Confirm button.
+
+Two more pieces belong to the seam (milestone 5):
+
+- **`ParserUnavailableException`.** A parser throws it when the parse call could not be made or gave no answer (the model is down or timed out). The conversation answers it with the refusal `model_unavailable`, traces `parse:unavailable` in the Model zone, and moves nothing. Any other exception from the parser is handled as any other failure: `not_done_nothing_taken`.
+- **`IParserUsage`.** A parser may implement it to say what its last call cost: `LastUsage` is a `ParseUsage(InputTokens, OutputTokens, CostUsd, Duration)`, or null before the first call. The runner records it per case (D12). `ScriptedParser` implements it with zero tokens, zero cost and the time the lookup took.
 
 ```mermaid
 flowchart LR
@@ -368,6 +376,107 @@ As in `ConfirmHandler.cs`.
 
 `ConfirmOutcome.Done.ToString()` masks the purchase code.
 
+## The conversation
+
+`Conversation` (`src/Agent.Core/Conversation/`) is one user's conversation with the agent, without a screen. The phone's `ChatSession` ([agent-web.md](agent-web.md)) is a thin adapter over it, and the test runner drives it directly, so the runner measures the same logic the phone runs. It is not registered in DI. A host builds it with:
+
+- `IServiceScopeFactory`;
+- `IParser`;
+- `TimeProvider`;
+- `IOptions<AgentOptions>`;
+- an `ITraceSink` for its own steps;
+- the user ID.
+
+Every action opens its own DI scope (`CreateAsyncScope`) and resolves the agent's services from it, so no two actions share a database context. A `SemaphoreSlim(1,1)` runs one action at a time, so a timer refresh and a tap never overlap. `Dispose` cancels the token every action uses, so a running action takes the agent's cancellation path: a Confirm cancelled before the send goes back to Pending, and one cancelled during the send goes to Checking. An action that starts after `Dispose` returns at once.
+
+### Actions
+
+| Action | What it does |
+|---|---|
+| `SendAsync(text)` | D6 first (below), then the parse call with the pending note, then `Orchestrator.HandleAsync`; the reply becomes messages. A `ParserUnavailableException` gives `model_unavailable` |
+| `TapOptionAsync(value)` | Checks the value against the open question's options (anything else is traced `option_rejected` and ignored), then sends the last request again with the slot filled |
+| `GiveConsentAsync()` | `WalletClient.GiveConsentAsync`, then answers the last request again |
+| `ConfirmAsync(pin)` | `ConfirmHandler.ConfirmAsync(user, Card.PendingId, pin)`; the PIN is passed through and kept nowhere |
+| `SettleAsync()` | Only while the card is Checking: `ConfirmHandler.SettleCheckingAsync`, the same body under the same key (rule 6) |
+| `CancelAsync()` | `PendingStore.CancelAsync` while the card is live |
+| `RefreshAsync()` | Reads the record; marks the card expired when it is Pending past `ExpiresAt`, Expired, or gone |
+
+When the Confirm handler throws, the conversation reads the record:
+
+- if it is Pending, nothing was sent, and the reply is `not_done_nothing_taken`;
+- otherwise the outcome is shown as checking, never as failed (rule 6).
+
+Any other exception in an action is traced as `error` (the exception type) and answered with `not_done_nothing_taken`.
+
+### State
+
+| Member | What it holds |
+|---|---|
+| `Messages` | The messages as codes and figures (below), a snapshot |
+| `Card`, `CardState` | The card as a `CardView`, and its `CardStatus`: Live, Done, NotDone, Checking, Expired or Cancelled |
+| `Question` | The open `AgentReply.Question` |
+| `PinVisible`, `Busy` | Whether the card needs a PIN field; whether an action runs |
+| `WalletVersion` | Goes up by one on every Done |
+| `CardMessageIndex`, `QuestionMessageIndex`, `ActionMessageIndex` | The positions in `Messages` of the card's message, the open question's message, and the message whose button (consent, or check again) is live |
+| `CardsIssued` | Every card issued, in order (for the grader) |
+| `QuestionsAsked` | Every question, in order, as `ConversationQuestion(Kind, Answer, OptionValues)` (for the grader) |
+| `LastReply` | The last `AgentReply` to a request |
+| `ConsentShown` | True once the consent screen has been shown |
+
+`Changed` is raised on every new message, and at the start and end of every action. It is raised while the action still holds its turn, so a handler sees each message on the async flow of the action that added it.
+
+### D6, the typed yes and no
+
+`AgentOptions.YesWords` and `NoWords` hold the words, and `Agent.Core` has none of its own (rule 4). When a card is live, `SendAsync` compares `ArabicText.Normalize(text)` with the normalised words, ordinal:
+
+- **A yes word** never confirms. The reply is `points_to_confirm`, the card stays open, and nothing reaches the wallet.
+- **A no word** cancels the card (`cancelled`).
+- **Any other text** cancels the card the same way and goes on as a new request.
+
+A question that waits for a typed answer (`which_amount` or `which_contact` with no options) takes the next text as its slot when the parser reads it as `Unclear`:
+
+- the amount is parsed with `ArabicDigits.ToAscii` and invariant `decimal.TryParse`, so both digit forms work;
+- the recipient is the trimmed text.
+
+### Messages as codes
+
+A `ConversationMessage(Role, Kind, Code, AmountIqd, Reference, PurchaseCode, AttemptsLeft, Reason)` carries codes and figures only. A user message carries no text: the screen and the runner keep what was typed.
+
+| Kind | Role | Code | Figures |
+|---|---|---|---|
+| `Typed` | User | none | none |
+| `Option` | User | The option's value | none |
+| `Refusal` | Agent | The reason code (`ReasonCodes`), including `model_unavailable` and `not_done_nothing_taken` | `AmountIqd`: the refusal's figure, if any |
+| `Unsupported` | Agent | The parsed unsupported reason | none |
+| `Question` | Agent | The question kind (`QuestionKinds`) | none; the options are on `Question` |
+| `Balance` | Agent | none | `AmountIqd`: the balance |
+| `Consent` | Agent | none | none |
+| `Card` | Agent | none | none; the card is `Card` |
+| `Outcome` | Agent | `done`, `checking`, `not_done`, `expired`, `cancelled`, `pin_required`, `pin_wrong`, `pin_malformed`, `already_handled` or `not_found` (`OutcomeCodes`) | `done`: `Reference`, `AmountIqd` (the balance after), `PurchaseCode`; `not_done`: `Reason`, `AmountIqd`; `pin_wrong`: `AttemptsLeft` |
+| `Info` | Agent | `points_to_confirm` | none |
+
+```mermaid
+stateDiagram-v2
+    [*] --> NoCard
+    NoCard --> Asking: reply is a question
+    Asking --> Asking: option tap or typed answer asks again
+    Asking --> Live: option tap or typed answer gives a card
+    NoCard --> Live: reply is a card
+    Live --> Live: typed yes (points_to_confirm), or a PIN outcome
+    Live --> Cancelled: typed no, other text, or Cancel
+    Live --> Expired: RefreshAsync after the timer, or a late Confirm
+    Live --> Done: ConfirmAsync, the wallet says done
+    Live --> NotDone: ConfirmAsync, the wallet refuses
+    Live --> Checking: ConfirmAsync, the outcome is unknown
+    Checking --> Done: SettleAsync
+    Checking --> NotDone: SettleAsync
+    Checking --> Checking: SettleAsync, still unknown
+    Cancelled --> NoCard: next request
+    Expired --> NoCard: next request
+    Done --> NoCard: next request
+    NotDone --> NoCard: next request
+```
+
 ## The live trace
 
 `ITraceSink.Record(zone, step, detail)` (`src/Agent.Core/Trace/`) receives each step of a request for the page's live trace. `TraceZone` is `User`, `Code`, `Model` or `Write`. `AddAgentCore` registers `NullTraceSink`, which drops every step, with `TryAddScoped`, so a host that registers its own sink first keeps it. The `Orchestrator` and the `ConfirmHandler` take it by constructor. The step names are the constants of `TraceSteps`.
@@ -377,7 +486,7 @@ As in `ConfirmHandler.cs`.
 | Code | `Orchestrator` | `parse_received` (the intent), `consent_checked` (`given` or `required`), `recipient_resolved` (`contact`, `alias`, `number`, `bill` or `purchase`), `amount_resolved` (the amount), `checks_passed` (the quote's total) or `check_failed:<reason>` (the figure), `card_created` (type, total, `pin` when one is needed), `question:<kind>` (how many options), `refusal:<code>` (the wallet code for `not_done_nothing_taken`, else the figure), `balance_shown` (no figure) |
 | Write | `ConfirmHandler` | `begin_execute` (type and total), `recheck_ok` or `recheck_failed:<reason>` (the wallet code, if any), `execute_sent`, `outcome:<done, not_done, checking, expired, already_handled, not_found, pin_required, pin_wrong, pin_malformed, cancelled or exception>` (the record's state, the reason, or the attempts left), `settle_sent`, `settle_outcome:<the same names>` |
 
-The User and Model zones are written by the web session (milestone 4, Task 2) and the model parser (milestone 6). A detail holds codes, states and amounts only: never a PIN, an idempotency key, a purchase code, a phone, a name, a balance or any text the user typed (an unsupported reason stays out until milestone 6 validates it). `TraceSinkTests.NoPinKeyCodeOrPhoneInAnyStep` runs a PIN payment and a purchase through a recording sink and checks every step and detail.
+The User and Model zones are written by the `Conversation` (below; `message_received`, `confirm_tapped`, `check_again_tapped`, `cancel_tapped`, `parse:scripted`, `parse:unavailable`) and the model parser (milestone 6). A detail holds codes, states and amounts only: never a PIN, an idempotency key, a purchase code, a phone, a name, a balance or any text the user typed (an unsupported reason stays out until milestone 6 validates it). `TraceSinkTests.NoPinKeyCodeOrPhoneInAnyStep` runs a PIN payment and a purchase through a recording sink and checks every step and detail.
 
 ```mermaid
 sequenceDiagram
@@ -408,12 +517,39 @@ sequenceDiagram
 
 Never stored: a PIN, a balance figure, a purchase code (full or partial), the typed recipient text, a refusal's figure, or a refusal's detail other than the wallet code kept with `not_done_nothing_taken`. `AuditLog.WriteAsync` and `WriteRefusalAsync` have no parameter for a PIN, a balance or a code, and `AuditLogTests.WriteHasNoParameterForAPinABalanceOrAPurchaseCode` checks both; `AuditLogTests.RefusalKeepsTheDetailOnlyWhenNothingWasTaken` checks the detail rule. `AmountIqd` is the payment's amount, never a balance.
 
+## The learning-log rule
+
+`LearningLogRule.EntryFor(AgentReply reply, ParsedRequest request)` (`src/Agent.Core/Learning/`) is the pure function that decides what goes to the learning log (D12). It returns a `LearningEntry(Reason, Detail)`, or null when nothing is logged. The table arrives in milestone 6, which persists exactly this entry; until then the runner grades it against the answer key.
+
+`LearningLogRule.Logged` and `NotLogged` are the lists of `data/seed/settings.json` (`learning_log`), in the same order. `LearningLogRuleTests.TheListsAreTheSettingsLists` pins them to the seed.
+
+| Reply | Entry |
+|---|---|
+| `Refusal` with `recipient_not_found`, `bill_not_found`, `biller_unavailable`, `product_not_found`, `not_understood` or `not_supported` | That code, with the reply's detail. Without a detail, `bill_not_found` takes the biller asked for, and `product_not_found` takes the operator, type and value asked for, space separated |
+| `Refusal` with `dinars_only` (the request named another currency, GAP-07) | `other_currency` |
+| `Unsupported` with `same_as_last_time`, `refers_back`, `change_waiting_card`, `choose_account`, `part_of_bill`, `credit_to_own_number`, `other_currency` or `other_language` | That reason, no detail |
+| `Unsupported` with any other reason (`withdrawal`, `other_balance`) | `not_supported`, with the reason as detail |
+| A `not_logged` refusal (`insufficient_balance`, the two caps, `nothing_due`, `account_closed`, `number_has_no_wallet`, `consent_required`), any other refusal, a question, a balance, the consent screen, a card | null |
+
+`more_than_three_requests` and `model_invalid_reply` are in the logged list but are not replies. The caller that splits a message (milestone 9c) and the model parser (milestone 6) build those entries.
+
+```mermaid
+flowchart TD
+    reply["AgentReply and ParsedRequest"] --> kind{"Reply"}
+    kind -- "Refusal, logged code" --> logged["Entry: the code, with the reply's detail or what was asked for"]
+    kind -- "Refusal dinars_only" --> currency["Entry: other_currency"]
+    kind -- "Unsupported, logged name" --> named["Entry: the reason"]
+    kind -- "Unsupported, other reason" --> other["Entry: not_supported, the reason as detail"]
+    kind -- "anything else" --> none["null: not logged"]
+```
+
 ## The "no tap, no money" test
 
 `tests/Agent.Core.Tests/Architecture/NoTapNoMoneyTests.cs` checks rule 1 on the compiled code. It needs no database and no wallet.
 
 - `OnlyTheConfirmHandlerCanReachExecute` decodes the IL of every method and constructor of every type in `Agent.Core`, and records each one with a `call`, `callvirt`, `ldftn`, `ldvirtftn` or `newobj` whose operand resolves to `WalletClient.ExecuteAsync`. A compiler-generated state machine's `MoveNext`, or a lambda's body, is mapped back to the method that declares it (through `AsyncStateMachineAttribute`, `IteratorStateMachineAttribute`, or the `<Method>d__N` name). The set of callers must equal exactly `ConfirmHandler.ConfirmAsync` and `ConfirmHandler.SettleCheckingAsync`. So neither may hand the call to a helper, and any new caller fails the test.
-- `NothingInAgentCoreCallsTheConfirmHandler` checks, with the same scan, that no method in `Agent.Core` calls `ConfirmAsync` or `SettleCheckingAsync`: no parse or reply path can turn words into a Confirm. Milestone 4 adds exactly the card component's Confirm handler and the settle timer in `Agent.Web` as callers, and must extend the scan to that assembly with them as the only ones allowed.
+- `OnlyTheConversationsConfirmAndSettleCallTheConfirmHandler` checks, with the same scan, that the only methods in `Agent.Core` that call `ConfirmAsync` or `SettleCheckingAsync` are `Conversation.ConfirmAsync` (the card's Confirm button) and `Conversation.SettleAsync` (the "check again" button): no parse or reply path can turn words into a Confirm.
+- `NothingInAgentWebCallsTheConfirmHandler` and `OnlyTheSessionsConfirmAndSettleCallTheConversationsFromTheWeb` scan `Agent.Web`: nothing there calls the handler, and only `ChatSession.ConfirmAsync` and `ChatSession.SettleAsync` call the conversation's two. `NothingInAgentWebInvokesByReflection` checks that assembly for reflection calls. `Agent.Eval` joins the scan with the runner's case driver (milestone 5, Task 2).
 - `OnlyTheWalletClientNamesTheTransactionsRoutes` decodes every `ldstr` (`Module.ResolveString`): the literal `"transactions"` is loaded only by `WalletClient.ExecuteAsync`, `"transactions/by-key/"` only by `WalletClient.FindByKeyAsync`, and no other literal contains `transactions` (ordinal, so a leading slash or a full URL is caught too; the table name `PendingTransactions` is not). So no second HTTP path to the execute route can hide in the assembly.
 - `NothingInAgentCoreInvokesByReflection` checks that no method calls `MethodBase.Invoke`, `Type.GetMethod`, `Type.GetMethods`, `Type.InvokeMember`, `Delegate.DynamicInvoke` or any overload of `MethodInfo.CreateDelegate`; `TheReflectionScanKnowsEveryInvokeRoute` checks the predicate catches every public overload of each.
 - `ExecuteIsInternal` checks that `ExecuteAsync` is `internal`, not public, and that `Agent.Core.Tests` is the only friend assembly.
@@ -441,6 +577,7 @@ Never stored: a PIN, a balance figure, a purchase code (full or partial), the ty
 | `SweepIntervalSeconds` | 5; 0 to 3,600 | `PendingSweeper`: how often it sweeps. 0 registers no sweeper (the test hosts) |
 | `StaleExecutingAfterSeconds` | 40; must be more than three times `WalletTimeoutSeconds` (validated at start) | `PendingSweeper`: a record Executing this long becomes Checking. A Confirm makes three timed wallet calls (balance, history, execute) while the record is Executing, so 40 is 3 x 10 s plus a margin |
 | `MinSubstringWordLength` | 3; 1 to 20 | `ContactResolver`, rule 4: a shorter typed word must equal a whole word |
+| `YesWords`, `NoWords` | empty | `Conversation`, D6. Phone text, so not set in `Agent.Core`: the console post-configures them from `Word_yes` and `Word_no` in its resource file, and the test host sets `yes` and `no` |
 
 The settings component (milestone 7) shows them; milestone 4 shows them read only. The client key goes in user secrets or the environment, never in a committed file.
 

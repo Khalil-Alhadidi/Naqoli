@@ -26,6 +26,19 @@ public class ScriptedParserTests
     }
 
     [Fact]
+    public async Task ItReportsZeroUsageAfterEachParse()
+    {
+        var parser = new ScriptedParser();
+        Assert.Null(parser.LastUsage);
+
+        await parser.ParseAsync(HammoudiPlaceholder, NothingPending, Token);
+
+        var usage = Assert.IsType<ParseUsage>(parser.LastUsage);
+        Assert.Equal((0, 0, 0m), (usage.InputTokens, usage.OutputTokens, usage.CostUsd));
+        Assert.True(usage.Duration >= TimeSpan.Zero);
+    }
+
+    [Fact]
     public async Task ExtraWhitespaceStillMatches()
     {
         var parsed = await new ScriptedParser().ParseAsync("  send  fifty thousand to my\tbrother Hammoudi ", NothingPending, Token);

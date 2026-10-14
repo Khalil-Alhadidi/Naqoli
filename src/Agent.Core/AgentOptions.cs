@@ -102,6 +102,16 @@ public sealed class AgentOptions
     [Range(1, 20)]
     public int MinSubstringWordLength { get; set; } = Resolver.ContactResolver.MinSubstringWordLength;
 
+    /// <summary>
+    /// D6: the typed words that mean "yes" while a card is live. A yes never confirms; it points to the Confirm button.
+    /// Compared after <see cref="Text.ArabicText.Normalize"/>. Empty by default: <c>Agent.Core</c> holds no phone text
+    /// (rule 4), so the web console sets them from its resource file and a test sets its own.
+    /// </summary>
+    public string[] YesWords { get; set; } = [];
+
+    /// <summary>D6: the typed words that mean "no" while a card is live; a no cancels the card. See <see cref="YesWords"/>.</summary>
+    public string[] NoWords { get; set; } = [];
+
     /// <summary>True when <see cref="StaleExecutingAfterSeconds"/> outlasts the three timed wallet calls of a Confirm.</summary>
     internal bool StaleExecutingOutlastsAConfirm => StaleExecutingAfterSeconds > 3 * WalletTimeoutSeconds;
 }
