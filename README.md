@@ -88,7 +88,7 @@ Notes:
 - The database tests (collection `wallet-api`, fixture `WalletApiFixture`) probe the test server once, with a 3-second timeout. If it answers, they recreate the test database, apply the migrations and the seed, and run the API in process against it. If it does not, every database test reports Skipped with "SQL Server not reachable at <server>; set ConnectionStrings__WalletTest or start SQL Server"; with `ZAINCASH_TEST_SQL=1` set they fail instead. They never read the `Wallet` connection string. By default they use the local default instance with Windows authentication and the database `ZainCashWallet_Test`. On route A or B, set the `ConnectionStrings__WalletTest` environment variable to a connection string whose database name ends in `_Test`; the fixture refuses any other name, because it drops the database at the start of the run. In PowerShell, `ZAINCASH_TEST_SQL` stays set for the rest of the session; clear it with `Remove-Item Env:ZAINCASH_TEST_SQL`.
 - `migrate` applies the migrations and the synthetic seed, prints `Database ready: 12 users, 12 accounts, 12 contacts, 19 transactions` and exits 0. It is safe to run twice. Without a connection string it prints `No connection string 'Wallet'. Set ConnectionStrings:Wallet in appsettings, user secrets or the ConnectionStrings__Wallet environment variable.` and exits 1.
 - `seed-hash` (`dotnet run --project src/Wallet.MockApi -- seed-hash`) prints the hash of the frozen seed, the value kept in `data/seed/seed-hash.txt`, and exits 0. It needs no database. See [data/seed/README.md](data/seed/README.md).
-- The database tests (`SeedApplyTests`) also check that `SeedReset.Reset` restores the seed with identity values from 1.
+- The database tests (`SeedApplyTests`) also check that `SeedReset.ResetAsync` restores the seed with identity values from 1.
 - The mock wallet API listens on http://localhost:5276. `GET /health` returns `ok`, and the OpenAPI document is at `/openapi/v1.json` in Development.
 - The mock wallet API serves plain HTTP on loopback by design and does not redirect to HTTPS.
 - The web app listens on http://localhost:5089.
@@ -101,6 +101,6 @@ The mock wallet is a minimal API on http://localhost:5276 with read endpoints fo
 
 The full contract (every route, field, error code, the idempotency, PIN and balance-floor rules, the fault modes, the reset and the admin key) is in [docs/wallet-api.md](docs/wallet-api.md). Ready-made requests against the seed are in `src/Wallet.MockApi/Wallet.MockApi.http`.
 
-The `/admin` routes need no key in Development when `Wallet:AdminKey` is not set. Outside Development, set a key in user secrets or the `Wallet__AdminKey` environment variable and send it in the `X-Wallet-Admin-Key` header; never commit it.
+Every `/admin` request carries the `X-Wallet-Admin-Key` header. In Development with no `Wallet:AdminKey` set, any non-empty value is accepted (the header makes a browser preflight, so a web page cannot reset the wallet). Outside Development, set a key of at least 16 characters in user secrets or the `Wallet__AdminKey` environment variable and send it in that header; never commit it.
 
 Status: milestone 2 of 12, see [docs/build-plan.md](docs/build-plan.md).

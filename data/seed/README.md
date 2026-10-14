@@ -1,6 +1,6 @@
 # Seed data
 
-The mock wallet starts from one frozen, synthetic seed. The rows live in `src/Wallet.MockApi/Data/SeedData.cs`, so that `migrate` and the reset core (`SeedReset.Reset`) load exactly the same data. This file describes the seed in words; the code is the source of truth.
+The mock wallet starts from one frozen, synthetic seed. The rows live in `src/Wallet.MockApi/Data/SeedData.cs` (the Arabic values that tests refer to are named constants in `SeedStrings.cs` beside it), so that `migrate` and the reset core (`SeedReset.ResetAsync`) load exactly the same data. This file describes the seed in words; the code is the source of truth.
 
 Every name, phone number, account number, purchase code and transaction here is invented. None belongs to a real person or company account.
 
@@ -12,7 +12,7 @@ The seed is frozen as of milestone 2 and tagged `seed-v1` once the milestone 2 r
 
 ## Reset
 
-`POST /admin/reset` on the mock wallet (and `SeedReset.Reset` behind it) restores this seed exactly, identity values included: ids start again where the seed leaves them, so the next transaction after a reset is id 20. The endpoint is serialised with payments (`WalletGate`): it waits for payments in progress, holds new ones back until it is done, and never runs alongside another reset; it also clears the fault switch. See [docs/wallet-api.md](../../docs/wallet-api.md#reset).
+`POST /admin/reset` on the mock wallet (and `SeedReset.ResetAsync` behind it) restores this seed exactly, identity values included: ids start again where the seed leaves them, so the next transaction after a reset is id 20. The endpoint is serialised with payments (`WalletGate`): it waits for payments in progress, holds new ones back until it is done, and never runs alongside another reset; it also clears the fault switch. See [docs/wallet-api.md](../../docs/wallet-api.md#reset).
 
 ## Phone numbers
 
@@ -103,7 +103,7 @@ One alias, one account (D15). Unique on (owner, text).
 
 ## History
 
-19 transactions, all `Done`. Fees are the `WalletOptions` defaults (transfer 1,000, bill 500, purchase 0); total = amount + fee. `CompletedAt` equals `CreatedAt`. Keys are `seed-u<user>-<nnn>`, references `ZC-` followed by the transaction id padded to 10 digits. Users 3 to 12 have no history.
+19 transactions, all `Done`. Fees are constants frozen with the seed in `SeedData` (`SeedTransferFeeIqd` 1,000, `SeedBillFeeIqd` 500, `SeedPurchaseFeeIqd` 0), not read from `WalletOptions`, so changing the configured fees never rewrites these rows; total = amount + fee. `CompletedAt` equals `CreatedAt`. Keys are `seed-u<user>-<nnn>`, references `ZC-` followed by the transaction id padded to 10 digits. Users 3 to 12 have no history.
 
 | Id | Key | Payer | Type | To | Amount (IQD) | Days before anchor |
 |---|---|---|---|---|---|---|
