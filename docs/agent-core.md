@@ -364,20 +364,26 @@ dotnet test tests/Agent.Core.Tests -- --filter-class "Agent.Core.Tests.Confirm.C
 $env:ConnectionStrings__AgentTest = 'Server=(localdb)\MSSQLLocalDB;Database=ZainCashAgent_Test;Trusted_Connection=True;TrustServerCertificate=True'
 ```
 
-## Questions for Khalil
+## Decisions by Khalil (14 Oct 2026) and open questions
+
+Khalil answered the milestone 3 questions on 14 Oct 2026. Items marked *milestone 4* change code in milestone 4's first task; until then the code does what the "Today" column says.
+
+| Question | Decision | Today |
+|---|---|---|
+| A code for an amount below the minimum | `amount_below_minimum` is a refusal code in his list; it gets its own phone string | Already used |
+| `pin_locked`, `caller_cancelled` and the warning key `repeat` | Kept as their own codes (`caller_cancelled` is audit-only) | Already used |
+| Rule 4: how short a typed fragment may be | A typed word of one or two letters must equal a whole word; longer words match inside. The minimum becomes a setting (*milestone 4*) | `ContactResolver.MinSubstringWordLength` = 3, a constant |
+| No biller named, bills exist, none due | `nothing_due` (*milestone 4*) | `bill_not_found` |
+| Operator text that matches no operator | Refuse with `product_not_found`, so the learning log sees it (*milestone 4*) | Asks `which_operator` |
+| Rule 9 readings below the minimum | Dropped from the question; a bare number with no valid reading is refused with `amount_below_minimum` (*milestone 4*) | `0.5` offers 500 and 500,000 |
+| Architecture section 5 | Updated with the Executing to Pending edge and the resend-under-the-same-key settle note | Done |
+
+Still open:
 
 | Question | Today |
 |---|---|
-| A code for an amount below the minimum | Provisional `amount_below_minimum` (not in the reason codes of `data/README.md`); the alternative is `not_understood` |
-| A code for a locked PIN | Provisional `pin_locked` as a top-level reason; the alternative is `not_done_nothing_taken` with detail `pin_locked` |
-| `caller_cancelled` and the warning key `repeat` | New codes: the result reason when the caller cancels a Confirm, and the resource key of the repeat warning |
-| Rule 4: how short a typed fragment may be | `MinSubstringWordLength` is 3: a typed word of one or two letters must equal a whole word. One constant to move |
 | Rule 4 vs rule 6 | Partial comes before near, so a typed name inside a longer saved name is a card even when another contact is one edit away |
-| No biller named, bills exist, none due | `bill_not_found`; `nothing_due` may be better |
-| Operator text that matches no operator | Asks `which_operator` rather than refusing `product_not_found`, so the learning log does not see it |
-| Rule 9 readings below the minimum | A bare `0.5` offers 500 and 500,000; the 500 reading is then refused below the minimum. Only readings above the per-transaction cap are dropped |
 | Display names for bills and purchases | A bill shows its label, else its biller name; a purchase shows the operator's Arabic name |
-| Architecture section 5 | Add the Executing to Pending edge (wrong PIN keeps the card) and "settled by resending the same key" for Checking |
 
 ## Known limits
 

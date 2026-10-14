@@ -183,7 +183,8 @@ stateDiagram-v2
     Executing --> Done: wallet confirms
     Executing --> NotDone: recheck fails or wallet rejects
     Executing --> Checking: timeout, status unknown
-    Checking --> Done: status found by key
+    Executing --> Pending: wrong or missing PIN, card stays
+    Checking --> Done: resend with the same key finds it done
     Checking --> NotDone: wallet confirms nothing moved
     Cancelled --> [*]
     Expired --> [*]
@@ -191,7 +192,7 @@ stateDiagram-v2
     NotDone --> [*]
 ```
 
-Two properties to keep: a pending record can leave `Pending` only once, so a double tap does nothing; and a retry from `Checking` always reuses the same key, so the wallet can never execute it twice.
+Two properties to keep: a pending record can leave `Pending` only once, so a double tap does nothing; and a retry from `Checking` always reuses the same key, so the wallet can never execute it twice. A `Checking` record is settled by resending the same request under the same key, not by a lookup alone: a lookup can say "not found" while the wallet is still writing the row, whereas a resend either replays the stored outcome or runs once. A wrong or missing PIN sends the record back to `Pending` with its timer and key unchanged, so the user can enter the PIN again on the same card (added 14 Oct 2026, milestone 3).
 
 "Try again" and "Send again" (D19) do not reopen a finished record. They start a new one at `Pending`, with its own ID and key.
 
