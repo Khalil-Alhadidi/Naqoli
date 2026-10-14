@@ -1,3 +1,4 @@
+using System.Net;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Data.SqlClient;
@@ -82,13 +83,16 @@ public sealed class WalletApiFixture : IAsyncLifetime
         DatabaseAvailable = true;
     }
 
-    /// <summary>Returns the test database to the frozen seed.</summary>
-    /// <remarks>Calls the reset core directly until the API has <c>POST /admin/reset</c> (milestone 2, task 4).</remarks>
+    /// <summary>Returns the test database to the frozen seed and clears the fault switch, through <c>POST /admin/reset</c>.</summary>
     public async Task ResetAsync()
     {
-        await using var scope = CreateScope();
-        SeedReset.Reset(scope.ServiceProvider.GetRequiredService<WalletDbContext>());
+        using var response = await Client.PostAsync("/admin/reset", null, TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
+
+    /// <summary>A new client of the API under test, for tests that need their own timeout. The caller disposes it.</summary>
+    public HttpClient CreateClient()
+        => (factory ?? throw new InvalidOperationException("The wallet API is not running. " + SkipReason)).CreateClient();
 
     /// <summary>A service scope of the API under test, for tests that work on the database directly.</summary>
     public AsyncServiceScope CreateScope()

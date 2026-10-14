@@ -1,0 +1,201 @@
+using System.Diagnostics;
+using System.Net;
+using System.Net.Http.Json;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Mvc.Testing;
+using Wallet.MockApi.Contracts;
+using Wallet.MockApi.Data;
+
+namespace Agent.Core.Tests.Wallet;
+
+/// <summary>The fault switch (architecture, section 7): each mode, its effect on <c>POST /transactions</c>, and the admin key.</summary>
+[Collection(WalletApiCollection.Name)]
+public class FaultTests(WalletApiFixture fixture)
+{
+    private const string HammoudiPhone = "07700001004";
+    private const int HammoudiId = 4;
+    private const long DemoSeedBalance = 300_000;
+    private const long HammoudiSeedBalance = 80_000;
+
+    private static CancellationToken Token => TestContext.Current.CancellationToken;
+
+    private static PaymentRequest SendFiftyThousandToHammoudi
+        => new(SeedData.DemoUserId, "transfer", 50_000, HammoudiPhone, null, null, null, null);
+
+    [Fact]
+    public async Task ErrorFaultReturns500AndMovesNothing()
+    {
+        Assert.SkipUnless(fixture.DatabaseAvailable, fixture.SkipReason);
+        await fixture.ResetAsync();
+        await SetFaultAsync(new FaultRequest("error", null));
+
+        var response = await PostAsync(fixture.Client, "f-error", SendFiftyThousandToHammoudi);
+
+        Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
+        Assert.Equal("injected_error", (await response.ReadProblemAsync(Token)).Code());
+        Assert.Equal(DemoSeedBalance, await BalanceAsync(SeedData.DemoUserId));
+        Assert.Equal(HammoudiSeedBalance, await BalanceAsync(HammoudiId));
+        Assert.Equal(HttpStatusCode.NotFound, (await fixture.Client.GetAsync("/transactions/by-key/f-error", Token)).StatusCode);
+    }
+
+    [Fact]
+    public async Task SlowFaultDelaysButSucceeds()
+    {
+        Assert.SkipUnless(fixture.DatabaseAvailable, fixture.SkipReason);
+        await fixture.ResetAsync();
+        var state = await SetFaultAsync(new FaultRequest("slow", 300));
+        Assert.Equal(new FaultState("slow", 300, false), state);
+
+        var watch = Stopwatch.StartNew();
+        var response = await PostAsync(fixture.Client, "f-slow", SendFiftyThousandToHammoudi);
+        watch.Stop();
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        Assert.True(watch.ElapsedMilliseconds >= 300, $"The slow fault answered after {watch.ElapsedMilliseconds} ms.");
+        Assert.Equal(249_000, await BalanceAsync(SeedData.DemoUserId));
+    }
+
+    [Fact]
+    public async Task TimeoutBeforeExecuteMovesNothingAndByKeyIs404()
+    {
+        Assert.SkipUnless(fixture.DatabaseAvailable, fixture.SkipReason);
+        await fixture.ResetAsync();
+        await SetFaultAsync(new FaultRequest("timeoutBeforeExecute", 200));
+
+        var response = await PostAsync(fixture.Client, "f-before", SendFiftyThousandToHammoudi);
+
+        Assert.Equal(HttpStatusCode.GatewayTimeout, response.StatusCode);
+        Assert.Equal("injected_timeout", (await response.ReadProblemAsync(Token)).Code());
+        Assert.Equal(DemoSeedBalance, await BalanceAsync(SeedData.DemoUserId));
+        Assert.Equal(HammoudiSeedBalance, await BalanceAsync(HammoudiId));
+
+        var lookup = await fixture.Client.GetAsync("/transactions/by-key/f-before", Token);
+        Assert.Equal(HttpStatusCode.NotFound, lookup.StatusCode);
+        Assert.Equal("unknown_key", (await lookup.ReadProblemAsync(Token)).Code());
+    }
+
+    [Fact]
+    public async Task TimeoutAfterExecuteIsFoundByKeyWhileTheRequestStillHangs()
+    {
+        Assert.SkipUnless(fixture.DatabaseAvailable, fixture.SkipReason);
+        await fixture.ResetAsync();
+        await SetFaultAsync(new FaultRequest("timeoutAfterExecute", 5_000, Once: true));
+
+        using (var impatient = fixture.CreateClient())
+        {
+            impatient.Timeout = TimeSpan.FromSeconds(1);
+            await Assert.ThrowsAnyAsync<TaskCanceledException>(
+                () => PostAsync(impatient, "f-after", SendFiftyThousandToHammoudi));
+        }
+
+        // The original request is still waiting on the server; the money has moved and the key says so.
+        var lookup = await fixture.Client.GetFromJsonAsync<TransactionResponse>("/transactions/by-key/f-after", Token);
+        Assert.NotNull(lookup);
+        Assert.Equal("done", lookup.Status);
+        Assert.Equal(249_000, lookup.BalanceAfterIqd);
+        Assert.Equal(249_000, await BalanceAsync(SeedData.DemoUserId));
+        Assert.Equal(130_000, await BalanceAsync(HammoudiId));
+
+        await SetFaultAsync(new FaultRequest("none", null));
+    }
+
+    [Fact]
+    public async Task OnceFaultClearsAfterOneRequest()
+    {
+        Assert.SkipUnless(fixture.DatabaseAvailable, fixture.SkipReason);
+        await fixture.ResetAsync();
+        await SetFaultAsync(new FaultRequest("error", null, Once: true));
+
+        var first = await PostAsync(fixture.Client, "f-once", SendFiftyThousandToHammoudi);
+        Assert.Equal(HttpStatusCode.InternalServerError, first.StatusCode);
+
+        var state = await fixture.Client.GetFromJsonAsync<FaultState>("/admin/faults", Token);
+        Assert.Equal("none", state!.Mode);
+
+        // The retry reuses the key and goes through.
+        var retry = await PostAsync(fixture.Client, "f-once", SendFiftyThousandToHammoudi);
+        Assert.Equal(HttpStatusCode.Created, retry.StatusCode);
+        Assert.Equal(249_000, await BalanceAsync(SeedData.DemoUserId));
+    }
+
+    [Fact]
+    public async Task UnknownFaultModeIs422()
+    {
+        Assert.SkipUnless(fixture.DatabaseAvailable, fixture.SkipReason);
+        await fixture.ResetAsync();
+
+        var response = await fixture.Client.PostAsJsonAsync("/admin/faults", new FaultRequest("explode", null), Token);
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+        Assert.Equal("invalid_fault_mode", (await response.ReadProblemAsync(Token)).Code());
+        Assert.Equal("none", (await fixture.Client.GetFromJsonAsync<FaultState>("/admin/faults", Token))!.Mode);
+    }
+
+    [Fact]
+    public async Task FaultDelayDefaultsToTheConfiguredValue()
+    {
+        Assert.SkipUnless(fixture.DatabaseAvailable, fixture.SkipReason);
+        await fixture.ResetAsync();
+
+        var state = await SetFaultAsync(new FaultRequest("timeoutBeforeExecute", null));
+
+        Assert.Equal(new FaultState("timeoutBeforeExecute", 60_000, false), state);
+        await SetFaultAsync(new FaultRequest("none", null));
+    }
+
+    [Fact]
+    public async Task AdminKeyRequiredWhenConfigured()
+    {
+        Assert.SkipUnless(fixture.DatabaseAvailable, fixture.SkipReason);
+
+        await using var keyed = new WebApplicationFactory<Program>().WithWebHostBuilder(host =>
+        {
+            host.UseSetting("ConnectionStrings:Wallet", fixture.TestConnectionString);
+            host.UseSetting("Wallet:AdminKey", "test-key");
+        });
+        using var client = keyed.CreateClient();
+
+        var without = await client.GetAsync("/admin/faults", Token);
+        Assert.Equal(HttpStatusCode.Forbidden, without.StatusCode);
+        Assert.Equal("admin_key_required", (await without.ReadProblemAsync(Token)).Code());
+
+        using var wrong = new HttpRequestMessage(HttpMethod.Get, "/admin/faults");
+        wrong.Headers.Add("X-Wallet-Admin-Key", "not-the-key");
+        Assert.Equal(HttpStatusCode.Forbidden, (await client.SendAsync(wrong, Token)).StatusCode);
+
+        using var right = new HttpRequestMessage(HttpMethod.Get, "/admin/faults");
+        right.Headers.Add("X-Wallet-Admin-Key", "test-key");
+        Assert.Equal(HttpStatusCode.OK, (await client.SendAsync(right, Token)).StatusCode);
+
+        // Every admin route is behind the key, the reset included.
+        var reset = await client.PostAsync("/admin/reset", null, Token);
+        Assert.Equal(HttpStatusCode.Forbidden, reset.StatusCode);
+        var setFault = await client.PostAsJsonAsync("/admin/faults", new FaultRequest("error", null), Token);
+        Assert.Equal(HttpStatusCode.Forbidden, setFault.StatusCode);
+    }
+
+    private async Task<FaultState> SetFaultAsync(FaultRequest request)
+    {
+        var response = await fixture.Client.PostAsJsonAsync("/admin/faults", request, Token);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var state = await response.Content.ReadFromJsonAsync<FaultState>(Token);
+        Assert.NotNull(state);
+        return state;
+    }
+
+    private static async Task<HttpResponseMessage> PostAsync(HttpClient client, string key, PaymentRequest request)
+    {
+        using var message = new HttpRequestMessage(HttpMethod.Post, "/transactions")
+        {
+            Content = JsonContent.Create(request),
+        };
+        message.Headers.Add("Idempotency-Key", key);
+        return await client.SendAsync(message, Token);
+    }
+
+    private async Task<long> BalanceAsync(int userId)
+    {
+        var balance = await fixture.Client.GetFromJsonAsync<BalanceResponse>($"/users/{userId}/balance", Token);
+        return balance!.BalanceIqd;
+    }
+}

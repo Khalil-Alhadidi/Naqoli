@@ -25,13 +25,16 @@ public abstract record ExecuteResult
 /// <summary>
 /// The only code in the mock wallet that moves money. One idempotency key executes at most once: the unique index
 /// on <see cref="Transaction.IdempotencyKey"/> is the guarantee, and a violation of it returns the stored outcome.
-/// A balance never goes below zero: the debit is one conditional update.
+/// A balance never goes below zero: the debit is one conditional update. The fault switch applies here and only here,
+/// and every payment holds the <see cref="WalletGate"/> shared, so a reset never runs in the middle of one.
 /// </summary>
 public sealed partial class TransactionService(
     WalletDbContext db,
     PaymentValidator validator,
     TimeProvider clock,
     IOptions<WalletOptions> options,
+    FaultSwitch faults,
+    WalletGate gate,
     ILogger<TransactionService> logger)
 {
     /// <summary>The longest idempotency key accepted; the column is this wide.</summary>
@@ -41,15 +44,59 @@ public sealed partial class TransactionService(
     private const int SqlUniqueConstraint = 2627;
 
     /// <summary>
-    /// Validates, checks the PIN, records the key, then moves the money in one database transaction.
-    /// A request refused by validation or the PIN rules still returns the stored outcome when its key was used before,
-    /// so a retry never depends on the body or on data the first call changed.
+    /// Applies the injected fault, if any, then validates, checks the PIN, records the key, and moves the money in one
+    /// database transaction. A request refused by validation or the PIN rules still returns the stored outcome when its
+    /// key was used before, so a retry never depends on the body or on data the first call changed.
     /// </summary>
+    /// <remarks>
+    /// Fault delays sit outside the gate, so a hanging request never holds up a reset. A timeout after execute
+    /// waits only once the database transaction has committed; if the caller goes away during that wait, the
+    /// committed result is returned as normal and nothing is thrown.
+    /// </remarks>
     public async Task<ExecuteResult> ExecuteAsync(string idempotencyKey, PaymentRequest request, CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrEmpty(idempotencyKey);
         ArgumentNullException.ThrowIfNull(request);
 
+        var fault = faults.Take();
+        if (fault.Mode != FaultMode.None)
+            LogFault(logger, fault.Mode, fault.DelayMs);
+
+        switch (fault.Mode)
+        {
+            case FaultMode.Error:
+                return new ExecuteResult.Refused(new PaymentRefusal(StatusCodes.Status500InternalServerError, FaultErrors.InjectedError));
+
+            case FaultMode.Slow:
+                await Task.Delay(TimeSpan.FromMilliseconds(fault.DelayMs), clock, cancellationToken);
+                break;
+
+            case FaultMode.TimeoutBeforeExecute:
+                await Task.Delay(TimeSpan.FromMilliseconds(fault.DelayMs), clock, cancellationToken);
+                return new ExecuteResult.Refused(new PaymentRefusal(StatusCodes.Status504GatewayTimeout, FaultErrors.InjectedTimeout));
+        }
+
+        ExecuteResult result;
+        using (await gate.EnterSharedAsync(cancellationToken))
+            result = await ExecuteCoreAsync(idempotencyKey, request, cancellationToken);
+
+        if (fault.Mode == FaultMode.TimeoutAfterExecute)
+        {
+            try
+            {
+                await Task.Delay(TimeSpan.FromMilliseconds(fault.DelayMs), clock, cancellationToken);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                // The caller has gone; the outcome is committed and can be found by its key.
+            }
+        }
+
+        return result;
+    }
+
+    private async Task<ExecuteResult> ExecuteCoreAsync(string idempotencyKey, PaymentRequest request, CancellationToken cancellationToken)
+    {
         var check = await validator.ValidateAsync(request, cancellationToken);
         if (!check.IsValid)
             return await RefuseUnlessKnownAsync(idempotencyKey, check.Refusal, cancellationToken);
@@ -289,6 +336,9 @@ public sealed partial class TransactionService(
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Idempotency key reused; returning the stored outcome of transaction {TransactionId} ({Status})")]
     private static partial void LogReplayed(ILogger logger, int transactionId, TransactionStatus status);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Injected fault {Mode} ({DelayMs} ms) applied to a payment")]
+    private static partial void LogFault(ILogger logger, FaultMode mode, int delayMs);
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Wrong PIN for user {UserId}; failed attempts now {Attempts}")]
     private static partial void LogWrongPin(ILogger logger, int userId, int attempts);

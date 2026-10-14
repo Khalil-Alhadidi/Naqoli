@@ -34,6 +34,8 @@ builder.Services.AddOptions<WalletOptions>()
 builder.Services.AddSingleton<FeeCalculator>();
 builder.Services.AddScoped<PaymentValidator>();
 builder.Services.AddScoped<TransactionService>();
+builder.Services.AddSingleton<FaultSwitch>();
+builder.Services.AddSingleton<WalletGate>();
 
 var app = builder.Build();
 
@@ -71,6 +73,7 @@ if (app.Environment.IsDevelopment())
 app.MapGet("/health", () => "ok");
 app.MapReadEndpoints();
 app.MapTransactionEndpoints();
+app.MapAdminEndpoints();
 
 app.Run();
 return 0;
