@@ -1,7 +1,8 @@
 @Wallet.MockApi_HostAddress = http://localhost:5276
 
 # Requests for the mock wallet, against the frozen seed (data/seed/README.md). The contract is docs/wallet-api.md.
-# User 1 is the demo user; 07700001004 is Hammoudi (user 4); bill account 1 is user 1's home electricity; product 1 is Zain credit 5,000.
+# User 1 (07805550001) is the demo user and users 1 to 5 exist; 07805550101 is Hammoudi (contact S01 of user 1, not a user);
+# bill account 1 is user 1's home electricity; product 1 is Zain credit 5,000.
 # Change @idempotencyKey before each new payment: a used key replays the stored outcome instead of paying again.
 # Keys are 1 to 64 characters of A-Z, a-z, 0-9, _ and -; anything else is 400 invalid_idempotency_key.
 @idempotencyKey = http-demo-001
@@ -16,8 +17,11 @@ GET {{Wallet.MockApi_HostAddress}}/health
 ### One user
 GET {{Wallet.MockApi_HostAddress}}/users/1
 
-### The user behind a phone number
-GET {{Wallet.MockApi_HostAddress}}/users/by-phone/07700001004
+### User 5 gives consent (204; again is also 204; a reset clears it)
+POST {{Wallet.MockApi_HostAddress}}/users/5/consent
+
+### The wallet account behind a phone number (registered name and status, active or closed)
+GET {{Wallet.MockApi_HostAddress}}/accounts/by-phone/07805550101
 
 ### Contacts and aliases of user 1 (add ?q= to filter by a substring of the saved name or alias)
 GET {{Wallet.MockApi_HostAddress}}/users/1/contacts
@@ -29,7 +33,7 @@ GET {{Wallet.MockApi_HostAddress}}/users/1/bills
 GET {{Wallet.MockApi_HostAddress}}/users/1/balance
 
 ### History of user 1: transfers to Hammoudi, newest first
-GET {{Wallet.MockApi_HostAddress}}/users/1/history?to=07700001004&take=10
+GET {{Wallet.MockApi_HostAddress}}/users/1/history?to=07805550101&take=10
 
 ### Store catalogue: Zain credit cards
 GET {{Wallet.MockApi_HostAddress}}/store/products?provider=Zain&type=credit
@@ -45,7 +49,7 @@ Content-Type: application/json
   "userId": 1,
   "type": "transfer",
   "amountIqd": 50000,
-  "toPhone": "07700001004"
+  "toPhone": "07805550101"
 }
 
 ### Quote: pay bill account 1 in full
@@ -67,7 +71,7 @@ Idempotency-Key: {{idempotencyKey}}
   "userId": 1,
   "type": "transfer",
   "amountIqd": 50000,
-  "toPhone": "07700001004"
+  "toPhone": "07805550101"
 }
 
 ### Execute: pay bill account 1 (amount comes from the wallet)

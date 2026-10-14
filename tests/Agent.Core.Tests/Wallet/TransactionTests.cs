@@ -20,6 +20,8 @@ public class TransactionTests(WalletApiFixture fixture)
     private const long TraderBalance = 12_500_000;
     private const long TightBalance = 18_500;
     private const long HammoudiBalance = 100_000;
+    private const string ClosedContactPhone = "07805550120";
+    private const long ClosedContactBalance = 100_000;
 
     // Any PIN that is not U3's.
     private const string WrongPin = "0000";
@@ -166,6 +168,33 @@ public class TransactionTests(WalletApiFixture fixture)
         Assert.Equal(HttpStatusCode.UnprocessableEntity, replay.StatusCode);
         Assert.Equal("insufficient_funds", (await replay.ReadProblemAsync(Token)).Code());
         Assert.Equal(1, await RowsWithKeyAsync("t-empty"));
+    }
+
+    [Fact]
+    public async Task TransferToClosedAccountIsRefusedAndNothingMoves()
+    {
+        Assert.SkipUnless(fixture.DatabaseAvailable, fixture.SkipReason);
+        await fixture.ResetAsync();
+
+        // S20: U1's contact whose account is closed.
+        var request = Transfer(DemoUserId, 10_000, ClosedContactPhone);
+        var response = await PostAsync("t-closed", request);
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+        Assert.Equal("account_closed", (await response.ReadProblemAsync(Token)).Code());
+        Assert.Equal(DemoBalance, await BalanceAsync(DemoUserId));
+        Assert.Equal(ClosedContactBalance, await fixture.AccountBalanceAsync(ClosedContactPhone));
+
+        // Refused in validation, before any row is stored against the key.
+        var lookup = await fixture.Client.GetAsync("/transactions/by-key/t-closed", Token);
+        Assert.Equal(HttpStatusCode.NotFound, lookup.StatusCode);
+        Assert.Equal("unknown_key", (await lookup.ReadProblemAsync(Token)).Code());
+        Assert.Equal(0, await RowsWithKeyAsync("t-closed"));
+
+        var retry = await PostAsync("t-closed", request);
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, retry.StatusCode);
+        Assert.Equal("account_closed", (await retry.ReadProblemAsync(Token)).Code());
+        Assert.Equal(DemoBalance, await BalanceAsync(DemoUserId));
     }
 
     [Fact]

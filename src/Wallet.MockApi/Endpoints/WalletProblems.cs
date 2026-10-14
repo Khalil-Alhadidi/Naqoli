@@ -9,6 +9,9 @@ namespace Wallet.MockApi.Endpoints;
 /// </summary>
 internal static class WalletProblems
 {
+    /// <summary>The code of the 404 a phone number with no wallet account behind it gets.</summary>
+    public const string UnknownAccount = "unknown_account";
+
     private static readonly Dictionary<string, string> Titles = new(StringComparer.Ordinal)
     {
         [PaymentErrors.MissingIdempotencyKey] = "Idempotency key missing",
@@ -16,6 +19,7 @@ internal static class WalletProblems
         [PaymentErrors.InvalidType] = "Unknown payment type",
         [PaymentErrors.UnknownUser] = "Unknown user",
         [PaymentErrors.UnknownRecipient] = "Unknown recipient",
+        [PaymentErrors.AccountClosed] = "Recipient account is closed",
         [PaymentErrors.SameAccount] = "Payer and recipient are the same account",
         [PaymentErrors.InvalidAmount] = "Invalid amount",
         [PaymentErrors.NothingDue] = "Nothing is due on this bill",
@@ -40,6 +44,13 @@ internal static class WalletProblems
     /// </summary>
     public static ProblemHttpResult UserNotFound()
         => From(new PaymentRefusal(StatusCodes.Status404NotFound, PaymentErrors.UnknownUser), "User not found");
+
+    /// <summary>
+    /// The 404 <c>GET /accounts/by-phone/{phone}</c> returns when no wallet account has that number: code
+    /// <c>unknown_account</c> and the title <c>Account not found</c>.
+    /// </summary>
+    public static ProblemHttpResult AccountNotFound()
+        => From(new PaymentRefusal(StatusCodes.Status404NotFound, UnknownAccount), "Account not found");
 
     public static ProblemHttpResult From(PaymentRefusal refusal) => From(refusal, title: null);
 

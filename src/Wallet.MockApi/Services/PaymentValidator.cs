@@ -15,6 +15,7 @@ public static class PaymentErrors
     public const string InvalidType = "invalid_type";
     public const string UnknownUser = "unknown_user";
     public const string UnknownRecipient = "unknown_recipient";
+    public const string AccountClosed = "account_closed";
     public const string SameAccount = "same_account";
     public const string InvalidAmount = "invalid_amount";
     public const string NothingDue = "nothing_due";
@@ -175,10 +176,14 @@ public sealed class PaymentValidator(WalletDbContext db, FeeCalculator fees, IOp
             recipients = recipients.Where(a => a.Phone == request.ToPhone);
 
         var recipient = await recipients
-            .Select(a => new { a.Id, a.Phone, a.RegisteredName })
+            .Select(a => new { a.Id, a.Phone, a.RegisteredName, a.Status })
             .SingleOrDefaultAsync(cancellationToken);
         if (recipient is null)
             return Draft.Refused(PaymentErrors.UnknownRecipient);
+
+        // A closed account exists but takes no money, whether named by phone or by id.
+        if (recipient.Status == AccountStatus.Closed)
+            return Draft.Refused(PaymentErrors.AccountClosed);
 
         if (recipient.Id == fromAccountId)
             return Draft.Refused(PaymentErrors.SameAccount);

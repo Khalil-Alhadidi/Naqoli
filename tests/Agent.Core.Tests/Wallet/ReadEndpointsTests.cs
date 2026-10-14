@@ -19,6 +19,12 @@ public sealed class ReadEndpointsTests(WalletApiFixture fixture) : IAsyncLifetim
     private const int DemoUserId = SeedFacts.DemoUserId;
     private const string TraderPhone = "07905550003";
 
+    /// <summary>U5, who has not given consent yet.</summary>
+    private const int FirstUseUserId = 5;
+
+    /// <summary>X04: a closed account with no registered name.</summary>
+    private const string ClosedOtherPhone = "07805550193";
+
     private static CancellationToken Token => TestContext.Current.CancellationToken;
 
     public async ValueTask InitializeAsync()
@@ -30,24 +36,175 @@ public sealed class ReadEndpointsTests(WalletApiFixture fixture) : IAsyncLifetim
     public ValueTask DisposeAsync() => ValueTask.CompletedTask;
 
     [Fact]
-    public async Task UserByPhoneReturnsRegisteredName()
+    public async Task UserSummaryCarriesCodeAndConsent()
     {
         Assert.SkipUnless(fixture.DatabaseAvailable, fixture.SkipReason);
 
-        var user = await fixture.Client.GetFromJsonAsync<UserSummary>($"/users/by-phone/{TraderPhone}", Token);
-
-        Assert.NotNull(user);
-        Assert.Equal(SeedFacts.TraderUserId, user.Id);
-        Assert.Equal(TraderPhone, user.Phone);
-        Assert.Equal(SeedFacts.Account(TraderPhone).RegisteredName, user.RegisteredName);
-
         var demo = await fixture.Client.GetFromJsonAsync<UserSummary>($"/users/{DemoUserId}", Token);
-        Assert.Equal(new UserSummary(DemoUserId, SeedFacts.DemoPhone, SeedFacts.Account(SeedFacts.DemoPhone).RegisteredName!), demo);
+        Assert.Equal(
+            new UserSummary(DemoUserId, "U1", SeedFacts.DemoPhone, SeedFacts.Account(SeedFacts.DemoPhone).RegisteredName!, true),
+            demo);
+
+        var trader = await fixture.Client.GetFromJsonAsync<UserSummary>($"/users/{SeedFacts.TraderUserId}", Token);
+        Assert.NotNull(trader);
+        Assert.Equal("U3", trader.Code);
+        Assert.Equal(TraderPhone, trader.Phone);
+        Assert.Equal(SeedFacts.Account(TraderPhone).RegisteredName, trader.RegisteredName);
+
+        // U5 has not given consent yet.
+        var firstUse = await fixture.Client.GetFromJsonAsync<UserSummary>($"/users/{FirstUseUserId}", Token);
+        Assert.NotNull(firstUse);
+        Assert.Equal("U5", firstUse.Code);
+        Assert.False(firstUse.ConsentGiven);
+    }
+
+    [Fact]
+    public async Task AccountByPhoneFindsContactsOthersAndClosed()
+    {
+        Assert.SkipUnless(fixture.DatabaseAvailable, fixture.SkipReason);
+
+        var hammoudi = await fixture.Client.GetFromJsonAsync<AccountSummary>($"/accounts/by-phone/{HammoudiPhone}", Token);
+        Assert.Equal(
+            new AccountSummary(await AccountIdAsync(HammoudiPhone), HammoudiPhone, SeedFacts.Account(HammoudiPhone).RegisteredName, "active"),
+            hammoudi);
+
+        // X04: a closed account with no registered name, saved by nobody.
+        var closed = await fixture.Client.GetFromJsonAsync<AccountSummary>($"/accounts/by-phone/{ClosedOtherPhone}", Token);
+        Assert.NotNull(closed);
+        Assert.Equal(ClosedOtherPhone, closed.Phone);
+        Assert.Null(closed.RegisteredName);
+        Assert.Equal("closed", closed.Status);
+
+        var unknown = await fixture.Client.GetAsync("/accounts/by-phone/07805559999", Token);
+        Assert.Equal(HttpStatusCode.NotFound, unknown.StatusCode);
+        var problem = await unknown.ReadProblemAsync(Token);
+        Assert.Equal(404, problem.Status);
+        Assert.Equal("Account not found", problem.Title);
+        Assert.Equal("unknown_account", problem.Code());
+
+        // The old user-by-phone route is gone.
+        var oldRoute = await fixture.Client.GetAsync($"/users/by-phone/{SeedFacts.DemoPhone}", Token);
+        Assert.Equal(HttpStatusCode.NotFound, oldRoute.StatusCode);
+    }
+
+    [Fact]
+    public async Task ConsentCanBeGivenOnce()
+    {
+        Assert.SkipUnless(fixture.DatabaseAvailable, fixture.SkipReason);
+        var path = $"/users/{FirstUseUserId}";
+
+        var first = await fixture.Client.PostAsync($"{path}/consent", content: null, Token);
+        Assert.Equal(HttpStatusCode.NoContent, first.StatusCode);
+        Assert.True((await fixture.Client.GetFromJsonAsync<UserSummary>(path, Token))!.ConsentGiven);
+
+        // Giving consent again changes nothing and is not an error.
+        var second = await fixture.Client.PostAsync($"{path}/consent", content: null, Token);
+        Assert.Equal(HttpStatusCode.NoContent, second.StatusCode);
+        Assert.True((await fixture.Client.GetFromJsonAsync<UserSummary>(path, Token))!.ConsentGiven);
+
+        var unknown = await fixture.Client.PostAsync("/users/99/consent", content: null, Token);
+        Assert.Equal(HttpStatusCode.NotFound, unknown.StatusCode);
+        Assert.Equal("unknown_user", (await unknown.ReadProblemAsync(Token)).Code());
+
+        // A reset restores the seed, where U5 has not given consent.
+        await fixture.ResetAsync();
+        Assert.False((await fixture.Client.GetFromJsonAsync<UserSummary>(path, Token))!.ConsentGiven);
+    }
+
+    [Fact]
+    public async Task ContactsCarryCodesAndAccountStatus()
+    {
+        Assert.SkipUnless(fixture.DatabaseAvailable, fixture.SkipReason);
+
+        var result = await fixture.Client.GetFromJsonAsync<ContactsResponse>($"/users/{DemoUserId}/contacts", Token);
+
+        Assert.NotNull(result);
+        var closed = Assert.Single(result.Contacts, c => c.Code == "S20");
+        Assert.Equal(SeedFacts.Contact("S20").Number, closed.Phone);
+        Assert.Equal("closed", closed.AccountStatus);
+
+        var hammoudi = Assert.Single(result.Contacts, c => c.Phone == HammoudiPhone);
+        Assert.Equal("S01", hammoudi.Code);
+        Assert.Equal("active", hammoudi.AccountStatus);
+
+        Assert.Equal(4, result.Aliases.Count);
+        Assert.All(result.Aliases, a =>
+        {
+            Assert.False(string.IsNullOrEmpty(a.Phone));
+            Assert.Equal(SeedFacts.Account(a.Phone).RegisteredName, a.RegisteredName);
+            Assert.Equal(SeedFacts.Account(a.Phone).Status, a.AccountStatus);
+        });
+    }
+
+    [Fact]
+    public async Task BillsCarryCodesAndEnglishNames()
+    {
+        Assert.SkipUnless(fixture.DatabaseAvailable, fixture.SkipReason);
+
+        var bills = await fixture.Client.GetFromJsonAsync<List<BillItem>>($"/users/{DemoUserId}/bills", Token);
+
+        Assert.NotNull(bills);
+        Assert.Equal(["BS1", "BS2", "BS3", "BS4"], bills.Select(b => b.Code));
+        Assert.Equal(
+            ["Electricity", "Electricity", "Water", "Internet (Earthlink subscription)"],
+            bills.Select(b => b.BillerNameEn));
+        Assert.Null(Assert.Single(bills, b => b.Code == "BS3").Label);
+    }
+
+    [Fact]
+    public async Task ProductsCarryCodesAndProviderNames()
+    {
+        Assert.SkipUnless(fixture.DatabaseAvailable, fixture.SkipReason);
+        var seedNetForty = SeedFacts.Seed.Products.Single(p => p.Id == "ZN-NET-40");
+
+        var all = await fixture.Client.GetFromJsonAsync<List<ProductItem>>("/store/products", Token);
+        var upperCaseZain = await fixture.Client.GetFromJsonAsync<List<ProductItem>>("/store/products?provider=ZAIN", Token);
+
+        Assert.NotNull(all);
+        var netForty = Assert.Single(all, p => p.Code == "ZN-NET-40");
+        Assert.Equal("zain", netForty.Provider);
+        Assert.Equal("Zain", netForty.ProviderNameEn);
+        Assert.Equal(seedNetForty.ProviderNameAr, netForty.ProviderNameAr);
+        Assert.NotNull(netForty.AlsoCalled);
+        Assert.Equal(seedNetForty.AlsoCalled, netForty.AlsoCalled);
+        Assert.Equal("internet", netForty.Type);
+
+        Assert.Null(Assert.Single(all, p => p.Code == "KR-CR-5").AlsoCalled);
+
+        Assert.Equal(6, upperCaseZain!.Count);
+        Assert.All(upperCaseZain, p => Assert.Equal("zain", p.Provider));
+    }
+
+    [Fact]
+    public async Task OrdersCarryProductCodes()
+    {
+        Assert.SkipUnless(fixture.DatabaseAvailable, fixture.SkipReason);
+
+        var orders = await fixture.Client.GetFromJsonAsync<List<OrderItem>>($"/users/{DemoUserId}/orders", Token);
+
+        Assert.NotNull(orders);
+        Assert.Equal(["ZN-NET-25", "AC-CR-5", "ZN-NET-25", "ZN-CR-10"], orders.Select(o => o.ProductCode));
+    }
+
+    [Fact]
+    public async Task HistoryCarriesCounterpartyAccountId()
+    {
+        Assert.SkipUnless(fixture.DatabaseAvailable, fixture.SkipReason);
+        var account = await fixture.Client.GetFromJsonAsync<AccountSummary>($"/accounts/by-phone/{HammoudiPhone}", Token);
+
+        var history = await fixture.Client.GetFromJsonAsync<List<HistoryItem>>(
+            $"/users/{DemoUserId}/history?to={HammoudiPhone}", Token);
+
+        Assert.NotNull(history);
+        Assert.Equal(account!.AccountId, Assert.Single(history).CounterpartyAccountId);
+
+        // Bills and purchases have no counterparty account.
+        var all = await fixture.Client.GetFromJsonAsync<List<HistoryItem>>($"/users/{DemoUserId}/history", Token);
+        Assert.All(all!.Where(h => h.Type != "transfer"), h => Assert.Null(h.CounterpartyAccountId));
     }
 
     [Theory]
     [InlineData("/users/999")]
-    [InlineData("/users/by-phone/07805559999")]
     [InlineData("/users/999/contacts")]
     [InlineData("/users/999/bills")]
     [InlineData("/users/999/balance")]

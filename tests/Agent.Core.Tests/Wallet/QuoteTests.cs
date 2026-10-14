@@ -136,6 +136,32 @@ public class QuoteTests(WalletApiFixture fixture)
     }
 
     [Fact]
+    public async Task QuoteToClosedAccountIsRefused()
+    {
+        Assert.SkipUnless(fixture.DatabaseAvailable, fixture.SkipReason);
+        await fixture.ResetAsync();
+
+        // S20, U1's contact whose account is closed; X04, a closed account with no registered name.
+        foreach (var phone in new[] { "07805550120", "07805550193" })
+        {
+            var byPhone = await fixture.Client.PostAsJsonAsync("/quotes", Transfer(DemoUserId, 10_000, phone), Token);
+
+            Assert.Equal(HttpStatusCode.UnprocessableEntity, byPhone.StatusCode);
+            var problem = await byPhone.ReadProblemAsync(Token);
+            Assert.Equal("account_closed", problem.Code());
+            Assert.Equal("Recipient account is closed", problem.Title);
+
+            // Naming the account by id is refused the same way.
+            var account = await fixture.Client.GetFromJsonAsync<AccountSummary>($"/accounts/by-phone/{phone}", Token);
+            var byId = await fixture.Client.PostAsJsonAsync(
+                "/quotes", Transfer(DemoUserId, 10_000, toAccountId: account!.AccountId), Token);
+
+            Assert.Equal(HttpStatusCode.UnprocessableEntity, byId.StatusCode);
+            Assert.Equal("account_closed", (await byId.ReadProblemAsync(Token)).Code());
+        }
+    }
+
+    [Fact]
     public async Task TransferToSelfIs422()
     {
         Assert.SkipUnless(fixture.DatabaseAvailable, fixture.SkipReason);
