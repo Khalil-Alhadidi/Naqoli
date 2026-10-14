@@ -124,4 +124,4 @@ Every request except `GET /health` carries the `X-Wallet-Client-Key` header. In 
 
 Every `/admin` request also carries the `X-Wallet-Admin-Key` header. In Development with no `Wallet:AdminKey` set, any non-empty value is accepted (the header makes a browser preflight, so a web page cannot reset the wallet). Outside Development, set a key of at least 16 characters in user secrets or the `Wallet__AdminKey` environment variable and send it in that header; never commit it.
 
-Status: milestone 2 of 12, see [docs/build-plan.md](docs/build-plan.md).
+Status: milestone 3 of 12 (write path, no model) under final review, see [docs/build-plan.md](docs/build-plan.md).
