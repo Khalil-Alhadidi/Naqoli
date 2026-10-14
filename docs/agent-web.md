@@ -218,7 +218,7 @@ The outcome names are `done`, `not_done`, `checking`, `expired`, `already_handle
 1. It expires the cards past their timer.
 2. It moves to Checking the records that have been Executing for at least `StaleExecutingAfterSeconds` (40).
 
-Options validation requires `StaleExecutingAfterSeconds` to be more than three times `WalletTimeoutSeconds` (10), because a Confirm makes three timed wallet calls while its record is Executing. A failed sweep is logged at Warning and the loop goes on. While the agent database is down, that means a Warning every 5 seconds. The EF command log is set to Warning in `appsettings.json`, so the healthy sweep stays quiet. Details are in [agent-core.md](agent-core.md), "The pending sweeper".
+Options validation requires `StaleExecutingAfterSeconds` to be more than three times `WalletTimeoutSeconds` (10), because a Confirm makes three timed wallet calls while its record is Executing. A failed sweep is logged at Warning once per outage (the first failure after a success), at Debug while the outage lasts, and the recovery at Information; the loop goes on. The EF command log is set to Warning in `appsettings.json`, so the healthy sweep stays quiet. Details are in [agent-core.md](agent-core.md), "The pending sweeper".
 
 ## The phone strings, for Khalil
 
@@ -376,5 +376,4 @@ The journeys locate elements only by these attributes.
 | Option taps send the request again with the slot filled, so an ambiguous display text asks again | The orchestrator's answer entry point, milestone 7 |
 | Text typed before the circuit is interactive is lost | The `data-interactive` marker tells the journeys; a person types again |
 | A Checking record whose circuit is gone has no "check again" button in a new circuit | The Checking screen in milestone 8; the record stays Checking and is never shown as failed |
-| The sweeper logs a Warning every 5 seconds while the agent database is down | Accepted for now |
 | The live trace keeps every entry for the life of the circuit | A cap would be a new setting |

@@ -34,11 +34,13 @@ public sealed class ChatSession : IDisposable
     private readonly int userId;
     private readonly SemaphoreSlim gate = new(1, 1);
     private readonly CancellationTokenSource lifetime = new();
+    private readonly CancellationToken stopping;
     private readonly List<ChatMessage> messages = [];
 
     private ParsedRequest? lastRequest;
     private string? typedSlot;
     private int nextId;
+    private bool disposed;
 
     public ChatSession(
         IServiceScopeFactory scopes,
@@ -61,6 +63,7 @@ public sealed class ChatSession : IDisposable
         this.text = text;
         this.trace = trace;
         userId = options.Value.DemoUserId;
+        stopping = lifetime.Token;
     }
 
     /// <summary>Raised after every change of state; handlers must not block (components call <c>InvokeAsync</c>).</summary>
@@ -107,11 +110,12 @@ public sealed class ChatSession : IDisposable
     {
         ArgumentNullException.ThrowIfNull(typedText);
         TraceLog.Current.Value = trace;
-        await gate.WaitAsync(lifetime.Token);
+        if (!await EnterAsync())
+            return;
         try
         {
             SetBusy(true);
-            var token = lifetime.Token;
+            var token = stopping;
             trace.Record(TraceZone.User, "message_received", FormattableString.Invariant($"length {typedText.Length}"));
             Add(ChatRole.User, typedText, ChatMessageKind.Text);
 
@@ -148,6 +152,10 @@ public sealed class ChatSession : IDisposable
         {
             Failed(ex);
         }
+        catch (OperationCanceledException) when (stopping.IsCancellationRequested)
+        {
+            // The circuit is gone; the agent has recorded what it could (see Dispose).
+        }
         finally
         {
             Release();
@@ -162,11 +170,12 @@ public sealed class ChatSession : IDisposable
     public async Task TapOptionAsync(string value)
     {
         TraceLog.Current.Value = trace;
-        await gate.WaitAsync(lifetime.Token);
+        if (!await EnterAsync())
+            return;
         try
         {
             SetBusy(true);
-            var token = lifetime.Token;
+            var token = stopping;
             var question = Question;
             var option = question?.Options.FirstOrDefault(o => string.Equals(o.Value, value, StringComparison.Ordinal));
             if (question is null || option is null || lastRequest is null)
@@ -189,6 +198,10 @@ public sealed class ChatSession : IDisposable
         {
             Failed(ex);
         }
+        catch (OperationCanceledException) when (stopping.IsCancellationRequested)
+        {
+            // The circuit is gone; the agent has recorded what it could (see Dispose).
+        }
         finally
         {
             Release();
@@ -199,11 +212,12 @@ public sealed class ChatSession : IDisposable
     public async Task GiveConsentAsync()
     {
         TraceLog.Current.Value = trace;
-        await gate.WaitAsync(lifetime.Token);
+        if (!await EnterAsync())
+            return;
         try
         {
             SetBusy(true);
-            var token = lifetime.Token;
+            var token = stopping;
             WalletResult<bool> given;
             await using (var scope = scopes.CreateAsyncScope())
                 given = await scope.ServiceProvider.GetRequiredService<WalletClient>().GiveConsentAsync(userId, token);
@@ -223,6 +237,10 @@ public sealed class ChatSession : IDisposable
         {
             Failed(ex);
         }
+        catch (OperationCanceledException) when (stopping.IsCancellationRequested)
+        {
+            // The circuit is gone; the agent has recorded what it could (see Dispose).
+        }
         finally
         {
             Release();
@@ -237,7 +255,8 @@ public sealed class ChatSession : IDisposable
     public async Task<ConfirmOutcome?> ConfirmAsync(string? pin)
     {
         TraceLog.Current.Value = trace;
-        await gate.WaitAsync(lifetime.Token);
+        if (!await EnterAsync())
+            return null;
         try
         {
             if (Card is not { } card)
@@ -250,7 +269,7 @@ public sealed class ChatSession : IDisposable
             {
                 await using var scope = scopes.CreateAsyncScope();
                 var handler = scope.ServiceProvider.GetRequiredService<ConfirmHandler>();
-                outcome = await handler.ConfirmAsync(userId, card.PendingId, string.IsNullOrEmpty(pin) ? null : pin, lifetime.Token);
+                outcome = await handler.ConfirmAsync(userId, card.PendingId, string.IsNullOrEmpty(pin) ? null : pin, stopping);
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
@@ -260,6 +279,11 @@ public sealed class ChatSession : IDisposable
 
             ShowOutcome(outcome);
             return outcome;
+        }
+        catch (OperationCanceledException) when (stopping.IsCancellationRequested)
+        {
+            // The circuit is gone mid-call: the handler has taken its cancellation path (back to Pending or Checking).
+            return null;
         }
         finally
         {
@@ -274,7 +298,8 @@ public sealed class ChatSession : IDisposable
     public async Task<ConfirmOutcome?> SettleAsync()
     {
         TraceLog.Current.Value = trace;
-        await gate.WaitAsync(lifetime.Token);
+        if (!await EnterAsync())
+            return null;
         try
         {
             if (Card is not { } card || CardState != CardStatus.Checking)
@@ -287,7 +312,7 @@ public sealed class ChatSession : IDisposable
             {
                 await using var scope = scopes.CreateAsyncScope();
                 var handler = scope.ServiceProvider.GetRequiredService<ConfirmHandler>();
-                outcome = await handler.SettleCheckingAsync(userId, card.PendingId, lifetime.Token);
+                outcome = await handler.SettleCheckingAsync(userId, card.PendingId, stopping);
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
@@ -297,6 +322,11 @@ public sealed class ChatSession : IDisposable
 
             ShowOutcome(outcome);
             return outcome;
+        }
+        catch (OperationCanceledException) when (stopping.IsCancellationRequested)
+        {
+            // The circuit is gone mid-call: the handler has taken its cancellation path (back to Pending or Checking).
+            return null;
         }
         finally
         {
@@ -308,17 +338,22 @@ public sealed class ChatSession : IDisposable
     public async Task CancelAsync()
     {
         TraceLog.Current.Value = trace;
-        await gate.WaitAsync(lifetime.Token);
+        if (!await EnterAsync())
+            return;
         try
         {
             SetBusy(true);
             trace.Record(TraceZone.User, "cancel_tapped", null);
             if (IsCardLive)
-                await CancelCardAsync(lifetime.Token);
+                await CancelCardAsync(stopping);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             Failed(ex);
+        }
+        catch (OperationCanceledException) when (stopping.IsCancellationRequested)
+        {
+            // The circuit is gone; the agent has recorded what it could (see Dispose).
         }
         finally
         {
@@ -333,7 +368,8 @@ public sealed class ChatSession : IDisposable
     public async Task RefreshAsync()
     {
         TraceLog.Current.Value = trace;
-        await gate.WaitAsync(lifetime.Token);
+        if (!await EnterAsync())
+            return;
         try
         {
             SetBusy(true);
@@ -342,7 +378,7 @@ public sealed class ChatSession : IDisposable
 
             PendingRecord? record;
             await using (var scope = scopes.CreateAsyncScope())
-                record = await scope.ServiceProvider.GetRequiredService<PendingStore>().FindAsync(card.PendingId, userId, lifetime.Token);
+                record = await scope.ServiceProvider.GetRequiredService<PendingStore>().FindAsync(card.PendingId, userId, stopping);
 
             var state = record?.State;
             if (record is null || state == PendingState.Expired || (state == PendingState.Pending && record.ExpiresAt <= clock.GetUtcNow()))
@@ -358,17 +394,42 @@ public sealed class ChatSession : IDisposable
         {
             Failed(ex);
         }
+        catch (OperationCanceledException) when (stopping.IsCancellationRequested)
+        {
+            // The circuit is gone; the agent has recorded what it could (see Dispose).
+        }
         finally
         {
             Release();
         }
     }
 
+    /// <summary>
+    /// Ends the circuit's session: cancels the token every running action uses, so the agent takes its cancellation path
+    /// (a Confirm cancelled before the send goes back to Pending, during it to Checking). The semaphore is deliberately
+    /// not disposed: an action still running releases it in its <c>finally</c>, and a disposed semaphore would throw there.
+    /// </summary>
     public void Dispose()
     {
+        if (disposed)
+            return;
+        disposed = true;
         lifetime.Cancel();
         lifetime.Dispose();
-        gate.Dispose();
+    }
+
+    /// <summary>Waits for the session's turn; false when the session ended while waiting.</summary>
+    private async Task<bool> EnterAsync()
+    {
+        try
+        {
+            await gate.WaitAsync(stopping);
+            return true;
+        }
+        catch (OperationCanceledException)
+        {
+            return false;
+        }
     }
 
     private bool IsCardLive => Card is not null && CardState == CardStatus.Live;
@@ -582,7 +643,7 @@ public sealed class ChatSession : IDisposable
         try
         {
             await using var scope = scopes.CreateAsyncScope();
-            record = await scope.ServiceProvider.GetRequiredService<PendingStore>().FindAsync(pendingId, userId, lifetime.Token);
+            record = await scope.ServiceProvider.GetRequiredService<PendingStore>().FindAsync(pendingId, userId, stopping);
         }
         catch (Exception readFailure) when (readFailure is not OperationCanceledException)
         {

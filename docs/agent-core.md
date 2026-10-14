@@ -244,7 +244,7 @@ stateDiagram-v2
 - `MarkStaleExecutingAsync(olderThan)` is the stale-Executing sweep: every record still Executing whose `ExecutingSince` is at least `olderThan` ago becomes Checking (audit reason `stale_executing`), never NotDone, since its execute call may have reached the wallet; a settle then resolves it under the same key. It covers a process that stopped between the begin and the outcome write. `PendingSweeper` (below) runs it with `olderThan` = `StaleExecutingAfterSeconds`.
 ### The pending sweeper
 
-`PendingSweeper` (`src/Agent.Core/Pending/PendingSweeper.cs`) is a `BackgroundService`. `AddAgentCore` registers it with `AddHostedService` only when `SweepIntervalSeconds` is above 0 (the test hosts set 0 and call `SweepOnceAsync` on an instance they build). At start and then on a `PeriodicTimer` every `SweepIntervalSeconds`, it opens its own DI scope, resolves `PendingStore`, runs `ExpireDueAsync` and then `MarkStaleExecutingAsync(StaleExecutingAfterSeconds)`, and logs both counts at Debug. A failed sweep is logged at Warning and the loop goes on; only the host's stop token ends it. It never calls the wallet.
+`PendingSweeper` (`src/Agent.Core/Pending/PendingSweeper.cs`) is a `BackgroundService`. `AddAgentCore` registers it with `AddHostedService` only when `SweepIntervalSeconds` is above 0 (the test hosts set 0 and call `SweepOnceAsync` on an instance they build). At start and then on a `PeriodicTimer` every `SweepIntervalSeconds`, it opens its own DI scope, resolves `PendingStore`, runs `ExpireDueAsync` and then `MarkStaleExecutingAsync(StaleExecutingAfterSeconds)`, and logs both counts at Debug. A failed sweep is logged at Warning once per outage (the first failure after a success), at Debug while it lasts, and the recovery at Information (`SweepAndLogAsync`); the loop goes on, and only the host's stop token ends it. It never calls the wallet.
 
 ```mermaid
 sequenceDiagram
@@ -257,7 +257,7 @@ sequenceDiagram
         P->>S: ExpireDueAsync: Pending past ExpiresAt to Expired
         P->>S: MarkStaleExecutingAsync(StaleExecutingAfterSeconds): Executing to Checking, reason stale_executing
         alt an exception
-            P->>P: log Warning, wait for the next tick
+            P->>P: log Warning (first failure) or Debug (still failing), wait for the next tick
         else
             P->>P: log the counts at Debug
         end

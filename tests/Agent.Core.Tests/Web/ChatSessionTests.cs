@@ -311,4 +311,47 @@ public sealed class ChatSessionTests(AgentHost host) : IAsyncDisposable
             }
         }
     }
+
+    [Fact]
+    public async Task DisposingTheSessionMidActionEndsItQuietly()
+    {
+        Assert.SkipUnless(host.DatabaseAvailable, host.SkipReason);
+        await host.ResetAsync();
+        var stall = new StallingHandler();
+        var provider = host.BuildProvider((services, configuration) =>
+        {
+            services.AddAgentWebServices(configuration);
+            // Every wallet call of this provider waits until it is cancelled: a wallet that never answers.
+            services.AddHttpClient<global::Agent.Core.Wallet.WalletClient>().AddHttpMessageHandler(() => stall);
+        });
+        disposables.Add(provider);
+        var scope = provider.CreateAsyncScope();
+        var session = scope.ServiceProvider.GetRequiredService<ChatSession>();
+
+        var sending = session.SendAsync(HammoudiSentence);
+        await stall.Entered.Task.WaitAsync(TimeSpan.FromSeconds(10), Token);
+
+        // The circuit goes away while the orchestrator waits on the wallet.
+        session.Dispose();
+
+        await sending; // No exception escapes: the cancellation ends the action inside the session.
+        Assert.False(session.Busy);
+        Assert.Null(session.Card);
+
+        // Disposing again (the circuit scope does) is harmless.
+        await scope.DisposeAsync();
+    }
+
+    /// <summary>Holds every request until its token is cancelled.</summary>
+    private sealed class StallingHandler : DelegatingHandler
+    {
+        public TaskCompletionSource Entered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            Entered.TrySetResult();
+            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+            throw new InvalidOperationException("Unreachable.");
+        }
+    }
 }

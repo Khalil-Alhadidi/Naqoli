@@ -4,6 +4,7 @@ using Agent.Core.Tests.Wallet;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
@@ -113,6 +114,55 @@ public class PendingSweeperTests(AgentHost host)
         Assert.Equal(
             hosted,
             services.Any(d => d.ServiceType == typeof(IHostedService) && d.ImplementationType == typeof(PendingSweeper)));
+    }
+
+    [Fact]
+    public async Task AnOutageIsLoggedOnceAtWarningAndTheRecoveryAtInformation()
+    {
+        Assert.SkipUnless(host.DatabaseAvailable, host.SkipReason);
+        await host.ResetAsync();
+        var factory = new FailingThenWorkingScopeFactory(host.Services.GetRequiredService<IServiceScopeFactory>(), failures: 2);
+        var logger = new CapturingLogger();
+        using var sweeper = new PendingSweeper(factory, host.Services.GetRequiredService<IOptions<AgentOptions>>(), logger);
+
+        for (var i = 0; i < 3; i++)
+            Assert.True(await sweeper.SweepAndLogAsync(Token));
+
+        // First failure: Warning. Second: Debug. Success: the counts at Debug, then the recovery at Information.
+        Assert.Equal(
+            [LogLevel.Warning, LogLevel.Debug, LogLevel.Debug, LogLevel.Information],
+            logger.Entries.Select(e => e.Level));
+        Assert.NotNull(logger.Entries[0].Exception);
+        Assert.NotNull(logger.Entries[1].Exception);
+
+        // A later success after the recovery logs only the counts.
+        Assert.True(await sweeper.SweepAndLogAsync(Token));
+        Assert.Equal(LogLevel.Debug, logger.Entries[^1].Level);
+        Assert.Equal(5, logger.Entries.Count);
+    }
+
+    /// <summary>A logger that keeps every entry, at every level.</summary>
+    private sealed class CapturingLogger : ILogger<PendingSweeper>
+    {
+        public List<(LogLevel Level, string Message, Exception? Exception)> Entries { get; } = [];
+
+        public IDisposable? BeginScope<TState>(TState state)
+            where TState : notnull
+            => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+            => Entries.Add((logLevel, formatter(state, exception), exception));
+    }
+
+    /// <summary>Throws on the first <paramref name="failures"/> scopes, then hands out real ones.</summary>
+    private sealed class FailingThenWorkingScopeFactory(IServiceScopeFactory inner, int failures) : IServiceScopeFactory
+    {
+        private int calls;
+
+        public IServiceScope CreateScope()
+            => ++calls <= failures ? throw new InvalidOperationException("Stub: the database is down.") : inner.CreateScope();
     }
 
     private sealed class ThrowingScopeFactory : IServiceScopeFactory
