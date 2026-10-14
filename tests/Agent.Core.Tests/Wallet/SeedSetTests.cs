@@ -185,6 +185,40 @@ public class SeedSetTests
         }
     }
 
+    [Fact]
+    public void MissingRequiredPropertyIsRejected()
+    {
+        var dir = CopySeed();
+        try
+        {
+            ReplaceFirst(dir, SeedFiles.Users, "\"number\": \"07805550001\",", "");
+
+            var ex = Assert.Throws<SeedException>(() => SeedSet.Load(dir.FullName));
+            Assert.StartsWith("users.json", ex.Message, StringComparison.Ordinal);
+        }
+        finally
+        {
+            dir.Delete(true);
+        }
+    }
+
+    [Fact]
+    public void NullRequiredValueIsRejected()
+    {
+        var dir = CopySeed();
+        try
+        {
+            ReplaceFirst(dir, SeedFiles.Contacts, "\"id\": \"S01\"", "\"id\": null");
+
+            var ex = Assert.Throws<SeedException>(() => SeedSet.Load(dir.FullName));
+            Assert.StartsWith("contacts.json", ex.Message, StringComparison.Ordinal);
+        }
+        finally
+        {
+            dir.Delete(true);
+        }
+    }
+
     /// <summary>Copies the eight seed files to a new temporary directory. The caller deletes it.</summary>
     internal static DirectoryInfo CopySeed()
     {

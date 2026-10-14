@@ -27,7 +27,7 @@ public sealed record SeedUser(
     long Balance,
     bool ConsentGiven,
     string Pin,
-    string? RoleInTestSet);
+    string? RoleInTestSet = null);
 
 /// <summary>A wallet account (<c>accounts.json</c>). <see cref="Id"/> is set for kind <c>other</c> only.</summary>
 public sealed record SeedAccount(
@@ -36,7 +36,7 @@ public sealed record SeedAccount(
     string Status,
     long Balance,
     string Kind,
-    string? Id);
+    string? Id = null);
 
 /// <summary>A saved contact of one user (<c>contacts.json</c>).</summary>
 public sealed record SeedContact(
@@ -45,7 +45,7 @@ public sealed record SeedContact(
     string SavedName,
     string? Alias,
     string Number,
-    string? Why);
+    string? Why = null);
 
 /// <summary>A biller (<c>billers.json</c>).</summary>
 public sealed record SeedBiller(string Code, string NameEn, string NameAr);
@@ -58,7 +58,7 @@ public sealed record SeedBill(
     string? Label,
     string SubscriberNumber,
     long AmountDue,
-    string? Note);
+    string? Note = null);
 
 /// <summary>A store product (<c>store.json</c>).</summary>
 public sealed record SeedProduct(
@@ -81,11 +81,11 @@ public sealed record SeedHistoryRow(
     long Amount,
     long Fee,
     string Status,
-    string? ToNumber,
-    string? Contact,
-    string? Bill,
-    string? Biller,
-    string? Product);
+    string? ToNumber = null,
+    string? Contact = null,
+    string? Bill = null,
+    string? Biller = null,
+    string? Product = null);
 
 /// <summary>The test set's limits, fees and lists (<c>settings.json</c>).</summary>
 public sealed record SeedSettings(

@@ -17,6 +17,11 @@ public sealed class SeedSet
         UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow,
         ReadCommentHandling = JsonCommentHandling.Disallow,
         AllowTrailingCommas = false,
+
+        // A missing constructor parameter without a default, or a null in a non-nullable one, is a JsonException
+        // (wrapped into a SeedException naming the file) rather than a null that breaks validation later.
+        RespectNullableAnnotations = true,
+        RespectRequiredConstructorParameters = true,
     };
 
     private SeedSet(
