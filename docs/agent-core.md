@@ -420,7 +420,7 @@ Any other exception in an action is traced as `error` (the exception type) and a
 | `CardMessageIndex`, `QuestionMessageIndex`, `ActionMessageIndex` | The positions in `Messages` of the card's message, the open question's message, and the message whose button (consent, or check again) is live |
 | `CardsIssued` | Every card issued, in order (for the grader) |
 | `QuestionsAsked` | Every question, in order, as `ConversationQuestion(Kind, Answer, OptionValues)` (for the grader) |
-| `LastReply` | The last `AgentReply` to a request |
+| `LastReply`, `LastRequest` | The last `AgentReply` to a request, and the request it answered (together they give the learning-log entry) |
 | `ConsentShown` | True once the consent screen has been shown |
 
 `Changed` is raised on every new message, and at the start and end of every action. It is raised while the action still holds its turn, so a handler sees each message on the async flow of the action that added it.

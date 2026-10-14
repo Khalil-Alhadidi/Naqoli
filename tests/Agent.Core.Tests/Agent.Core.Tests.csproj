@@ -19,6 +19,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\Agent.Core\Agent.Core.csproj" />
     <ProjectReference Include="..\..\src\Wallet.MockApi\Wallet.MockApi.csproj" />
+    <ProjectReference Include="..\..\src\Agent.Eval\Agent.Eval.csproj" />
     <!-- Aliased: Agent.Web and Wallet.MockApi both have a public Program class. -->
     <ProjectReference Include="..\..\src\Agent.Web\Agent.Web.csproj" Aliases="AgentWeb" />
   </ItemGroup>

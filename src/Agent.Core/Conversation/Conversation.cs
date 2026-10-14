@@ -150,6 +150,12 @@ public sealed class Conversation : IDisposable
     /// <summary>The last reply the agent gave to a request (the orchestrator's, or <c>model_unavailable</c>).</summary>
     public AgentReply? LastReply { get; private set; }
 
+    /// <summary>
+    /// The last request handed to the orchestrator (as parsed, or with a typed or tapped answer in its slot); with
+    /// <see cref="LastReply"/> it gives the learning-log entry (<c>LearningLogRule.EntryFor</c>).
+    /// </summary>
+    public ParsedRequest? LastRequest => lastRequest;
+
     /// <summary>True once the consent screen has been shown in this conversation.</summary>
     public bool ConsentShown { get; private set; }
 
