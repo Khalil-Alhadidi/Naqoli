@@ -1,3 +1,4 @@
+using Agent.Core.Masking;
 using Agent.Core.Parsing;
 using Agent.Core.Requests;
 using Agent.Core.Tests.Wallet;
@@ -82,5 +83,25 @@ public class ScriptedParserTests
 
         Assert.Equal(RequestIntent.Unclear, (await parser.ParseAsync("yes", NothingPending, Token)).Intent);
         Assert.Equal(RequestIntent.Unclear, (await parser.ParseAsync("no", NothingPending, Token)).Intent);
+    }
+
+    [Fact]
+    public async Task ASentenceWithAPhoneNumberMatchesTheMaskedText()
+    {
+        // The conversation masks the typed text before the parse call, so a sentence is masked the same way at load:
+        // Khalil writes it with a real-looking number, and any spacing of that number matches.
+        var request = ParsedRequest.Transfer("07701234567", 25_000, AmountUnit.Dinars);
+        var parser = new ScriptedParser([new ScriptedSentence("send 25000 to 07701234567", request)]);
+
+        var typed = Masker.Mask("send 25000 to 0770 123 4567");
+
+        Assert.Equal("send 25000 to <NUM_1>", typed.Text);
+        Assert.Equal(request, await parser.ParseAsync(typed.Text, new ParseContext(null, typed.Map), Token));
+    }
+
+    [Fact]
+    public void TheNameIsScripted()
+    {
+        Assert.Equal("scripted", new ScriptedParser().Name);
     }
 }

@@ -10,8 +10,9 @@ public enum ParserFault
     Unreachable,
 
     /// <summary>
-    /// <c>model_invalid_reply</c>: the call returns an <see cref="RequestIntent.Unclear"/> request (until milestone 6
-    /// validates the model's structure, an invalid reply is a request the agent did not understand).
+    /// <c>model_invalid_reply</c>: the call returns what the structure validator returns for a reply it refused, an
+    /// <see cref="RequestIntent.Unclear"/> request with <see cref="ParsedRequest.Problem"/>
+    /// <see cref="RecordingParser.InjectedProblem"/>, so the conversation takes its <c>model_invalid_reply</c> path.
     /// </summary>
     InvalidReply,
 }
@@ -49,6 +50,12 @@ public sealed class RecordingParser(IParser inner) : IParser, IParserUsage
                 return [.. usages];
         }
     }
+
+    /// <summary>The <see cref="ParsedRequest.Problem"/> of an injected invalid reply.</summary>
+    public const string InjectedProblem = "injected";
+
+    /// <summary>The measured parser's name: the recording is transparent.</summary>
+    public string Name => inner.Name;
 
     public ParseUsage? LastUsage
     {
@@ -105,7 +112,7 @@ public sealed class RecordingParser(IParser inner) : IParser, IParserUsage
             case ParserFault.Unreachable:
                 throw new ParserUnavailableException("Injected fault: model_unreachable.");
             case ParserFault.InvalidReply:
-                return new ParsedRequest { Intent = RequestIntent.Unclear };
+                return new ParsedRequest { Intent = RequestIntent.Unclear, Problem = InjectedProblem };
         }
 
         var parsed = await inner.ParseAsync(text, context, cancellationToken);

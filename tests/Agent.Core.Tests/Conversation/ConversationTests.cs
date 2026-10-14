@@ -440,6 +440,8 @@ public sealed class ConversationTests(AgentHost host) : IAsyncDisposable
     /// <summary>A parser whose model is down.</summary>
     private sealed class UnavailableParser : IParser
     {
+        public string Name => "unavailable";
+
         public Task<ParsedRequest> ParseAsync(string text, ParseContext context, CancellationToken cancellationToken)
             => throw new ParserUnavailableException();
     }

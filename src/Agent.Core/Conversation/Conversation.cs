@@ -159,6 +159,13 @@ public sealed class Conversation : IDisposable
     /// </summary>
     public ParsedRequest? LastRequest => lastRequest;
 
+    /// <summary>
+    /// The learning-log entry of <see cref="LastReply"/>, as the conversation wrote it (<c>model_invalid_reply</c> for a
+    /// structure the validator refused, else <see cref="LearningLogRule.EntryFor"/>), or null when nothing was logged.
+    /// The runner grades this entry.
+    /// </summary>
+    public LearningEntry? LastLearningEntry { get; private set; }
+
     /// <summary>True once the consent screen has been shown in this conversation.</summary>
     public bool ConsentShown { get; private set; }
 
@@ -213,11 +220,12 @@ public sealed class Conversation : IDisposable
             {
                 trace.Record(TraceZone.Model, "parse:unavailable", null);
                 LastReply = new AgentReply.Refusal(ReasonCodes.ModelUnavailable, null, null);
+                LastLearningEntry = null;
                 AddRefusal(ReasonCodes.ModelUnavailable);
                 return;
             }
 
-            trace.Record(TraceZone.Model, "parse:scripted", parsed.Intent.ToString());
+            trace.Record(TraceZone.Model, "parse:" + parser.Name, parsed.Intent.ToString());
             parsed = Unmask(parsed, masked.Map);
 
             // A structure the validator refused: the reply is not_understood, and the log says why (by field name).
@@ -543,7 +551,8 @@ public sealed class Conversation : IDisposable
 
         LastReply = reply;
         ShowReply(reply);
-        await WriteLearningAsync(invalidReply ?? LearningLogRule.EntryFor(reply, request), token);
+        LastLearningEntry = invalidReply ?? LearningLogRule.EntryFor(reply, request);
+        await WriteLearningAsync(LastLearningEntry, token);
     }
 
     /// <summary>

@@ -11,7 +11,11 @@ namespace Agent.Core.Tests.Conversation;
 /// </summary>
 internal sealed class CapturingParser(IReadOnlyDictionary<string, ParsedRequest> replies) : IParser
 {
+    public const string ParserName = "capturing";
+
     private readonly ConcurrentQueue<(string Text, ParseContext Context)> calls = new();
+
+    public string Name => ParserName;
 
     public IReadOnlyList<(string Text, ParseContext Context)> Calls => [.. calls];
 

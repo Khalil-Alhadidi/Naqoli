@@ -134,6 +134,7 @@ public sealed class ConversationMaskingTests(AgentHost host)
         Assert.Null(session.Conversation.Card);
         Assert.Equal(ReasonCodes.NotUnderstood, Assert.IsType<AgentReply.Refusal>(session.Conversation.LastReply).Code);
         Assert.Contains((TraceZone.Code, LearningLogRule.ModelInvalidReply, "recipient_text"), session.Trace.Entries);
+        Assert.Equal(new LearningEntry(LearningLogRule.ModelInvalidReply, "recipient_text"), session.Conversation.LastLearningEntry);
         var row = Assert.Single(await session.LearningRowsAsync());
         Assert.Equal(
             (U1, LearningLogRule.ModelInvalidReply, "recipient_text", "send 50000 to <NUM_1>", false),
@@ -151,5 +152,33 @@ public sealed class ConversationMaskingTests(AgentHost host)
         Assert.DoesNotContain(session.Trace.Entries, e => e.Step == LearningLogRule.ModelInvalidReply);
         var row = Assert.Single(await session.LearningRowsAsync());
         Assert.Equal((LearningLogRule.NotUnderstood, "something else"), (row.Reason, row.MaskedText));
+    }
+
+    [Fact]
+    public async Task TheTraceNamesTheParser()
+    {
+        var parser = new CapturingParser(new Dictionary<string, ParsedRequest>());
+        await using var session = await StartAsync(parser);
+
+        await session.Conversation.SendAsync("something else");
+
+        Assert.Contains((TraceZone.Model, "parse:" + CapturingParser.ParserName, nameof(RequestIntent.Unclear)), session.Trace.Entries);
+    }
+
+    [Fact]
+    public async Task TheLastLearningEntryIsWhatWasWrittenForTheLastReply()
+    {
+        var parser = new CapturingParser(new Dictionary<string, ParsedRequest>
+        {
+            ["send 50000 to <NUM_1>"] = FiftyThousandTo("<NUM_1>"),
+        });
+        await using var session = await StartAsync(parser);
+
+        await session.Conversation.SendAsync("something else");
+        Assert.Equal(new LearningEntry(LearningLogRule.NotUnderstood, null), session.Conversation.LastLearningEntry);
+
+        await session.Conversation.SendAsync("send 50000 to " + SeedFacts.HammoudiPhone);
+        Assert.NotNull(session.Conversation.Card);
+        Assert.Null(session.Conversation.LastLearningEntry);
     }
 }

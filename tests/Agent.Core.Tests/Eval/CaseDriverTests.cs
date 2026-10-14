@@ -1,3 +1,4 @@
+using Agent.Core.Learning;
 using Agent.Core.Parsing;
 using Agent.Core.Pipeline;
 using Agent.Core.Requests;
@@ -188,7 +189,7 @@ public sealed class CaseDriverTests(AgentHost host) : IAsyncDisposable
     }
 
     [Fact]
-    public async Task AnInvalidModelReplyIsNotUnderstoodAndLogged()
+    public async Task AnInvalidModelReplyIsNotUnderstoodAndGradedAsModelInvalidReply()
     {
         var runner = Start();
 
@@ -197,7 +198,8 @@ public sealed class CaseDriverTests(AgentHost host) : IAsyncDisposable
 
         Assert.Empty(seen.Cards);
         Assert.Equal([ReasonCodes.NotUnderstood], seen.Steps[0].ReplyCodes);
-        Assert.Equal(ReasonCodes.NotUnderstood, seen.LearningEntry?.Reason);
+        // The runner grades the entry the conversation wrote: the injected invalid structure is model_invalid_reply.
+        Assert.Equal(new LearningEntry(LearningLogRule.ModelInvalidReply, RecordingParser.InjectedProblem), seen.LearningEntry);
     }
 
     [Fact]

@@ -3,7 +3,6 @@ using System.Globalization;
 using Agent.Core;
 using Agent.Core.Conversation;
 using Agent.Core.Data;
-using Agent.Core.Learning;
 using Agent.Core.Parsing;
 using Agent.Core.Pending;
 using Agent.Core.Pipeline;
@@ -211,9 +210,8 @@ public sealed class CaseDriver
             after = before;
         }
 
-        var learning = conversation.LastReply is { } reply && conversation.LastRequest is { } request
-            ? LearningLogRule.EntryFor(reply, request)
-            : null;
+        // The entry the conversation wrote for its last reply (model_invalid_reply included), not one derived again here.
+        var learning = conversation.LastLearningEntry;
         var usages = parser.Usages;
         var usage = new ParseUsage(
             usages.Sum(u => u.InputTokens),
