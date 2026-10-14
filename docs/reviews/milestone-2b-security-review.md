@@ -45,5 +45,5 @@ Conditional pass. Before tagging `seed-v2` or the next commit: I2 (move the untr
 ## Controller's disposition (14 Oct 2026)
 - I2: the zip was already moved by Khalil; the extracted folder is his to delete, and `.gitignore` now excludes `docs/zaincash-testdata-export-*/` so it can never be staged.
 - I1, M1, M4: folded into the first task of the milestone 3 plan (client key on every route except `/health`, replay fingerprint, `seed-` prefix reserved).
-- M3 (active user accounts in `Validate`, filtered unique default index, closed payer refused): fixed in the milestone 2b fix wave if the final review's wave is open, otherwise carried to milestone 3 task 1.
+- M3: the active-user-account validation and the filtered unique default-account index were fixed in the final-review fix wave (commit fa3788e, migration `OneDefaultAccountPerUser`); refusing a closed payer is Khalil's wording decision and is carried to milestone 3.
 - M2, M5, M6, R1-R8: recorded in the milestone 3 carry-forwards.
