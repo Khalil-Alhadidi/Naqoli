@@ -1,4 +1,5 @@
 using Agent.Core.Data;
+using Agent.Core.Pipeline;
 using Agent.Core.Wallet;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -15,7 +16,7 @@ public static class AgentCoreServiceCollectionExtensions
     /// <summary>
     /// Adds <see cref="AgentOptions"/> (section <c>Agent</c>, validated at start), a <see cref="TimeProvider"/>
     /// unless one is registered, the <see cref="AgentDbContext"/> on <c>ConnectionStrings:Agent</c> and the typed
-    /// <see cref="WalletClient"/>. Nothing connects until it is used, so the app starts without the wallet or the database.
+    /// <see cref="WalletClient"/>, and the scoped <see cref="Checks"/>. Nothing connects until it is used, so the app starts without the wallet or the database.
     /// </summary>
     public static IServiceCollection AddAgentCore(this IServiceCollection services, IConfiguration configuration)
     {
@@ -46,6 +47,8 @@ public static class AgentCoreServiceCollectionExtensions
             http,
             sp.GetRequiredService<IOptions<AgentOptions>>().Value,
             sp.GetService<IHostEnvironment>()));
+
+        services.AddScoped<Checks>();
 
         return services;
     }
