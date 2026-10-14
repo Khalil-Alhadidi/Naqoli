@@ -65,7 +65,7 @@ An alias points at the account behind its contact's number. A contact is joined 
 
 ### Codes
 
-Each seeded row keeps its test-set id as a code, so the answer keys can name it: `UserSummary.code` (`U1`), `ContactItem.code` (`S01`), `BillItem.code` (`BS1`), `ProductItem.code` (`ZN-CR-5`), and the code of the four other accounts (`X01` to `X04`, stored but not sent). Seeded transactions carry the idempotency key `seed-<history id>` (`seed-H0001`) and the reference `ZC-` followed by the transaction id padded to 10 digits.
+Each seeded row keeps its test-set id as a code, so the answer keys can name it: `UserSummary.code` (`U1`), `ContactItem.code` (`S01`), `BillItem.code` (`BS1`), `ProductItem.code` (`ZN-CR-5`), and the code of the four other accounts (`X01` to `X04`, stored but not sent). Seeded transactions carry the idempotency key `seed-<history id>` (`seed-H0001`) and the reference `ZC-` followed by the transaction id padded to 10 digits. Those keys cannot be replayed or looked up: the wallet refuses any caller's key that starts with `seed-` (execute 400 `invalid_idempotency_key`, by-key 404 `unknown_key`). Each seeded row stores the request fingerprint of its own fields and no balance after (see [docs/wallet-api.md](../../docs/wallet-api.md#idempotency)). Seeded purchase codes are derivable and for display only.
 
 The purchase code of a seeded order is `SeedData.OrderCodeFor(history id)`: `9` followed by the digits of the history id, left-padded with zeros to 12 (`H0086` gives `9000000000086`). Purchases made at run time get 13 random digits.
 

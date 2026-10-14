@@ -101,6 +101,8 @@ The mock wallet is a minimal API on http://localhost:5276 with read endpoints fo
 
 The full contract (every route, field, error code, the idempotency, PIN and balance-floor rules, the fault modes, the reset and the admin key) is in [docs/wallet-api.md](docs/wallet-api.md). Ready-made requests against the seed are in `src/Wallet.MockApi/Wallet.MockApi.http`.
 
-Every `/admin` request carries the `X-Wallet-Admin-Key` header. In Development with no `Wallet:AdminKey` set, any non-empty value is accepted (the header makes a browser preflight, so a web page cannot reset the wallet). Outside Development, set a key of at least 16 characters in user secrets or the `Wallet__AdminKey` environment variable and send it in that header; never commit it.
+Every request except `GET /health` carries the `X-Wallet-Client-Key` header. In Development with no `Wallet:ClientKey` set, any non-empty value is accepted. Outside Development both apps (the wallet and the agent) need `Wallet:ClientKey`, at least 16 characters, in user secrets or the environment: `dotnet user-secrets set "Wallet:ClientKey" "<value>" --project src/Wallet.MockApi` (the agent side comes in milestone 3, task 2). Never commit it.
+
+Every `/admin` request also carries the `X-Wallet-Admin-Key` header. In Development with no `Wallet:AdminKey` set, any non-empty value is accepted (the header makes a browser preflight, so a web page cannot reset the wallet). Outside Development, set a key of at least 16 characters in user secrets or the `Wallet__AdminKey` environment variable and send it in that header; never commit it.
 
 Status: milestone 2 of 12, see [docs/build-plan.md](docs/build-plan.md).
