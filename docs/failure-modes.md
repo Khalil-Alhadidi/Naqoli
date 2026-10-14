@@ -11,4 +11,5 @@ How the system can fail and what it does. One row per mode. Added to whenever a 
 | Wallet rejects the execute | NotDone, template reply, no retry without a new tap | Milestone 3 | pending |
 | Model outage or timeout | Handover message from a template; no card | Milestone 6 | pending |
 | Invalid or unexpected model output | Becomes a question to the user, never an exception or a card | Milestone 6 | pending |
-| Database missing at startup of the migrate command | One clear line and exit 1 | Milestone 1, src/Wallet.MockApi/Program.cs and Data/WalletConnection.cs | review only |
+| Connection string missing, or SQL Server unreachable, when `migrate` runs | One clear line to stderr and exit 1 | Milestone 1, src/Wallet.MockApi/Program.cs and Data/WalletConnection.cs | review only (returns before the host is built; unreachable-server path exercised by hand) |
+| Windows path longer than about 100 characters | `dotnet build` fails with MSB3021 from the Playwright package; README tells the reader to clone to a short path or enable long paths | README, Prerequisites | reproduced by hand on 14 Oct 2026 |

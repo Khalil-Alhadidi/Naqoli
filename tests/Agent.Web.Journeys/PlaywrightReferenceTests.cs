@@ -1,6 +1,6 @@
 namespace Agent.Web.Journeys;
 
-public class UnitTest1
+public class PlaywrightReferenceTests
 {
     [Fact]
     public void PlaywrightIsReferenced()

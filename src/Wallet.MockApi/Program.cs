@@ -1,3 +1,4 @@
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Wallet.MockApi.Data;
 
@@ -13,6 +14,7 @@ if (string.IsNullOrWhiteSpace(connectionString))
 // Add services to the container.
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
+builder.Services.AddProblemDetails();
 builder.Services.AddDbContext<WalletDbContext>(o => o.UseSqlServer(connectionString));
 
 var app = builder.Build();
@@ -20,21 +22,31 @@ var app = builder.Build();
 // "migrate": apply migrations, add the synthetic seed if the database is empty, report and exit.
 if (args is ["migrate", ..])
 {
-    using var scope = app.Services.CreateScope();
-    var db = scope.ServiceProvider.GetRequiredService<WalletDbContext>();
-    db.Database.Migrate();
-    SeedData.Apply(db);
-    Console.WriteLine($"Database ready: {db.Users.Count()} users, {db.Accounts.Count()} accounts");
-    return 0;
+    try
+    {
+        using var scope = app.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<WalletDbContext>();
+        db.Database.Migrate();
+        SeedData.Apply(db);
+        Console.WriteLine($"Database ready: {db.Users.Count()} users, {db.Accounts.Count()} accounts");
+        return 0;
+    }
+    catch (SqlException ex)
+    {
+        Console.Error.WriteLine($"Cannot reach SQL Server using connection string '{WalletConnection.ConnectionStringName}': {ex.Message} See README, section Database.");
+        return 1;
+    }
 }
 
 // Configure the HTTP request pipeline.
+// Errors become RFC 7807 problem details. The API serves plain HTTP on loopback, so there is no HTTPS redirection.
+app.UseExceptionHandler();
+app.UseStatusCodePages();
+
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
 }
-
-app.UseHttpsRedirection();
 
 app.MapGet("/health", () => "ok");
 

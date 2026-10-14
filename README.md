@@ -16,23 +16,29 @@ Rules: the nine rules that are never broken are listed in [CLAUDE.md](CLAUDE.md)
 - .NET 10 SDK.
 - The `dotnet-ef` tool. It is pinned as a local tool in `.config/dotnet-tools.json` (version 10.0.13); after cloning, run `dotnet tool restore` once.
 - A SQL Server: the local default instance, LocalDB, or a container (see below).
+- Docker Desktop or Docker Engine, for route B only.
+- `pwsh`, used below to install the Playwright browsers, means PowerShell 7 or later ([installing PowerShell on Windows](https://learn.microsoft.com/en-us/powershell/scripting/install/installing-powershell-on-windows)).
+
+### Windows path length
+
+The Microsoft.Playwright package ships deeply nested files. With a clone path longer than roughly 100 characters, `dotnet build` fails with MSB3021 "exceeds the OS max path limit". Clone to a short path such as `C:\src\naqoli`, or enable long paths: turn on the Windows setting `LongPathsEnabled` ([maximum path length limitation](https://learn.microsoft.com/en-us/windows/win32/fileio/maximum-file-path-limitation)) and run `git config --global core.longpaths true`.
 
 ## Database
 
-The connection string is configuration, named `Wallet`. The default in `src/Wallet.MockApi/appsettings.json` is the local default SQL Server instance with Windows authentication:
+The connection string is configuration, named `Wallet`. The default lives in `src/Wallet.MockApi/appsettings.Development.json` and applies only when the environment is Development, which `dotnet run` uses. It is the local default SQL Server instance with Windows authentication:
 
 ```text
 Server=localhost;Database=ZainCashWallet;Trusted_Connection=True;TrustServerCertificate=True
 ```
 
-If you have that, nothing needs setting. Otherwise pick one of the two routes below. Either way, set the value in user secrets or in the `ConnectionStrings__Wallet` environment variable. The environment variable wins over user secrets, and both win over `appsettings.json`. User secrets are read only in the Development environment, which is what `dotnet run` uses here.
+If you have that, nothing needs setting. Otherwise pick one of the two routes below. Either way, set the value in user secrets or in the `ConnectionStrings__Wallet` environment variable. The environment variable wins over user secrets, and both win over the `appsettings` files. User secrets are read only in the Development environment, which is what `dotnet run` uses here. Outside Development there is no default, so the connection string must be supplied.
 
 ### Route A: LocalDB on Windows
 
 LocalDB is installed with Visual Studio and with SQL Server Express. Set the connection string:
 
 ```powershell
-dotnet user-secrets set "ConnectionStrings:Wallet" "Server=(localdb)\MSSQLLocalDB;Database=ZainCashWallet;Trusted_Connection=True" --project src/Wallet.MockApi
+dotnet user-secrets set "ConnectionStrings:Wallet" "Server=(localdb)\MSSQLLocalDB;Database=ZainCashWallet;Trusted_Connection=True;TrustServerCertificate=True" --project src/Wallet.MockApi
 ```
 
 ### Route B: SQL Server in a container
@@ -79,9 +85,10 @@ Run every command from the repository root. The solution file is `ZainCashAgent.
 Notes:
 
 - The tests use xunit.v3 on Microsoft Testing Platform, selected in the root `global.json`, so test filters go after `--` as shown.
-- The database test reports Skipped unless `ZAINCASH_TEST_SQL=1` is set. When it runs, it uses the local default instance with Windows authentication and the database `ZainCashWallet_Test`.
+- The database test reports Skipped unless `ZAINCASH_TEST_SQL=1` is set. It does not read the `Wallet` connection string. By default it uses the local default instance with Windows authentication and the database `ZainCashWallet_Test`. On route A or B, set the `ConnectionStrings__WalletTest` environment variable to a connection string whose database name ends in `_Test`; the test refuses any other name, because it drops the database before and after it runs. In PowerShell, `ZAINCASH_TEST_SQL` stays set for the rest of the session; clear it with `Remove-Item Env:ZAINCASH_TEST_SQL`.
 - `migrate` applies the migrations and the synthetic seed, prints `Database ready: 3 users, 3 accounts` and exits 0. It is safe to run twice. Without a connection string it prints `No connection string 'Wallet'. Set ConnectionStrings:Wallet in appsettings, user secrets or the ConnectionStrings__Wallet environment variable.` and exits 1.
 - The mock wallet API listens on http://localhost:5276. `GET /health` returns `ok`, and the OpenAPI document is at `/openapi/v1.json` in Development.
+- The mock wallet API serves plain HTTP on loopback by design and does not redirect to HTTPS.
 - The web app listens on http://localhost:5089.
 - The eval console prints a usage line for now. It runs the request sets from milestone 5.
 - Install the Playwright browsers once, after the first build: `pwsh tests/Agent.Web.Journeys/bin/Debug/net10.0/playwright.ps1 install`.
