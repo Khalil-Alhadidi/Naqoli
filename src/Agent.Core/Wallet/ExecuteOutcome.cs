@@ -14,12 +14,13 @@ public abstract record ExecuteOutcome
     /// <summary>201 (the payment ran now) or 200 (<paramref name="Replayed"/>: the stored outcome of the same key).</summary>
     public sealed record Done(WalletTransaction Transaction, bool Replayed) : ExecuteOutcome;
 
-    /// <summary>Any 4xx: the wallet refused, and nothing moved.</summary>
+    /// <summary>Any 4xx except 409: the wallet refused, and nothing moved.</summary>
     public sealed record Refused(WalletProblem Problem) : ExecuteOutcome;
 
     /// <summary>
-    /// A 5xx (<c>http_500</c>, <c>http_504</c>), the client's timeout (<c>timeout</c>), a transport failure
-    /// (<c>connection</c>), or a success body that could not be read (<c>unreadable_response</c>).
+    /// A 5xx (<c>http_500</c>, <c>http_504</c>), a 409 (<c>in_progress</c>: the key's payment is still executing), the
+    /// client's timeout (<c>timeout</c>), a transport failure (<c>connection</c>), or a success body that could not be
+    /// read (<c>unreadable_response</c>).
     /// </summary>
     public sealed record Unknown(string Reason) : ExecuteOutcome;
 }

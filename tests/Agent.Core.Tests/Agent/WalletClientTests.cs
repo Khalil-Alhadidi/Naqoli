@@ -187,6 +187,61 @@ public class WalletClientTests(AgentHost host)
         Assert.Equal(new Uri("http://wallet/users/1/balance"), request.RequestUri);
     }
 
+    [Fact]
+    public async Task ReadsReturnUnavailableOnServerErrorAndTimeout()
+    {
+        var stub = new ScriptedStub();
+        var client = StubClient(stub);
+
+        stub.Next = (_, _) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.InternalServerError));
+        var error = Assert.IsType<WalletResult<WalletBalance>.Unavailable>(await client.GetBalanceAsync(DemoUserId, Token));
+        Assert.Equal("http_500", error.Reason);
+
+        stub.Next = (_, _) => throw new HttpRequestException("refused");
+        var connection = Assert.IsType<WalletResult<WalletQuote>.Unavailable>(
+            await client.QuoteAsync(Transfer(DemoUserId, 10_000, SeedFacts.HammoudiPhone), Token));
+        Assert.Equal("connection", connection.Reason);
+
+        stub.Next = async (_, token) =>
+        {
+            await Task.Delay(TimeSpan.FromSeconds(10), token);
+            return new HttpResponseMessage(HttpStatusCode.OK);
+        };
+        var timeout = Assert.IsType<WalletResult<bool>.Unavailable>(await client.GiveConsentAsync(DemoUserId, Token));
+        Assert.Equal("timeout", timeout.Reason);
+
+        stub.Next = (_, _) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("{not json", System.Text.Encoding.UTF8, "application/json") });
+        var unreadable = Assert.IsType<WalletResult<WalletTransaction>.Unavailable>(
+            await client.FindByKeyAsync("k", DemoUserId, Token));
+        Assert.Equal("unreadable_response", unreadable.Reason);
+
+        // The caller's own cancellation is not an outcome: it propagates.
+        using var cancelled = new CancellationTokenSource();
+        await cancelled.CancelAsync();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => client.GetUserAsync(DemoUserId, cancelled.Token));
+    }
+
+    [Fact]
+    public async Task ExecuteConflictIsUnknownInProgress()
+    {
+        var stub = new ScriptedStub
+        {
+            Next = (_, _) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.Conflict)
+            {
+                Content = JsonContent.Create(new { code = "in_progress" }, mediaType: new("application/problem+json")),
+            }),
+        };
+
+        var outcome = await StubClient(stub).ExecuteAsync("k-409", Transfer(DemoUserId, 10_000, SeedFacts.HammoudiPhone), Token);
+
+        Assert.Equal(new ExecuteOutcome.Unknown("in_progress"), outcome);
+    }
+
+    private static WalletClient StubClient(HttpMessageHandler handler)
+        => new(
+            new HttpClient(handler) { BaseAddress = new Uri("http://wallet"), Timeout = TimeSpan.FromSeconds(1) },
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<WalletClient>.Instance);
+
     private async Task SetFaultAsync(FaultRequest fault)
     {
         using var response = await host.Wallet.Client.PostAsJsonAsync("/admin/faults", fault, Token);
@@ -206,6 +261,16 @@ public class WalletClientTests(AgentHost host)
                 Content = JsonContent.Create(new { accountId = 1, balanceIqd = 750_000, asOf = DateTimeOffset.UnixEpoch }),
             });
         }
+    }
+
+    /// <summary>Answers each request with whatever <see cref="Next"/> does, without any network.</summary>
+    private sealed class ScriptedStub : HttpMessageHandler
+    {
+        public Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> Next { get; set; } =
+            (_, _) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK));
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+            => Next(request, cancellationToken);
     }
 
     private sealed class StubEnvironment(string name) : IHostEnvironment

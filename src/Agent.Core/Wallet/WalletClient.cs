@@ -9,7 +9,7 @@ namespace Agent.Core.Wallet;
 
 /// <summary>
 /// The agent's only way to the mock wallet (docs/wallet-api.md), over HTTP. Reads and quotes return
-/// <see cref="WalletResult{T}"/>; execute returns an <see cref="ExecuteOutcome"/>. It never retries, never logs a body,
+/// <see cref="WalletResult{T}"/> (Ok, Refused on a 4xx, Unavailable otherwise); execute returns an <see cref="ExecuteOutcome"/>. It never retries, never logs a body,
 /// and sends the PIN only inside the execute body.
 /// </summary>
 public sealed partial class WalletClient
@@ -17,6 +17,12 @@ public sealed partial class WalletClient
     public const string ClientKeyHeader = "X-Wallet-Client-Key";
 
     public const string IdempotencyKeyHeader = "Idempotency-Key";
+
+    // The reasons of WalletResult<T>.Unavailable and ExecuteOutcome.Unknown, besides "http_" and the status.
+    internal const string Timeout = "timeout";
+    internal const string Connection = "connection";
+    internal const string UnreadableResponse = "unreadable_response";
+    internal const string InProgress = "in_progress";
 
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web)
     {
@@ -98,18 +104,18 @@ public sealed partial class WalletClient
     public async Task<WalletResult<WalletQuote>> QuoteAsync(WalletPaymentRequest request, CancellationToken cancellationToken = default)
     {
         // A quote ignores the PIN, so it never carries one.
-        using var response = await http.PostAsJsonAsync("quotes", request with { Pin = null }, Json, cancellationToken);
-        return await ReadResultAsync<WalletQuote>(response, "quotes", cancellationToken);
+        using var message = new HttpRequestMessage(HttpMethod.Post, "quotes")
+        {
+            Content = JsonContent.Create(request with { Pin = null }, options: Json),
+        };
+        return await SendAsync("quotes", message, ReadBodyAsync<WalletQuote>, cancellationToken);
     }
 
     /// <summary>Records that the user has given consent. Idempotent.</summary>
     public async Task<WalletResult<bool>> GiveConsentAsync(int userId, CancellationToken cancellationToken = default)
     {
-        using var response = await http.PostAsync(FormattableString.Invariant($"users/{userId}/consent"), content: null, cancellationToken);
-        if (response.IsSuccessStatusCode)
-            return new WalletResult<bool>.Ok(true);
-
-        return await RefusedOrThrowAsync<bool>(response, "consent", cancellationToken);
+        using var message = new HttpRequestMessage(HttpMethod.Post, FormattableString.Invariant($"users/{userId}/consent"));
+        return await SendAsync<bool>("consent", message, static (_, _) => Task.FromResult(true), cancellationToken);
     }
 
     /// <summary>The outcome stored under <paramref name="key"/> for <paramref name="userId"/>; 404 <c>unknown_key</c> for any other user.</summary>
@@ -142,12 +148,19 @@ public sealed partial class WalletClient
                 var transaction = await response.Content.ReadFromJsonAsync<WalletTransaction>(Json, cancellationToken);
                 if (transaction is null)
                 {
-                    LogExecuteUnknown(status, "unreadable_response");
-                    return new ExecuteOutcome.Unknown("unreadable_response");
+                    LogExecuteUnknown(status, UnreadableResponse);
+                    return new ExecuteOutcome.Unknown(UnreadableResponse);
                 }
 
                 LogExecuteDone(status);
                 return new ExecuteOutcome.Done(transaction, Replayed: status == 200);
+            }
+
+            // 409 in_progress: the key's payment is still executing, so the outcome is not known yet.
+            if (status == 409)
+            {
+                LogExecuteUnknown(status, InProgress);
+                return new ExecuteOutcome.Unknown(InProgress);
             }
 
             if (status is >= 400 and < 500)
@@ -164,54 +177,83 @@ public sealed partial class WalletClient
         }
         catch (TaskCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
-            LogExecuteUnknown(0, "timeout");
-            return new ExecuteOutcome.Unknown("timeout");
+            LogExecuteUnknown(0, Timeout);
+            return new ExecuteOutcome.Unknown(Timeout);
         }
         catch (HttpRequestException)
         {
-            LogExecuteUnknown(0, "connection");
-            return new ExecuteOutcome.Unknown("connection");
+            LogExecuteUnknown(0, Connection);
+            return new ExecuteOutcome.Unknown(Connection);
         }
         catch (JsonException)
         {
-            LogExecuteUnknown(0, "unreadable_response");
-            return new ExecuteOutcome.Unknown("unreadable_response");
+            LogExecuteUnknown(0, UnreadableResponse);
+            return new ExecuteOutcome.Unknown(UnreadableResponse);
         }
     }
 
     // The route name, not the path, goes to the log, so a phone number or key in the path never reaches a log line.
     private async Task<WalletResult<T>> GetAsync<T>(string route, string path, CancellationToken cancellationToken)
     {
-        using var response = await http.GetAsync(path, cancellationToken);
-        return await ReadResultAsync<T>(response, route, cancellationToken);
+        using var message = new HttpRequestMessage(HttpMethod.Get, path);
+        return await SendAsync(route, message, ReadBodyAsync<T>, cancellationToken);
     }
 
-    private async Task<WalletResult<T>> ReadResultAsync<T>(HttpResponseMessage response, string route, CancellationToken cancellationToken)
-    {
-        if (response.IsSuccessStatusCode)
-        {
-            var value = await response.Content.ReadFromJsonAsync<T>(Json, cancellationToken)
-                ?? throw new InvalidOperationException($"The wallet answered {route} with an empty body.");
-            return new WalletResult<T>.Ok(value);
-        }
+    private static async Task<T?> ReadBodyAsync<T>(HttpResponseMessage response, CancellationToken cancellationToken)
+        => await response.Content.ReadFromJsonAsync<T>(Json, cancellationToken);
 
-        return await RefusedOrThrowAsync<T>(response, route, cancellationToken);
+    /// <summary>
+    /// Sends a read, quote or consent call. A 2xx with a readable body is <c>Ok</c>, a 4xx is <c>Refused</c>, and
+    /// anything else is <c>Unavailable</c>: another status (<c>http_NNN</c>), the client's timeout (<c>timeout</c>), a
+    /// transport failure (<c>connection</c>) or a body that cannot be read (<c>unreadable_response</c>). Only the
+    /// caller's own cancellation throws.
+    /// </summary>
+    private async Task<WalletResult<T>> SendAsync<T>(
+        string route,
+        HttpRequestMessage message,
+        Func<HttpResponseMessage, CancellationToken, Task<T?>> readValue,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var response = await http.SendAsync(message, cancellationToken);
+            var status = (int)response.StatusCode;
+
+            if (response.IsSuccessStatusCode)
+            {
+                var value = await readValue(response, cancellationToken);
+                return value is null
+                    ? Unavailable<T>(route, status, UnreadableResponse)
+                    : new WalletResult<T>.Ok(value);
+            }
+
+            if (status is >= 400 and < 500)
+            {
+                var problem = await WalletProblem.ReadAsync(response, cancellationToken);
+                LogReadRefused(route, status, problem.Code);
+                return new WalletResult<T>.Refused(problem);
+            }
+
+            return Unavailable<T>(route, status, "http_" + status.ToString(CultureInfo.InvariantCulture));
+        }
+        catch (TaskCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            return Unavailable<T>(route, 0, Timeout);
+        }
+        catch (HttpRequestException)
+        {
+            return Unavailable<T>(route, 0, Connection);
+        }
+        catch (JsonException)
+        {
+            return Unavailable<T>(route, 0, UnreadableResponse);
+        }
     }
 
-    // A 4xx is the wallet's answer; anything else on a read is a failure the caller handles (a read moves no money).
-    private async Task<WalletResult<T>> RefusedOrThrowAsync<T>(HttpResponseMessage response, string route, CancellationToken cancellationToken)
+    private WalletResult<T> Unavailable<T>(string route, int status, string reason)
     {
-        var status = (int)response.StatusCode;
-        if (status is >= 400 and < 500)
-        {
-            var problem = await WalletProblem.ReadAsync(response, cancellationToken);
-            LogReadRefused(route, status, problem.Code);
-            return new WalletResult<T>.Refused(problem);
-        }
-
-        LogReadFailed(route, status);
-        response.EnsureSuccessStatusCode();
-        throw new HttpRequestException($"The wallet answered {route} with status {status}.", null, response.StatusCode);
+        LogReadUnavailable(route, status, reason);
+        return new WalletResult<T>.Unavailable(reason);
     }
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Wallet execute done with status {Status}")]
@@ -226,6 +268,6 @@ public sealed partial class WalletClient
     [LoggerMessage(Level = LogLevel.Information, Message = "Wallet {Route} refused with status {Status} and code {Code}")]
     private partial void LogReadRefused(string route, int status, string code);
 
-    [LoggerMessage(Level = LogLevel.Warning, Message = "Wallet {Route} failed with status {Status}")]
-    private partial void LogReadFailed(string route, int status);
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Wallet {Route} unavailable (status {Status}, reason {Reason})")]
+    private partial void LogReadUnavailable(string route, int status, string reason);
 }
