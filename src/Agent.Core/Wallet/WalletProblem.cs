@@ -11,6 +11,18 @@ public sealed record WalletProblem(int Status, string Code, long? AmountDueIqd, 
 {
     public const string NoCode = "no_code";
 
+    /// <summary>500 from the wallet's fault switch (mode <c>error</c>): nothing was written.</summary>
+    public const string InjectedError = "injected_error";
+
+    /// <summary>504 from the wallet's fault switch (mode <c>timeoutBeforeExecute</c>): nothing was written.</summary>
+    public const string InjectedTimeout = "injected_timeout";
+
+    /// <summary>
+    /// True for the 5xx codes that mean nothing was written (<see cref="InjectedError"/>, <see cref="InjectedTimeout"/>).
+    /// Any other code on a 5xx says nothing about the money, so the outcome stays unknown (rule 6).
+    /// </summary>
+    public static bool IsNothingWritten(string code) => code is InjectedError or InjectedTimeout;
+
     /// <summary>Reads the problem from a response. Never throws on a missing or malformed body.</summary>
     internal static async Task<WalletProblem> ReadAsync(HttpResponseMessage response, CancellationToken cancellationToken)
     {

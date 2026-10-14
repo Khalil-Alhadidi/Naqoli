@@ -13,7 +13,7 @@ public class MaskerTests
 
     /// <summary>Extended Arabic-Indic digits (U+06F0 to U+06F9), built by char arithmetic.</summary>
     private static string ExtendedArabicIndic(string ascii)
-        => string.Concat(ascii.Select(c => char.IsAsciiDigit(c) ? (char)('۰' + (c - '0')) : c));
+        => string.Concat(ascii.Select(c => char.IsAsciiDigit(c) ? (char)(0x06F0 + (c - '0')) : c));
 
     [Fact]
     public void AnAsciiNumberBecomesAToken()
@@ -66,6 +66,40 @@ public class MaskerTests
         Assert.Equal("to <NUM_1>.", masked.Text);
         Assert.True(masked.Map.TryUnmask("<NUM_1>", out var original));
         Assert.Equal(number, original);
+    }
+
+    /// <summary>A phone number split by <paramref name="separator"/> between its groups.</summary>
+    internal static string Split(int separator)
+        => "0770" + (char)separator + "123" + (char)separator + "4567";
+
+    [Theory]
+    [InlineData(0x00A0)] // no-break space
+    [InlineData(0x0009)] // tab
+    [InlineData(0x000A)] // line feed
+    [InlineData(0x2009)] // thin space
+    [InlineData(0x200E)] // left-to-right mark
+    [InlineData(0x200F)] // right-to-left mark
+    [InlineData(0x061C)] // Arabic letter mark (a format character)
+    public void AnySeparatorOfAPhoneNumberIsInsideTheRun(int separator)
+    {
+        // Review I1: the same separators as PhoneNumbers (Unicode whitespace, format characters, dashes, dots, brackets).
+        var number = Split(separator);
+
+        var masked = Masker.Mask("to " + number + " now");
+
+        Assert.Equal("to <NUM_1> now", masked.Text);
+        Assert.True(masked.Map.TryUnmask("<NUM_1>", out var original));
+        Assert.Equal(number, original);
+    }
+
+    [Fact]
+    public void BracketsAroundANumberStayOutsideTheToken()
+    {
+        var masked = Masker.Mask("to (0770) (123) (4567).");
+
+        Assert.Equal("to (<NUM_1>).", masked.Text);
+        Assert.True(masked.Map.TryUnmask("<NUM_1>", out var original));
+        Assert.Equal("0770) (123) (4567", original);
     }
 
     [Fact]
@@ -130,6 +164,7 @@ public class MaskerTests
     [InlineData("<NUM_0>", false)]
     [InlineData("x <NUM_1>", false)]
     [InlineData("<NUM_>", false)]
+    [InlineData("<NUM_1>\n", false)]
     public void IsTokenMatchesExactlyOneToken(string text, bool expected)
     {
         Assert.Equal(expected, MaskMap.IsToken(text));

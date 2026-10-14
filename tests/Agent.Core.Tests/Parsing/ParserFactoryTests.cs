@@ -105,6 +105,22 @@ public class ParserFactoryTests
     }
 
     [Fact]
+    public void TheModelClientNeverRetries()
+    {
+        // Review M2: one parse call per message (rule 2); a 429 or 529 shows the handover message instead of a retry.
+        Assert.Equal(0, ParserFactory.CreateAnthropicClient(SecretLookingKey).MaxRetries);
+    }
+
+    [Fact]
+    public void TheRunnerReadsTheKeyFromTheConsolesUserSecrets()
+    {
+        // Review R4: a regenerated UserSecretsId in Agent.Web would otherwise disconnect the runner from the key silently.
+        var project = File.ReadAllText(Path.Combine(global::Agent.Eval.Running.EvalPaths.RepositoryRoot(), "src", "Agent.Web", "Agent.Web.csproj"));
+
+        Assert.Contains("<UserSecretsId>" + global::Agent.Eval.Running.EvalCommand.WebUserSecretsId + "</UserSecretsId>", project, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void AnUnknownParserIsRefused()
     {
         var ex = Assert.Throws<InvalidOperationException>(() => Build(new Dictionary<string, string?> { ["Agent:Parser"] = "gpt" }));

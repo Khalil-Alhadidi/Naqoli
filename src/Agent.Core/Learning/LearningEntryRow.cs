@@ -2,7 +2,9 @@ namespace Agent.Core.Learning;
 
 /// <summary>
 /// One row of the learning log (D12, slide 2): a request the agent did not do, for a person to review. It holds the
-/// masked text of the message, never the typed text, a number, a PIN, a balance or a purchase code.
+/// masked text of the message: a run of seven or more digits is a token, and nothing from the wallet (no balance, no
+/// purchase code) is ever written. A shorter run the user typed stays as typed, so a PIN typed into the chat (four to
+/// six digits) can be in it; the policy for that is open (docs/failure-modes.md, "A PIN typed into the chat").
 /// </summary>
 public sealed class LearningEntryRow
 {

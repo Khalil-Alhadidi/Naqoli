@@ -1,5 +1,6 @@
 using Agent.Core.Masking;
 using Agent.Core.Requests;
+using Agent.Core.Text;
 
 namespace Agent.Core.Parsing;
 
@@ -134,13 +135,15 @@ public static class ParsedRequestValidator
     }
 
     /// <summary>
-    /// Exactly one token of this message's map, or words with no number run and no token the map does not hold (the
-    /// user typed no such number: the parse call invented it).
+    /// Exactly one token of this message's map, or words with no number in them and no token the map does not hold (the
+    /// user typed no such number: the parse call invented it). "A number" is what the masker masks or what the orchestrator
+    /// would read as a phone number (<see cref="PhoneNumbers.LooksLikeNumber"/>), so the guard refuses everything the code
+    /// it protects would treat as one (review I1).
     /// </summary>
     private static bool RecipientIsSafe(string recipient, MaskMap map)
         => MaskMap.IsToken(recipient)
             ? map.TryUnmask(recipient, out _)
-            : !Masker.HasNumberRun(recipient) && map.KnowsEveryToken(recipient);
+            : !Masker.HasNumberRun(recipient) && !PhoneNumbers.LooksLikeNumber(recipient) && map.KnowsEveryToken(recipient);
 
     private static bool TooLong(string? text) => text is { Length: > MaxTextLength };
 

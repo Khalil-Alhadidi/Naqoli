@@ -51,6 +51,8 @@ public sealed partial class ClaudeParser : IParser, IParserUsage
     private static readonly JsonSerializerOptions StrictJson = new(JsonSerializerDefaults.General)
     {
         TypeInfoResolver = new DefaultJsonTypeInfoResolver(),
+        // A reply that names a field twice is not the structure (review R1), rather than last-wins.
+        AllowDuplicateProperties = false,
     };
 
     private static readonly Lazy<string> LazyPrompt = new(LoadPrompt);
@@ -117,6 +119,15 @@ public sealed partial class ClaudeParser : IParser, IParserUsage
         ArgumentNullException.ThrowIfNull(text);
         ArgumentNullException.ThrowIfNull(context);
 
+        // Rule 5 in depth (review M3): a caller that did not mask (no map) cannot send a number to the model.
+        var map = context.Map;
+        if (map is null)
+        {
+            var masked = Masker.Mask(text);
+            text = masked.Text;
+            map = masked.Map;
+        }
+
         List<ChatMessage> messages =
         [
             new(ChatRole.System, Prompt),
@@ -176,7 +187,7 @@ public sealed partial class ClaudeParser : IParser, IParserUsage
         if (reply.Requests is { Count: > 1 } several)
             trace.Record(TraceZone.Model, MoreThanOneRequestStep, several.Count.ToString(CultureInfo.InvariantCulture));
 
-        return ParsedRequestValidator.Validate(reply, context.Map ?? MaskMap.Empty).Request;
+        return ParsedRequestValidator.Validate(reply, map).Request;
     }
 
     private static bool TryRead(string? text, [NotNullWhen(true)] out ParsedRequestsDto? reply)

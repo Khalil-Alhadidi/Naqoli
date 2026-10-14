@@ -84,6 +84,21 @@ public sealed class CaseDriverTests(AgentHost host) : IAsyncDisposable
     }
 
     [Fact]
+    public async Task APinTypedIntoTheChatIsSeenInTheParserTextAndTheLearningLog()
+    {
+        // Review I2: a typed PIN (four digits, not masked) reaches the parse call and the learning row of the not_understood
+        // reply; the grader sees both. The next case starts with an empty learning log.
+        var runner = Start();
+        var pin = SeedFacts.PinOf("U1");
+
+        var typed = await runner.Driver.PlayAsync(Case("U1", null, Say("my pin is " + pin)), Token);
+        var clean = await runner.Driver.PlayAsync(Case("U1", null, Say("something unknown")), Token);
+
+        Assert.True(typed.Steps[0].PinSeen);
+        Assert.False(clean.Steps[0].PinSeen);
+    }
+
+    [Fact]
     public async Task ACleanTransferIsPlayedEndToEnd()
     {
         var runner = Start();

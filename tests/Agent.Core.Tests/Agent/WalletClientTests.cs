@@ -264,6 +264,10 @@ public class WalletClientTests(AgentHost host)
         stub.Next = (_, _) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.InternalServerError));
         Assert.Equal(new ExecuteOutcome.Unknown("http_500"), await client.ExecuteAsync("k-1", send, Token));
 
+        // A 5xx with a code that is not one of the two documented fault codes: nothing says nothing was written (review M1).
+        stub.Next = (_, _) => Task.FromResult(Problem(HttpStatusCode.InternalServerError, """{"status":500,"title":"Other","code":"database_busy"}"""));
+        Assert.Equal(new ExecuteOutcome.Unknown("http_500"), await client.ExecuteAsync("k-0", send, Token));
+
         // ProblemDetails from ASP.NET Core itself: no code.
         stub.Next = (_, _) => Task.FromResult(Problem(HttpStatusCode.InternalServerError, """{"status":500,"title":"An error occurred"}"""));
         Assert.Equal(new ExecuteOutcome.Unknown("http_500"), await client.ExecuteAsync("k-2", send, Token));

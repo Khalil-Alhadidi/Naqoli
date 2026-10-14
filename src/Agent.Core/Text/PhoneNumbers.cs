@@ -35,8 +35,9 @@ public static partial class PhoneNumbers
     }
 
     /// <summary>
-    /// True when the text is a phone number attempt (7 or more digits, with only spaces, dashes, dots, parentheses or a
-    /// leading plus between them), so the recipient goes to the phone path rather than the name resolver.
+    /// True when the text is a phone number attempt (7 or more digits, with only separators between them
+    /// (<see cref="NumberSeparators"/>) and an optional leading plus), so the recipient goes to the phone path rather than
+    /// the name resolver.
     /// </summary>
     public static bool LooksLikeNumber(string? typed)
     {
@@ -55,7 +56,7 @@ public static partial class PhoneNumbers
         var builder = new StringBuilder(typed.Length);
         foreach (var c in ArabicDigits.ToAscii(typed.Trim()))
         {
-            if (char.IsWhiteSpace(c) || c is '-' or '.' or '(' or ')')
+            if (NumberSeparators.IsSeparator(c))
                 continue;
             builder.Append(c);
         }

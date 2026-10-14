@@ -24,11 +24,11 @@ namespace Agent.Eval.Running;
 /// world's payment, made through <see cref="WalletAdmin"/>, and is left out of the case's transactions.
 /// </summary>
 /// <remarks>
-/// Before each case: the wallet is reset to the seed (faults cleared), every open pending record is closed and the audit
-/// log emptied, the clock is set back to the real time, and the parser's record is cleared. Every exception of a step is
-/// caught and kept as <see cref="CaseObservation.StepError"/> (<see cref="StepErrorOf"/>: the type and a fixed message,
-/// never the exception's message, which may echo case text), and the case stops there; the run goes on with the next
-/// case.
+/// Before each case: the wallet is reset to the seed (faults cleared), every open pending record is closed, the audit
+/// log and the learning log are emptied, the clock is set back to the real time, and the parser's record is cleared.
+/// Every exception of a step is caught and kept as <see cref="CaseObservation.StepError"/> (<see cref="StepErrorOf"/>: the
+/// type and a fixed message, never the exception's message, which may echo case text), and the case stops there; the run
+/// goes on with the next case.
 /// </remarks>
 public sealed class CaseDriver
 {
@@ -413,7 +413,10 @@ public sealed class CaseDriver
         return codes;
     }
 
-    /// <summary>True when the PIN, in either digit form, is in a message, a trace step or an audit row.</summary>
+    /// <summary>
+    /// True when the PIN, in either digit form, is in a message, a trace step, a text handed to the parse call, an audit
+    /// row or a learning-log row.
+    /// </summary>
     private async Task<bool> PinSeenAsync(IReadOnlyList<ConversationMessage> messages, string pin, CancellationToken cancellationToken)
     {
         string[] forms = [pin, ArabicDigits.ToArabicIndic(pin)];
@@ -429,18 +432,30 @@ public sealed class CaseDriver
         if (trace.Entries.Any(e => Holds(e.Step) || Holds(e.Detail)))
             return true;
 
+        // What the parse call received (review I2): a PIN typed into the chat is not masked (four to six digits).
+        if (parser.Texts.Any(Holds))
+            return true;
+
         await using var scope = services.CreateAsyncScope();
-        var rows = await scope.ServiceProvider.GetRequiredService<AgentDbContext>().AuditEntries.AsNoTracking().ToListAsync(cancellationToken);
-        return rows.Any(r => Holds(r.Event) || Holds(r.FromState) || Holds(r.ToState) || Holds(r.Reason) || Holds(r.Reference)
-            || Holds(r.Detail) || IsPin(r.AmountIqd));
+        var db = scope.ServiceProvider.GetRequiredService<AgentDbContext>();
+        var rows = await db.AuditEntries.AsNoTracking().ToListAsync(cancellationToken);
+        if (rows.Any(r => Holds(r.Event) || Holds(r.FromState) || Holds(r.ToState) || Holds(r.Reason) || Holds(r.Reference)
+            || Holds(r.Detail) || IsPin(r.AmountIqd)))
+        {
+            return true;
+        }
+
+        var learning = await db.LearningEntries.AsNoTracking().ToListAsync(cancellationToken);
+        return learning.Any(l => Holds(l.Reason) || Holds(l.Detail) || Holds(l.MaskedText));
     }
 
-    /// <summary>Closes every open pending record (the wallet was just reset) and empties the audit log.</summary>
+    /// <summary>Closes every open pending record (the wallet was just reset) and empties the audit log and the learning log.</summary>
     private async Task ResetAgentAsync(CancellationToken cancellationToken)
     {
         await using var scope = services.CreateAsyncScope();
         await scope.ServiceProvider.GetRequiredService<PendingStore>().ExpireAllOpenAsync(WalletResetReason, cancellationToken);
         await scope.ServiceProvider.GetRequiredService<AgentDbContext>().AuditEntries.ExecuteDeleteAsync(cancellationToken);
+        await scope.ServiceProvider.GetRequiredService<AgentDbContext>().LearningEntries.ExecuteDeleteAsync(cancellationToken);
     }
 
     /// <summary>The wallet user id of a seed user code, read once through <see cref="WalletClient.GetUserAsync"/>.</summary>

@@ -167,6 +167,32 @@ public class ClaudeParserTests
     }
 
     [Fact]
+    public async Task WithoutAMapTheParserMasksTheTextItself()
+    {
+        // Review M3: a caller that did not mask cannot send a number to the model.
+        var (parser, client, _) = Start();
+        client.Reply = (_, _, _) => Task.FromResult(FakeChatClient.Json(Dto(
+            "\"intent\":\"transfer\",\"recipient_text\":\"<NUM_1>\",\"amount_value\":50000,\"amount_unit\":\"none\",\"biller_code\":null,\"bill_label_text\":null,\"operator_text\":null,\"product_type\":null,\"product_value\":null,\"unsupported_reason\":null,\"currency_text\":null")));
+
+        var parsed = await parser.ParseAsync("send 50000 to 07701234567", new ParseContext(null), Token);
+
+        Assert.Equal("Pending: none\nMessage: send 50000 to <NUM_1>", client.Calls[0].Messages[1].Text);
+        Assert.Equal("<NUM_1>", parsed.RecipientText);
+    }
+
+    [Fact]
+    public async Task ARepeatedFieldIsNotTheStructure()
+    {
+        // Review R1: a reply that names intent twice is refused, not read last-wins.
+        var (parser, client, _) = Start();
+        client.Reply = (_, _, _) => Task.FromResult(FakeChatClient.Json(Transfer.Replace("\"intent\":\"transfer\"", "\"intent\":\"balance\",\"intent\":\"transfer\"", StringComparison.Ordinal)));
+
+        var parsed = await parser.ParseAsync("x", new ParseContext(null, MaskMap.Empty), Token);
+
+        Assert.Equal((RequestIntent.Unclear, ClaudeParser.JsonProblem), (parsed.Intent, parsed.Problem));
+    }
+
+    [Fact]
     public async Task AReplyOutsideTheSetsIsUnclearWithTheField()
     {
         var (parser, client, _) = Start();

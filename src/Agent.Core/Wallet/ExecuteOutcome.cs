@@ -15,8 +15,9 @@ public abstract record ExecuteOutcome
     public sealed record Done(WalletTransaction Transaction, bool Replayed) : ExecuteOutcome;
 
     /// <summary>
-    /// Any 4xx except 409, or a 5xx whose ProblemDetails carries a wallet <c>code</c> (<c>injected_error</c>,
-    /// <c>injected_timeout</c>: the wallet refused before writing): the wallet refused, and nothing moved.
+    /// Any 4xx except 409, or a 5xx whose ProblemDetails carries one of the codes that mean nothing was written
+    /// (<c>injected_error</c>, <c>injected_timeout</c>; <see cref="WalletProblem.IsNothingWritten"/>): the wallet refused, and
+    /// nothing moved.
     /// </summary>
     public sealed record Refused(WalletProblem Problem) : ExecuteOutcome;
 

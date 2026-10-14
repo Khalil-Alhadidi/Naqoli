@@ -79,7 +79,16 @@ public static class ParserFactory
     public static IChatClient CreateChatClient(string apiKey, ModelCandidate candidate)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(apiKey);
-        return CreateChatClient(new AnthropicClient { ApiKey = apiKey }, candidate);
+        return CreateChatClient(CreateAnthropicClient(apiKey), candidate);
+    }
+
+    /// <summary>The Anthropic client with <paramref name="apiKey"/> and no retries.</summary>
+    public static AnthropicClient CreateAnthropicClient(string apiKey)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(apiKey);
+        // No retries: one parse call per message (rule 2). A 429 or 529 shows the handover message (model_unavailable) at
+        // once instead of several requests inside the timeout, and the cost record counts the one call made.
+        return new AnthropicClient { ApiKey = apiKey, MaxRetries = 0 };
     }
 
     /// <summary>An <see cref="IChatClient"/> for <paramref name="candidate"/> over <paramref name="client"/> (tests pass a stubbed one).</summary>

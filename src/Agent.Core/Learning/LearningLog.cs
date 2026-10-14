@@ -8,7 +8,8 @@ namespace Agent.Core.Learning;
 /// <c>model_invalid_reply</c>) returns. It stores the masked text of the message, never the typed text, and has no
 /// parameter for a PIN, a balance or a purchase code. The detail and the text are masked once more here, so a number
 /// that reached them some other way (a typed answer to a question goes to the orchestrator as typed) never reaches a
-/// row, and both are cut to their columns.
+/// row, and both are cut to their columns. A run of four to six digits (a PIN typed into the chat) is not masked; see
+/// <see cref="LearningEntryRow"/>.
 /// </summary>
 public sealed class LearningLog(AgentDbContext db, TimeProvider time)
 {

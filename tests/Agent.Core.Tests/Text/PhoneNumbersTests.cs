@@ -44,4 +44,19 @@ public class PhoneNumbersTests
     [InlineData("", false)]
     public void LooksLikeNumberNeedsSevenDigits(string typed, bool expected)
         => Assert.Equal(expected, PhoneNumbers.LooksLikeNumber(typed));
+
+    [Theory]
+    [InlineData(0x00A0)]
+    [InlineData(0x0009)]
+    [InlineData(0x200E)]
+    [InlineData(0x061C)]
+    public void AnySeparatorOfTheMaskerIsIgnored(int separator)
+    {
+        // Review I1: one idea of a number for the masker, the validator and this rule.
+        var typed = global::Agent.Core.Tests.Masking.MaskerTests.Split(separator);
+
+        Assert.True(PhoneNumbers.LooksLikeNumber(typed));
+        Assert.True(PhoneNumbers.TryNormalize(typed, out var phone));
+        Assert.Equal("07701234567", phone);
+    }
 }

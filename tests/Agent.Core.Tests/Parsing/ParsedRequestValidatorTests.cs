@@ -245,6 +245,28 @@ public class ParsedRequestValidatorTests
         AssertProblem(ParsedRequestValidator.Validate(Transfer(recipient: recipient), Map), "recipient_text");
     }
 
+    [Theory]
+    [InlineData(0x00A0)]
+    [InlineData(0x0009)]
+    [InlineData(0x000A)]
+    [InlineData(0x2009)]
+    [InlineData(0x200E)]
+    [InlineData(0x200F)]
+    [InlineData(0x061C)]
+    public void APhoneNumberWithAnySeparatorInTheRecipientIsAProblem(int separator)
+    {
+        // Review I1: the guard refuses what the orchestrator would read as a phone number.
+        AssertProblem(ParsedRequestValidator.Validate(Transfer(recipient: global::Agent.Core.Tests.Masking.MaskerTests.Split(separator)), Map), "recipient_text");
+    }
+
+    [Theory]
+    [InlineData("(0770) (123) (4567)")]
+    [InlineData("+964 (770) 123-4567")]
+    public void APhoneNumberInBracketsInTheRecipientIsAProblem(string recipient)
+    {
+        AssertProblem(ParsedRequestValidator.Validate(Transfer(recipient: recipient), Map), "recipient_text");
+    }
+
     [Fact]
     public void AnArabicIndicPhoneNumberInTheRecipientIsAProblem()
     {

@@ -54,7 +54,7 @@ public sealed partial class MaskMap
         return true;
     }
 
-    [GeneratedRegex("^<NUM_[1-9][0-9]*>$", RegexOptions.CultureInvariant)]
+    [GeneratedRegex(@"^<NUM_[1-9][0-9]*>\z", RegexOptions.CultureInvariant)]
     private static partial Regex ExactToken();
 
     [GeneratedRegex("<NUM_[0-9]+>", RegexOptions.CultureInvariant)]
