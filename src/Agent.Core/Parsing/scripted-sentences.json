@@ -1,7 +1,7 @@
 [
   {
-    "note": "TODO-AR: English placeholder. Khalil replaces this sentence with his Iraqi Arabic one; the request stays.",
-    "sentence": "send fifty thousand to my brother Hammoudi",
+    "note": "Khalil's Iraqi Arabic sentence (15 Oct 2026); the request next to it is what the scripted parser returns for it.",
+    "sentence": "حول خمسين الف دينار الى اخوية حمودي",
     "request": {
       "intent": "Transfer",
       "recipientText": "اخوية حمودي",
@@ -10,8 +10,8 @@
     }
   },
   {
-    "note": "TODO-AR: English placeholder. Khalil replaces this sentence with his Iraqi Arabic one; the request stays.",
-    "sentence": "balance",
+    "note": "Khalil's Iraqi Arabic sentence (15 Oct 2026); the request next to it is what the scripted parser returns for it.",
+    "sentence": "شكد الرصيد",
     "request": {
       "intent": "Balance"
     }
