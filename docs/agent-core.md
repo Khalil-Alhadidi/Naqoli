@@ -134,7 +134,7 @@ flowchart TD
 `Orchestrator.HandleAsync(userId, request, cancellationToken)` answers one `ParsedRequest` with one `AgentReply`: `Question`, `Refusal`, `BalanceReply`, `ConsentScreen`, `CardIssued` or `Unsupported`. It never executes. A wallet read with no usable answer is the refusal `not_done_nothing_taken` with detail `wallet_` plus the reason (or the wallet's code for a 4xx); it never throws for one. Every question and refusal writes one audit row, and every step goes to the live trace (below).
 
 1. **Balance question** (D22). Read the user; without consent, the consent screen. Otherwise read the balance and reply `BalanceReply`. The audit row `balance_shown` carries no figure.
-2. **Unsupported, unclear, currency.** `Unsupported` replies `Unsupported(reason)` with the parsed reason (`not_supported` when none). `Unclear` is refused `not_understood`. A `CurrencyText` is refused `dinars_only`. These come before the consent gate.
+2. **Unsupported, unclear, currency.** `Unsupported` with reason `other_balance` is refused `only_own_balance`, and with `other_language` is refused `not_understood`, each with the reason as the refusal's detail (RED-10, GAP-08). Any other `Unsupported` replies `Unsupported(reason)` with the parsed reason (`not_supported` when none). `Unclear` is refused `not_understood`. A `CurrencyText` is refused `dinars_only`. These come before the consent gate.
 3. **Consent gate.** Read the user; without consent, the consent screen replaces everything.
 4. **Transfer.** The recipient first (rule 16), then the amount (rule 10 asks for a missing one, typed; rule 9 asks which reading of a bare number below 1,000). `AmountRule` offers only readings from `MinAmountIqd` up to `PerTransactionCapIqd`; a bare number whose whole readings are all below the minimum is refused `amount_below_minimum` with the minimum as the figure (Khalil, 14 Oct 2026: `0.5` offers only 500,000; `0.0005` is refused). Then the checks and the card.
 5. **Bill.** Read the bills (and, for `internet`, the store catalogue), resolve the bill, then D9: a bill is paid in full. An amount the user named must equal the amount due, else the refusal `bills_paid_in_full` with the full amount due. Then the checks (without the format check) and the card.
@@ -631,8 +631,10 @@ Never stored: a PIN, a balance figure, a purchase code (full or partial), the ty
 |---|---|
 | `Refusal` with `recipient_not_found`, `bill_not_found`, `biller_unavailable`, `product_not_found`, `not_understood` or `not_supported` | That code, with the reply's detail. Without a detail, `bill_not_found` takes the biller asked for, and `product_not_found` takes the operator, type and value asked for, space separated |
 | `Refusal` with `dinars_only` (the request named another currency, GAP-07) | `other_currency` |
+| `Refusal` with `only_own_balance` (someone else's balance, RED-10) | `not_supported`, detail `other_balance` |
+| `Refusal` with `not_understood` and detail `other_language` (GAP-08) | `other_language`, no detail |
 | `Unsupported` with `same_as_last_time`, `refers_back`, `change_waiting_card`, `choose_account`, `part_of_bill`, `credit_to_own_number`, `other_currency` or `other_language` | That reason, no detail |
-| `Unsupported` with any other reason (`withdrawal`, `other_balance`) | `not_supported`, with the reason as detail |
+| `Unsupported` with any other reason (`withdrawal`) | `not_supported`, with the reason as detail |
 | A `not_logged` refusal (`insufficient_balance`, the two caps, `nothing_due`, `account_closed`, `number_has_no_wallet`, `consent_required`), any other refusal, a question, a balance, the consent screen, a card | null |
 
 `more_than_three_requests` and `model_invalid_reply` are in the logged list but are not replies. The caller that splits a message (milestone 9c) builds the first; the conversation builds the second when the parsed request carries a `Problem` (see The learning log).
@@ -642,6 +644,8 @@ flowchart TD
     reply["AgentReply and ParsedRequest"] --> kind{"Reply"}
     kind -- "Refusal, logged code" --> logged["Entry: the code, with the reply's detail or what was asked for"]
     kind -- "Refusal dinars_only" --> currency["Entry: other_currency"]
+    kind -- "Refusal only_own_balance" --> balance["Entry: not_supported, detail other_balance"]
+    kind -- "Refusal not_understood, detail other_language" --> language["Entry: other_language"]
     kind -- "Unsupported, logged name" --> named["Entry: the reason"]
     kind -- "Unsupported, other reason" --> other["Entry: not_supported, the reason as detail"]
     kind -- "anything else" --> none["null: not logged"]

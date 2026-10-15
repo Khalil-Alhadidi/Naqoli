@@ -1,5 +1,6 @@
 using System.Globalization;
 using Agent.Core.Audit;
+using Agent.Core.Learning;
 using Agent.Core.Pending;
 using Agent.Core.Requests;
 using Agent.Core.Resolver;
@@ -131,6 +132,16 @@ public sealed class Orchestrator
         // 2. Requests the agent does not do or could not read.
         if (request.Intent == RequestIntent.Unsupported)
         {
+            // Two reasons that reply with a refusal code of their own (RED-10, GAP-08); the reason stays as the detail
+            // the learning log reads (LearningLogRule.EntryFor).
+            switch (request.UnsupportedReason)
+            {
+                case LearningLogRule.OtherBalance:
+                    return await RefuseAsync(userId, ReasonCodes.OnlyOwnBalance, LearningLogRule.OtherBalance, null, cancellationToken);
+                case LearningLogRule.OtherLanguage:
+                    return await RefuseAsync(userId, ReasonCodes.NotUnderstood, LearningLogRule.OtherLanguage, null, cancellationToken);
+            }
+
             var reason = request.UnsupportedReason ?? ReasonCodes.NotSupported;
             await audit.WriteAsync(userId, null, AuditEvents.Refused, null, null, reason, null, null, cancellationToken);
             // The parsed reason is not validated before milestone 6, so it stays out of the trace.

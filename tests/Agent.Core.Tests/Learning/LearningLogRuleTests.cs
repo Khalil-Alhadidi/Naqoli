@@ -85,6 +85,31 @@ public class LearningLogRuleTests
     }
 
     [Fact]
+    public void OnlyOwnBalanceIsNotSupportedWithOtherBalanceAsDetail()
+    {
+        // RED-10: the reply the orchestrator gives an other_balance request.
+        var entry = LearningLogRule.EntryFor(
+            new AgentReply.Refusal(ReasonCodes.OnlyOwnBalance, LearningLogRule.OtherBalance, null), Unsupported(LearningLogRule.OtherBalance));
+
+        Assert.Equal(new LearningEntry(ReasonCodes.NotSupported, LearningLogRule.OtherBalance), entry);
+    }
+
+    [Fact]
+    public void NotUnderstoodForAnotherLanguageIsLoggedAsOtherLanguage()
+    {
+        // GAP-08: the reply the orchestrator gives an other_language request.
+        var entry = LearningLogRule.EntryFor(
+            new AgentReply.Refusal(ReasonCodes.NotUnderstood, LearningLogRule.OtherLanguage, null), Unsupported(LearningLogRule.OtherLanguage));
+
+        Assert.Equal(new LearningEntry(LearningLogRule.OtherLanguage, null), entry);
+
+        // Without that detail, not_understood stays itself.
+        Assert.Equal(
+            new LearningEntry(ReasonCodes.NotUnderstood, null),
+            LearningLogRule.EntryFor(new AgentReply.Refusal(ReasonCodes.NotUnderstood, null, null), Unclear));
+    }
+
+    [Fact]
     public void AnUnsupportedRequestWithoutAReasonIsNotSupportedWithoutDetail()
     {
         var entry = LearningLogRule.EntryFor(new AgentReply.Unsupported(ReasonCodes.NotSupported), Unsupported(null));

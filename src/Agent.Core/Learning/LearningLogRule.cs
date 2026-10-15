@@ -34,6 +34,12 @@ public static class LearningLogRule
     public const string OtherCurrency = "other_currency";
     public const string OtherLanguage = "other_language";
 
+    /// <summary>
+    /// The unsupported reason for a question about someone else's balance: the reply is <c>only_own_balance</c>, and the
+    /// learning row <c>not_supported</c> with this as its detail (RED-10). Not a logged name of its own.
+    /// </summary>
+    public const string OtherBalance = "other_balance";
+
     /// <summary>The reasons that are logged, in the order of <c>settings.json</c>.</summary>
     public static IReadOnlyList<string> Logged { get; } =
     [
@@ -88,8 +94,12 @@ public static class LearningLogRule
     /// reply has none, a <c>bill_not_found</c> takes the biller asked for, and a <c>product_not_found</c> the operator,
     /// type and value asked for.</item>
     /// <item>A <c>dinars_only</c> refusal (the request named another currency, GAP-07) gives <c>other_currency</c>.</item>
+    /// <item>An <c>only_own_balance</c> refusal (a question about someone else's balance, RED-10) gives
+    /// <c>not_supported</c> with detail <c>other_balance</c>.</item>
+    /// <item>A <c>not_understood</c> refusal with detail <c>other_language</c> (a message in another language, GAP-08)
+    /// gives <c>other_language</c>.</item>
     /// <item>An <see cref="AgentReply.Unsupported"/> gives its reason when that is a logged name, and otherwise
-    /// <c>not_supported</c> with the reason as detail (<c>withdrawal</c>, <c>other_balance</c>).</item>
+    /// <c>not_supported</c> with the reason as detail (<c>withdrawal</c>).</item>
     /// <item>Everything else, including the <see cref="NotLogged"/> codes, gives null. <c>more_than_three_requests</c> and
     /// <c>model_invalid_reply</c> are not replies; the callers that know them build their entries.</item>
     /// </list>
@@ -103,6 +113,12 @@ public static class LearningLogRule
         {
             case AgentReply.Refusal { Code: ReasonCodes.DinarsOnly }:
                 return new LearningEntry(OtherCurrency, null);
+
+            case AgentReply.Refusal { Code: ReasonCodes.OnlyOwnBalance }:
+                return new LearningEntry(NotSupported, OtherBalance);
+
+            case AgentReply.Refusal { Code: ReasonCodes.NotUnderstood, Detail: OtherLanguage }:
+                return new LearningEntry(OtherLanguage, null);
 
             case AgentReply.Refusal refusal when LoggedRefusals.Contains(refusal.Code):
                 return new LearningEntry(refusal.Code, refusal.Detail ?? DetailFrom(refusal.Code, request));

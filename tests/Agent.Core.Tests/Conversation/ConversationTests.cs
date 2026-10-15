@@ -330,6 +330,22 @@ public sealed class ConversationTests(AgentHost host) : IAsyncDisposable
     }
 
     [Fact]
+    public async Task AnotherPersonsBalanceRepliesOnlyOwnBalanceAndLogsOtherBalance()
+    {
+        const string sentence = "how much does ali have";
+        var session = await StartAsync(
+            extra: new ScriptedSentence(sentence, new ParsedRequest { Intent = RequestIntent.Unsupported, UnsupportedReason = "other_balance" }));
+        var conversation = session.Conversation;
+
+        await conversation.SendAsync(sentence);
+
+        Assert.Equal(
+            new ConversationMessage(ConversationRole.Agent, ConversationKind.Refusal, ReasonCodes.OnlyOwnBalance),
+            LastAgentMessage(conversation));
+        Assert.Equal(new global::Agent.Core.Learning.LearningEntry(ReasonCodes.NotSupported, "other_balance"), conversation.LastLearningEntry);
+    }
+
+    [Fact]
     public async Task ANewSentenceCancelsTheCardAndIsAnswered()
     {
         var session = await StartAsync();

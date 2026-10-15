@@ -465,6 +465,33 @@ public class OrchestratorTests(AgentHost host)
     }
 
     [Fact]
+    public async Task AnotherPersonsBalanceRepliesOnlyOwnBalance()
+    {
+        await StartAsync();
+
+        var reply = await HandleAsync(U1, new ParsedRequest { Intent = RequestIntent.Unsupported, UnsupportedReason = "other_balance" });
+
+        Assert.Equal(new AgentReply.Refusal(ReasonCodes.OnlyOwnBalance, "other_balance", null), reply);
+        var row = Assert.Single(await AuditAsync());
+        Assert.Equal(AuditEvents.Refused, row.Event);
+        Assert.Equal(ReasonCodes.OnlyOwnBalance, row.Reason);
+        Assert.Null(row.PendingId);
+    }
+
+    [Fact]
+    public async Task AnotherLanguageRepliesNotUnderstood()
+    {
+        await StartAsync();
+
+        var reply = await HandleAsync(U1, new ParsedRequest { Intent = RequestIntent.Unsupported, UnsupportedReason = "other_language" });
+
+        Assert.Equal(new AgentReply.Refusal(ReasonCodes.NotUnderstood, "other_language", null), reply);
+        var row = Assert.Single(await AuditAsync());
+        Assert.Equal(AuditEvents.Refused, row.Event);
+        Assert.Equal(ReasonCodes.NotUnderstood, row.Reason);
+    }
+
+    [Fact]
     public async Task RepeatWarningWithinTenMinutes()
     {
         await StartAsync();
