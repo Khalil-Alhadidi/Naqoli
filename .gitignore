@@ -490,3 +490,12 @@ $RECYCLE.BIN/
 # Raw test-set exports must never be committed (rule 7); the committed copy is data/ and docs/matching-rules.md
 docs/zaincash-testdata-export-*/
 docs/zaincash-testdata-export-*.zip
+
+# Keys and connection strings live in user secrets or environment variables only (rule 9).
+# Local overrides of configuration and any secrets file are never committed.
+.env.*
+!.env.example
+appsettings.*.local.json
+appsettings.local.json
+secrets.json
+*.secrets.json
