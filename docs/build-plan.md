@@ -1,8 +1,8 @@
 # Topic 04 · Bill Pay & Transfer Agent · Build plan
 
-**Version 0.4, proposed on 05/10/2026. The order of milestones is not yet confirmed by Khalil.** It follows `docs/architecture.md` version 0.11. Decision numbers (D1 to D22) refer to that file.
+**Version 0.5, 15/10/2026.** It follows `docs/architecture.md` version 0.11. Decision numbers (D1 to D22) refer to that file. Version 0.4 was proposed on 05/10/2026 and the order of milestones was confirmed by Khalil when the build started.
 
-No dates yet. The organisers' guidelines for the build round have not arrived, so milestones are ordered, not scheduled.
+**Build period (organisers' guidelines, received 15 Oct 2026):** 15 October to 8 November 2026 for the MVP; the finals come after. Code written before the build period is allowed and is disclosed: milestones 1 to 6 were built on 14 and 15 October, before the guidelines arrived, and are listed as such in `docs/disclosure.md` and the README. Milestones 7 to 12 fall inside the build period.
 
 ## How to use this plan
 
@@ -193,7 +193,7 @@ Also closed in this milestone: review I3 of milestone 3 (the validator and un-ma
 - A typed phone number, shown in full with its registered name and the "first time" line (D16).
 - No account-number entry and no QR scanning (D21). A typed account number is still masked, gets no card, and the reply asks for a phone number or a saved name.
 - Refusals from templates: insufficient balance, unknown contact, over a cap. No comment on the user's finances.
-- The balance question (D22): code reads the user's own balance and fills a template. No card, no tap, and only after consent.
+- The balance question (D22): code reads the user's own balance and fills a template. No card, no tap, and only after consent. The audit row keeps that a balance was shown and when, never the figure (Khalil, 15 Oct 2026; built in milestone 3 as `balance_shown`).
 - Typing while a card waits, all four cases (D6).
 - Try again and Send again (D19).
 - Caps and the PIN field, read from settings (D8).
@@ -209,6 +209,8 @@ Also closed in this milestone: review I3 of milestone 3 (the validator and un-ma
 - Each behaviour above has a screen journey, with the scripted parser.
 - A changed limit in settings takes effect without a restart.
 - The PIN never appears in the chat, the audit log or the learning log.
+
+**Status, 15 Oct 2026 (part 1):** the five fixes from `docs/reports/diagnosis-2026-10-15.md` that fall under this milestone are in, one commit each: a tap answers by the chosen entity's id and a typed partial answer merges into the pending request (D3, D6); a message made only of yes or no entries, up to `MaxYesNoWords` (4, a setting), is a yes or a no, and a multi-word entry matches only as a whole phrase; a near spelling is checked before a partial match (`docs/matching-rules.md`, added 15/10/2026); `other_balance` replies `only_own_balance` and `other_language` replies `not_understood`; `choose_account` with a recipient and an amount gets the card, the `account_choice_unavailable` note and the `choose_account` learning row. Reruns on the development set with prompt version 1 unchanged (`docs/reports/dev-claude-<candidate>-m7a-2026-10-15-19xx`): Haiku 51/72 (was 43), Sonnet 58/72 (was 46), Opus 58/72 (was 46); 0 executions without a tap and 0 masking failures on every run. Sonnet and Opus now fail only the items deferred to milestones 8, 9b and 9c, GAP-07 (prompt), and AMB-06 (the model read the typed amount as unclear on this run; Haiku read it right). The rest of this milestone (typed numbers on the card, refusal templates, the balance reply with consent, D6 on screen, Try again and Send again, caps and the PIN field from settings, the kill switch, the settings and log components, the journeys) follows.
 
 ## Milestone 8: Bills and faults on screen
 
@@ -227,6 +229,8 @@ Also closed in this milestone: review I3 of milestone 3 (the validator and un-ma
 - A timeout shows "checking", never "failed", and resolves to done or not done by key.
 - `docs/failure-modes.md` describes all six failure modes from slide 2, each with how it is handled and which test shows it.
 
+**Deferred here from the 15 Oct diagnosis (`docs/reports/diagnosis-2026-10-15.md`):** CLN-09, CLN-09-v1 and CLN-25 (the user named the subscription, so the bill goes straight to the card; the structure has no field that says so, which means prompt version 2 with a schema field and a resolver branch) and GAP-07 (the slang words for banknotes are not dinar amounts; one prompt line in Khalil's words, also prompt version 2). Prompt version 2 is the first prompt revision and belongs to this milestone, after the bill flow is on screen.
+
 ## Milestone 9: Extras, in reverse cut order
 
 Three separate pieces. Build them in this order. Each one can be dropped without changing the others.
@@ -240,11 +244,13 @@ Three separate pieces. Build them in this order. Each one can be dropped without
 
 - Delivers: the purchase flow against the catalogue, the code shown with a copy button, and My orders.
 - Done when: the purchase cases in the development set pass, the code never reaches the model, and logs keep only the last digits of a code.
+- Deferred here from the 15 Oct diagnosis: AMB-23 (a bare value with no operator: rule 11 asks the operator, rule 12 lists the products; Khalil decides which governs), MAL-09 (Latin spellings of operator names), NOGO-12 (the wording of the learning-log detail) and GAP-06 (`credit_to_own_number` with the operator, type and value kept filled, which needs prompt version 2 and the known-gap path of milestone 7 extended to purchases).
 
 **9c. Compound requests (D7)**
 
 - Delivers: separate cards in the order spoken, each with its own tap, the next card built only after the previous one is finished, and a cap of three.
 - Done when: the compound cases in the development set pass, and a cancel, expiry or failure on one card still leads to the next.
+- Deferred here from the 15 Oct diagnosis: CMP-01, CMP-03, CMP-05, CMP-07 and CMP-09 (the validator keeps the first request of a message until this piece), plus the `max_three_requests` reply and the `more_than_three_requests` learning row of CMP-07.
 
 **If a piece is cut:** the agent gives a safe reply and no card for those requests, the piece is listed under known gaps, and its held-out cases are reported as unsupported. They are not removed from the held-out set.
 
@@ -253,6 +259,7 @@ Three separate pieces. Build them in this order. Each one can be dropped without
 **Delivers**
 
 - The candidates compared on the development set with the final prompt, under the rule in D13: fewest wrong cards wins, and a close call goes to the cheaper or in-country model.
+- The candidates (Khalil, 15 Oct 2026): Claude (paid; Haiku, Sonnet and Opus through the Anthropic API, in since milestone 6), Gemini Flash-Lite (free) and a Qwen model on Groq (free). The second provider is wired through `Microsoft.Extensions.AI` before this milestone starts, so the comparison has at least one free candidate; its model id goes into `docs/disclosure.md` in the commit that configures it.
 - The learning data component in the console, with its count in the menu.
 
 **Done when**
@@ -300,15 +307,15 @@ Only after milestone 12, and only if the core meets its targets. Speech becomes 
 | Export the Rules and Matching sheets as `docs/matching-rules.md` | The resolver is built from them, and the workbook itself stays out of the coding sessions because it holds the held-out cases | Milestone 3 |
 | Write the phone strings in the resource file (D20) | Everything the agent says is a template written by an Iraqi | Milestone 4 for the first few, milestone 7 for the rest |
 | Two or three short conversations with counter staff or their customers, written up | "Evidence you spoke to someone" is part of a 20% criterion | Milestone 12 |
-| Name the three model candidates and get access to each | The decisions describe their types but not their names | Milestone 6 |
+| Name the three model candidates and get access to each | Done 15 Oct 2026: Claude (paid, Anthropic API key in user secrets), Gemini Flash-Lite and a Qwen model on Groq (both free). The free providers are added before milestone 10 | Milestone 6 (Claude), milestone 10 (the rest) |
 
 ## Open items
 
 | Item | Status |
 |---|---|
-| Build-period dates | Waits for the organisers' guidelines |
-| Whether code written before the build period is allowed | Not known. Until it is, keep to wording, data specifications and conversations |
+| Build-period dates | Settled 15 Oct 2026: 15 October to 8 November 2026 (MVP), finals after |
+| Whether code written before the build period is allowed | Settled 15 Oct 2026: allowed, and disclosed (milestones 1 to 6) |
 | Where the demo runs: Khalil's laptop or a hosted copy | Waits for the organisers' guidelines |
 | Results component in the page | Waits for the organisers' guidelines |
-| Test framework and other library choices not named in the architecture | Khalil decides at milestone 1 |
-| What the audit log keeps for a balance reply | Proposed: that the balance was shown and when, not the figure. Khalil decides before milestone 7 |
+| Test framework and other library choices not named in the architecture | Settled at milestone 1: xUnit; Microsoft.Extensions.Logging with no third-party sink |
+| What the audit log keeps for a balance reply | Settled 15 Oct 2026: that the balance was shown and when, not the figure |
