@@ -157,3 +157,14 @@ Outside Development the agent needs both `Agent:WalletBaseUrl` and `Agent:Wallet
 Every `/admin` request also carries the `X-Wallet-Admin-Key` header. In Development with no `Wallet:AdminKey` set, any non-empty value is accepted (the header makes a browser preflight, so a web page cannot reset the wallet). Outside Development, set a key of at least 16 characters in user secrets or the `Wallet__AdminKey` environment variable and send it in that header; never commit it.
 
 Status: milestone 6 of 12 (model in) built: masking, the structure validator, the learning log and the Claude parser through Microsoft.Extensions.AI, see [docs/agent-model.md](docs/agent-model.md) and [docs/build-plan.md](docs/build-plan.md). Baseline runs: pending; they run on 15 Oct 2026 once the Anthropic key is in user secrets (Task 3 of the plan); this line is filled from the committed reports.
+
+## Disclosure
+
+Every model, provider, library, data source and AI coding assistant used in this entry, in short. The full list, one line per item and added in the same commit as the thing it names, is [docs/disclosure.md](docs/disclosure.md).
+
+- AI coding assistant: Claude Code (Anthropic), with the Claude Fable 5.1, Opus and Haiku models, for planning, implementation and review. All Iraqi Arabic wording, answer keys and matching rules are written by Khalil.
+- Models and provider: Claude Haiku 5.5 (`claude-haiku-5-5`, the default candidate), Claude Sonnet 5.5 (`claude-sonnet-5-5`) and Claude Opus 5.5 (`claude-opus-5-5`), all through the Anthropic API, each used for one read-only structured parse call per message. The key is read from user secrets (`Anthropic:ApiKey`) or `ANTHROPIC_API_KEY` and is never committed.
+- Runtime and libraries: .NET 10 SDK and ASP.NET Core 10; Anthropic 12.56.0 (official C# SDK) and Microsoft.Extensions.AI 10.11.0 (the `IChatClient` abstraction); MudBlazor 9.11.0; Microsoft.EntityFrameworkCore.SqlServer and .Design 10.0.13 with the dotnet-ef 10.0.13 tool; Microsoft.AspNetCore.OpenApi 10.0.13; Microsoft.Extensions.Http, Hosting, Options and Configuration 10.0.13; System.Security.Cryptography.Pkcs 10.0.13; SQL Server (local instance, LocalDB or container).
+- Tests: xunit.v3 4.0.2 on Microsoft Testing Platform, xunit.runner.visualstudio 4.0.1, Microsoft.NET.Test.Sdk 18.11.0, Microsoft.AspNetCore.Mvc.Testing 10.0.13, Microsoft.Playwright 1.63.0 with Chrome Headless Shell 153.
+- Data: the test-set workbook v0.15 (Khalil, 14 Oct 2026), exported as `data/seed/*.json`, `data/requests.dev.jsonl`, `data/requests.heldout.jsonl` and `docs/matching-rules.md`. All synthetic. The held-out file is sealed ([docs/HELDOUT_SEAL.md](docs/HELDOUT_SEAL.md)).
+- External resources: Roboto from Google Fonts (MudBlazor's default font; falls back to system fonts offline).
