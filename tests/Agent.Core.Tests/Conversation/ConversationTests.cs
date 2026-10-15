@@ -432,7 +432,9 @@ public sealed class ConversationTests(AgentHost host) : IAsyncDisposable
             new RecordingSink(),
             SeedFacts.DemoUserId);
 
-        var sending = conversation.SendAsync(HammoudiSentence);
+        // This conversation has the embedded parser, so it is typed the sentence of the file, as Khalil wrote it.
+        var embedded = ScriptedParser.EmbeddedSentences().First(s => s.Request.Intent == RequestIntent.Transfer).Sentence;
+        var sending = conversation.SendAsync(embedded);
         await stall.Entered.Task.WaitAsync(TimeSpan.FromSeconds(10), Token);
 
         // The user goes away while the orchestrator waits on the wallet.

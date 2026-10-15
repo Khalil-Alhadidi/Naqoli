@@ -23,10 +23,13 @@ namespace Agent.Core.Tests.Web;
 [Collection(AgentCollection.Name)]
 public sealed class ChatSessionTests(AgentHost host) : IAsyncDisposable
 {
-    /// <summary>The English placeholder sentence of <c>scripted-sentences.json</c> (TODO-AR, Khalil's to replace).</summary>
-    private const string HammoudiSentence = "send fifty thousand to my brother Hammoudi";
+    /// <summary>The transfer sentence of <c>scripted-sentences.json</c>, as Khalil wrote it (never a literal here).</summary>
+    private static string HammoudiSentence
+        => ScriptedParser.EmbeddedSentences().First(s => s.Request.Intent == RequestIntent.Transfer).Sentence;
 
-    private const string BalanceSentence = "balance";
+    /// <summary>The balance sentence of <c>scripted-sentences.json</c>, as Khalil wrote it.</summary>
+    private static string BalanceSentence
+        => ScriptedParser.EmbeddedSentences().First(s => s.Request.Intent == RequestIntent.Balance).Sentence;
 
     private readonly List<IAsyncDisposable> disposables = [];
 
@@ -54,11 +57,7 @@ public sealed class ChatSessionTests(AgentHost host) : IAsyncDisposable
             services.Configure<AgentOptions>(o => o.DemoUserId = userId);
             if (extra.Length > 0)
             {
-                var sentences = new List<ScriptedSentence>
-                {
-                    new(HammoudiSentence, ParsedRequest.Transfer(SeedFacts.Contact("S01").Alias, 50, AmountUnit.Thousand)),
-                    new(BalanceSentence, ParsedRequest.Balance()),
-                };
+                var sentences = new List<ScriptedSentence>(ScriptedParser.EmbeddedSentences());
                 sentences.AddRange(extra);
                 services.AddSingleton<IParser>(new ScriptedParser(sentences));
             }

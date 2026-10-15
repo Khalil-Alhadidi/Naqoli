@@ -11,8 +11,13 @@ namespace Agent.Core.Tests.Parsing;
 /// </summary>
 public class ScriptedParserTests
 {
-    /// <summary>The English placeholder sentence Khalil replaces with his Iraqi Arabic one (TODO-AR).</summary>
-    private const string HammoudiPlaceholder = "send fifty thousand to my brother Hammoudi";
+    /// <summary>The transfer sentence of <c>scripted-sentences.json</c>, as Khalil wrote it (never a literal here).</summary>
+    private static string HammoudiPlaceholder
+        => ScriptedParser.EmbeddedSentences().First(s => s.Request.Intent == RequestIntent.Transfer).Sentence;
+
+    /// <summary>The balance sentence of <c>scripted-sentences.json</c>, as Khalil wrote it.</summary>
+    private static string BalancePlaceholder
+        => ScriptedParser.EmbeddedSentences().First(s => s.Request.Intent == RequestIntent.Balance).Sentence;
 
     private static CancellationToken Token => TestContext.Current.CancellationToken;
 
@@ -42,14 +47,18 @@ public class ScriptedParserTests
     [Fact]
     public async Task ExtraWhitespaceStillMatches()
     {
-        var parsed = await new ScriptedParser().ParseAsync("  send  fifty thousand to my\tbrother Hammoudi ", NothingPending, Token);
+        // The sentence with a leading and a trailing space, doubled spaces and a tab between its words.
+        var words = HammoudiPlaceholder.Split(' ');
+        var spaced = "  " + string.Join("  ", words[..^1]) + "\t" + words[^1] + " ";
+
+        var parsed = await new ScriptedParser().ParseAsync(spaced, NothingPending, Token);
 
         Assert.Equal(RequestIntent.Transfer, parsed.Intent);
     }
 
     [Fact]
     public async Task TheBalanceSentenceIsTheBalanceQuestion()
-        => Assert.Equal(ParsedRequest.Balance(), await new ScriptedParser().ParseAsync("balance", NothingPending, Token));
+        => Assert.Equal(ParsedRequest.Balance(), await new ScriptedParser().ParseAsync(BalancePlaceholder, NothingPending, Token));
 
     [Theory]
     [InlineData("yes")]
