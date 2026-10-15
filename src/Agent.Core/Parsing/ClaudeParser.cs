@@ -264,9 +264,21 @@ public sealed partial class ClaudeParser : IParser, IParserUsage
                     schema["type"] = "array";
                 else if (context.PropertyInfo?.Name is { } name && EnumOf(name) is { } values)
                 {
-                    schema["enum"] = new JsonArray([.. values.Select(v => (JsonNode?)v)]);
-                    if (!values.Contains(null))
+                    var set = new JsonArray([.. values.Where(v => v is not null).Select(v => (JsonNode?)v)]);
+                    if (values.Contains(null))
+                    {
+                        // The structured-output validator rejects an enum under a type list (["string", "null"]) with
+                        // HTTP 400 "Enum value ... does not match declared type". A nullable set is two alternatives.
+                        schema.Remove("type");
+                        schema["anyOf"] = new JsonArray(
+                            new JsonObject { ["type"] = "string", ["enum"] = set },
+                            new JsonObject { ["type"] = "null" });
+                    }
+                    else
+                    {
                         schema["type"] = "string";
+                        schema["enum"] = set;
+                    }
                 }
 
                 return schema;

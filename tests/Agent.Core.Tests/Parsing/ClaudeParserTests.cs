@@ -128,12 +128,55 @@ public class ClaudeParserTests
         Assert.Equal(fields.ToHashSet(), required);
 
         var properties = item.GetProperty("properties");
-        string?[] Enum(string name) => [.. properties.GetProperty(name).GetProperty("enum").EnumerateArray().Select(e => e.ValueKind == JsonValueKind.Null ? null : e.GetString())];
+        string?[] Enum(string name)
+        {
+            var field = properties.GetProperty(name);
+            if (field.TryGetProperty("enum", out var set))
+            {
+                Assert.Equal("string", field.GetProperty("type").GetString());
+                return [.. set.EnumerateArray().Select(e => e.GetString())];
+            }
+
+            // A nullable set is two alternatives. The structured-output validator rejects an enum under a type list
+            // (["string", "null"]): "Enum value 'electricity' does not match declared type" (HTTP 400, 15 Oct 2026).
+            var alternatives = field.GetProperty("anyOf").EnumerateArray().ToArray();
+            Assert.Equal(2, alternatives.Length);
+            Assert.Equal("string", alternatives[0].GetProperty("type").GetString());
+            Assert.Equal("null", alternatives[1].GetProperty("type").GetString());
+            Assert.False(alternatives[1].TryGetProperty("enum", out _));
+            return [.. alternatives[0].GetProperty("enum").EnumerateArray().Select(e => e.GetString()), null];
+        }
+
         Assert.Equal(["transfer", "bill", "purchase", "balance", "unsupported", "unclear"], Enum("intent"));
         Assert.Equal(["none", "dinars", "thousand", "million"], Enum("amount_unit"));
         Assert.Equal(["electricity", "water", "internet", "school_fees", null], Enum("biller_code"));
         Assert.Equal(["credit", "internet", null], Enum("product_type"));
         Assert.Equal([.. ParsedRequestValidator.UnsupportedReasons, null], Enum("unsupported_reason"));
+    }
+
+    [Fact]
+    public void NoEnumOfTheSchemaSitsUnderATypeList()
+    {
+        // The structured-output validator rejects an enum whose node declares a type list; a nullable set is an anyOf
+        // of a string enum and a null node. A plain nullable field (no enum) may keep its type list.
+        static void Check(JsonElement node, string path)
+        {
+            if (node.ValueKind == JsonValueKind.Object)
+            {
+                if (node.TryGetProperty("enum", out _))
+                    Assert.True(node.GetProperty("type").ValueKind == JsonValueKind.String, path + ": enum under a type list");
+                foreach (var property in node.EnumerateObject())
+                    Check(property.Value, path + "." + property.Name);
+            }
+            else if (node.ValueKind == JsonValueKind.Array)
+            {
+                var i = 0;
+                foreach (var element in node.EnumerateArray())
+                    Check(element, path + "[" + i++ + "]");
+            }
+        }
+
+        Check(ClaudeParser.Schema, "schema");
     }
 
     [Fact]
