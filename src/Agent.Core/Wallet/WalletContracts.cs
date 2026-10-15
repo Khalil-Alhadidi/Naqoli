@@ -125,3 +125,7 @@ public sealed record WalletTransaction(
     string? Code,
     DateTimeOffset CompletedAt,
     string? ErrorCode);
+
+/// <summary>The wallet's own limits (<c>GET /settings</c>): the fee of each type, the PIN threshold and the attempts allowed.</summary>
+public sealed record WalletSettings(
+    long TransferFeeIqd, long BillFeeIqd, long PurchaseFeeIqd, long PinRequiredAboveIqd, int MaxPinAttempts);

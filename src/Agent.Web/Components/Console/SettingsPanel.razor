@@ -1,5 +1,7 @@
 @using System.Globalization
 @using Agent.Core.Parsing
+@using Agent.Core.Wallet
+@inject IServiceScopeFactory Scopes
 @inject IOptionsMonitor<AgentOptions> Options
 @inject IOptions<ModelOptions> Model
 @inject RuntimeSettings Runtime
@@ -44,6 +46,27 @@
         </tbody>
     </MudSimpleTable>
 
+    <MudText Typo="Typo.subtitle1" Class="mt-4">Wallet (read only)</MudText>
+    <MudSimpleTable Dense="true">
+        <tbody>
+            @switch (wallet)
+            {
+                case null:
+                    <tr><td colspan="2">Reading the wallet's limits…</td></tr>
+                    break;
+                case WalletResult<WalletSettings>.Ok { Value: var limits }:
+                    @foreach (var (name, value) in WalletRows(limits))
+                    {
+                        <tr data-testid="setting-row" data-name="@name"><td>@name</td><td>@value</td></tr>
+                    }
+                    break;
+                default:
+                    <tr data-testid="setting-error" data-name="Wallet"><td colspan="2">@WalletUnavailable(wallet)</td></tr>
+                    break;
+            }
+        </tbody>
+    </MudSimpleTable>
+
     <MudText Typo="Typo.subtitle1" Class="mt-4">Model (read only)</MudText>
     <MudSimpleTable Dense="true">
         <tbody>
@@ -72,6 +95,30 @@
     ];
 
     private readonly Dictionary<string, string> drafts = new(StringComparer.Ordinal);
+    private WalletResult<WalletSettings>? wallet;
+
+    /// <summary>The wallet's own limits, read once through a fresh scope's client when the panel opens.</summary>
+    protected override async Task OnInitializedAsync()
+    {
+        await using var scope = Scopes.CreateAsyncScope();
+        wallet = await scope.ServiceProvider.GetRequiredService<WalletClient>().GetSettingsAsync();
+    }
+
+    private static IEnumerable<(string Name, string Value)> WalletRows(WalletSettings s)
+    {
+        yield return ("Wallet:" + nameof(WalletSettings.PinRequiredAboveIqd), Number(s.PinRequiredAboveIqd));
+        yield return ("Wallet:" + nameof(WalletSettings.MaxPinAttempts), Number(s.MaxPinAttempts));
+        yield return ("Wallet:" + nameof(WalletSettings.TransferFeeIqd), Number(s.TransferFeeIqd));
+        yield return ("Wallet:" + nameof(WalletSettings.BillFeeIqd), Number(s.BillFeeIqd));
+        yield return ("Wallet:" + nameof(WalletSettings.PurchaseFeeIqd), Number(s.PurchaseFeeIqd));
+    }
+
+    private static string WalletUnavailable(WalletResult<WalletSettings> result) => result switch
+    {
+        WalletResult<WalletSettings>.Unavailable unavailable => "wallet unavailable: " + unavailable.Reason,
+        WalletResult<WalletSettings>.Refused refused => "wallet unavailable: " + refused.Problem.Code,
+        _ => "wallet unavailable",
+    };
     private readonly Dictionary<string, string> errors = new(StringComparer.Ordinal);
 
     private static string Key(string name) => AgentOptions.SectionName + ":" + name;

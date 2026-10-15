@@ -44,6 +44,16 @@ public class ClientKeyTests(WalletApiFixture fixture)
     }
 
     [Fact]
+    public async Task TheSettingsRouteNeedsTheClientKey()
+    {
+        Assert.SkipUnless(fixture.DatabaseAvailable, fixture.SkipReason);
+
+        using var bare = BareClient();
+
+        await AssertClientKeyRequiredAsync(await bare.GetAsync("/settings", Token));
+    }
+
+    [Fact]
     public async Task HeaderWithAnyValueOpensInDevelopment()
     {
         Assert.SkipUnless(fixture.DatabaseAvailable, fixture.SkipReason);

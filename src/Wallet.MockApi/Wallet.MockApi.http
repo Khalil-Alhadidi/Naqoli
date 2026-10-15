@@ -51,6 +51,10 @@ X-Wallet-Client-Key: {{clientKey}}
 GET {{Wallet.MockApi_HostAddress}}/store/products?provider=Zain&type=credit
 X-Wallet-Client-Key: {{clientKey}}
 
+### The wallet's fees and PIN limits (read only)
+GET {{Wallet.MockApi_HostAddress}}/settings
+X-Wallet-Client-Key: {{clientKey}}
+
 ### Orders of user 1
 GET {{Wallet.MockApi_HostAddress}}/users/1/orders
 X-Wallet-Client-Key: {{clientKey}}

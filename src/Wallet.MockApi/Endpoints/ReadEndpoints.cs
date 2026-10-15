@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using Wallet.MockApi.Contracts;
 using Wallet.MockApi.Data;
 using Wallet.MockApi.Data.Entities;
@@ -9,7 +10,7 @@ namespace Wallet.MockApi.Endpoints;
 
 /// <summary>
 /// The read endpoints of the mock wallet: users, accounts by phone, contacts and aliases, bills, balance, history,
-/// the store catalogue and orders (architecture, section 7). None of them changes data, except the consent route,
+/// the store catalogue and orders (architecture, section 7), and the wallet's own limits (<c>/settings</c>). None of them changes data, except the consent route,
 /// which belongs to the user resource and only sets the user's consent flag.
 /// </summary>
 public static class ReadEndpoints
@@ -60,7 +61,18 @@ public static class ReadEndpoints
             .WithName("GetOrders")
             .ProducesProblem(StatusCodes.Status404NotFound);
 
+        app.MapGet("/settings", GetSettings)
+            .WithName("GetSettings");
+
         return app;
+    }
+
+    /// <summary>The wallet's configured fees and PIN limits; no database read.</summary>
+    private static Ok<SettingsResponse> GetSettings(IOptions<WalletOptions> options)
+    {
+        var o = options.Value;
+        return TypedResults.Ok(new SettingsResponse(
+            o.TransferFeeIqd, o.BillFeeIqd, o.PurchaseFeeIqd, o.PinRequiredAboveIqd, o.MaxPinAttempts));
     }
 
     private static async Task<Results<Ok<UserSummary>, ProblemHttpResult>> GetUserAsync(

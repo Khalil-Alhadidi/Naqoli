@@ -84,6 +84,10 @@ public sealed partial class WalletClient
             FormattableString.Invariant($"users/{userId}/history?") + string.Join('&', query), cancellationToken);
     }
 
+    /// <summary>The wallet's own fees and PIN limits, as configured in the wallet.</summary>
+    public Task<WalletResult<WalletSettings>> GetSettingsAsync(CancellationToken cancellationToken = default)
+        => GetAsync<WalletSettings>("settings", "settings", cancellationToken);
+
     /// <summary>The store catalogue, filtered by whichever of provider code, type and face value are given.</summary>
     public Task<WalletResult<IReadOnlyList<WalletProduct>>> GetProductsAsync(
         string? provider, string? type, long? value, CancellationToken cancellationToken = default)

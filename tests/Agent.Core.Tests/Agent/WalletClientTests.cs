@@ -222,6 +222,37 @@ public class WalletClientTests(AgentHost host)
     }
 
     [Fact]
+    public async Task TheWalletSettingsAreMappedAndUnavailableOnAConnectionFailure()
+    {
+        var stub = new ScriptedStub
+        {
+            Next = (request, _) =>
+            {
+                Assert.Equal(new Uri("http://wallet/settings"), request.RequestUri);
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = JsonContent.Create(new
+                    {
+                        transferFeeIqd = 1_000,
+                        billFeeIqd = 500,
+                        purchaseFeeIqd = 0,
+                        pinRequiredAboveIqd = 1_000_000,
+                        maxPinAttempts = 3,
+                    }),
+                });
+            },
+        };
+        var client = StubClient(stub);
+
+        var settings = Assert.IsType<WalletResult<WalletSettings>.Ok>(await client.GetSettingsAsync(Token)).Value;
+        Assert.Equal(new WalletSettings(1_000, 500, 0, 1_000_000, 3), settings);
+
+        stub.Next = (_, _) => throw new HttpRequestException("refused");
+        var connection = Assert.IsType<WalletResult<WalletSettings>.Unavailable>(await client.GetSettingsAsync(Token));
+        Assert.Equal("connection", connection.Reason);
+    }
+
+    [Fact]
     public async Task ExecuteConflictIsUnknownInProgress()
     {
         var stub = new ScriptedStub

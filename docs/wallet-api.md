@@ -40,6 +40,7 @@ The API serves plain HTTP on loopback and does not redirect to HTTPS. `GET /heal
 | `GET /users/{id}/history?to=&since=&take=` | Transactions the user paid, newest first | 200 `HistoryItem[]` | 404 `unknown_user` |
 | `GET /store/products?provider=&type=&value=` | Store catalogue (D11) | 200 `ProductItem[]` | none |
 | `GET /users/{id}/orders` | Past purchases and their purchase codes, newest first | 200 `OrderItem[]` | 404 `unknown_user` |
+| `GET /settings` | The wallet's own fees and PIN limits, as configured (read only; milestone 7) | 200 `SettingsResponse` | none |
 | `POST /quotes` | Fee, total and balance after. No money moves | 200 `QuoteResponse` | 422 |
 | `POST /transactions` | Execute a transfer, bill payment or purchase. Needs `Idempotency-Key` | 201 `TransactionResponse` (new), 200 (replay) | 400, 422, 423, 500, 504 (409 reserved) |
 | `GET /transactions/by-key/{key}?userId=` | Outcome of the user's key, for display after a timeout | 200 `TransactionResponse` | 400 `missing_user_id`, 404 `unknown_key` |
@@ -176,6 +177,20 @@ History, products, quotes and transactions all use the same lower-case names.
 `name` was removed in milestone 2b; the test set has no product name, only the fields above.
 
 `GET /users/{id}/orders` returns `OrderItem[]`, newest first (`createdAt`, then id): `orderId`, `transactionId`, `productId`, `productCode` (the product's test-set id, which replaced `productName` in milestone 2b), `code` (the purchase code), `createdAt`. Purchase codes are for code and the card only, never for the model (rule 5). Seeded orders have codes `9` followed by 12 digits (see [data/seed/README.md](../data/seed/README.md#codes)).
+
+`GET /settings` returns `SettingsResponse`, the values of the `Wallet` section (see Configuration) as the wallet runs with them. It reads no database and has no fault; it needs the client key, not the admin key. The agent's settings component shows them read only (section "Wallet (read only)"); the agent never changes them.
+
+`SettingsResponse`:
+
+| Field | Type | Notes |
+|---|---|---|
+| `transferFeeIqd` | long | `Wallet:TransferFeeIqd` (1,000 by default) |
+| `billFeeIqd` | long | `Wallet:BillFeeIqd` (500) |
+| `purchaseFeeIqd` | long | `Wallet:PurchaseFeeIqd` (0) |
+| `pinRequiredAboveIqd` | long | `Wallet:PinRequiredAboveIqd` (1,000,000): a total above it needs the PIN (D8) |
+| `maxPinAttempts` | int | `Wallet:MaxPinAttempts` (3) |
+
+Tests: `ReadEndpointsTests.SettingsReturnTheConfiguredLimits`; the agent's client: `WalletClientTests.TheWalletSettingsAreMappedAndUnavailableOnAConnectionFailure`.
 
 ### Payment request
 
@@ -557,7 +572,9 @@ dotnet user-secrets set "Wallet:ClientKey" "<choose-a-key-of-16-or-more-characte
 $env:Wallet__ClientKey = '<choose-a-key-of-16-or-more-characters>'
 ```
 
-Tests: `ClientKeyTests.NoHeaderIs403OnEveryRouteExceptHealth`, `HeaderWithAnyValueOpensInDevelopment`, `ConfiguredKeyMustMatch`, `ProductionWithoutKeyIsClosed`.
+`GET /settings` is a read like the others: it needs the client key and nothing more.
+
+Tests: `ClientKeyTests.NoHeaderIs403OnEveryRouteExceptHealth`, `TheSettingsRouteNeedsTheClientKey`, `HeaderWithAnyValueOpensInDevelopment`, `ConfiguredKeyMustMatch`, `ProductionWithoutKeyIsClosed`.
 
 ## Admin key
 

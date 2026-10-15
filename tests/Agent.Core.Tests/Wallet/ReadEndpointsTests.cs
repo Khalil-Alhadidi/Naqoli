@@ -3,6 +3,8 @@ using System.Net.Http.Json;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
+using Wallet.MockApi;
 using Wallet.MockApi.Contracts;
 using Wallet.MockApi.Data;
 
@@ -414,6 +416,27 @@ public sealed class ReadEndpointsTests(WalletApiFixture fixture) : IAsyncLifetim
         Assert.Equal(["9000000000078", "9000000000081", "9000000000080", "9000000000079"], orders.Select(o => o.Code));
         Assert.Equal([5, 7, 5, 2], orders.Select(o => o.ProductId));
         Assert.Equal(SeedData.At(Today(), 12, "08:46"), orders[0].CreatedAt);
+    }
+
+    [Fact]
+    public async Task SettingsReturnTheConfiguredLimits()
+    {
+        Assert.SkipUnless(fixture.DatabaseAvailable, fixture.SkipReason);
+
+        WalletOptions configured;
+        await using (var scope = fixture.CreateScope())
+            configured = scope.ServiceProvider.GetRequiredService<IOptions<WalletOptions>>().Value;
+
+        var settings = await fixture.Client.GetFromJsonAsync<SettingsResponse>("/settings", Token);
+
+        Assert.Equal(
+            new SettingsResponse(
+                configured.TransferFeeIqd, configured.BillFeeIqd, configured.PurchaseFeeIqd,
+                configured.PinRequiredAboveIqd, configured.MaxPinAttempts),
+            settings);
+
+        // The limits the matching rules name (fees, the PIN above 1,000,000, three attempts).
+        Assert.Equal(new SettingsResponse(1_000, 500, 0, 1_000_000, 3), settings);
     }
 
     // Seeded dates follow the Iraq date of the clock the API uses.
