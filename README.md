@@ -156,7 +156,7 @@ Outside Development the agent needs both `Agent:WalletBaseUrl` and `Agent:Wallet
 
 Every `/admin` request also carries the `X-Wallet-Admin-Key` header. In Development with no `Wallet:AdminKey` set, any non-empty value is accepted (the header makes a browser preflight, so a web page cannot reset the wallet). Outside Development, set a key of at least 16 characters in user secrets or the `Wallet__AdminKey` environment variable and send it in that header; never commit it.
 
-Status: milestone 6 of 12 (model in) built: masking, the structure validator, the learning log and the Claude parser through Microsoft.Extensions.AI, see [docs/agent-model.md](docs/agent-model.md) and [docs/build-plan.md](docs/build-plan.md). Baseline runs: pending; they run on 15 Oct 2026 once the Anthropic key is in user secrets (Task 3 of the plan); this line is filled from the committed reports.
+Status: milestone 6 of 12 (model in) done and tagged `milestone-6`: masking, the structure validator, the learning log and the Claude parser through Microsoft.Extensions.AI, see [docs/agent-model.md](docs/agent-model.md) and [docs/build-plan.md](docs/build-plan.md). Baselines on the development set (15 Oct 2026, prompt version 1, Khalil's Arabic in): Haiku 43/72, Sonnet 46/72, Opus 46/72, with 0 executions without a tap and 0 masking failures on every run; the reports are in `docs/reports/`.
 
 ## Disclosure
 

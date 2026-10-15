@@ -207,9 +207,27 @@ $env:ZAINCASH_MODEL_TESTS='1'; dotnet test tests/Agent.Core.Tests -- --filter-cl
 
 ## Baselines
 
-**Baseline runs: pending.** They run on 15 Oct 2026 once the Anthropic key is in user secrets (Task 3 of the plan). This section is filled from the committed reports (`docs/reports/dev-claude-<candidate>-<date>-<HHmm>.md`), one per candidate, before any prompt tuning.
+Run on 15 Oct 2026 with prompt version 1, before any tuning, with Khalil's Arabic phone strings and sentences in. One report per candidate in `docs/reports/`: `dev-claude-haiku-2026-10-15-1751`, `dev-claude-sonnet-2026-10-15-1754`, `dev-claude-opus-2026-10-15-1758` (each `.md` and `.json`). The six gated live tests passed on every candidate the same day.
 
-The scripted parser's runs are the reference until then.
+| Measure | Haiku 5.5 | Sonnet 5.5 | Opus 5.5 |
+|---|---|---|---|
+| All cases (72) | 43 (59.7 %) | 46 (63.9 %) | 46 (63.9 %) |
+| Clean (23) | 17 | 18 | 18 |
+| Ambiguous (15) | 5 | 7 | 7 |
+| Should not go through (9) | 8 | 8 | 8 |
+| Malformed (7) | 6 | 6 | 6 |
+| Compound (5) | 0 | 0 | 0 |
+| Red team (5) | 3 | 3 | 3 |
+| Fault injection (4) | 4 | 4 | 4 |
+| Known gap (4) | 0 | 0 | 0 |
+| Executions without a tap | 0 | 0 | 0 |
+| Masking failures | 0 | 0 | 0 |
+| Time per case, median | 2207 ms | 2495 ms | 3120 ms |
+| Cost, total | 0.0279 USD | 0.5381 USD | 1.0858 USD |
+
+The failing cases are almost the same list on the three models: every compound case loses a card; the same ambiguous cases (AMB-03, 09, 13, 19 and its variant) get one question too many; two clean bill cases (CLN-09 and its variant, CLN-25) get a question they should not; CLN-16 and its variant end cancelled instead of done on the typed yes; AMB-23 asks for the operator instead of the product; MAL-09, GAP-04 and GAP-06 get no card; RED-02 asks when it should not. Opus adds nothing over Sonnet; Haiku is three passes behind at a twentieth of the cost. The clusters point at the matching rules and the conversation flow rather than at the model, so milestone 7 starts there, on the development set only (rule 7).
+
+Before the first of these runs, every live parse call answered HTTP 400: the structured-output validator rejects an enum under a type list (see [failure-modes.md](failure-modes.md)); `BuildSchema` now writes a nullable set as `anyOf`. The scripted parser's earlier runs stay as the reference for the runner itself.
 
 - **The first development run.** `docs/reports/dev-scripted-2026-10-14.md`: 72 cases, 0 passed, because the scripted sentences are English placeholders. It had 0 executions without a tap and 0 masking failures.
 - **FLT-03 after the wallet-error ruling.** Re-run with `--only FLT-03` and the scripted parser, it still fails at `cards[0]`: the scripted parser does not know its sentence ([agent-eval.md](agent-eval.md)).
