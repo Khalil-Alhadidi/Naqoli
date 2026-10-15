@@ -499,3 +499,6 @@ appsettings.*.local.json
 appsettings.local.json
 secrets.json
 *.secrets.json
+
+# Spreadsheets under docs are working files (the Arabic workbook, the test-set workbook of rule 7); their content lives in the resx and in data/
+docs/*.xlsx
