@@ -41,16 +41,24 @@ public sealed class ConfirmHandler
     private readonly WalletClient wallet;
     private readonly PendingStore store;
     private readonly Checks checks;
+    private readonly KillSwitch killSwitch;
     private readonly AgentOptions options;
     private readonly TimeProvider clock;
     private readonly ITraceSink trace;
 
     public ConfirmHandler(
-        WalletClient wallet, PendingStore store, Checks checks, IOptionsSnapshot<AgentOptions> options, TimeProvider clock, ITraceSink trace)
+        WalletClient wallet,
+        PendingStore store,
+        Checks checks,
+        KillSwitch killSwitch,
+        IOptionsSnapshot<AgentOptions> options,
+        TimeProvider clock,
+        ITraceSink trace)
     {
         ArgumentNullException.ThrowIfNull(wallet);
         ArgumentNullException.ThrowIfNull(store);
         ArgumentNullException.ThrowIfNull(checks);
+        ArgumentNullException.ThrowIfNull(killSwitch);
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(clock);
         ArgumentNullException.ThrowIfNull(trace);
@@ -58,6 +66,7 @@ public sealed class ConfirmHandler
         this.wallet = wallet;
         this.store = store;
         this.checks = checks;
+        this.killSwitch = killSwitch;
         this.options = options.Value;
         this.clock = clock;
         this.trace = trace;
@@ -92,6 +101,19 @@ public sealed class ConfirmHandler
         var sent = false;
         try
         {
+            // The kill switch: the record has left Pending, nothing has been sent, and nothing will be. It ends NotDone
+            // the way a failed recheck ends it.
+            if (killSwitch.IsOn)
+            {
+                trace.Record(TraceZone.Write, TraceSteps.RecheckFailedPrefix + ReasonCodes.KillSwitchDetail, null);
+                return Traced(
+                    TraceSteps.OutcomePrefix,
+                    await CompleteNotDoneAsync(
+                        record,
+                        ReasonCodes.KillSwitchDetail,
+                        new ConfirmOutcome.NotDone(ReasonCodes.NotDoneNothingTaken, ReasonCodes.KillSwitchDetail)));
+            }
+
             // Section 4: recheck the balance (and the daily cap), then execute. Nothing has been sent yet.
             RecheckStop? stop;
             try
@@ -219,6 +241,13 @@ public sealed class ConfirmHandler
             return Traced(TraceSteps.SettleOutcomePrefix, new ConfirmOutcome.NotFound());
         if (record.State != PendingState.Checking)
             return Traced(TraceSteps.SettleOutcomePrefix, new ConfirmOutcome.AlreadyHandled(record.State));
+
+        // The kill switch: no resend. The record stays Checking until the switch is off and the user checks again.
+        if (killSwitch.IsOn)
+        {
+            trace.Record(TraceZone.Write, TraceSteps.KillSwitch, "on");
+            return Traced(TraceSteps.SettleOutcomePrefix, new ConfirmOutcome.Checking());
+        }
 
         trace.Record(TraceZone.Write, TraceSteps.SettleSent, null);
         var executed = await wallet.ExecuteAsync(record.IdempotencyKey, RequestFrom(record, pin: null), cancellationToken);

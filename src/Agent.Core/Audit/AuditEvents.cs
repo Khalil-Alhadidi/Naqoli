@@ -15,4 +15,7 @@ public static class AuditEvents
     public const string QuestionAsked = "question_asked";
     public const string Refused = "refused";
     public const string ConsentShown = "consent_shown";
+
+    /// <summary>The kill switch was flipped in the console; the reason is <c>on</c> or <c>off</c>.</summary>
+    public const string KillSwitch = "kill_switch";
 }

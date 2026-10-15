@@ -125,6 +125,50 @@ public class OrchestratorTests(AgentHost host)
     }
 
     [Fact]
+    public async Task TheKillSwitchRefusesARequestThatWouldGetACard()
+    {
+        await StartAsync();
+        var killSwitch = host.Services.GetRequiredService<KillSwitch>();
+        killSwitch.Set(true);
+        try
+        {
+            var refusal = Refusal(
+                await HandleAsync(U1, ParsedRequest.Transfer(HammoudiAlias, 50_000, AmountUnit.Dinars)), ReasonCodes.NotDoneNothingTaken);
+            Assert.Equal(ReasonCodes.KillSwitchDetail, refusal.Detail);
+
+            // A bill and a purchase are stopped the same way, before any question.
+            Assert.Equal(
+                ReasonCodes.KillSwitchDetail,
+                Refusal(await HandleAsync(U1, ParsedRequest.Bill("electricity", null, null, AmountUnit.None)), ReasonCodes.NotDoneNothingTaken).Detail);
+            Assert.Equal(
+                ReasonCodes.KillSwitchDetail,
+                Refusal(await HandleAsync(U1, ParsedRequest.Purchase(null, null, null)), ReasonCodes.NotDoneNothingTaken).Detail);
+
+            await using (var scope = host.Services.CreateAsyncScope())
+            {
+                var db = scope.ServiceProvider.GetRequiredService<AgentDbContext>();
+                Assert.Equal(0, await db.PendingTransactions.CountAsync(Token));
+            }
+
+            var audit = await AuditAsync();
+            Assert.Equal(3, audit.Count);
+            Assert.All(audit, row =>
+            {
+                Assert.Equal(AuditEvents.Refused, row.Event);
+                Assert.Equal(ReasonCodes.NotDoneNothingTaken, row.Reason);
+                Assert.Equal(ReasonCodes.KillSwitchDetail, row.Detail);
+            });
+
+            // The balance question still answers: nothing moves.
+            Assert.Equal(new AgentReply.BalanceReply(SeedFacts.DemoBalance), await HandleAsync(U1, ParsedRequest.Balance()));
+        }
+        finally
+        {
+            killSwitch.Set(false);
+        }
+    }
+
+    [Fact]
     public async Task AmbiguousNameAsks()
     {
         await StartAsync();

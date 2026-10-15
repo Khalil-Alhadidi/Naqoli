@@ -22,7 +22,8 @@ public static class AgentCoreServiceCollectionExtensions
     /// Adds <see cref="AgentOptions"/> (section <c>Agent</c>, validated at start), a <see cref="TimeProvider"/>
     /// unless one is registered, the <see cref="AgentDbContext"/> on <c>ConnectionStrings:Agent</c> and the typed
     /// <see cref="WalletClient"/>, the scoped <see cref="Checks"/>, <see cref="AuditLog"/>, <see cref="LearningLog"/>,
-    /// <see cref="PendingStore"/>, <see cref="CardBuilder"/>, <see cref="Orchestrator"/> and <see cref="ConfirmHandler"/>, a scoped
+    /// <see cref="PendingStore"/>, <see cref="CardBuilder"/>, <see cref="Orchestrator"/> and <see cref="ConfirmHandler"/>, the
+    /// singleton <see cref="KillSwitch"/> (off at start), a scoped
     /// <see cref="NullTraceSink"/> as <see cref="ITraceSink"/> unless one is registered, and the hosted
     /// <see cref="PendingSweeper"/> when <c>Agent:SweepIntervalSeconds</c> is above 0. No <c>IParser</c> is registered:
     /// the host picks one. Nothing connects until it is used, so the app starts without the wallet or the database.
@@ -46,6 +47,7 @@ public static class AgentCoreServiceCollectionExtensions
             .ValidateOnStart();
 
         services.TryAddSingleton(TimeProvider.System);
+        services.TryAddSingleton<KillSwitch>();
 
         services.AddDbContext<AgentDbContext>(o =>
         {

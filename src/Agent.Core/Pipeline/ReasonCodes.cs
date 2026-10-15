@@ -45,6 +45,9 @@ public static class ReasonCodes
     /// <summary>The detail of a <see cref="NotSupported"/> refusal for a transfer to the user's own number.</summary>
     public const string OwnNumberDetail = "own_number";
 
+    /// <summary>The detail of <see cref="NotDoneNothingTaken"/> while the kill switch is on (<see cref="KillSwitch"/>).</summary>
+    public const string KillSwitchDetail = "kill_switch";
+
     /// <summary>The prefix of the detail of <see cref="NotDoneNothingTaken"/> when a wallet read or quote gave no answer.</summary>
     public const string WalletDetailPrefix = "wallet_";
 }

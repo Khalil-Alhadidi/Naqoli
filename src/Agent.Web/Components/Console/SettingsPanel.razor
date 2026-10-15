@@ -5,6 +5,8 @@
 @inject IOptionsMonitor<AgentOptions> Options
 @inject IOptions<ModelOptions> Model
 @inject RuntimeSettings Runtime
+@inject KillSwitch Kill
+@using Agent.Core.Audit
 
 @* D8: the agent's limits are edited here and apply to the next action, without a restart. A saved value lives in memory
    only (RuntimeSettings); the other rows are read only. No key (wallet or Anthropic) is ever shown. *@
@@ -13,6 +15,10 @@
     <MudText Typo="Typo.body2" Class="mb-2">A saved value applies to the next action and is forgotten when the console restarts.</MudText>
 
     <MudText Typo="Typo.subtitle1" Class="mt-2">Agent</MudText>
+    @* Khalil, 15 Oct 2026: while on, no card is issued, Confirm and check-again are refused; off at every start. *@
+    <MudSwitch T="bool" Value="@Kill.IsOn" ValueChanged="SetKillSwitchAsync" Color="Color.Error"
+               Label="Kill switch (nothing moves while on)"
+               data-testid="kill-switch" data-on="@(Kill.IsOn ? "true" : "false")" />
     <MudSimpleTable Dense="true">
         <tbody>
             @{ var current = Options.CurrentValue; }
@@ -144,6 +150,15 @@
         {
             errors[name] = error;
         }
+    }
+
+    /// <summary>Flips the kill switch and writes one audit row for the flip, in a scope of its own.</summary>
+    private async Task SetKillSwitchAsync(bool on)
+    {
+        Kill.Set(on);
+        await using var scope = Scopes.CreateAsyncScope();
+        await scope.ServiceProvider.GetRequiredService<AuditLog>().WriteAsync(
+            Options.CurrentValue.DemoUserId, null, AuditEvents.KillSwitch, null, null, on ? "on" : "off", null, null, CancellationToken.None);
     }
 
     private void Reset(string name)

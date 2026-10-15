@@ -176,6 +176,80 @@ public class ConfirmHandlerTests(AgentHost host)
                 : base.SendAsync(request, cancellationToken);
     }
 
+    /// <summary>A settle through a handler that reaches the wallet through <paramref name="client"/>.</summary>
+    private async Task<ConfirmOutcome> SettleThroughAsync(WalletClient client, PendingRecord card)
+    {
+        await using var scope = host.Services.CreateAsyncScope();
+        var checks = ActivatorUtilities.CreateInstance<Checks>(scope.ServiceProvider, client);
+        var handler = ActivatorUtilities.CreateInstance<ConfirmHandler>(scope.ServiceProvider, client, checks);
+        return await handler.SettleCheckingAsync(card.UserId, card.Id, Token);
+    }
+
+    [Fact]
+    public async Task TheKillSwitchEndsALiveCardNotDoneWithoutAnExecute()
+    {
+        await StartAsync();
+        var card = await CardAsync(U1, FiftyThousandToHammoudi);
+        var executes = 0;
+        var client = StubbedExecuteClient(() =>
+        {
+            Interlocked.Increment(ref executes);
+            return new HttpResponseMessage(HttpStatusCode.InternalServerError);
+        });
+        var killSwitch = host.Services.GetRequiredService<KillSwitch>();
+        killSwitch.Set(true);
+        try
+        {
+            var outcome = await ConfirmThroughAsync(client, card);
+
+            Assert.Equal(new ConfirmOutcome.NotDone(ReasonCodes.NotDoneNothingTaken, ReasonCodes.KillSwitchDetail), outcome);
+            Assert.Equal(0, executes);
+            Assert.Equal(0, await WalletRowsAsync(card.IdempotencyKey));
+            var record = await RecordAsync(card.Id);
+            Assert.Equal(PendingState.NotDone, record.State);
+            Assert.Equal(ReasonCodes.KillSwitchDetail, record.ResultCode);
+            Assert.Equal(SeedFacts.DemoBalance, await host.Wallet.AccountBalanceAsync(SeedFacts.DemoPhone));
+
+            // The record left Pending once: a second tap is already handled.
+            Assert.Equal(new ConfirmOutcome.AlreadyHandled(PendingState.NotDone), await ConfirmAsync(card.UserId, card.Id));
+        }
+        finally
+        {
+            killSwitch.Set(false);
+        }
+    }
+
+    [Fact]
+    public async Task TheKillSwitchLeavesACheckingRecordCheckingWithoutAResend()
+    {
+        await StartAsync();
+        var card = await CardAsync(U1, FiftyThousandToHammoudi);
+        Assert.Equal(new ConfirmOutcome.Checking(), await ConfirmIntoCheckingAsync(card));
+
+        var resends = 0;
+        var client = StubbedExecuteClient(() =>
+        {
+            Interlocked.Increment(ref resends);
+            return new HttpResponseMessage(HttpStatusCode.InternalServerError);
+        });
+        var killSwitch = host.Services.GetRequiredService<KillSwitch>();
+        killSwitch.Set(true);
+        try
+        {
+            Assert.Equal(new ConfirmOutcome.Checking(), await SettleThroughAsync(client, card));
+
+            Assert.Equal(0, resends);
+            Assert.Equal(PendingState.Checking, (await RecordAsync(card.Id)).State);
+        }
+        finally
+        {
+            killSwitch.Set(false);
+        }
+
+        // Once it is off, the settle resends under the same key as before.
+        Assert.IsType<ConfirmOutcome.Done>(await SettleAsync(card.UserId, card.Id));
+    }
+
     [Fact]
     public async Task ConfirmMovesMoneyOnce()
     {

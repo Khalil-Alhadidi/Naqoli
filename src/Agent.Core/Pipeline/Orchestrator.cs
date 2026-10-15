@@ -47,6 +47,7 @@ public sealed class Orchestrator
     private readonly CardBuilder cards;
     private readonly PendingStore store;
     private readonly AuditLog audit;
+    private readonly KillSwitch killSwitch;
     private readonly AgentOptions options;
     private readonly TimeProvider clock;
     private readonly ITraceSink trace;
@@ -57,6 +58,7 @@ public sealed class Orchestrator
         CardBuilder cards,
         PendingStore store,
         AuditLog audit,
+        KillSwitch killSwitch,
         IOptionsSnapshot<AgentOptions> options,
         TimeProvider clock,
         ITraceSink trace)
@@ -66,6 +68,7 @@ public sealed class Orchestrator
         ArgumentNullException.ThrowIfNull(cards);
         ArgumentNullException.ThrowIfNull(store);
         ArgumentNullException.ThrowIfNull(audit);
+        ArgumentNullException.ThrowIfNull(killSwitch);
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(clock);
         ArgumentNullException.ThrowIfNull(trace);
@@ -75,6 +78,7 @@ public sealed class Orchestrator
         this.cards = cards;
         this.store = store;
         this.audit = audit;
+        this.killSwitch = killSwitch;
         this.options = options.Value;
         this.clock = clock;
         this.trace = trace;
@@ -168,6 +172,14 @@ public sealed class Orchestrator
 
         if (request.CurrencyText is not null)
             return await RefuseAsync(userId, ReasonCodes.DinarsOnly, null, null, cancellationToken);
+
+        // The kill switch: a request that could lead to a card (a transfer, a bill, a purchase, or the known gap that goes
+        // on as a transfer) is refused before any wallet read or question. The balance question has answered above.
+        if (killSwitch.IsOn && request.Intent is RequestIntent.Transfer or RequestIntent.Bill or RequestIntent.Purchase)
+        {
+            trace.Record(TraceZone.Code, TraceSteps.KillSwitch, "on");
+            return await RefuseAsync(userId, ReasonCodes.NotDoneNothingTaken, ReasonCodes.KillSwitchDetail, null, cancellationToken);
+        }
 
         // 3. The consent gate.
         var userRead = await wallet.GetUserAsync(userId, cancellationToken);
