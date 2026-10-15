@@ -36,8 +36,8 @@ public sealed class Conversation : IDisposable
     private readonly TimeProvider clock;
     private readonly ITraceSink trace;
     private readonly int userId;
-    private readonly HashSet<string> yesWords;
-    private readonly HashSet<string> noWords;
+    private readonly string[][] yesEntries;
+    private readonly string[][] noEntries;
     private readonly int maxYesNoWords;
     private readonly SemaphoreSlim gate = new(1, 1);
     private readonly CancellationTokenSource lifetime = new();
@@ -80,8 +80,8 @@ public sealed class Conversation : IDisposable
         this.clock = clock;
         this.trace = trace;
         this.userId = userId;
-        yesWords = WordSet(options.Value.YesWords);
-        noWords = WordSet(options.Value.NoWords);
+        yesEntries = Entries(options.Value.YesWords);
+        noEntries = Entries(options.Value.NoWords);
         maxYesNoWords = options.Value.MaxYesNoWords;
         stopping = lifetime.Token;
     }
@@ -197,11 +197,11 @@ public sealed class Conversation : IDisposable
             Add(new ConversationMessage(ConversationRole.User, ConversationKind.Typed));
 
             var pendingNote = PendingNote();
-            // D6: a yes or a no is a message made only of yes (or no) words, at most MaxYesNoWords of them; a sentence
-            // with any other word in it is a request.
+            // D6: a yes or a no is a message of at most MaxYesNoWords words made only of whole yes (or no) entries; a
+            // sentence with any other word in it is a request.
             var words = WordsOf(typedText);
-            var isYes = IsPhrase(words, yesWords, maxYesNoWords);
-            var isNo = !isYes && IsPhrase(words, noWords, maxYesNoWords);
+            var isYes = IsPhrase(words, yesEntries, maxYesNoWords);
+            var isNo = !isYes && IsPhrase(words, noEntries, maxYesNoWords);
 
             if (IsCardLive)
             {
@@ -876,9 +876,18 @@ public sealed class Conversation : IDisposable
         _ => null,
     };
 
-    /// <summary>The D6 word set of a configured list: every word of every entry, in the form <see cref="WordsOf"/> gives.</summary>
-    private static HashSet<string> WordSet(string[]? entries)
-        => entries is null ? new(StringComparer.Ordinal) : new(entries.SelectMany(WordsOf), StringComparer.Ordinal);
+    /// <summary>
+    /// The D6 entries of a configured list, each as its sequence of words in the form <see cref="WordsOf"/> gives,
+    /// longest first (so the longest entry is tried first at each position), without empty or repeated entries.
+    /// </summary>
+    private static string[][] Entries(string[]? entries)
+        => entries is null
+            ? []
+            : [.. entries
+                .Select(WordsOf)
+                .Where(words => words.Length > 0)
+                .DistinctBy(words => string.Join(' ', words), StringComparer.Ordinal)
+                .OrderByDescending(words => words.Length)];
 
     /// <summary>
     /// The words in which a typed message and a D6 entry are compared: <see cref="ArabicText.Normalize"/> (alef and digit
@@ -900,11 +909,28 @@ public sealed class Conversation : IDisposable
     }
 
     /// <summary>
-    /// D6: true when the message has one to <paramref name="maxWords"/> words and every one is in
-    /// <paramref name="set"/>. Whole words only: a word that merely contains a yes word is not one.
+    /// D6 (Khalil, 15 Oct 2026): true when the message has one to <paramref name="maxWords"/> words and its words can be
+    /// cut, left to right, into whole entries of <paramref name="entries"/>: at each position the longest entry that
+    /// fits is taken, and a position where none fits means no. A multi-word entry matches only as the whole phrase,
+    /// never one of its words alone, and a word that merely contains an entry is not one.
     /// </summary>
-    private static bool IsPhrase(string[] words, HashSet<string> set, int maxWords)
-        => words.Length >= 1 && words.Length <= maxWords && Array.TrueForAll(words, set.Contains);
+    private static bool IsPhrase(string[] words, string[][] entries, int maxWords)
+    {
+        if (words.Length < 1 || words.Length > maxWords)
+            return false;
+
+        var position = 0;
+        while (position < words.Length)
+        {
+            var at = position;
+            var entry = Array.Find(entries, e => e.Length <= words.Length - at && e.AsSpan().SequenceEqual(words.AsSpan(at, e.Length)));
+            if (entry is null)
+                return false;
+            position += entry.Length;
+        }
+
+        return true;
+    }
 
     private void AddRefusal(string code, long? amountIqd = null)
         => Add(new ConversationMessage(ConversationRole.Agent, ConversationKind.Refusal, code, amountIqd));

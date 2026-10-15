@@ -489,16 +489,17 @@ Any other exception in an action is traced as `error` (the exception type) and a
 
 ### D6, the typed yes and no
 
-`AgentOptions.YesWords` and `NoWords` hold the words, and `Agent.Core` has none of its own (rule 4). The rule is Khalil's (15 Oct 2026): a message is a yes when every word of it is a yes word and it has at most `MaxYesNoWords` (4) words; the same for a no. Never a substring match.
+`AgentOptions.YesWords` and `NoWords` hold the words, and `Agent.Core` has none of its own (rule 4). The rule is Khalil's (15 Oct 2026): a message is a yes when it has at most `MaxYesNoWords` (4) words and is made only of whole yes entries; the same for a no. Never a substring match.
 
-- **The word sets.** Every whitespace-separated word of every configured entry, normalised as a message is. So the entry `اي نعم` contributes two words, and the no entry `الغاء العملية` makes `العملية` alone a no (a cancel, the safe direction).
-- **The message.** `ArabicText.Normalize`, then every punctuation or symbol character, anywhere, replaced by a space, Latin letters lower-cased, split on spaces (`Conversation.WordsOf`). The words are compared ordinal with the sets. Yes is checked first.
+- **The entries.** Each configured entry is a phrase: its words, normalised as a message is, in order. A multi-word entry matches only as the whole phrase, so one of its words alone matches nothing (the no entry of two words does not make its second word a no).
+- **The match.** The message's words are cut left to right into entries: at each position the longest entry that fits is taken (`Conversation.IsPhrase`), and a position where none fits means it is not a yes (or no). Two entries in a row count (`cancel` then `the operation`). The limit counts words, not entries.
+- **The message.** `ArabicText.Normalize`, then every punctuation or symbol character, anywhere, replaced by a space, Latin letters lower-cased, split on spaces (`Conversation.WordsOf`). The words are compared ordinal with the entries. Yes is checked first.
 
 When a card is live:
 
 - **A yes** never confirms. The reply is `points_to_confirm`, the card stays open, and nothing reaches the wallet.
 - **A no** cancels the card (`cancelled`).
-- **Any other text** (one word outside the set, or more than `MaxYesNoWords` words) cancels the card the same way and goes on as a new request.
+- **Any other text** (a word that is not part of a whole entry, or more than `MaxYesNoWords` words) cancels the card the same way and goes on as a new request.
 
 ### Answers to a question
 

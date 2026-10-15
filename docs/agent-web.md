@@ -151,7 +151,7 @@ When the handler throws, the session reads the record:
 
 The conversation does D6 ([agent-core.md](agent-core.md), "D6, the typed yes and no"). Its words are `AgentOptions.YesWords` and `NoWords`, which `AddAgentWebServices` post-configures from the resource values `Word_yes` and `Word_no`. When a card is live, `SendAsync` first compares the typed text, after `ArabicText.Normalize`, with those words:
 
-A yes (or a no) is a message made only of words of those lists, at most `MaxYesNoWords` of them, after punctuation is dropped; an entry of two words contributes each word on its own.
+A yes (or a no) is a message of at most `MaxYesNoWords` words, after punctuation is dropped, made only of whole entries of those lists; an entry of two words matches only as the whole phrase.
 
 - **The yes word** never confirms. The reply is `Refusal_points_to_confirm`, the card stays open, and nothing reaches the wallet.
 - **The no word** cancels the card (`PendingStore.CancelAsync`, message `Refusal_card_cancelled`).

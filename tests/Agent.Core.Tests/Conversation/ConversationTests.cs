@@ -224,11 +224,12 @@ public sealed class ConversationTests(AgentHost host) : IAsyncDisposable
     private static readonly Action<AgentOptions> PhraseWords = o =>
     {
         o.YesWords = ["yes", "ok", "go"];
-        o.NoWords = ["no", "stop", "the operation"];
+        o.NoWords = ["no", "stop", "cancel", "the operation"];
     };
 
     [Theory]
     [InlineData("ok go")]
+    [InlineData("yes ok")]
     [InlineData("yes ok go yes")]
     [InlineData("yes, ok!")]
     [InlineData("go... ok?")]
@@ -254,6 +255,7 @@ public sealed class ConversationTests(AgentHost host) : IAsyncDisposable
     [Theory]
     [InlineData("yes ok go yes ok")]
     [InlineData("yes maybe")]
+    [InlineData("yes yesterday")]
     [InlineData("yesterday")]
     [InlineData("okgo")]
     public async Task TooManyYesWordsOrAnyOtherWordIsANewRequest(string typed)
@@ -272,11 +274,13 @@ public sealed class ConversationTests(AgentHost host) : IAsyncDisposable
         Assert.Equal(ReasonCodes.NotUnderstood, LastAgentMessage(conversation).Code);
     }
 
+    /// <summary>D6 (Khalil, 15 Oct 2026): the message is cut, left to right, into whole entries of the list.</summary>
     [Theory]
-    [InlineData("operation")]
     [InlineData("stop no!")]
     [InlineData("the operation")]
-    public async Task OneWordOfATwoWordNoEntryIsANo(string typed)
+    [InlineData("cancel the operation")]
+    [InlineData("the operation, cancel")]
+    public async Task AMessageMadeOfWholeNoEntriesIsANo(string typed)
     {
         var session = await StartAsync(configure: PhraseWords);
         var conversation = session.Conversation;
@@ -289,6 +293,27 @@ public sealed class ConversationTests(AgentHost host) : IAsyncDisposable
         Assert.Equal(PendingState.Cancelled, (await RecordAsync(session, card.PendingId)).State);
         // A no is not a request: the parser is not called.
         Assert.Single(session.Trace.Entries, e => e.Zone == TraceZone.Model);
+    }
+
+    /// <summary>A multi-word entry is one phrase: one of its words alone, or its words out of order, match nothing.</summary>
+    [Theory]
+    [InlineData("operation")]
+    [InlineData("the")]
+    [InlineData("operation the")]
+    [InlineData("cancel operation")]
+    public async Task OneWordOfAMultiWordEntryIsNotANo(string typed)
+    {
+        var session = await StartAsync(configure: PhraseWords);
+        var conversation = session.Conversation;
+        await conversation.SendAsync(HammoudiSentence);
+        var card = conversation.Card!;
+
+        await conversation.SendAsync(typed);
+
+        // Not a no: the card is cancelled as for any request, and the parser is called.
+        Assert.Equal(PendingState.Cancelled, (await RecordAsync(session, card.PendingId)).State);
+        Assert.Equal(2, session.Trace.Entries.Count(e => e.Zone == TraceZone.Model));
+        Assert.Equal(ReasonCodes.NotUnderstood, LastAgentMessage(conversation).Code);
     }
 
     [Fact]
@@ -307,6 +332,24 @@ public sealed class ConversationTests(AgentHost host) : IAsyncDisposable
         Assert.DoesNotContain(conversation.Messages, m => m.Code == ReasonCodes.PointsToConfirm);
         Assert.Equal(CardStatus.Cancelled, conversation.CardState);
         Assert.Equal(2, session.Trace.Entries.Count(e => e.Zone == TraceZone.Model));
+    }
+
+    [Fact]
+    public async Task TheLimitCountsWordsNotEntries()
+    {
+        var session = await StartAsync(configure: o =>
+        {
+            PhraseWords(o);
+            o.MaxYesNoWords = 2;
+        });
+        var conversation = session.Conversation;
+        await conversation.SendAsync(HammoudiSentence);
+
+        // Two entries but three words: over the limit, so a request, not a no.
+        await conversation.SendAsync("cancel the operation");
+
+        Assert.Equal(2, session.Trace.Entries.Count(e => e.Zone == TraceZone.Model));
+        Assert.Equal(ReasonCodes.NotUnderstood, LastAgentMessage(conversation).Code);
     }
 
     [Fact]
