@@ -37,6 +37,7 @@
         yield return (nameof(AgentOptions.SweepIntervalSeconds), Number(o.SweepIntervalSeconds));
         yield return (nameof(AgentOptions.StaleExecutingAfterSeconds), Number(o.StaleExecutingAfterSeconds));
         yield return (nameof(AgentOptions.MinSubstringWordLength), Number(o.MinSubstringWordLength));
+        yield return (nameof(AgentOptions.MaxYesNoWords), Number(o.MaxYesNoWords));
 
         // The Model section: the candidate in use and each candidate's model, limits and prices.
         var m = Model.Value;

@@ -201,6 +201,7 @@ public sealed class ConversationTests(AgentHost host) : IAsyncDisposable
         Assert.Equal(CardStatus.Live, conversation.CardState);
     }
 
+    /// <summary>D6 phrase rule: a message with one word that is not a yes (or no) word is a request.</summary>
     [Theory]
     [InlineData("yes please")]
     [InlineData("no, send it")]
@@ -218,6 +219,94 @@ public sealed class ConversationTests(AgentHost host) : IAsyncDisposable
         Assert.Equal(CardStatus.Cancelled, conversation.CardState);
         Assert.Equal(PendingState.Cancelled, (await RecordAsync(session, card.PendingId)).State);
         Assert.Equal(ReasonCodes.NotUnderstood, LastAgentMessage(conversation).Code);
+    }
+
+    private static readonly Action<AgentOptions> PhraseWords = o =>
+    {
+        o.YesWords = ["yes", "ok", "go"];
+        o.NoWords = ["no", "stop", "the operation"];
+    };
+
+    [Theory]
+    [InlineData("ok go")]
+    [InlineData("yes ok go yes")]
+    [InlineData("yes, ok!")]
+    [InlineData("go... ok?")]
+    public async Task AMessageMadeOnlyOfYesWordsPointsToConfirm(string typed)
+    {
+        var session = await StartAsync(configure: PhraseWords);
+        var conversation = session.Conversation;
+        await conversation.SendAsync(HammoudiSentence);
+        var card = conversation.Card!;
+
+        await conversation.SendAsync(typed);
+
+        Assert.Equal(
+            new ConversationMessage(ConversationRole.Agent, ConversationKind.Info, ReasonCodes.PointsToConfirm),
+            LastAgentMessage(conversation));
+        Assert.Equal(CardStatus.Live, conversation.CardState);
+        var record = await RecordAsync(session, card.PendingId);
+        Assert.Equal(PendingState.Pending, record.State);
+        Assert.Equal(0, await WalletRowsAsync(record.IdempotencyKey));
+        Assert.Single(session.Trace.Entries, e => e.Zone == TraceZone.Model);
+    }
+
+    [Theory]
+    [InlineData("yes ok go yes ok")]
+    [InlineData("yes maybe")]
+    [InlineData("yesterday")]
+    [InlineData("okgo")]
+    public async Task TooManyYesWordsOrAnyOtherWordIsANewRequest(string typed)
+    {
+        var session = await StartAsync(configure: PhraseWords);
+        var conversation = session.Conversation;
+        await conversation.SendAsync(HammoudiSentence);
+        var card = conversation.Card!;
+
+        await conversation.SendAsync(typed);
+
+        Assert.DoesNotContain(conversation.Messages, m => m.Code == ReasonCodes.PointsToConfirm);
+        Assert.Equal(PendingState.Cancelled, (await RecordAsync(session, card.PendingId)).State);
+        // The parser was called for the second message: it is a request.
+        Assert.Equal(2, session.Trace.Entries.Count(e => e.Zone == TraceZone.Model));
+        Assert.Equal(ReasonCodes.NotUnderstood, LastAgentMessage(conversation).Code);
+    }
+
+    [Theory]
+    [InlineData("operation")]
+    [InlineData("stop no!")]
+    [InlineData("the operation")]
+    public async Task OneWordOfATwoWordNoEntryIsANo(string typed)
+    {
+        var session = await StartAsync(configure: PhraseWords);
+        var conversation = session.Conversation;
+        await conversation.SendAsync(HammoudiSentence);
+        var card = conversation.Card!;
+
+        await conversation.SendAsync(typed);
+
+        Assert.Equal(Outcome(OutcomeCodes.Cancelled), LastAgentMessage(conversation));
+        Assert.Equal(PendingState.Cancelled, (await RecordAsync(session, card.PendingId)).State);
+        // A no is not a request: the parser is not called.
+        Assert.Single(session.Trace.Entries, e => e.Zone == TraceZone.Model);
+    }
+
+    [Fact]
+    public async Task TheWordLimitIsReadFromTheOptions()
+    {
+        var session = await StartAsync(configure: o =>
+        {
+            PhraseWords(o);
+            o.MaxYesNoWords = 1;
+        });
+        var conversation = session.Conversation;
+        await conversation.SendAsync(HammoudiSentence);
+
+        await conversation.SendAsync("ok go");
+
+        Assert.DoesNotContain(conversation.Messages, m => m.Code == ReasonCodes.PointsToConfirm);
+        Assert.Equal(CardStatus.Cancelled, conversation.CardState);
+        Assert.Equal(2, session.Trace.Entries.Count(e => e.Zone == TraceZone.Model));
     }
 
     [Fact]

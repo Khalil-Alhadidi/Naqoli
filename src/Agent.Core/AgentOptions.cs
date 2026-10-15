@@ -103,9 +103,19 @@ public sealed class AgentOptions
     public int MinSubstringWordLength { get; set; } = Resolver.ContactResolver.MinSubstringWordLength;
 
     /// <summary>
+    /// D6 (Khalil, 15 Oct 2026): a message is a yes, or a no, when every word of it is a yes word (a no word) and it has
+    /// at most this many words. Never a substring match.
+    /// </summary>
+    [Range(1, 20)]
+    public int MaxYesNoWords { get; set; } = 4;
+
+    /// <summary>
     /// D6: the typed words that mean "yes" while a card is live. A yes never confirms; it points to the Confirm button.
-    /// Compared after <see cref="Text.ArabicText.Normalize"/>. Empty by default: <c>Agent.Core</c> holds no phone text
-    /// (rule 4), so the web console sets them from its resource file and a test sets its own.
+    /// The yes set is every whitespace-separated word of every entry, normalised as a message is
+    /// (<see cref="Text.ArabicText.Normalize"/>, punctuation and symbols dropped, Latin lower-cased): an entry of two
+    /// words contributes both words, each on its own. A message made only of these words, at most
+    /// <see cref="MaxYesNoWords"/> of them, is a yes. Empty by default: <c>Agent.Core</c> holds no phone text (rule 4),
+    /// so the web console sets them from its resource file and a test sets its own.
     /// </summary>
     public string[] YesWords { get; set; } = [];
 

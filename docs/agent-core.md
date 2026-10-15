@@ -489,11 +489,16 @@ Any other exception in an action is traced as `error` (the exception type) and a
 
 ### D6, the typed yes and no
 
-`AgentOptions.YesWords` and `NoWords` hold the words, and `Agent.Core` has none of its own (rule 4). When a card is live, `SendAsync` compares `ArabicText.Normalize(text)` with the normalised words, ordinal:
+`AgentOptions.YesWords` and `NoWords` hold the words, and `Agent.Core` has none of its own (rule 4). The rule is Khalil's (15 Oct 2026): a message is a yes when every word of it is a yes word and it has at most `MaxYesNoWords` (4) words; the same for a no. Never a substring match.
 
-- **A yes word** never confirms. The reply is `points_to_confirm`, the card stays open, and nothing reaches the wallet.
-- **A no word** cancels the card (`cancelled`).
-- **Any other text** cancels the card the same way and goes on as a new request.
+- **The word sets.** Every whitespace-separated word of every configured entry, normalised as a message is. So the entry `اي نعم` contributes two words, and the no entry `الغاء العملية` makes `العملية` alone a no (a cancel, the safe direction).
+- **The message.** `ArabicText.Normalize`, then every punctuation or symbol character, anywhere, replaced by a space, Latin letters lower-cased, split on spaces (`Conversation.WordsOf`). The words are compared ordinal with the sets. Yes is checked first.
+
+When a card is live:
+
+- **A yes** never confirms. The reply is `points_to_confirm`, the card stays open, and nothing reaches the wallet.
+- **A no** cancels the card (`cancelled`).
+- **Any other text** (one word outside the set, or more than `MaxYesNoWords` words) cancels the card the same way and goes on as a new request.
 
 ### Answers to a question
 
@@ -682,6 +687,7 @@ The conversation calls it after every reply that yields an entry, with the maske
 | `SweepIntervalSeconds` | 5; 0 to 3,600 | `PendingSweeper`: how often it sweeps. 0 registers no sweeper (the test hosts) |
 | `StaleExecutingAfterSeconds` | 40; must be more than three times `WalletTimeoutSeconds` (validated at start) | `PendingSweeper`: a record Executing this long becomes Checking. A Confirm makes three timed wallet calls (balance, history, execute) while the record is Executing, so 40 is 3 x 10 s plus a margin |
 | `MinSubstringWordLength` | 3; 1 to 20 | `ContactResolver`, rule 4: a shorter typed word must equal a whole word |
+| `MaxYesNoWords` | 4; 1 to 20 | `Conversation`, D6: a yes or a no has at most this many words |
 | `YesWords`, `NoWords` | empty | `Conversation`, D6. Phone text, so not set in `Agent.Core`: the console post-configures them from `Word_yes` and `Word_no` in its resource file, and the test host sets `yes` and `no` |
 
 The settings component (milestone 7) shows them; milestone 4 shows them read only. The client key goes in user secrets or the environment, never in a committed file.

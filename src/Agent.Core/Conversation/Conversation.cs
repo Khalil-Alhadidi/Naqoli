@@ -36,8 +36,9 @@ public sealed class Conversation : IDisposable
     private readonly TimeProvider clock;
     private readonly ITraceSink trace;
     private readonly int userId;
-    private readonly string[] yesWords;
-    private readonly string[] noWords;
+    private readonly HashSet<string> yesWords;
+    private readonly HashSet<string> noWords;
+    private readonly int maxYesNoWords;
     private readonly SemaphoreSlim gate = new(1, 1);
     private readonly CancellationTokenSource lifetime = new();
     private readonly CancellationToken stopping;
@@ -79,8 +80,9 @@ public sealed class Conversation : IDisposable
         this.clock = clock;
         this.trace = trace;
         this.userId = userId;
-        yesWords = NormalizeWords(options.Value.YesWords);
-        noWords = NormalizeWords(options.Value.NoWords);
+        yesWords = WordSet(options.Value.YesWords);
+        noWords = WordSet(options.Value.NoWords);
+        maxYesNoWords = options.Value.MaxYesNoWords;
         stopping = lifetime.Token;
     }
 
@@ -195,10 +197,11 @@ public sealed class Conversation : IDisposable
             Add(new ConversationMessage(ConversationRole.User, ConversationKind.Typed));
 
             var pendingNote = PendingNote();
-            // D6: a yes or a no is the whole message and nothing more; a sentence that merely contains a word is a request.
-            var word = NormalizeWord(typedText);
-            var isYes = IsWord(word, yesWords);
-            var isNo = IsWord(word, noWords);
+            // D6: a yes or a no is a message made only of yes (or no) words, at most MaxYesNoWords of them; a sentence
+            // with any other word in it is a request.
+            var words = WordsOf(typedText);
+            var isYes = IsPhrase(words, yesWords, maxYesNoWords);
+            var isNo = !isYes && IsPhrase(words, noWords, maxYesNoWords);
 
             if (IsCardLive)
             {
@@ -870,28 +873,35 @@ public sealed class Conversation : IDisposable
         _ => null,
     };
 
-    private static string[] NormalizeWords(string[]? words)
-        => words is null
-            ? []
-            : [.. words.Select(NormalizeWord).Where(w => w.Length > 0).Distinct(StringComparer.Ordinal)];
+    /// <summary>The D6 word set of a configured list: every word of every entry, in the form <see cref="WordsOf"/> gives.</summary>
+    private static HashSet<string> WordSet(string[]? entries)
+        => entries is null ? new(StringComparer.Ordinal) : new(entries.SelectMany(WordsOf), StringComparer.Ordinal);
 
     /// <summary>
-    /// The form in which a typed message and a D6 word are compared: <see cref="ArabicText.Normalize"/> (trim, one
-    /// space, alef and digit forms), then trailing punctuation dropped (a question mark, a comma, a full stop, in
-    /// either script), then Latin letters lower-cased. The whole message must equal a word; a word inside a longer
-    /// message is never a yes or a no.
+    /// The words in which a typed message and a D6 entry are compared: <see cref="ArabicText.Normalize"/> (alef and digit
+    /// forms, harakat), then every punctuation or symbol character, anywhere, replaced by a space (a question mark, a
+    /// comma, a full stop, in either script), then Latin letters lower-cased, split on spaces.
     /// </summary>
-    internal static string NormalizeWord(string text)
+    internal static string[] WordsOf(string text)
     {
         var normalized = ArabicText.Normalize(text);
-        var end = normalized.Length;
-        while (end > 0 && (char.IsPunctuation(normalized[end - 1]) || char.IsSymbol(normalized[end - 1]) || normalized[end - 1] == ' '))
-            end--;
-        return normalized[..end].ToLowerInvariant();
+        var spaced = string.Create(normalized.Length, normalized, static (span, source) =>
+        {
+            for (var i = 0; i < source.Length; i++)
+            {
+                var c = source[i];
+                span[i] = char.IsPunctuation(c) || char.IsSymbol(c) ? ' ' : c;
+            }
+        });
+        return spaced.ToLowerInvariant().Split(' ', StringSplitOptions.RemoveEmptyEntries);
     }
 
-    private static bool IsWord(string word, string[] words)
-        => word.Length > 0 && Array.Exists(words, w => string.Equals(word, w, StringComparison.Ordinal));
+    /// <summary>
+    /// D6: true when the message has one to <paramref name="maxWords"/> words and every one is in
+    /// <paramref name="set"/>. Whole words only: a word that merely contains a yes word is not one.
+    /// </summary>
+    private static bool IsPhrase(string[] words, HashSet<string> set, int maxWords)
+        => words.Length >= 1 && words.Length <= maxWords && Array.TrueForAll(words, set.Contains);
 
     private void AddRefusal(string code, long? amountIqd = null)
         => Add(new ConversationMessage(ConversationRole.Agent, ConversationKind.Refusal, code, amountIqd));
