@@ -44,6 +44,7 @@ Configured as parse-call candidates in the `Model` section (`src/Agent.Web/appse
 
 - Test-set workbook v0.15 (Khalil, 14 Oct 2026), exported as `data/seed/*.json`, `data/requests.dev.jsonl`, `data/requests.heldout.jsonl` and `docs/matching-rules.md` in commit 462187f33dd18d08b8176ee767a5114ba9a7f1b2. All synthetic. The held-out file is sealed from that commit until the milestone 11 run.
 - Held-out file `data/requests.heldout.jsonl` as committed in 462187f: SHA-256 `3e396362fd6cea5fa81e26ad9e4c17e9c4de2066ee186e963690a14c195ca1c1` (the value recorded in `docs/build-plan.md` when the file was committed, copied here without opening the file). `Agent.Eval heldout --milestone-11-run` refuses to run when the file's hash differs from this value.
+- Two guards keep the held-out file sealed while Claude Code works in the repository (added 15 Oct 2026): rule 7 in `CLAUDE.md` says never to open, read, grep, print or copy it, hashing from the shell being the only permitted operation; and `.claude/settings.json` (committed) carries a permissions deny rule so the Read, Grep and Bash tools cannot access `data/requests.heldout.jsonl`. The runner's `--milestone-11-run` flag is the third guard.
 
 ## External resources
 

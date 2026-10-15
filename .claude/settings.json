@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "deny": [
+      "Read(./data/requests.heldout.jsonl)",
+      "Read(**/requests.heldout.jsonl)",
+      "Bash(cat data/requests.heldout.jsonl*)",
+      "Bash(cat ./data/requests.heldout.jsonl*)",
+      "Bash(head * data/requests.heldout.jsonl*)",
+      "Bash(tail * data/requests.heldout.jsonl*)",
+      "Bash(grep * data/requests.heldout.jsonl*)",
+      "Bash(rg * data/requests.heldout.jsonl*)",
+      "Bash(sed * data/requests.heldout.jsonl*)",
+      "Bash(less data/requests.heldout.jsonl*)",
+      "Bash(more data/requests.heldout.jsonl*)",
+      "Bash(cp data/requests.heldout.jsonl*)",
+      "Bash(cp ./data/requests.heldout.jsonl*)"
+    ]
+  }
+}
