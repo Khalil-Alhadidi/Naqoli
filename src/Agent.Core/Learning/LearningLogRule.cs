@@ -94,6 +94,8 @@ public static class LearningLogRule
     /// reply has none, a <c>bill_not_found</c> takes the biller asked for, and a <c>product_not_found</c> the operator,
     /// type and value asked for.</item>
     /// <item>A <c>dinars_only</c> refusal (the request named another currency, GAP-07) gives <c>other_currency</c>.</item>
+    /// <item>A card issued with the note <c>account_choice_unavailable</c> (the known gap, GAP-04) gives
+    /// <c>choose_account</c>.</item>
     /// <item>An <c>only_own_balance</c> refusal (a question about someone else's balance, RED-10) gives
     /// <c>not_supported</c> with detail <c>other_balance</c>.</item>
     /// <item>A <c>not_understood</c> refusal with detail <c>other_language</c> (a message in another language, GAP-08)
@@ -113,6 +115,9 @@ public static class LearningLogRule
         {
             case AgentReply.Refusal { Code: ReasonCodes.DinarsOnly }:
                 return new LearningEntry(OtherCurrency, null);
+
+            case AgentReply.CardIssued { Note: ReasonCodes.AccountChoiceUnavailable }:
+                return new LearningEntry(ChooseAccount, null);
 
             case AgentReply.Refusal { Code: ReasonCodes.OnlyOwnBalance }:
                 return new LearningEntry(NotSupported, OtherBalance);

@@ -15,6 +15,9 @@ public static class TraceSteps
     public const string RefusalPrefix = "refusal:";
     public const string BalanceShown = "balance_shown";
 
+    /// <summary>A known gap handled with a card and a note; the detail is the gap's code (<c>choose_account</c>).</summary>
+    public const string KnownGap = "known_gap";
+
     // Write zone: the Confirm handler.
     public const string BeginExecute = "begin_execute";
     public const string RecheckOk = "recheck_ok";

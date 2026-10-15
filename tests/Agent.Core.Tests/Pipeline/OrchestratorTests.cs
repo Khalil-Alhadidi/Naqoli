@@ -491,6 +491,54 @@ public class OrchestratorTests(AgentHost host)
         Assert.Equal(ReasonCodes.NotUnderstood, row.Reason);
     }
 
+    private static ParsedRequest ChooseAccount(string? recipient, decimal? amount) => new()
+    {
+        Intent = RequestIntent.Unsupported,
+        UnsupportedReason = "choose_account",
+        RecipientText = recipient,
+        AmountValue = amount,
+        AmountUnit = AmountUnit.Thousand,
+    };
+
+    [Fact]
+    public async Task ChooseAccountWithARecipientAndAnAmountGivesTheCardWithTheNote()
+    {
+        await StartAsync();
+        var request = ChooseAccount(HammoudiAlias, 30);
+
+        var reply = Assert.IsType<AgentReply.CardIssued>(await HandleAsync(U1, request));
+
+        Assert.Equal(ReasonCodes.AccountChoiceUnavailable, reply.Note);
+        Assert.Equal(("transfer", 30_000L, SeedFacts.HammoudiPhone), (reply.Pending.Type, reply.Pending.AmountIqd, reply.Pending.ToPhone));
+        Assert.Equal(
+            new global::Agent.Core.Learning.LearningEntry("choose_account", null),
+            global::Agent.Core.Learning.LearningLogRule.EntryFor(reply, request));
+        Assert.Equal([AuditEvents.Created], (await AuditAsync()).Select(r => r.Event));
+    }
+
+    [Fact]
+    public async Task ChooseAccountWithoutARecipientOrAnAmountIsUnsupported()
+    {
+        await StartAsync();
+
+        Assert.Equal(new AgentReply.Unsupported("choose_account"), await HandleAsync(U1, ChooseAccount(null, 30)));
+        Assert.Equal(new AgentReply.Unsupported("choose_account"), await HandleAsync(U1, ChooseAccount(HammoudiAlias, null)));
+    }
+
+    [Fact]
+    public async Task ChooseAccountPassesAQuestionThroughWithoutTheNote()
+    {
+        await StartAsync();
+
+        // A shared name asks which contact; the tapped answer then gives the card with the note.
+        var request = ChooseAccount(SeedFacts.Contact("S08").SavedName, 30);
+        Question(await HandleAsync(U1, request), QuestionKinds.WhichContact, QuestionAnswer.Tap);
+
+        var card = Assert.IsType<AgentReply.CardIssued>(await HandleAsync(U1, request, new SlotAnswers(ContactOption: "S09")));
+        Assert.Equal(ReasonCodes.AccountChoiceUnavailable, card.Note);
+        Assert.Equal(SeedFacts.Contact("S09").Number, card.Pending.ToPhone);
+    }
+
     [Fact]
     public async Task RepeatWarningWithinTenMinutes()
     {

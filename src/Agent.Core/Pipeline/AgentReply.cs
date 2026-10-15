@@ -52,9 +52,10 @@ public abstract record AgentReply
 
     /// <summary>
     /// A confirmation card was issued for <see cref="Pending"/>. The record is for <c>Agent.Core</c> callers; a component
-    /// gets <see cref="View"/> only.
+    /// gets <see cref="View"/> only. <see cref="Note"/> is a reason code shown with the card (a known gap:
+    /// <see cref="ReasonCodes.AccountChoiceUnavailable"/>), or null.
     /// </summary>
-    public sealed record CardIssued(PendingRecord Pending) : AgentReply
+    public sealed record CardIssued(PendingRecord Pending, string? Note = null) : AgentReply
     {
         /// <summary>The card as the screen shows it, projected from <see cref="Pending"/>.</summary>
         public CardView View => CardView.From(Pending);

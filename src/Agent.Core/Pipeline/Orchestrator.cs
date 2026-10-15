@@ -130,6 +130,7 @@ public sealed class Orchestrator
         }
 
         // 2. Requests the agent does not do or could not read.
+        string? cardNote = null;
         if (request.Intent == RequestIntent.Unsupported)
         {
             // Two reasons that reply with a refusal code of their own (RED-10, GAP-08); the reason stays as the detail
@@ -142,11 +143,22 @@ public sealed class Orchestrator
                     return await RefuseAsync(userId, ReasonCodes.NotUnderstood, LearningLogRule.OtherLanguage, null, cancellationToken);
             }
 
-            var reason = request.UnsupportedReason ?? ReasonCodes.NotSupported;
-            await audit.WriteAsync(userId, null, AuditEvents.Refused, null, null, reason, null, null, cancellationToken);
-            // The parsed reason is not validated before milestone 6, so it stays out of the trace.
-            trace.Record(TraceZone.Code, TraceSteps.RefusalPrefix + ReasonCodes.NotSupported, null);
-            return new AgentReply.Unsupported(reason);
+            // The known gap (GAP-04): the user chose the account to pay from, which the agent cannot do. With a recipient
+            // and an amount the transfer goes on from the usual account, and its card carries the note.
+            if (IsChooseAccountTransfer(request))
+            {
+                trace.Record(TraceZone.Code, TraceSteps.KnownGap, LearningLogRule.ChooseAccount);
+                cardNote = ReasonCodes.AccountChoiceUnavailable;
+                request = request with { Intent = RequestIntent.Transfer, UnsupportedReason = null };
+            }
+            else
+            {
+                var reason = request.UnsupportedReason ?? ReasonCodes.NotSupported;
+                await audit.WriteAsync(userId, null, AuditEvents.Refused, null, null, reason, null, null, cancellationToken);
+                // The parsed reason is not validated before milestone 6, so it stays out of the trace.
+                trace.Record(TraceZone.Code, TraceSteps.RefusalPrefix + ReasonCodes.NotSupported, null);
+                return new AgentReply.Unsupported(reason);
+            }
         }
 
         if (request.Intent == RequestIntent.Unclear)
@@ -163,14 +175,26 @@ public sealed class Orchestrator
             return await ConsentAsync(userId, cancellationToken);
         trace.Record(TraceZone.Code, TraceSteps.ConsentChecked, ConsentGiven);
 
-        return request.Intent switch
+        var reply = request.Intent switch
         {
             RequestIntent.Transfer => await TransferAsync(user, request, answers, cancellationToken),
             RequestIntent.Bill => await BillAsync(userId, request, answers, cancellationToken),
             RequestIntent.Purchase => await PurchaseAsync(userId, request, answers, cancellationToken),
             _ => await RefuseAsync(userId, ReasonCodes.NotUnderstood, null, null, cancellationToken),
         };
+
+        // A known gap's note goes with its card only; a question or a refusal on the way is returned as it is.
+        return cardNote is not null && reply is AgentReply.CardIssued issued ? issued with { Note = cardNote } : reply;
     }
+
+    /// <summary>
+    /// The known gap <c>choose_account</c> (GAP-04) with a recipient and an amount: handled as a transfer from the usual
+    /// account, its card carrying <see cref="ReasonCodes.AccountChoiceUnavailable"/>. Without either, it is unsupported.
+    /// </summary>
+    private static bool IsChooseAccountTransfer(ParsedRequest request)
+        => string.Equals(request.UnsupportedReason, LearningLogRule.ChooseAccount, StringComparison.Ordinal)
+            && !string.IsNullOrWhiteSpace(request.RecipientText)
+            && request.AmountValue is not null;
 
     /// <summary>
     /// Step 4: the recipient first (rule 16), then the amount, then the checks and the card. A question among contacts

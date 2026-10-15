@@ -646,6 +646,9 @@ public sealed class Conversation : IDisposable
                 break;
 
             case AgentReply.CardIssued issued:
+                // A known gap's note comes before the card, as an informational reply (account_choice_unavailable).
+                if (issued.Note is { } note)
+                    Add(new ConversationMessage(ConversationRole.Agent, ConversationKind.Info, note));
                 Card = issued.View;
                 CardState = CardStatus.Live;
                 PinVisible = Card.PinRequired;

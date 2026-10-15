@@ -85,6 +85,19 @@ public class LearningLogRuleTests
     }
 
     [Fact]
+    public void ACardWithTheAccountChoiceNoteIsLoggedAsChooseAccount()
+    {
+        // GAP-04: the known gap gets a card, and the learning row still records what the agent could not do.
+        var request = Unsupported(LearningLogRule.ChooseAccount);
+        var record = new global::Agent.Core.Pending.PendingRecord { Type = "transfer" };
+
+        Assert.Equal(
+            new LearningEntry(LearningLogRule.ChooseAccount, null),
+            LearningLogRule.EntryFor(new AgentReply.CardIssued(record, ReasonCodes.AccountChoiceUnavailable), request));
+        Assert.Null(LearningLogRule.EntryFor(new AgentReply.CardIssued(record), request));
+    }
+
+    [Fact]
     public void OnlyOwnBalanceIsNotSupportedWithOtherBalanceAsDetail()
     {
         // RED-10: the reply the orchestrator gives an other_balance request.

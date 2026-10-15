@@ -22,6 +22,17 @@ public sealed class ConversationAnswerTests(AgentHost host)
     private const string RecipientOnlySentence = "to hammoudi";
     private const string OtherTransferSentence = "send fifteen thousand to my sister";
     private const string InternetSentence = "pay the internet";
+    private const string ChooseAccountSentence = "send thirty thousand to hammoudi from my savings";
+    private const string ChooseAccountSharedSentence = "send thirty thousand to hussein from my savings";
+
+    private static ParsedRequest ChooseAccount(string recipient) => new()
+    {
+        Intent = RequestIntent.Unsupported,
+        UnsupportedReason = "choose_account",
+        RecipientText = recipient,
+        AmountValue = 30,
+        AmountUnit = AmountUnit.Thousand,
+    };
 
     /// <summary>U2: no internet bill, so "pay the internet" is a store card (rule 17).</summary>
     private const int U2 = SeedFacts.TightUserId;
@@ -37,6 +48,8 @@ public sealed class ConversationAnswerTests(AgentHost host)
         new(RecipientOnlySentence, ParsedRequest.Transfer(HammoudiAlias, null, AmountUnit.None)),
         new(OtherTransferSentence, ParsedRequest.Transfer(SeedFacts.Contact("S19").SavedName, 15, AmountUnit.Thousand)),
         new(InternetSentence, ParsedRequest.Bill("internet", null, null, AmountUnit.None)),
+        new(ChooseAccountSentence, ChooseAccount(HammoudiAlias)),
+        new(ChooseAccountSharedSentence, ChooseAccount(SeedFacts.Contact("S08").SavedName)),
     ]);
 
     private async Task<ConversationHarness> StartAsync(int userId = SeedFacts.DemoUserId)
@@ -132,6 +145,48 @@ public sealed class ConversationAnswerTests(AgentHost host)
         var card = Assert.IsType<CardView>(conversation.Card);
         Assert.Equal(SeedFacts.Contact("S19").Number, card.ToPhone);
         Assert.Equal(15_000, card.AmountIqd);
+    }
+
+    [Fact]
+    public async Task ChooseAccountGivesTheNoteBeforeTheCardAndConfirmMovesTheMoney()
+    {
+        await using var harness = await StartAsync();
+        var conversation = harness.Conversation;
+
+        await conversation.SendAsync(ChooseAccountSentence);
+
+        var messages = conversation.Messages;
+        var note = new ConversationMessage(ConversationRole.Agent, ConversationKind.Info, ReasonCodes.AccountChoiceUnavailable);
+        Assert.Equal(
+            [
+                new ConversationMessage(ConversationRole.User, ConversationKind.Typed),
+                note,
+                new ConversationMessage(ConversationRole.Agent, ConversationKind.Card),
+            ],
+            messages);
+        Assert.Equal(2, conversation.CardMessageIndex);
+        Assert.Equal(new global::Agent.Core.Learning.LearningEntry("choose_account", null), conversation.LastLearningEntry);
+        Assert.Equal(RequestIntent.Unsupported, conversation.LastRequest?.Intent);
+
+        Assert.IsType<ConfirmOutcome.Done>(await conversation.ConfirmAsync(null));
+        Assert.Equal(SeedFacts.DemoBalance - 31_000, await host.Wallet.AccountBalanceAsync(SeedFacts.DemoPhone));
+    }
+
+    [Fact]
+    public async Task ChooseAccountWithASharedNameReachesTheCardWithTheNoteAfterTheTap()
+    {
+        await using var harness = await StartAsync();
+        var conversation = harness.Conversation;
+
+        await conversation.SendAsync(ChooseAccountSharedSentence);
+        Assert.Equal(QuestionKinds.WhichContact, Assert.IsType<AgentReply.Question>(conversation.Question).Kind);
+
+        await conversation.TapOptionAsync("S08");
+
+        Assert.Equal(SeedFacts.Contact("S08").Number, Assert.IsType<CardView>(conversation.Card).ToPhone);
+        Assert.Contains(conversation.Messages, m => m.Kind == ConversationKind.Info && m.Code == ReasonCodes.AccountChoiceUnavailable);
+        Assert.Equal(new global::Agent.Core.Learning.LearningEntry("choose_account", null), conversation.LastLearningEntry);
+        Assert.Single(conversation.QuestionsAsked);
     }
 
     [Fact]
