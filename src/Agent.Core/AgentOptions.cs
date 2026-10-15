@@ -129,6 +129,17 @@ public sealed class AgentOptions
     [RegularExpression("^(scripted|claude)$")]
     public string Parser { get; set; } = Parsing.ParserFactory.Scripted;
 
+    /// <summary>The default of <see cref="DevSetPath"/>.</summary>
+    public const string DefaultDevSetPath = "data/" + Parsing.ScriptedParser.DevSetFileName;
+
+    /// <summary>
+    /// The development set the scripted parser loads (with its sidecar of parses next to it), relative to the repository
+    /// root unless rooted. Its file name must be <c>requests.dev.jsonl</c> (rule 7). Read by
+    /// <see cref="Parsing.ParserFactory.AddAgentParser"/>; shown read-only in settings.
+    /// </summary>
+    [Required]
+    public string DevSetPath { get; set; } = DefaultDevSetPath;
+
     /// <summary>True when <see cref="StaleExecutingAfterSeconds"/> outlasts the three timed wallet calls of a Confirm.</summary>
     internal bool StaleExecutingOutlastsAConfirm => StaleExecutingAfterSeconds > 3 * WalletTimeoutSeconds;
 }

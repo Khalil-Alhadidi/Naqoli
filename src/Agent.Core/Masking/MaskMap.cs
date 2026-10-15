@@ -41,6 +41,18 @@ public sealed partial class MaskMap
         return false;
     }
 
+    /// <summary>
+    /// <paramref name="text"/> with each number of this map, exactly as typed, replaced by its token (the longest first,
+    /// so a number inside a longer one is not cut). The scripted parser writes a typed number the way the model returns it.
+    /// </summary>
+    internal string Tokenize(string text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        foreach (var (token, original) in originals.OrderByDescending(pair => pair.Value.Length))
+            text = text.Replace(original, token, StringComparison.Ordinal);
+        return text;
+    }
+
     /// <summary>True when every token inside <paramref name="text"/> is one of this map's.</summary>
     public bool KnowsEveryToken(string text)
     {

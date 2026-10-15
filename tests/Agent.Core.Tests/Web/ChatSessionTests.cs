@@ -23,13 +23,8 @@ namespace Agent.Core.Tests.Web;
 [Collection(AgentCollection.Name)]
 public sealed class ChatSessionTests(AgentHost host) : IAsyncDisposable
 {
-    /// <summary>The transfer sentence of <c>scripted-sentences.json</c>, as Khalil wrote it (never a literal here).</summary>
-    private static string HammoudiSentence
-        => ScriptedParser.EmbeddedSentences().First(s => s.Request.Intent == RequestIntent.Transfer).Sentence;
-
-    /// <summary>The balance sentence of <c>scripted-sentences.json</c>, as Khalil wrote it.</summary>
-    private static string BalanceSentence
-        => ScriptedParser.EmbeddedSentences().First(s => s.Request.Intent == RequestIntent.Balance).Sentence;
+    /// <summary>The transfer sentence of these tests' scripted parser (English; the Arabic dev-set cases are the oracle's).</summary>
+    private const string HammoudiSentence = "send fifty thousand to my brother Hammoudi";
 
     private readonly List<IAsyncDisposable> disposables = [];
 
@@ -43,8 +38,8 @@ public sealed class ChatSessionTests(AgentHost host) : IAsyncDisposable
     }
 
     /// <summary>
-    /// A circuit for <paramref name="userId"/>, with the embedded scripted sentences plus <paramref name="extra"/> ones
-    /// (built from the seed through <see cref="SeedFacts"/>, never Arabic literals).
+    /// A circuit for <paramref name="userId"/>, with a scripted parser of the Hammoudi sentence plus <paramref name="extra"/>
+    /// ones (built from the seed through <see cref="SeedFacts"/>, never Arabic literals).
     /// </summary>
     private async Task<Circuit> StartAsync(int userId = SeedFacts.DemoUserId, params ScriptedSentence[] extra)
     {
@@ -55,12 +50,12 @@ public sealed class ChatSessionTests(AgentHost host) : IAsyncDisposable
         {
             services.AddAgentWebServices(configuration);
             services.Configure<AgentOptions>(o => o.DemoUserId = userId);
-            if (extra.Length > 0)
+            var sentences = new List<ScriptedSentence>
             {
-                var sentences = new List<ScriptedSentence>(ScriptedParser.EmbeddedSentences());
-                sentences.AddRange(extra);
-                services.AddSingleton<IParser>(new ScriptedParser(sentences));
-            }
+                new(HammoudiSentence, ParsedRequest.Transfer(SeedFacts.Contact("S01").Alias, 50, AmountUnit.Thousand)),
+            };
+            sentences.AddRange(extra);
+            services.AddSingleton<IParser>(new ScriptedParser(sentences));
         });
         var scope = provider.CreateAsyncScope();
         disposables.Add(provider);

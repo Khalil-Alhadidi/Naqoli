@@ -25,7 +25,7 @@ namespace Agent.Core.Tests.Conversation;
 [Collection(AgentCollection.Name)]
 public sealed class ConversationTests(AgentHost host) : IAsyncDisposable
 {
-    /// <summary>The English placeholder sentence of <c>scripted-sentences.json</c> (TODO-AR, Khalil's to replace).</summary>
+    /// <summary>The transfer sentence of these tests' scripted parser (English; the Arabic dev-set cases are the oracle's).</summary>
     private const string HammoudiSentence = "send fifty thousand to my brother Hammoudi";
 
     private const string BalanceSentence = "balance";
@@ -574,15 +574,13 @@ public sealed class ConversationTests(AgentHost host) : IAsyncDisposable
         disposables.Add(provider);
         var conversation = new AgentConversation(
             provider.GetRequiredService<IServiceScopeFactory>(),
-            new ScriptedParser(),
+            new ScriptedParser([new ScriptedSentence(HammoudiSentence, ParsedRequest.Transfer(SeedFacts.Contact("S01").Alias, 50, AmountUnit.Thousand))]),
             host.Clock,
             provider.GetRequiredService<IOptions<AgentOptions>>(),
             new RecordingSink(),
             SeedFacts.DemoUserId);
 
-        // This conversation has the embedded parser, so it is typed the sentence of the file, as Khalil wrote it.
-        var embedded = ScriptedParser.EmbeddedSentences().First(s => s.Request.Intent == RequestIntent.Transfer).Sentence;
-        var sending = conversation.SendAsync(embedded);
+        var sending = conversation.SendAsync(HammoudiSentence);
         await stall.Entered.Task.WaitAsync(TimeSpan.FromSeconds(10), Token);
 
         // The user goes away while the orchestrator waits on the wallet.

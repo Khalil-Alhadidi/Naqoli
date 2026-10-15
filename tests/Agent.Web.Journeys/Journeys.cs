@@ -3,8 +3,6 @@ extern alias AgentWeb;
 using System.Globalization;
 using Agent.Core.Audit;
 using Agent.Core.Data;
-using Agent.Core.Parsing;
-using Agent.Core.Requests;
 using AgentWeb::Agent.Web.Resources;
 using AgentWeb::Agent.Web.Services;
 using Microsoft.EntityFrameworkCore;
@@ -28,9 +26,8 @@ public sealed class Journeys(JourneyHost host) : IAsyncLifetime
 
     private IBrowserContext? context;
 
-    /// <summary>The transfer sentence of the scripted parser's file, as written (Khalil's to replace).</summary>
-    private static string TransferSentence
-        => ScriptedParser.EmbeddedSentences().First(s => s.Request.Intent == RequestIntent.Transfer).Sentence;
+    /// <summary>CLN-01 of the development set, as Khalil wrote it: fifty thousand to S01 (the oracle returns its parse).</summary>
+    private static string TransferSentence => DevSet.Say("CLN-01");
 
     private IStringLocalizer<PhoneStrings> Text => host.WebServices.GetRequiredService<IStringLocalizer<PhoneStrings>>();
 

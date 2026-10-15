@@ -4,20 +4,11 @@ namespace Agent.Eval.Running;
 public static class EvalPaths
 {
     /// <summary>The file that marks the repository root.</summary>
-    public const string SolutionFile = "ZainCashAgent.slnx";
+    public const string SolutionFile = global::Agent.Core.RepositoryRoot.SolutionFile;
 
     /// <summary>The nearest directory at or above <paramref name="start"/> (the app's base directory by default) that holds <see cref="SolutionFile"/>.</summary>
-    /// <exception cref="DirectoryNotFoundException">No such directory.</exception>
-    public static string RepositoryRoot(string? start = null)
-    {
-        for (var dir = new DirectoryInfo(start ?? AppContext.BaseDirectory); dir is not null; dir = dir.Parent)
-        {
-            if (File.Exists(Path.Combine(dir.FullName, SolutionFile)))
-                return dir.FullName;
-        }
-
-        throw new DirectoryNotFoundException(SolutionFile + " not found above " + (start ?? AppContext.BaseDirectory));
-    }
+    /// <exception cref="InvalidOperationException">No such directory.</exception>
+    public static string RepositoryRoot(string? start = null) => global::Agent.Core.RepositoryRoot.Find(start);
 
     /// <summary><paramref name="path"/> itself when absolute, else under the repository root.</summary>
     public static string Resolve(string path, string? repositoryRoot = null)

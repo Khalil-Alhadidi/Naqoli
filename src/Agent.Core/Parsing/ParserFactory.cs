@@ -15,6 +15,7 @@ namespace Agent.Core.Parsing;
 public static class ParserFactory
 {
     public const string ParserSetting = AgentOptions.SectionName + ":" + nameof(AgentOptions.Parser);
+    public const string DevSetPathSetting = AgentOptions.SectionName + ":" + nameof(AgentOptions.DevSetPath);
     public const string Scripted = ScriptedParser.ParserName;
     public const string Claude = "claude";
     public const string ApiKeySetting = "Anthropic:ApiKey";
@@ -38,8 +39,10 @@ public static class ParserFactory
 
     /// <summary>
     /// Binds <see cref="ModelOptions"/> (shown read-only by the console whatever the parser) and registers the parser
-    /// <c>Agent:Parser</c> names as <see cref="IParser"/>: the singleton <see cref="ScriptedParser"/>, or a scoped
-    /// <see cref="ClaudeParser"/> (it writes to the scope's <c>ITraceSink</c>) over a singleton <see cref="IChatClient"/>.
+    /// <c>Agent:Parser</c> names as <see cref="IParser"/>: the singleton <see cref="ScriptedParser"/> over the development
+    /// set <c>Agent:DevSetPath</c> names, or a scoped <see cref="ClaudeParser"/> (it writes to the scope's
+    /// <c>ITraceSink</c>) over a singleton <see cref="IChatClient"/>. The scripted parser's files are found and read when
+    /// it is first resolved, so a host without the repository starts and fails only when a message is parsed.
     /// </summary>
     /// <param name="environment">Reads an environment variable (tests); the process environment by default.</param>
     /// <exception cref="InvalidOperationException"><c>Agent:Parser</c> is neither <c>scripted</c> nor <c>claude</c>.</exception>
@@ -54,8 +57,7 @@ public static class ParserFactory
         switch (string.IsNullOrWhiteSpace(parser) ? Scripted : parser)
         {
             case Scripted:
-                // A factory, not the type: DI would pick the constructor that takes the sentences and pass an empty list.
-                services.AddSingleton<IParser>(_ => new ScriptedParser());
+                services.AddSingleton<IParser>(_ => ScriptedParser.Load(DevSetPath(configuration)));
                 return services;
 
             case Claude:
@@ -72,6 +74,30 @@ public static class ParserFactory
 
             default:
                 throw new InvalidOperationException(ParserSetting + " must be '" + Scripted + "' or '" + Claude + "'.");
+        }
+    }
+
+    /// <summary>
+    /// The full path of <c>Agent:DevSetPath</c> (its default when unset): itself when rooted, else under the repository
+    /// root (<see cref="RepositoryRoot.Find"/>).
+    /// </summary>
+    /// <exception cref="InvalidOperationException">The path is relative and no repository is found; the message names the path.</exception>
+    public static string DevSetPath(IConfiguration configuration)
+    {
+        ArgumentNullException.ThrowIfNull(configuration);
+        var configured = configuration[DevSetPathSetting];
+        var path = string.IsNullOrWhiteSpace(configured) ? AgentOptions.DefaultDevSetPath : configured;
+        if (Path.IsPathRooted(path))
+            return path;
+
+        try
+        {
+            return Path.GetFullPath(Path.Combine(RepositoryRoot.Find(), path));
+        }
+        catch (InvalidOperationException ex)
+        {
+            throw new InvalidOperationException(
+                DevSetPathSetting + " '" + path + "' is relative to the repository root, and none was found (" + ex.Message + ")", ex);
         }
     }
 

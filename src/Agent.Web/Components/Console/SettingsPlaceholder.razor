@@ -21,6 +21,7 @@
     {
         var o = Options.Value;
         yield return (nameof(AgentOptions.Parser), o.Parser);
+        yield return (nameof(AgentOptions.DevSetPath), o.DevSetPath);
         yield return (nameof(AgentOptions.DemoUserId), Number(o.DemoUserId));
         yield return (nameof(AgentOptions.MinAmountIqd), Number(o.MinAmountIqd));
         yield return (nameof(AgentOptions.PerTransactionCapIqd), Number(o.PerTransactionCapIqd));
