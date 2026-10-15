@@ -46,6 +46,12 @@ public class OrchestratorTests(AgentHost host)
         return await scope.ServiceProvider.GetRequiredService<Orchestrator>().HandleAsync(userId, request, Token);
     }
 
+    private async Task<AgentReply> HandleAsync(int userId, ParsedRequest request, SlotAnswers answers)
+    {
+        await using var scope = host.Services.CreateAsyncScope();
+        return await scope.ServiceProvider.GetRequiredService<Orchestrator>().HandleAsync(userId, request, answers, Token);
+    }
+
     private async Task<List<AuditEntry>> AuditAsync()
     {
         await using var scope = host.Services.CreateAsyncScope();
@@ -339,6 +345,44 @@ public class OrchestratorTests(AgentHost host)
     {
         await StartAsync();
         Refusal(await HandleAsync(U2, ParsedRequest.Bill("electricity", null, null, AmountUnit.None)), ReasonCodes.NothingDue);
+    }
+
+    [Fact]
+    public async Task ATappedContactPicksOnlyAmongTheOfferedCandidates()
+    {
+        await StartAsync();
+        var shared = ParsedRequest.Transfer(SeedFacts.Contact("S08").SavedName, 50_000, AmountUnit.Dinars);
+
+        // A contact of the same user that is not among the candidates of this question picks nothing: it asks again.
+        var again = Question(
+            await HandleAsync(U1, shared, new SlotAnswers(ContactOption: "S01")), QuestionKinds.WhichContact, QuestionAnswer.Tap);
+        Assert.Equal(["S08", "S09"], again.Options.Select(o => o.Value).Order(StringComparer.Ordinal));
+        Assert.Equal(
+            QuestionKinds.WhichContact,
+            Question(await HandleAsync(U1, shared, new SlotAnswers(ContactOption: Orchestrator.AccountOptionPrefix + "1")), QuestionKinds.WhichContact, QuestionAnswer.Tap).Kind);
+
+        // One of the candidates gives its card.
+        var card = Card(await HandleAsync(U1, shared, new SlotAnswers(ContactOption: "S08")));
+        Assert.Equal(SeedFacts.Contact("S08").Number, card.ToPhone);
+    }
+
+    [Fact]
+    public async Task ATappedBillOrProductThatIsNotTheUsersIsResolvedAsIfUntapped()
+    {
+        await StartAsync();
+
+        // BZ2 is U2's bill: for U1 it picks nothing, and the internet bill asks bill-or-store as without a tap.
+        Question(
+            await HandleAsync(U1, ParsedRequest.Bill("internet", null, null, AmountUnit.None), new SlotAnswers(BillCode: "BZ2")),
+            QuestionKinds.BillOrStore,
+            QuestionAnswer.Tap);
+        Assert.Equal("BS4", Card(await HandleAsync(U1, ParsedRequest.Bill("internet", null, null, AmountUnit.None), new SlotAnswers(BillCode: "BS4"))).BillCode);
+
+        Question(
+            await HandleAsync(U1, ParsedRequest.Purchase(null, "internet", 40_000), new SlotAnswers(ProductCode: "NO-SUCH-1")),
+            QuestionKinds.WhichOperator,
+            QuestionAnswer.Tap);
+        Assert.Equal("ZN-NET-40", Card(await HandleAsync(U1, ParsedRequest.Purchase(null, "internet", 40_000), new SlotAnswers(ProductCode: "ZN-NET-40"))).ProductCode);
     }
 
     [Fact]

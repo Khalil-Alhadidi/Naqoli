@@ -37,6 +37,7 @@ public sealed class Orchestrator
     private const string RecipientByNumber = "number";
     private const string RecipientByContact = "contact";
     private const string RecipientByAlias = "alias";
+    private const string RecipientByOption = "option";
     private const string ConsentGiven = "given";
     private const string ConsentRequired = "required";
 
@@ -89,12 +90,23 @@ public sealed class Orchestrator
     }
 
     /// <summary>
-    /// Answers <paramref name="request"/> for <paramref name="userId"/>. A wallet read with no answer is a refusal
+    /// Answers <paramref name="request"/> for <paramref name="userId"/> with nothing answered by a tap
+    /// (<see cref="SlotAnswers.None"/>).
+    /// </summary>
+    public Task<AgentReply> HandleAsync(int userId, ParsedRequest request, CancellationToken cancellationToken)
+        => HandleAsync(userId, request, SlotAnswers.None, cancellationToken);
+
+    /// <summary>
+    /// Answers <paramref name="request"/> for <paramref name="userId"/>, with the slots the user's taps have answered
+    /// (<paramref name="answers"/>, D3). A tapped answer only picks among what the resolvers found: a contact option among
+    /// the candidates of the question, one of the user's bills, a catalogue product; anything else is ignored and the
+    /// request is resolved as if no tap had been made. A wallet read with no answer is a refusal
     /// <see cref="ReasonCodes.NotDoneNothingTaken"/> with detail <c>wallet_</c> and the reason; it never throws for one.
     /// </summary>
-    public async Task<AgentReply> HandleAsync(int userId, ParsedRequest request, CancellationToken cancellationToken)
+    public async Task<AgentReply> HandleAsync(int userId, ParsedRequest request, SlotAnswers answers, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(answers);
         trace.Record(TraceZone.Code, TraceSteps.ParseReceived, request.Intent.ToString());
 
         // 1. The balance question (D22): read only, after consent, and the figure never reaches the audit row.
@@ -142,15 +154,19 @@ public sealed class Orchestrator
 
         return request.Intent switch
         {
-            RequestIntent.Transfer => await TransferAsync(user, request, cancellationToken),
-            RequestIntent.Bill => await BillAsync(userId, request, cancellationToken),
-            RequestIntent.Purchase => await PurchaseAsync(userId, request, cancellationToken),
+            RequestIntent.Transfer => await TransferAsync(user, request, answers, cancellationToken),
+            RequestIntent.Bill => await BillAsync(userId, request, answers, cancellationToken),
+            RequestIntent.Purchase => await PurchaseAsync(userId, request, answers, cancellationToken),
             _ => await RefuseAsync(userId, ReasonCodes.NotUnderstood, null, null, cancellationToken),
         };
     }
 
-    /// <summary>Step 4: the recipient first (rule 16), then the amount, then the checks and the card.</summary>
-    private async Task<AgentReply> TransferAsync(WalletUser user, ParsedRequest request, CancellationToken cancellationToken)
+    /// <summary>
+    /// Step 4: the recipient first (rule 16), then the amount, then the checks and the card. A question among contacts
+    /// that the user has answered by a tap (<see cref="SlotAnswers.ContactOption"/>) takes the tapped candidate.
+    /// </summary>
+    private async Task<AgentReply> TransferAsync(
+        WalletUser user, ParsedRequest request, SlotAnswers answers, CancellationToken cancellationToken)
     {
         var userId = user.Id;
         if (string.IsNullOrWhiteSpace(request.RecipientText))
@@ -186,13 +202,32 @@ public sealed class Orchestrator
             if (contactsRead is not WalletResult<WalletContacts>.Ok { Value: var contacts })
                 return await RefuseUnreadAsync(userId, contactsRead, cancellationToken);
 
-            switch (ContactResolver.Resolve(request.RecipientText, ContactCandidate.From(contacts), options.MinSubstringWordLength))
+            var resolution = ContactResolver.Resolve(request.RecipientText, ContactCandidate.From(contacts), options.MinSubstringWordLength);
+            var byOption = false;
+            if (resolution is Resolution.Options offered && answers.ContactOption is { } tapped)
+            {
+                // D3: the tap picks one of the candidates this same resolution offers, by its option value. A value that
+                // is not among them picks nothing, and the question is asked again.
+                var picked = offered.Candidates
+                    .Where(c => string.Equals(ContactOptionValue(c), tapped, StringComparison.Ordinal))
+                    .ToList();
+                if (picked.Count == 1)
+                {
+                    resolution = new Resolution.Card(picked[0]);
+                    byOption = true;
+                }
+            }
+
+            switch (resolution)
             {
                 case Resolution.Card { Chosen: var chosen }:
                     subject = new CardSubject(
                         TransferType, chosen.Phone, chosen.AccountId, chosen.Text, chosen.RegisteredName, null, null, null, null);
                     accountStatus = chosen.AccountStatus;
-                    trace.Record(TraceZone.Code, TraceSteps.RecipientResolved, chosen.IsAlias ? RecipientByAlias : RecipientByContact);
+                    trace.Record(
+                        TraceZone.Code,
+                        TraceSteps.RecipientResolved,
+                        byOption ? RecipientByOption : chosen.IsAlias ? RecipientByAlias : RecipientByContact);
                     break;
                 case Resolution.Options choice:
                     var contactOptions = choice.Candidates
@@ -240,12 +275,26 @@ public sealed class Orchestrator
         return await CheckAndIssueAsync(userId, input, subject, cancellationToken);
     }
 
-    /// <summary>Step 5: the bill from the biller, paid in full (D9), then the checks and the card.</summary>
-    private async Task<AgentReply> BillAsync(int userId, ParsedRequest request, CancellationToken cancellationToken)
+    /// <summary>
+    /// Step 5: the bill from the biller, paid in full (D9), then the checks and the card. A bill the user tapped
+    /// (<see cref="SlotAnswers.BillCode"/>) that is one of the user's bills is taken without asking again.
+    /// </summary>
+    private async Task<AgentReply> BillAsync(int userId, ParsedRequest request, SlotAnswers answers, CancellationToken cancellationToken)
     {
         var billsRead = await wallet.GetBillsAsync(userId, cancellationToken);
         if (billsRead is not WalletResult<IReadOnlyList<WalletBill>>.Ok { Value: var bills })
             return await RefuseUnreadAsync(userId, billsRead, cancellationToken);
+
+        var tappedBill = answers.BillCode is { } billCode
+            ? bills.FirstOrDefault(b => string.Equals(b.Code, billCode, StringComparison.Ordinal))
+            : null;
+        if (tappedBill is not null)
+        {
+            // D9 as the resolver applies it to a bill it picked: a bill with nothing due gets no card.
+            return tappedBill.AmountDueIqd > 0
+                ? await BillCardAsync(userId, request, tappedBill, cancellationToken)
+                : await RefuseAsync(userId, ReasonCodes.NothingDue, null, null, cancellationToken);
+        }
 
         IReadOnlyList<WalletProduct> products = [];
         if (string.Equals(request.BillerCode, BillResolver.InternetBiller, StringComparison.Ordinal))
@@ -280,6 +329,12 @@ public sealed class Orchestrator
                 throw new InvalidOperationException("Unknown bill resolution.");
         }
 
+        return await BillCardAsync(userId, request, bill, cancellationToken);
+    }
+
+    /// <summary>The named-amount check (D9), then the checks and the card for <paramref name="bill"/>.</summary>
+    private async Task<AgentReply> BillCardAsync(int userId, ParsedRequest request, WalletBill bill, CancellationToken cancellationToken)
+    {
         // D9: a bill is paid in full. An amount the user named must be the amount due, else no card.
         if (request.AmountValue is not null)
         {
@@ -300,15 +355,25 @@ public sealed class Orchestrator
         return await CheckAndIssueAsync(userId, input, subject, cancellationToken);
     }
 
-    /// <summary>Step 6: the product from the catalogue at the catalogue price, then the checks and the card.</summary>
-    private async Task<AgentReply> PurchaseAsync(int userId, ParsedRequest request, CancellationToken cancellationToken)
+    /// <summary>
+    /// Step 6: the product from the catalogue at the catalogue price, then the checks and the card. A product the user
+    /// tapped (<see cref="SlotAnswers.ProductCode"/>) that is in the catalogue is taken without asking again.
+    /// </summary>
+    private async Task<AgentReply> PurchaseAsync(int userId, ParsedRequest request, SlotAnswers answers, CancellationToken cancellationToken)
     {
         var productsRead = await wallet.GetProductsAsync(null, null, null, cancellationToken);
         if (productsRead is not WalletResult<IReadOnlyList<WalletProduct>>.Ok { Value: var catalogue })
             return await RefuseUnreadAsync(userId, productsRead, cancellationToken);
 
+        var tappedProduct = answers.ProductCode is { } productCode
+            ? catalogue.FirstOrDefault(p => string.Equals(p.Code, productCode, StringComparison.Ordinal))
+            : null;
+        var resolution = tappedProduct is not null
+            ? new ProductResolution.Card(tappedProduct)
+            : ProductResolver.Resolve(request, catalogue, options);
+
         WalletProduct product;
-        switch (ProductResolver.Resolve(request, catalogue, options))
+        switch (resolution)
         {
             case ProductResolution.Card card:
                 product = card.Product;

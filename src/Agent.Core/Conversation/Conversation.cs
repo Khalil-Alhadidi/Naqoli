@@ -46,7 +46,9 @@ public sealed class Conversation : IDisposable
     private readonly List<CardView> cardsIssued = [];
     private readonly List<ConversationQuestion> questionsAsked = [];
 
+    // The pending request (D3): the request as parsed or merged, and what the user's taps have answered for it.
     private ParsedRequest? lastRequest;
+    private SlotAnswers answers = SlotAnswers.None;
     private string? typedSlot;
     private string? lastMaskedText;
     private bool disposed;
@@ -159,6 +161,9 @@ public sealed class Conversation : IDisposable
     /// </summary>
     public ParsedRequest? LastRequest => lastRequest;
 
+    /// <summary>What the user's taps have answered for <see cref="LastRequest"/> (built by code; never sent to the parse call).</summary>
+    public SlotAnswers LastAnswers => answers;
+
     /// <summary>
     /// The learning-log entry of <see cref="LastReply"/>, as the conversation wrote it (<c>model_invalid_reply</c> for a
     /// structure the validator refused, else <see cref="LearningLogRule.EntryFor"/>), or null when nothing was logged.
@@ -171,9 +176,11 @@ public sealed class Conversation : IDisposable
 
     /// <summary>
     /// A typed message. With a live card, a yes word points to the Confirm button (D6: words never confirm), a no word
-    /// cancels the card, and anything else cancels it and goes on as a new request. A message that answers a typed
-    /// question (<c>which_amount</c> or <c>which_contact</c> with no options) fills that slot, unless it is a sentence of
-    /// its own. A parser that is unavailable gives <c>model_unavailable</c>.
+    /// cancels the card, and anything else cancels it and goes on as a new request. While a typed question is open
+    /// (<c>which_amount</c> or <c>which_contact</c> with no options), a message the parse call reads as unclear fills
+    /// that slot from the typed text, a transfer that is itself missing a recipient or an amount merges into the pending
+    /// transfer, and anything else (a complete request, another intent) replaces the pending request. A parser that is
+    /// unavailable gives <c>model_unavailable</c>.
     /// </summary>
     public async Task SendAsync(string typedText)
     {
@@ -238,10 +245,27 @@ public sealed class Conversation : IDisposable
             }
 
             var request = parsed;
-            if (parsed.Intent == RequestIntent.Unclear && !isYes && !isNo && typedSlot is not null && lastRequest is not null)
-                request = FillTypedSlot(lastRequest, typedSlot, typedText) ?? parsed;
+            var kept = SlotAnswers.None;
+            if (typedSlot is not null && lastRequest is not null)
+            {
+                if (parsed.Intent == RequestIntent.Unclear)
+                {
+                    if (!isYes && !isNo && FillTypedSlot(lastRequest, typedSlot, typedText) is { } filled)
+                    {
+                        request = filled;
+                        kept = answers;
+                    }
+                }
+                else if (MergePartial(lastRequest, parsed) is { } merged)
+                {
+                    // D3: the answer to a typed question that the model read as a partial request of the same kind.
+                    trace.Record(TraceZone.Code, "answer_merged", typedSlot);
+                    request = merged;
+                    kept = answers;
+                }
+            }
 
-            await HandleCoreAsync(request, token, ReferenceEquals(request, parsed) ? invalidReply : null);
+            await HandleCoreAsync(request, kept, token, ReferenceEquals(request, parsed) ? invalidReply : null);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -259,8 +283,9 @@ public sealed class Conversation : IDisposable
 
     /// <summary>
     /// A tap on an option of the open question. A value that was not offered is ignored (traced as
-    /// <c>option_rejected</c>). Until the orchestrator has an answer entry point, the original request is sent again
-    /// with the slot filled from the option.
+    /// <c>option_rejected</c>). The tap answers the pending request (D3): a contact, bill or product option is kept by
+    /// its value in <see cref="SlotAnswers"/>, so the orchestrator picks exactly that one among what it resolves; an
+    /// amount or operator option fills the request's own slot. Nothing is read from the wallet here.
     /// </summary>
     public async Task TapOptionAsync(string value)
     {
@@ -280,14 +305,13 @@ public sealed class Conversation : IDisposable
 
             // Added while the question is still open, so the screen can show the option's own text.
             Add(new ConversationMessage(ConversationRole.User, ConversationKind.Option, option.Value));
-            var request = await RequestForOptionAsync(question.Kind, option, lastRequest, token);
-            if (request is null)
+            if (AnswerForOption(question.Kind, option, lastRequest, answers) is not { } answered)
             {
                 AddRefusal(ReasonCodes.NotDoneNothingTaken);
                 return;
             }
 
-            await HandleCoreAsync(request, token);
+            await HandleCoreAsync(answered.Request, answered.Answers, token);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -303,7 +327,11 @@ public sealed class Conversation : IDisposable
         }
     }
 
-    /// <summary>The consent button: records consent in the wallet, then answers the last request again.</summary>
+    /// <summary>
+    /// The consent button: records consent in the wallet, then answers the pending request again, with what taps have
+    /// answered for it. (The consent gate comes before any question, so a pending request normally has no answers here;
+    /// they are passed all the same.)
+    /// </summary>
     public async Task GiveConsentAsync()
     {
         if (!await EnterAsync())
@@ -325,7 +353,7 @@ public sealed class Conversation : IDisposable
             trace.Record(TraceZone.Code, "consent_given", null);
             ActionMessageIndex = null;
             if (lastRequest is not null)
-                await HandleCoreAsync(lastRequest, token);
+                await HandleCoreAsync(lastRequest, answers, token);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -535,20 +563,22 @@ public sealed class Conversation : IDisposable
     }
 
     /// <summary>
-    /// Answers <paramref name="request"/> and shows the reply, then writes its learning-log entry:
-    /// <paramref name="invalidReply"/> when the parse call's structure was refused, else what
-    /// <see cref="LearningLogRule.EntryFor"/> returns.
+    /// Makes (<paramref name="request"/>, <paramref name="tapped"/>) the pending request, answers it and shows the reply,
+    /// then writes its learning-log entry: <paramref name="invalidReply"/> when the parse call's structure was refused,
+    /// else what <see cref="LearningLogRule.EntryFor"/> returns.
     /// </summary>
-    private async Task HandleCoreAsync(ParsedRequest request, CancellationToken token, LearningEntry? invalidReply = null)
+    private async Task HandleCoreAsync(
+        ParsedRequest request, SlotAnswers tapped, CancellationToken token, LearningEntry? invalidReply = null)
     {
         lastRequest = request;
+        answers = tapped;
         Question = null;
         QuestionMessageIndex = null;
         typedSlot = null;
 
         AgentReply reply;
         await using (var scope = scopes.CreateAsyncScope())
-            reply = await scope.ServiceProvider.GetRequiredService<Orchestrator>().HandleAsync(userId, request, token);
+            reply = await scope.ServiceProvider.GetRequiredService<Orchestrator>().HandleAsync(userId, request, tapped, token);
 
         LastReply = reply;
         ShowReply(reply);
@@ -647,47 +677,66 @@ public sealed class Conversation : IDisposable
         return null;
     }
 
-    /// <summary>The request a tapped option stands for: the original request with the option's slot filled.</summary>
-    private async Task<ParsedRequest?> RequestForOptionAsync(string kind, Option option, ParsedRequest last, CancellationToken token)
+    /// <summary>
+    /// The transfer a typed answer completes: when a typed question is open on a pending transfer and the parse call read
+    /// the answer as a transfer that is itself missing the recipient or the amount, the pending transfer with every slot
+    /// the answer names put in (the recipient; the amount with its unit; the currency). Null for anything else, which
+    /// then replaces the pending request: a complete transfer, another intent, the balance, an unsupported request.
+    /// </summary>
+    private static ParsedRequest? MergePartial(ParsedRequest pending, ParsedRequest parsed)
+    {
+        if (pending.Intent != RequestIntent.Transfer || parsed.Intent != RequestIntent.Transfer)
+            return null;
+        if (!string.IsNullOrWhiteSpace(parsed.RecipientText) && parsed.AmountValue is not null)
+            return null;
+
+        var merged = pending;
+        if (!string.IsNullOrWhiteSpace(parsed.RecipientText))
+            merged = merged with { RecipientText = parsed.RecipientText };
+        if (parsed.AmountValue is not null)
+            merged = merged with { AmountValue = parsed.AmountValue, AmountUnit = parsed.AmountUnit };
+        if (parsed.CurrencyText is not null)
+            merged = merged with { CurrencyText = parsed.CurrencyText };
+        return merged;
+    }
+
+    /// <summary>
+    /// The pending request and answers a tapped option stands for (D3), built from the option's value alone, with no
+    /// wallet read: the orchestrator checks the value against what it resolves. Null for a question kind with no tap.
+    /// </summary>
+    private static (ParsedRequest Request, SlotAnswers Answers)? AnswerForOption(
+        string kind, Option option, ParsedRequest last, SlotAnswers answers)
     {
         switch (kind)
         {
             case QuestionKinds.WhichContact:
             case QuestionKinds.DidYouMean:
-                // The display text is the saved name or alias that matched, so it resolves exactly.
-                return last with { RecipientText = option.Display };
+                return (last, answers with { ContactOption = option.Value });
 
             case QuestionKinds.WhichAmount:
-                return last with { AmountValue = option.AmountIqd, AmountUnit = AmountUnit.Dinars };
+                return (last with { AmountValue = option.AmountIqd, AmountUnit = AmountUnit.Dinars }, answers);
 
             case QuestionKinds.WhichOperator:
-                return last with { OperatorText = option.Value };
+                return (last with { OperatorText = option.Value }, answers);
 
             case QuestionKinds.WhichProduct:
                 {
-                    await using var scope = scopes.CreateAsyncScope();
-                    var read = await scope.ServiceProvider.GetRequiredService<WalletClient>().GetProductsAsync(null, null, null, token);
-                    if (read is not WalletResult<IReadOnlyList<WalletProduct>>.Ok { Value: var products })
-                        return null;
-                    var product = products.FirstOrDefault(p => string.Equals(p.Code, option.Value, StringComparison.Ordinal));
-                    return product is null ? null : ParsedRequest.Purchase(product.Provider, product.Type, product.FaceValueIqd);
+                    // Rule 17: a bill request that led to the store becomes a purchase of an internet card.
+                    var purchase = last.Intent == RequestIntent.Purchase
+                        ? last
+                        : ParsedRequest.Purchase(null, last.ProductType ?? BillResolver.InternetProductType, null);
+                    return (purchase, answers with { ProductCode = option.Value });
                 }
 
             case QuestionKinds.WhichBill:
             case QuestionKinds.BillOrStore:
                 {
+                    // Rule 13: the store option is a purchase of an internet card, which asks for the operator (rule 11).
                     if (option.Value == Option.StoreInternet)
-                        return ParsedRequest.Purchase(null, BillResolver.InternetProductType, null);
+                        return (ParsedRequest.Purchase(null, BillResolver.InternetProductType, null), SlotAnswers.None);
 
-                    await using var scope = scopes.CreateAsyncScope();
-                    var read = await scope.ServiceProvider.GetRequiredService<WalletClient>().GetBillsAsync(userId, token);
-                    if (read is not WalletResult<IReadOnlyList<WalletBill>>.Ok { Value: var bills })
-                        return null;
-                    var bill = bills.FirstOrDefault(b => string.Equals(b.Code, option.Value, StringComparison.Ordinal));
-                    if (bill is null)
-                        return null;
-                    var named = last.Intent == RequestIntent.Bill ? last.AmountValue : null;
-                    return ParsedRequest.Bill(bill.BillerCode, bill.Label, named, named is null ? AmountUnit.None : last.AmountUnit);
+                    var bill = last.Intent == RequestIntent.Bill ? last : ParsedRequest.Bill(null, null, null, AmountUnit.None);
+                    return (bill, answers with { BillCode = option.Value });
                 }
 
             default:

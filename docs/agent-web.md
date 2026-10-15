@@ -155,26 +155,23 @@ The conversation does D6 ([agent-core.md](agent-core.md), "D6, the typed yes and
 - **The no word** cancels the card (`PendingStore.CancelAsync`, message `Refusal_card_cancelled`).
 - **Any other text** cancels the card the same way and goes on as a new request.
 
-A question that waits for a typed answer (`which_amount` or `which_contact` with no options) takes the next text as its slot:
+A question that waits for a typed answer (`which_amount` or `which_contact` with no options) is answered into the pending request (D3; [agent-core.md](agent-core.md), "Answers to a question"):
 
-- the amount is parsed with `ArabicDigits.ToAscii` and invariant `decimal.TryParse`, so both digit forms work;
-- the recipient is the trimmed text.
-
-A scripted sentence, or the yes or no word, is a new request instead.
+- a message the parse call reads as unclear fills the slot from the text (the amount through `ArabicDigits.ToAscii` and invariant `decimal.TryParse`, so both digit forms work; the recipient as the trimmed text);
+- a transfer that is itself missing the recipient or the amount merges into the pending transfer;
+- anything else (a complete request, another intent, the yes or no word) replaces the pending request.
 
 ### Option taps
 
-A tap is accepted only for a value that the open question offered. Anything else is ignored and traced as `option_rejected`. Until the orchestrator has an answer entry point, an accepted tap sends the last request again with the slot filled:
+A tap is accepted only for a value that the open question offered. Anything else is ignored and traced as `option_rejected`. An accepted tap answers the pending request (D3) without reading the wallet; the orchestrator checks the answer against what it resolves (`Orchestrator.HandleAsync(user, request, SlotAnswers)`):
 
-| Question | Request sent |
+| Question | Pending request and answers |
 |---|---|
-| `which_contact`, `did_you_mean` | `RecipientText` = the option's display text (the saved name or alias that matched) |
+| `which_contact`, `did_you_mean` | The same request; `SlotAnswers.ContactOption` = the option's value (a contact code, or `account:<id>`). The orchestrator takes the candidate of the same question with that value, so two contacts with one saved name are told apart |
 | `which_amount` | `AmountValue` = the option's dinars, `AmountUnit.Dinars` |
 | `which_operator` | `OperatorText` = the provider code |
-| `which_product` | `Purchase(provider, type, face value)` of that product, read from the catalogue |
-| `which_bill`, `bill_or_store` | `Bill(biller code, label)` of that bill, read from the wallet; `store:internet` is `Purchase(null, "internet", null)` |
-
-**Known limit:** when two options share a display text, the request sent matches both again, and the same question comes back. This happens with two contacts saved under the same name, or with an unlabelled bill that shares its biller. The orchestrator's answer entry point (milestone 7) removes this.
+| `which_product` | The same purchase, or `Purchase(null, "internet", null)` after a bill request (rule 17); `SlotAnswers.ProductCode` = the product code |
+| `which_bill`, `bill_or_store` | The same bill request, or `Bill(null, null, null)`; `SlotAnswers.BillCode` = the bill code. `store:internet` is `Purchase(null, "internet", null)` with no answers, which asks the operator (rule 11) |
 
 ### The card, the countdown and the PIN
 

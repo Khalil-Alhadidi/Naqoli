@@ -454,8 +454,8 @@ Every action opens its own DI scope (`CreateAsyncScope`) and resolves the agent'
 | Action | What it does |
 |---|---|
 | `SendAsync(text)` | D6 first (below), then the parse call with the pending note, then `Orchestrator.HandleAsync`; the reply becomes messages. A `ParserUnavailableException` gives `model_unavailable` |
-| `TapOptionAsync(value)` | Checks the value against the open question's options (anything else is traced `option_rejected` and ignored), then sends the last request again with the slot filled |
-| `GiveConsentAsync()` | `WalletClient.GiveConsentAsync`, then answers the last request again |
+| `TapOptionAsync(value)` | Checks the value against the open question's options (anything else is traced `option_rejected` and ignored), then answers the pending request with the tap (below, "Answers to a question"); no wallet read |
+| `GiveConsentAsync()` | `WalletClient.GiveConsentAsync`, then answers the pending request and its answers again |
 | `ConfirmAsync(pin)` | `ConfirmHandler.ConfirmAsync(user, Card.PendingId, pin)`; the PIN is passed through and kept nowhere |
 | `SettleAsync()` | Only while the card is Checking: `ConfirmHandler.SettleCheckingAsync`, the same body under the same key (rule 6) |
 | `CancelAsync()` | `PendingStore.CancelAsync` while the card is live |
@@ -481,6 +481,7 @@ Any other exception in an action is traced as `error` (the exception type) and a
 | `CardsIssued` | Every card issued, in order (for the grader) |
 | `QuestionsAsked` | Every question, in order, as `ConversationQuestion(Kind, Answer, OptionValues)` (for the grader) |
 | `LastReply`, `LastRequest` | The last `AgentReply` to a request, and the request it answered (together they give the learning-log entry) |
+| `LastAnswers` | The `SlotAnswers` of the pending request: what taps have answered for `LastRequest` |
 | `LastLearningEntry` | The learning-log entry the conversation wrote for its last reply (`model_invalid_reply` for a refused structure, else `LearningLogRule.EntryFor`), or null; the runner grades it |
 | `ConsentShown` | True once the consent screen has been shown |
 
@@ -494,10 +495,47 @@ Any other exception in an action is traced as `error` (the exception type) and a
 - **A no word** cancels the card (`cancelled`).
 - **Any other text** cancels the card the same way and goes on as a new request.
 
-A question that waits for a typed answer (`which_amount` or `which_contact` with no options) takes the next text as its slot when the parser reads it as `Unclear`:
+### Answers to a question
 
-- the amount is parsed with `ArabicDigits.ToAscii` and invariant `decimal.TryParse`, so both digit forms work;
-- the recipient is the trimmed text.
+The conversation keeps the pending request as a pair: `LastRequest` and `LastAnswers`, a `SlotAnswers(ContactOption, BillCode, ProductCode)` that only code fills, from tapped option values (D3). The pair goes to `Orchestrator.HandleAsync(user, request, answers)`. Nothing of `SlotAnswers` reaches the parse call: the pending note stays the question kind or the card type (rule 5).
+
+A tap (`TapOptionAsync`) reads nothing from the wallet:
+
+| Question | Pending request | Answers |
+|---|---|---|
+| `which_contact`, `did_you_mean` | The same | `ContactOption` = the option's value (`Orchestrator.ContactOptionValue`: a contact code or `account:<id>`) |
+| `which_amount` | `AmountValue` = the option's dinars, `AmountUnit.Dinars` | Kept |
+| `which_operator` | `OperatorText` = the provider code | Kept |
+| `which_product` | The same purchase; after a bill request (rule 17), `Purchase(null, "internet", null)` | `ProductCode` = the product code |
+| `which_bill`, `bill_or_store` | The same bill request, else `Bill(null, null, null)`; `store:internet` is `Purchase(null, "internet", null)` | `BillCode` = the bill code; none for `store:internet` |
+
+The orchestrator uses an answer only to pick among what it resolved itself:
+
+- **Transfer by name.** The resolver runs on `RecipientText` as before. When it asks (`Options`) and exactly one of its candidates has the tapped `ContactOption`, that candidate goes to the card (trace `recipient_resolved` with `option`), with the text that was offered. A value that is not among the candidates picks nothing, and the question comes back.
+- **Bill.** A `BillCode` that is one of the user's bills skips `BillResolver`: nothing due is `nothing_due`, otherwise the D9 named-amount check and the card. Any other code falls through to the resolver.
+- **Purchase.** A `ProductCode` in the catalogue skips `ProductResolver`. Any other code falls through.
+
+A typed question (`which_amount` or `which_contact` with no options) takes the next message as its answer:
+
+- **The parse call reads it as `Unclear`.** The slot is filled from the typed text: the amount with `ArabicDigits.ToAscii` and invariant `decimal.TryParse`, so both digit forms work; the recipient as the trimmed text. A text that does not fill the slot is answered as parsed (`not_understood`).
+- **A transfer missing its recipient or its amount, on a pending transfer.** It merges: the pending transfer with every slot the parse names put in (`RecipientText`; `AmountValue` with `AmountUnit`; `CurrencyText`), answers kept, trace `answer_merged` with the question kind (AMB-06, AMB-13).
+- **Anything else** (a complete request, another intent, the balance, an unsupported request) replaces the pending pair, with no answers.
+
+The learning-log entry is for the request actually handled. A new request while a card is live cancels the card and replaces the pair.
+
+```mermaid
+flowchart TD
+    A[Typed message, typed question open] --> B{Parsed intent}
+    B -- Unclear --> C{Typed text fills the slot?}
+    C -- yes --> D[Pending request with the slot filled]
+    C -- no --> E[Parsed request: not_understood]
+    B -- Transfer, recipient or amount missing,<br/>pending is a transfer --> F[Merge into the pending transfer]
+    B -- anything else --> G[Replace the pending request]
+    D --> H[Orchestrator.HandleAsync with the pending answers]
+    F --> H
+    G --> I[Orchestrator.HandleAsync with no answers]
+    E --> I
+```
 
 ### Messages as codes
 
@@ -544,10 +582,10 @@ stateDiagram-v2
 
 | Zone | Written by | Steps (detail) |
 |---|---|---|
-| Code | `Orchestrator` | `parse_received` (the intent), `consent_checked` (`given` or `required`), `recipient_resolved` (`contact`, `alias`, `number`, `bill` or `purchase`), `amount_resolved` (the amount), `checks_passed` (the quote's total) or `check_failed:<reason>` (the figure), `card_created` (type, total, `pin` when one is needed), `question:<kind>` (how many options), `refusal:<code>` (the wallet code for `not_done_nothing_taken`, else the figure), `balance_shown` (no figure) |
+| Code | `Orchestrator` | `parse_received` (the intent), `consent_checked` (`given` or `required`), `recipient_resolved` (`contact`, `alias`, `number`, `option`, `bill` or `purchase`), `amount_resolved` (the amount), `checks_passed` (the quote's total) or `check_failed:<reason>` (the figure), `card_created` (type, total, `pin` when one is needed), `question:<kind>` (how many options), `refusal:<code>` (the wallet code for `not_done_nothing_taken`, else the figure), `balance_shown` (no figure) |
 | Write | `ConfirmHandler` | `begin_execute` (type and total), `recheck_ok` or `recheck_failed:<reason>` (the wallet code, if any), `execute_sent`, `outcome:<done, not_done, checking, expired, already_handled, not_found, pin_required, pin_wrong, pin_malformed, cancelled or exception>` (the record's state, the reason, or the attempts left), `settle_sent`, `settle_outcome:<the same names>` |
 
-The User and Model zones are written by the `Conversation` (below; `message_received`, `confirm_tapped`, `check_again_tapped`, `cancel_tapped`, `parse:<parser name>` with the intent, `parse:unavailable`) and the Claude parser (`more_than_one_request`, Model zone, with the count). The `Conversation` also writes, in the Code zone, `model_invalid_reply` (the field the validator refused), `learning_logged` (the reason) and `error` (an exception's type). A detail holds codes, states and amounts only: never a PIN, an idempotency key, a purchase code, a phone, a name, a balance or any text the user typed (the unsupported reason stays out of the trace). `TraceSinkTests.NoPinKeyCodeOrPhoneInAnyStep` runs a PIN payment and a purchase through a recording sink and checks every step and detail.
+The User and Model zones are written by the `Conversation` (below; `message_received`, `confirm_tapped`, `check_again_tapped`, `cancel_tapped`, `parse:<parser name>` with the intent, `parse:unavailable`) and the Claude parser (`more_than_one_request`, Model zone, with the count). The `Conversation` also writes, in the Code zone, `model_invalid_reply` (the field the validator refused), `answer_merged` (the typed question's kind), `option_rejected`, `learning_logged` (the reason) and `error` (an exception's type). A detail holds codes, states and amounts only: never a PIN, an idempotency key, a purchase code, a phone, a name, a balance or any text the user typed (the unsupported reason stays out of the trace). `TraceSinkTests.NoPinKeyCodeOrPhoneInAnyStep` runs a PIN payment and a purchase through a recording sink and checks every step and detail.
 
 ```mermaid
 sequenceDiagram
