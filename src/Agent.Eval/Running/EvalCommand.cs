@@ -219,7 +219,7 @@ public static class EvalCommand
                 CultureInfo.InvariantCulture, $"Model cost: {Usd(cost)} USD ({inputTokens} tokens in, {outputTokens} out)."));
         }
 
-        var summary = new RunSummary(parsed.Set, setHash, ReportParserName(measured.Name), started, settings, results);
+        var summary = new RunSummary(parsed.Set, setHash, ReportParserName(measured.Name), started, settings, results, parsed.Label);
         var paths = ReportWriter.Write(summary, EvalPaths.Resolve(parsed.Out ?? options.ReportDirectory, root));
 
         foreach (var score in ReportWriter.Scores(results, r => r.Category))

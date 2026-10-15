@@ -129,7 +129,7 @@ The rules, field by field:
 
 ## The report
 
-`ReportWriter` writes `docs/reports/<set>-<parser>-<UTC date>-<UTC HHmm>.md` and `.json` (for example `dev-scripted-2026-10-14-0900`; from milestone 6 the time is in the name, so a second run on the same day never overwrites a committed report, review M2; the first run's `dev-scripted-2026-10-14` files keep their old name). Both hold case ids, categories, codes, figures and verdicts, never a case's text (rule 7).
+`ReportWriter` writes `docs/reports/<set>-<parser>[-<label>]-<UTC date>-<UTC HHmm>.md` and `.json` (for example `dev-scripted-2026-10-14-0900`, or `dev-claude-haiku-m7a-2026-10-15-1800` with `--label m7a`, a tag of lower-case letters, digits, `_` and `-` that names a series of reruns; from milestone 6 the time is in the name, so a second run on the same day never overwrites a committed report, review M2; the first run's `dev-scripted-2026-10-14` files keep their old name). Both hold case ids, categories, codes, figures and verdicts, never a case's text (rule 7).
 
 - **Header**: the set, the SHA-256 of the case file, the parser, the UTC start, and every `Eval` and `Agent` setting. A model run adds `Model:Candidate`, `Model:ModelId`, `Model:PromptVersion`, `Model:EstimatedCostUsd` (printed before the run: cases × (1,500 input + 400 output tokens, thinking being billed as output) at the candidate's prices), `Model:CostUsd`, `Model:InputTokens` and `Model:OutputTokens` (the real figures from `IParserUsage`, printed after the run). Keys are shown only as `set` or `not set`, word lists only as a count.
 - **Totals, per category, per type**: cases, passed, percentage, and the Wilson 95% score interval (z = 1.96), shown as `lo–hi %`. For k passes out of n, with p = k/n: centre = (p + z²/2n) / (1 + z²/n), half-width = z·√(p(1−p)/n + z²/4n²) / (1 + z²/n). It stays inside 0 to 100 % and is honest for small groups: 0/10 gives 0.0–27.8 %, 5/10 gives 23.7–76.3 %, 10/10 gives 72.2–100.0 %.
@@ -171,7 +171,7 @@ The runner uses the Development environment unless `DOTNET_ENVIRONMENT` says oth
 
 1. Create the wallet database once: `dotnet run --project src/Wallet.MockApi -- migrate`.
 2. Start the wallet: `dotnet run --project src/Wallet.MockApi`.
-3. Run: `dotnet run --project src/Agent.Eval -- dev`. Options: `--only CLN-01,CLN-02`, `--wallet <url>`, `--out <dir>`, `--parser scripted|claude:<candidate>`.
+3. Run: `dotnet run --project src/Agent.Eval -- dev`. Options: `--only CLN-01,CLN-02`, `--wallet <url>`, `--out <dir>`, `--parser scripted|claude:<candidate>`, `--label <tag>` (added to the report name after the parser).
 
 The console prints one line per case (`CLN-01 passed`, or `CLN-01 failed at cards[0]`), one per category, the total, and the two report paths. Exit codes: 0 the run completed (whatever the pass rate); 2 a wrong command line, a wrong setting or the held-out guard refused; 1 the wallet or the agent database does not answer, the set file is missing or malformed, or the wallet stopped answering during the run (no report is written then).
 

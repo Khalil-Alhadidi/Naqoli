@@ -18,7 +18,8 @@ public sealed record RunSummary(
     string Parser,
     DateTimeOffset StartedUtc,
     IReadOnlyDictionary<string, string> Settings,
-    IReadOnlyList<CaseResult> Results);
+    IReadOnlyList<CaseResult> Results,
+    string? Label = null);
 
 /// <summary>Cases, passes and the Wilson 95% interval of one group.</summary>
 public sealed record GroupScore(string Name, int Cases, int Passed, double Percent, double LowPercent, double HighPercent);
@@ -96,7 +97,8 @@ public static class ReportWriter
 
     /// <summary>
     /// Writes the JSON and Markdown reports of <paramref name="summary"/> into <paramref name="directory"/>, named
-    /// <c>&lt;set&gt;-&lt;parser&gt;-&lt;UTC date&gt;-&lt;UTC HHmm&gt;</c>.
+    /// <c>&lt;set&gt;-&lt;parser&gt;-&lt;UTC date&gt;-&lt;UTC HHmm&gt;</c>, with the run's label after the parser when one was
+    /// given (<c>dev-claude-haiku-m7a-2026-10-15-1800</c>).
     /// </summary>
     public static ReportPaths Write(RunSummary summary, string directory)
     {
@@ -107,6 +109,7 @@ public static class ReportWriter
         // One report per set, parser and minute (dev-scripted-2026-10-14-0900), so a later run on the same day never
         // overwrites a committed report (review M2).
         var stem = summary.SetName + "-" + summary.Parser + "-"
+            + (string.IsNullOrEmpty(summary.Label) ? string.Empty : summary.Label + "-")
             + summary.StartedUtc.UtcDateTime.ToString("yyyy-MM-dd-HHmm", CultureInfo.InvariantCulture);
         var jsonPath = Path.Combine(directory, stem + ".json");
         var markdownPath = Path.Combine(directory, stem + ".md");

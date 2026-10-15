@@ -170,6 +170,17 @@ public sealed class HeldOutGuardTests : IDisposable
     }
 
     [Theory]
+    [InlineData("M7A")]
+    [InlineData("m7a b")]
+    [InlineData("../m7a")]
+    [InlineData("")]
+    public void ALabelOutsideThePatternIsRefused(string label)
+    {
+        Assert.Null(EvalArguments.Parse(["dev", "--label", label], out var error));
+        Assert.NotNull(error);
+    }
+
+    [Theory]
     [InlineData("gpt")]
     [InlineData("claude")]
     [InlineData("claude:")]
@@ -187,6 +198,10 @@ public sealed class HeldOutGuardTests : IDisposable
 
         Assert.Equal("claude-haiku", EvalCommand.ReportParserName("claude:haiku"));
         Assert.Equal("scripted", EvalCommand.ReportParserName("scripted"));
+
+        // The label goes into the report stem after the parser (ReportWriterTests.TheLabelFollowsTheParserInTheName).
+        Assert.Equal("m7a", EvalArguments.Parse(["dev", "--parser", "claude:haiku", "--label", "m7a"], out _)?.Label);
+        Assert.Null(EvalArguments.Parse(["dev"], out _)?.Label);
         // 72 cases x (1,500 x 0.10 + 400 x 0.50) / 1,000,000.
         Assert.Equal(0.0252m, EvalCommand.EstimatedCostUsd(72, haiku));
     }

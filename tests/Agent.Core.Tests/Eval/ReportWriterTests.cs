@@ -38,6 +38,17 @@ public sealed class ReportWriterTests : IDisposable
     }
 
     [Fact]
+    public void TheLabelFollowsTheParserInTheName()
+    {
+        var summary = Summary() with { Parser = "claude-haiku", Label = "m7a" };
+
+        var paths = ReportWriter.Write(summary, directory.FullName);
+
+        Assert.Equal("dev-claude-haiku-m7a-2026-10-14-0900.md", Path.GetFileName(paths.MarkdownPath));
+        Assert.Equal("dev-claude-haiku-m7a-2026-10-14-0900.json", Path.GetFileName(paths.JsonPath));
+    }
+
+    [Fact]
     public void TheReportHasEverySectionAndNoCaseText()
     {
         var summary = Summary();

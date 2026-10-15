@@ -4,7 +4,8 @@ namespace Agent.Eval.Running;
 
 /// <summary>
 /// The runner's command line: <c>dev</c> or <c>heldout --milestone-11-run</c>, then <c>--only id,id</c>,
-/// <c>--wallet url</c>, <c>--out dir</c> and <c>--parser scripted|claude:&lt;candidate&gt;</c> in any order.
+/// <c>--wallet url</c>, <c>--out dir</c>, <c>--parser scripted|claude:&lt;candidate&gt;</c> and <c>--label text</c> in any
+/// order.
 /// </summary>
 /// <param name="Set"><see cref="HeldOutGuard.DevSet"/> or <see cref="HeldOutGuard.HeldOutSet"/>.</param>
 /// <param name="Milestone11Run">The held-out flag was given.</param>
@@ -12,12 +13,19 @@ namespace Agent.Eval.Running;
 /// <param name="Wallet">The wallet's address, overriding <c>Agent:WalletBaseUrl</c>.</param>
 /// <param name="Out">The report directory, overriding <c>Eval:ReportDirectory</c>.</param>
 /// <param name="Parser">The parser measured: <c>scripted</c> (the default) or <c>claude:&lt;candidate&gt;</c>.</param>
+/// <param name="Label">A tag for the report name (lower-case letters, digits, <c>_</c> and <c>-</c>), or null.</param>
 public sealed partial record EvalArguments(
-    string Set, bool Milestone11Run, IReadOnlyList<string>? Only, Uri? Wallet, string? Out, string Parser = EvalArguments.ScriptedParser)
+    string Set,
+    bool Milestone11Run,
+    IReadOnlyList<string>? Only,
+    Uri? Wallet,
+    string? Out,
+    string Parser = EvalArguments.ScriptedParser,
+    string? Label = null)
 {
     /// <summary>The usage line.</summary>
     public const string Usage =
-        "Usage: Agent.Eval dev | heldout --milestone-11-run  [--only <id,id,...>] [--wallet <url>] [--out <dir>] [--parser scripted|claude:<candidate>]";
+        "Usage: Agent.Eval dev | heldout --milestone-11-run  [--only <id,id,...>] [--wallet <url>] [--out <dir>] [--parser scripted|claude:<candidate>] [--label <a-z0-9_->]";
 
     /// <summary>The default parser.</summary>
     public const string ScriptedParser = "scripted";
@@ -44,6 +52,7 @@ public sealed partial record EvalArguments(
         Uri? wallet = null;
         string? output = null;
         var parser = ScriptedParser;
+        string? label = null;
         for (var i = 1; i < args.Count; i++)
         {
             var arg = args[i];
@@ -53,7 +62,7 @@ public sealed partial record EvalArguments(
                 continue;
             }
 
-            if (arg is not ("--only" or "--wallet" or "--out" or "--parser"))
+            if (arg is not ("--only" or "--wallet" or "--out" or "--parser" or "--label"))
             {
                 error = "Unknown argument '" + arg + "'.";
                 return null;
@@ -88,6 +97,15 @@ public sealed partial record EvalArguments(
 
                     parser = value;
                     break;
+                case "--label":
+                    if (!LabelPattern().IsMatch(value))
+                    {
+                        error = "--label needs lower-case letters, digits, '_' or '-' only.";
+                        return null;
+                    }
+
+                    label = value;
+                    break;
                 default:
                     output = value;
                     break;
@@ -100,9 +118,12 @@ public sealed partial record EvalArguments(
             return null;
         }
 
-        return new EvalArguments(args[0], flag, only, wallet, output, parser);
+        return new EvalArguments(args[0], flag, only, wallet, output, parser, label);
     }
 
     [GeneratedRegex("^(scripted|claude:[a-z0-9_-]+)$", RegexOptions.CultureInvariant)]
     private static partial Regex ParserPattern();
+
+    [GeneratedRegex("^[a-z0-9_-]+$", RegexOptions.CultureInvariant)]
+    private static partial Regex LabelPattern();
 }
