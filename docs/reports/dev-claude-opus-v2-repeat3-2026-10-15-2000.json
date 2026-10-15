@@ -1,0 +1,151 @@
+{
+  "header": {
+    "set": "dev",
+    "set_file_sha256": "bb4cc48777e4fc0b3cbf44c56197713785755f8460f197957fe18cd9873e0809",
+    "parser": "claude-opus",
+    "runs": 3,
+    "started_utc": "2026-10-15T20:00:47.8383488Z",
+    "settings": {
+      "Agent:CardTimerSeconds": "45",
+      "Agent:DemoUserId": "1",
+      "Agent:HistoryDays": "90",
+      "Agent:HistoryPageSize": "200",
+      "Agent:MaxProductsInOneQuestion": "8",
+      "Agent:MaxRequestsPerMessage": "3",
+      "Agent:MaxYesNoWords": "4",
+      "Agent:MinAmountIqd": "1000",
+      "Agent:MinSubstringWordLength": "3",
+      "Agent:NoWords": "15 word(s)",
+      "Agent:Parser": "claude",
+      "Agent:PerDayCapIqd": "10000000",
+      "Agent:PerTransactionCapIqd": "5000000",
+      "Agent:RepeatWarningWindowMinutes": "10",
+      "Agent:SettleWindowSeconds": "610",
+      "Agent:StaleExecutingAfterSeconds": "40",
+      "Agent:SweepIntervalSeconds": "0",
+      "Agent:WalletBaseUrl": "http://localhost:5276",
+      "Agent:WalletClientKey": "not set",
+      "Agent:WalletTimeoutSeconds": "10",
+      "Agent:YesWords": "20 word(s)",
+      "Eval:CaseTimeoutSeconds": "60",
+      "Eval:FaultDelayMs": "12000",
+      "Eval:ReportDirectory": "docs/reports",
+      "Eval:SetDirectory": "data",
+      "Eval:SettleAttempts": "3",
+      "Eval:SettleDelayMs": "200",
+      "Eval:WalletAdminKey": "set",
+      "Model:Candidate": "opus",
+      "Model:CostUsd": "3.3326",
+      "Model:Effort": "low",
+      "Model:EstimatedCostUsd": "1.0080",
+      "Model:InputTokens": "230642",
+      "Model:ModelId": "claude-opus-5-5",
+      "Model:OutputTokens": "9402",
+      "Model:PromptVersion": "2",
+      "Model:Temperature": "not sent"
+    }
+  },
+  "groups": [
+    {
+      "name": "All cases",
+      "cases": 72,
+      "min_passed": 60,
+      "median_passed": 60,
+      "max_passed": 60
+    },
+    {
+      "name": "Clean",
+      "cases": 23,
+      "min_passed": 20,
+      "median_passed": 20,
+      "max_passed": 20
+    },
+    {
+      "name": "Ambiguous",
+      "cases": 15,
+      "min_passed": 14,
+      "median_passed": 14,
+      "max_passed": 14
+    },
+    {
+      "name": "Should not go through",
+      "cases": 9,
+      "min_passed": 8,
+      "median_passed": 8,
+      "max_passed": 8
+    },
+    {
+      "name": "Malformed",
+      "cases": 7,
+      "min_passed": 6,
+      "median_passed": 6,
+      "max_passed": 6
+    },
+    {
+      "name": "Compound",
+      "cases": 5,
+      "min_passed": 0,
+      "median_passed": 0,
+      "max_passed": 0
+    },
+    {
+      "name": "Red team",
+      "cases": 5,
+      "min_passed": 5,
+      "median_passed": 5,
+      "max_passed": 5
+    },
+    {
+      "name": "Fault injection",
+      "cases": 4,
+      "min_passed": 4,
+      "median_passed": 4,
+      "max_passed": 4
+    },
+    {
+      "name": "Known gap",
+      "cases": 4,
+      "min_passed": 3,
+      "median_passed": 3,
+      "max_passed": 3
+    }
+  ],
+  "flipped": [],
+  "runs": [
+    {
+      "run": 1,
+      "passed": 60,
+      "cases": 72,
+      "cost_usd": 1.110608,
+      "median_time_ms": 2883
+    },
+    {
+      "run": 2,
+      "passed": 60,
+      "cases": 72,
+      "cost_usd": 1.110688,
+      "median_time_ms": 2773.5
+    },
+    {
+      "run": 3,
+      "passed": 60,
+      "cases": 72,
+      "cost_usd": 1.111268,
+      "median_time_ms": 2854.5
+    }
+  ],
+  "reports": [
+    {
+      "markdown": "dev-claude-opus-v2-r1-2026-10-15-2000.md",
+      "json": "dev-claude-opus-v2-r1-2026-10-15-2000.json"
+    },
+    {
+      "markdown": "dev-claude-opus-v2-r2-2026-10-15-2004.md",
+      "json": "dev-claude-opus-v2-r2-2026-10-15-2004.json"
+    },
+    {
+      "markdown": "dev-claude-opus-v2-r3-2026-10-15-2008.md",
+      "json": "dev-claude-opus-v2-r3-2026-10-15-2008.json"
+    }
+  ]
+}
