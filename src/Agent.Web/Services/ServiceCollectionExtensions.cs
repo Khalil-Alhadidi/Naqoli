@@ -33,8 +33,8 @@ public static class ServiceCollectionExtensions
         services.AddAgentCore(configuration);
         services.AddOptions<AgentOptions>().PostConfigure<IStringLocalizer<PhoneStrings>>((options, text) =>
         {
-            options.YesWords = [text["Word_yes"].Value];
-            options.NoWords = [text["Word_no"].Value];
+            options.YesWords = PhoneWords.Split(text["Word_yes"].Value);
+            options.NoWords = PhoneWords.Split(text["Word_no"].Value);
         });
         services.AddAgentParser(configuration);
         services.AddScoped<ChatSession>();
