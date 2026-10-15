@@ -8,6 +8,10 @@ using MudBlazor.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// D8: the values saved in the settings component. The last source, so a saved value wins over the files, user secrets
+// and the environment; empty at start.
+builder.Configuration.AddRuntimeSettings();
+
 // Add services to the container.
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();

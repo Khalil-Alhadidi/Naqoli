@@ -1,0 +1,140 @@
+@using System.Globalization
+@using Agent.Core.Parsing
+@inject IOptionsMonitor<AgentOptions> Options
+@inject IOptions<ModelOptions> Model
+@inject RuntimeSettings Runtime
+
+@* D8: the agent's limits are edited here and apply to the next action, without a restart. A saved value lives in memory
+   only (RuntimeSettings); the other rows are read only. No key (wallet or Anthropic) is ever shown. *@
+<MudPaper Class="pa-3" Elevation="1">
+    <MudText Typo="Typo.h6">Settings</MudText>
+    <MudText Typo="Typo.body2" Class="mb-2">A saved value applies to the next action and is forgotten when the console restarts.</MudText>
+
+    <MudText Typo="Typo.subtitle1" Class="mt-2">Agent</MudText>
+    <MudSimpleTable Dense="true">
+        <tbody>
+            @{ var current = Options.CurrentValue; }
+            @foreach (var (name, read) in Editable)
+            {
+                var key = Key(name);
+                <tr data-testid="setting-row" data-name="@name">
+                    <td>@name</td>
+                    <td data-testid="setting-value" data-name="@name">@Number(read(current))</td>
+                    <td>
+                        <input data-testid="setting-input" data-name="@name" type="text" inputmode="numeric" aria-label="@name"
+                               value="@Draft(name)" @oninput="e => drafts[name] = e.Value?.ToString() ?? string.Empty" />
+                        <MudButton data-testid="setting-save" data-name="@name" Size="Size.Small" Variant="Variant.Outlined"
+                                   OnClick="() => Save(name)">Save</MudButton>
+                        @if (Runtime.Overrides.ContainsKey(key))
+                        {
+                            <MudButton data-testid="setting-reset" data-name="@name" Size="Size.Small" Variant="Variant.Text"
+                                       OnClick="() => Reset(name)">Reset</MudButton>
+                        }
+                        @if (errors.TryGetValue(name, out var error))
+                        {
+                            <MudText data-testid="setting-error" data-name="@name" Typo="Typo.caption" Color="Color.Error">@error</MudText>
+                        }
+                    </td>
+                </tr>
+            }
+            @foreach (var (name, value) in ReadOnly(current))
+            {
+                <tr data-testid="setting-row" data-name="@name"><td>@name</td><td colspan="2">@value</td></tr>
+            }
+        </tbody>
+    </MudSimpleTable>
+
+    <MudText Typo="Typo.subtitle1" Class="mt-4">Model (read only)</MudText>
+    <MudSimpleTable Dense="true">
+        <tbody>
+            @foreach (var (name, value) in ModelRows())
+            {
+                <tr data-testid="setting-row" data-name="@name"><td>@name</td><td>@value</td></tr>
+            }
+        </tbody>
+    </MudSimpleTable>
+</MudPaper>
+
+@code {
+    /// <summary>The agent limits that can be changed while the console runs, in the order shown.</summary>
+    private static readonly (string Name, Func<AgentOptions, long> Read)[] Editable =
+    [
+        (nameof(AgentOptions.MinAmountIqd), o => o.MinAmountIqd),
+        (nameof(AgentOptions.PerTransactionCapIqd), o => o.PerTransactionCapIqd),
+        (nameof(AgentOptions.PerDayCapIqd), o => o.PerDayCapIqd),
+        (nameof(AgentOptions.CardTimerSeconds), o => o.CardTimerSeconds),
+        (nameof(AgentOptions.MaxRequestsPerMessage), o => o.MaxRequestsPerMessage),
+        (nameof(AgentOptions.MaxProductsInOneQuestion), o => o.MaxProductsInOneQuestion),
+        (nameof(AgentOptions.RepeatWarningWindowMinutes), o => o.RepeatWarningWindowMinutes),
+        (nameof(AgentOptions.HistoryDays), o => o.HistoryDays),
+        (nameof(AgentOptions.MinSubstringWordLength), o => o.MinSubstringWordLength),
+        (nameof(AgentOptions.MaxYesNoWords), o => o.MaxYesNoWords),
+    ];
+
+    private readonly Dictionary<string, string> drafts = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, string> errors = new(StringComparer.Ordinal);
+
+    private static string Key(string name) => AgentOptions.SectionName + ":" + name;
+
+    private string Draft(string name) => drafts.TryGetValue(name, out var draft) ? draft : string.Empty;
+
+    private void Save(string name)
+    {
+        // Plain digits only (ASCII or Arabic-Indic, as the phone accepts); anything else is refused before the options see it.
+        var typed = Agent.Core.Text.ArabicDigits.ToAscii(Draft(name).Trim());
+        if (typed.Length == 0 || !typed.All(char.IsAsciiDigit))
+        {
+            errors[name] = name + ": type a whole number, digits only.";
+            return;
+        }
+
+        if (Runtime.TrySet(Key(name), typed, out var error))
+        {
+            errors.Remove(name);
+            drafts.Remove(name);
+        }
+        else
+        {
+            errors[name] = error;
+        }
+    }
+
+    private void Reset(string name)
+    {
+        Runtime.Reset(Key(name));
+        errors.Remove(name);
+        drafts.Remove(name);
+    }
+
+    private static IEnumerable<(string Name, string Value)> ReadOnly(AgentOptions o)
+    {
+        yield return (nameof(AgentOptions.Parser), o.Parser);
+        yield return (nameof(AgentOptions.DevSetPath), o.DevSetPath);
+        yield return (nameof(AgentOptions.DemoUserId), Number(o.DemoUserId));
+        yield return (nameof(AgentOptions.WalletBaseUrl), o.WalletBaseUrl?.ToString() ?? "-");
+        yield return (nameof(AgentOptions.WalletTimeoutSeconds), Number(o.WalletTimeoutSeconds));
+        yield return (nameof(AgentOptions.SettleWindowSeconds), Number(o.SettleWindowSeconds));
+        yield return (nameof(AgentOptions.HistoryPageSize), Number(o.HistoryPageSize));
+        yield return (nameof(AgentOptions.SweepIntervalSeconds), Number(o.SweepIntervalSeconds));
+        yield return (nameof(AgentOptions.StaleExecutingAfterSeconds), Number(o.StaleExecutingAfterSeconds));
+    }
+
+    /// <summary>The Model section: the candidate in use and each candidate's model, limits and prices.</summary>
+    private IEnumerable<(string Name, string Value)> ModelRows()
+    {
+        var m = Model.Value;
+        yield return ("Model:" + nameof(ModelOptions.Candidate), m.Candidate ?? "-");
+        foreach (var (name, c) in m.Candidates.OrderBy(c => c.Key, StringComparer.Ordinal))
+        {
+            var prefix = "Model:" + name + ":";
+            yield return (prefix + nameof(ModelCandidate.ModelId), c.Provider + " " + c.ModelId);
+            yield return (prefix + nameof(ModelCandidate.MaxOutputTokens), Number(c.MaxOutputTokens));
+            yield return (prefix + nameof(ModelCandidate.Effort), c.Effort);
+            yield return (prefix + nameof(ModelCandidate.Temperature), c.Temperature?.ToString(CultureInfo.InvariantCulture) ?? "not sent");
+            yield return (prefix + nameof(ModelCandidate.TimeoutSeconds), Number(c.TimeoutSeconds));
+            yield return (prefix + "PricePerMTok", c.InputPricePerMTok.ToString(CultureInfo.InvariantCulture) + " in, " + c.OutputPricePerMTok.ToString(CultureInfo.InvariantCulture) + " out (USD)");
+        }
+    }
+
+    private static string Number(long value) => PhoneFormat.Console(value);
+}

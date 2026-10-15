@@ -53,7 +53,7 @@ public sealed class Checks
     private readonly AgentOptions options;
     private readonly TimeProvider clock;
 
-    public Checks(WalletClient wallet, IOptions<AgentOptions> options, TimeProvider clock)
+    public Checks(WalletClient wallet, IOptionsSnapshot<AgentOptions> options, TimeProvider clock)
     {
         ArgumentNullException.ThrowIfNull(wallet);
         ArgumentNullException.ThrowIfNull(options);

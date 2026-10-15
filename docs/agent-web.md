@@ -348,6 +348,7 @@ The journeys locate elements only by these attributes.
 | Wallet balance | `wallet-balance` | `data-value` (ASCII) |
 | Wallet history row | `wallet-history-row` | `data-reference` |
 | Settings row | `setting-row` | `data-name` |
+| Settings value, input, Save, Reset, error (editable agent rows) | `setting-value`, `setting-input`, `setting-save`, `setting-reset`, `setting-error` | `data-name` (the setting's name, as on its row) |
 | Menu items | `menu-wallet`, `menu-settings`, `menu-log`, `menu-learning` | |
 
 ## The journeys

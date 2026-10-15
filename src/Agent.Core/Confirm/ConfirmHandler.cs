@@ -46,7 +46,7 @@ public sealed class ConfirmHandler
     private readonly ITraceSink trace;
 
     public ConfirmHandler(
-        WalletClient wallet, PendingStore store, Checks checks, IOptions<AgentOptions> options, TimeProvider clock, ITraceSink trace)
+        WalletClient wallet, PendingStore store, Checks checks, IOptionsSnapshot<AgentOptions> options, TimeProvider clock, ITraceSink trace)
     {
         ArgumentNullException.ThrowIfNull(wallet);
         ArgumentNullException.ThrowIfNull(store);

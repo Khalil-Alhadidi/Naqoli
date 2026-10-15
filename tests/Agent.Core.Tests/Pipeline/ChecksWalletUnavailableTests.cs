@@ -24,7 +24,7 @@ public class ChecksWalletUnavailableTests
         var handler = new StubHandler(respond);
         var http = new HttpClient(handler) { BaseAddress = new Uri("http://localhost") };
         var wallet = new WalletClient(http, NullLogger<WalletClient>.Instance);
-        return (new Checks(wallet, Options.Create(new AgentOptions()), new FakeClock()), handler);
+        return (new Checks(wallet, new FixedSnapshot(new AgentOptions()), new FakeClock()), handler);
     }
 
     private static HttpResponseMessage Json(string body)
@@ -93,5 +93,13 @@ public class ChecksWalletUnavailableTests
             Calls++;
             return Task.FromResult(respond(request));
         }
+    }
+
+    /// <summary>The options of every scope: fixed values, as <c>Options.Create</c> gives for <see cref="IOptions{TOptions}"/>.</summary>
+    private sealed class FixedSnapshot(AgentOptions value) : IOptionsSnapshot<AgentOptions>
+    {
+        public AgentOptions Value => value;
+
+        public AgentOptions Get(string? name) => value;
     }
 }

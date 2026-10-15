@@ -1,7 +1,11 @@
+extern alias AgentWeb;
+
 using Agent.Core.Pipeline;
 using Agent.Core.Tests.Agent;
 using Agent.Core.Tests.Wallet;
 using Agent.Core.Wallet;
+using AgentWeb::Agent.Web.Services;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Agent.Core.Tests.Pipeline;
@@ -198,5 +202,31 @@ public class ChecksTests(AgentHost host)
         var input = new CheckInput(SeedFacts.DemoUserId, "purchase", 5_000, null, null, null, null, ProductId: 9_999, SkipFormat: true);
 
         Assert.Equal(new CheckResult.Fail(ReasonCodes.NotDoneNothingTaken, "unknown_product", null), await RunAsync(input));
+    }
+
+    [Fact]
+    public async Task ACapChangedLiveAppliesToTheNextCheck()
+    {
+        await StartAsync();
+
+        // D8: the host's configuration with the runtime source last, as the web console has it.
+        await using var provider = host.BuildProvider((services, configuration) =>
+        {
+            var live = new ConfigurationBuilder().AddConfiguration(configuration).AddRuntimeSettings().Build();
+            services.AddAgentCore(live);
+            services.AddRuntimeSettings(live);
+        });
+        async Task<CheckResult> CheckAsync(CheckInput input)
+        {
+            await using var scope = provider.CreateAsyncScope();
+            return await scope.ServiceProvider.GetRequiredService<Checks>().RunAsync(input, Token);
+        }
+
+        var input = await TransferAsync(SeedFacts.DemoUserId, 50_000, ContactPhone("S01"));
+        Assert.IsType<CheckResult.Pass>(await CheckAsync(input));
+
+        Assert.True(provider.GetRequiredService<RuntimeSettings>().TrySet("Agent:PerTransactionCapIqd", "40000", out var error), error);
+
+        Assert.Equal(new CheckResult.Fail(ReasonCodes.OverPerTransactionCap, null, 40_000), await CheckAsync(input));
     }
 }

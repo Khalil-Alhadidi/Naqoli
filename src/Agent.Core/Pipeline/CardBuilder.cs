@@ -35,7 +35,7 @@ public sealed class CardBuilder
     private readonly WalletClient wallet;
     private readonly AgentOptions options;
 
-    public CardBuilder(WalletClient wallet, IOptions<AgentOptions> options)
+    public CardBuilder(WalletClient wallet, IOptionsSnapshot<AgentOptions> options)
     {
         ArgumentNullException.ThrowIfNull(wallet);
         ArgumentNullException.ThrowIfNull(options);

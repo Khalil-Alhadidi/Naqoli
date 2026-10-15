@@ -57,7 +57,7 @@ public sealed class Orchestrator
         CardBuilder cards,
         PendingStore store,
         AuditLog audit,
-        IOptions<AgentOptions> options,
+        IOptionsSnapshot<AgentOptions> options,
         TimeProvider clock,
         ITraceSink trace)
     {

@@ -14,7 +14,7 @@ namespace Agent.Core.Pending;
 /// in the same database transaction, and only when the transition happened. It never calls the wallet. Every call made
 /// for a user names that user, and a record of another user is not found.
 /// </summary>
-public sealed class PendingStore(AgentDbContext db, AuditLog audit, IOptions<AgentOptions> options, TimeProvider time)
+public sealed class PendingStore(AgentDbContext db, AuditLog audit, IOptionsSnapshot<AgentOptions> options, TimeProvider time)
 {
     /// <summary>The most characters of a purchase code the store keeps.</summary>
     public const int PurchaseCodeDigitsKept = 4;

@@ -15,7 +15,9 @@ public static class ServiceCollectionExtensions
     /// <see cref="ITraceSink"/> that routes every action's steps to its circuit's log, and the parser
     /// <c>Agent:Parser</c> names as <see cref="IParser"/> (<see cref="ParserFactory.AddAgentParser"/>). The D6 words
     /// (<see cref="AgentOptions.YesWords"/>, <see cref="AgentOptions.NoWords"/>) are set from the resource file
-    /// (<c>Word_yes</c>, <c>Word_no</c>), so <c>Agent.Core</c> holds no phone text (rule 4).
+    /// (<c>Word_yes</c>, <c>Word_no</c>), so <c>Agent.Core</c> holds no phone text (rule 4). When
+    /// <paramref name="configuration"/> has a <see cref="RuntimeSettingsSource"/> (Program adds it), the singleton
+    /// <see cref="RuntimeSettings"/> saves agent settings live (D8).
     /// </summary>
     public static IServiceCollection AddAgentWebServices(this IServiceCollection services, IConfiguration configuration)
     {
@@ -37,6 +39,7 @@ public static class ServiceCollectionExtensions
             options.NoWords = PhoneWords.Split(text["Word_no"].Value);
         });
         services.AddAgentParser(configuration);
+        services.AddRuntimeSettings(configuration);
         services.AddScoped<ChatSession>();
         services.AddScoped<ConsoleNavigation>();
         return services;
