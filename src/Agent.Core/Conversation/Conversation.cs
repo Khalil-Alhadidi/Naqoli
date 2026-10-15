@@ -188,9 +188,10 @@ public sealed class Conversation : IDisposable
             Add(new ConversationMessage(ConversationRole.User, ConversationKind.Typed));
 
             var pendingNote = PendingNote();
-            var normalized = ArabicText.Normalize(typedText);
-            var isYes = IsWord(normalized, yesWords);
-            var isNo = IsWord(normalized, noWords);
+            // D6: a yes or a no is the whole message and nothing more; a sentence that merely contains a word is a request.
+            var word = NormalizeWord(typedText);
+            var isYes = IsWord(word, yesWords);
+            var isNo = IsWord(word, noWords);
 
             if (IsCardLive)
             {
@@ -823,10 +824,25 @@ public sealed class Conversation : IDisposable
     private static string[] NormalizeWords(string[]? words)
         => words is null
             ? []
-            : [.. words.Select(ArabicText.Normalize).Where(w => w.Length > 0).Distinct(StringComparer.Ordinal)];
+            : [.. words.Select(NormalizeWord).Where(w => w.Length > 0).Distinct(StringComparer.Ordinal)];
 
-    private static bool IsWord(string normalized, string[] words)
-        => normalized.Length > 0 && Array.Exists(words, w => string.Equals(normalized, w, StringComparison.Ordinal));
+    /// <summary>
+    /// The form in which a typed message and a D6 word are compared: <see cref="ArabicText.Normalize"/> (trim, one
+    /// space, alef and digit forms), then trailing punctuation dropped (a question mark, a comma, a full stop, in
+    /// either script), then Latin letters lower-cased. The whole message must equal a word; a word inside a longer
+    /// message is never a yes or a no.
+    /// </summary>
+    internal static string NormalizeWord(string text)
+    {
+        var normalized = ArabicText.Normalize(text);
+        var end = normalized.Length;
+        while (end > 0 && (char.IsPunctuation(normalized[end - 1]) || char.IsSymbol(normalized[end - 1]) || normalized[end - 1] == ' '))
+            end--;
+        return normalized[..end].ToLowerInvariant();
+    }
+
+    private static bool IsWord(string word, string[] words)
+        => word.Length > 0 && Array.Exists(words, w => string.Equals(word, w, StringComparison.Ordinal));
 
     private void AddRefusal(string code, long? amountIqd = null)
         => Add(new ConversationMessage(ConversationRole.Agent, ConversationKind.Refusal, code, amountIqd));
