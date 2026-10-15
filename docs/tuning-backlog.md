@@ -1,0 +1,16 @@
+# Tuning backlog
+
+What waits for the model-choice and tuning pass of milestone 10 (`docs/build-plan.md`). Each item names the development-set cases it would move, where the fix sits, and what it depends on. Nothing here is tuned before its milestone; the held-out set is never consulted (rule 7).
+
+Figures below are from the prompt version 2 runs of 15 Oct 2026 (`docs/reports/dev-claude-<candidate>-v2-repeat3-2026-10-15-*`), three runs per candidate: medians haiku 55/72, sonnet 59/72, opus 60/72.
+
+| # | Item | Cases | Where it sits | Depends on | Status |
+|---|---|---|---|---|---|
+| 1 | **The bill-or-store schema field.** "Pay the Earthlink subscription" must go straight to the bill card, while "pay the internet" asks bill-or-store (rule 13). The structure has no field that says the user named the subscription, so `BillResolver` cannot tell the two apart. Needs a field in the parse structure (a prompt version bump and a schema change), a validator rule, and a resolver branch. | CLN-09, CLN-09-v1, CLN-25 (fail on every candidate, every run) | Milestone 8 (the bill flow), as the first schema change after the baselines | Khalil names the field and its values; the answer keys do not change | Open |
+| 2 | **A typed partial amount read as unclear.** After `which_amount`, the user types the amount with the thousand word. Sonnet reads it as `unclear` in every run, so the code fallback (digits only) cannot fill the slot and the case ends `not_understood`; haiku and opus read it as a partial transfer and the merge of milestone 7 completes the card. A prompt line for answers to an open question (the `Pending:` line names the question kind) belongs in prompt version 3. | AMB-06 (sonnet every run; passes on haiku and opus) | Prompt version 3, with the other prompt items of milestone 8 | Wording in Khalil's words if an Arabic example is needed; otherwise an English rule only | Open |
+| 3 | **Effort as a comparison axis.** Every candidate runs at `Effort` `low` (`Model:Effort` in the report header). Temperature cannot be used as an axis (the 5.5 models answer a non-default temperature with HTTP 400, probed 15 Oct 2026), so effort is the one sampling setting the comparison can vary: `low` against `medium` per candidate, with `--repeat 3`, cost and median time recorded. The decision rule of D13 applies (fewest wrong cards, then cheaper or in-country). | The flipped cases of the repeat reports (haiku: AMB-03, AMB-13, AMB-14, AMB-19, RED-09; sonnet: GAP-04) are the first to watch | Milestone 10 | The second provider in place, so the axis is run on every candidate | Open |
+
+## Not on this list
+
+- The items deferred to milestones 8, 9b and 9c in `docs/build-plan.md` (AMB-23, MAL-09, NOGO-12, GAP-06, the compound cases) are feature work, not tuning.
+- Haiku's remaining misses on every run (RED-10, MAL-06, CLN-23-v1) are parse quality at the cheapest candidate; they are measured again in the milestone 10 comparison rather than tuned for.
