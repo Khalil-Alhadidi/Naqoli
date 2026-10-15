@@ -191,7 +191,12 @@ public static class EvalCommand
             settings["Model:EstimatedCostUsd"] = Usd(estimate);
             await output.WriteLineAsync(string.Create(
                 CultureInfo.InvariantCulture,
-                $"Model {parsed.Candidate} ({candidate.ModelId}), prompt version {ClaudeParser.PromptVersion}. Estimated cost: {cases.Count} case(s) x ({EstimatedInputTokensPerCase} in + {EstimatedOutputTokensPerCase} out tokens) = {Usd(estimate)} USD."));
+                $"Model {parsed.Candidate} ({candidate.ModelId}), prompt version {ClaudeParser.PromptVersion}. Estimated cost: {cases.Count} case(s) x ({EstimatedInputTokensPerCase} in + {EstimatedOutputTokensPerCase} out tokens) = {Usd(estimate)} USD per run."));
+            if (parsed.Repeat > 1)
+            {
+                await output.WriteLineAsync(string.Create(
+                    CultureInfo.InvariantCulture, $"{parsed.Repeat} runs: estimated {Usd(estimate * parsed.Repeat)} USD in all."));
+            }
         }
 
         var admin = new WalletAdmin(http, options.WalletAdminKey, seed);
@@ -199,54 +204,75 @@ public static class EvalCommand
         var driver = new CaseDriver(host.Services, admin, seed, host.Services.GetRequiredService<EvalClock>(), parser, options);
         var grader = new CaseGrader(seed);
 
-        var started = TimeProvider.System.GetUtcNow();
-        var results = new List<CaseResult>(cases.Count);
-        long inputTokens = 0;
-        long outputTokens = 0;
-        foreach (var evalCase in cases)
+        var directory = EvalPaths.Resolve(parsed.Out ?? options.ReportDirectory, root);
+        var runs = new List<RunSummary>(parsed.Repeat);
+        var runPaths = new List<ReportPaths>(parsed.Repeat);
+        for (var run = 1; run <= parsed.Repeat; run++)
         {
-            CaseObservation observation;
-            try
+            if (parsed.Repeat > 1)
+                await output.WriteLineAsync(string.Create(CultureInfo.InvariantCulture, $"Run {run} of {parsed.Repeat}."));
+
+            var started = TimeProvider.System.GetUtcNow();
+            var runSettings = new Dictionary<string, string>(settings, StringComparer.Ordinal);
+            var results = new List<CaseResult>(cases.Count);
+            long inputTokens = 0;
+            long outputTokens = 0;
+            foreach (var evalCase in cases)
             {
-                observation = await driver.PlayAsync(evalCase, cancellationToken);
+                CaseObservation observation;
+                try
+                {
+                    observation = await driver.PlayAsync(evalCase, cancellationToken);
+                }
+                catch (HttpRequestException)
+                {
+                    await errors.WriteLineAsync("The wallet stopped answering during case " + evalCase.Id + ".");
+                    return Unavailable;
+                }
+
+                inputTokens += observation.Usage.InputTokens;
+                outputTokens += observation.Usage.OutputTokens;
+                var result = grader.Grade(evalCase, observation);
+                results.Add(result);
+                await output.WriteLineAsync(evalCase.Id + " " + (result.Passed ? "passed" : "failed" + (result.FirstFailing is { } f ? " at " + f.Field : string.Empty)));
             }
-            catch (HttpRequestException)
+
+            if (candidate is not null)
             {
-                await errors.WriteLineAsync("The wallet stopped answering during case " + evalCase.Id + ".");
-                return Unavailable;
+                var cost = results.Sum(r => r.CostUsd);
+                runSettings["Model:CostUsd"] = Usd(cost);
+                runSettings["Model:InputTokens"] = inputTokens.ToString(CultureInfo.InvariantCulture);
+                runSettings["Model:OutputTokens"] = outputTokens.ToString(CultureInfo.InvariantCulture);
+                await output.WriteLineAsync(string.Create(
+                    CultureInfo.InvariantCulture, $"Model cost: {Usd(cost)} USD ({inputTokens} tokens in, {outputTokens} out)."));
             }
 
-            inputTokens += observation.Usage.InputTokens;
-            outputTokens += observation.Usage.OutputTokens;
-            var result = grader.Grade(evalCase, observation);
-            results.Add(result);
-            await output.WriteLineAsync(evalCase.Id + " " + (result.Passed ? "passed" : "failed" + (result.FirstFailing is { } f ? " at " + f.Field : string.Empty)));
+            var summary = new RunSummary(
+                parsed.Set, setHash, ReportParserName(measured.Name), started, runSettings, results, parsed.Label, parsed.Repeat > 1 ? run : null);
+            var paths = ReportWriter.Write(summary, directory);
+            runs.Add(summary);
+            runPaths.Add(paths);
+
+            foreach (var score in ReportWriter.Scores(results, r => r.Category))
+            {
+                await output.WriteLineAsync(string.Create(
+                    CultureInfo.InvariantCulture,
+                    $"{score.Name}: {score.Passed}/{score.Cases} passed ({score.Percent:0.0} %, Wilson 95% {ReportWriter.Interval(score)})"));
+            }
+
+            var total = ReportWriter.Score("All cases", results);
+            await output.WriteLineAsync(string.Create(CultureInfo.InvariantCulture, $"All cases: {total.Passed}/{total.Cases} passed ({total.Percent:0.0} %)"));
+            await output.WriteLineAsync("Report: " + paths.MarkdownPath);
+            await output.WriteLineAsync("Report: " + paths.JsonPath);
         }
 
-        if (candidate is not null)
+        if (parsed.Repeat > 1)
         {
-            var cost = results.Sum(r => r.CostUsd);
-            settings["Model:CostUsd"] = Usd(cost);
-            settings["Model:InputTokens"] = inputTokens.ToString(CultureInfo.InvariantCulture);
-            settings["Model:OutputTokens"] = outputTokens.ToString(CultureInfo.InvariantCulture);
-            await output.WriteLineAsync(string.Create(
-                CultureInfo.InvariantCulture, $"Model cost: {Usd(cost)} USD ({inputTokens} tokens in, {outputTokens} out)."));
+            var repeat = ReportWriter.WriteRepeat(runs, runPaths, directory);
+            await output.WriteAsync(ReportWriter.RepeatConsoleSummary(ReportWriter.Repeat(runs)));
+            await output.WriteLineAsync("Repeat report: " + repeat.MarkdownPath);
+            await output.WriteLineAsync("Repeat report: " + repeat.JsonPath);
         }
-
-        var summary = new RunSummary(parsed.Set, setHash, ReportParserName(measured.Name), started, settings, results, parsed.Label);
-        var paths = ReportWriter.Write(summary, EvalPaths.Resolve(parsed.Out ?? options.ReportDirectory, root));
-
-        foreach (var score in ReportWriter.Scores(results, r => r.Category))
-        {
-            await output.WriteLineAsync(string.Create(
-                CultureInfo.InvariantCulture,
-                $"{score.Name}: {score.Passed}/{score.Cases} passed ({score.Percent:0.0} %, Wilson 95% {ReportWriter.Interval(score)})"));
-        }
-
-        var total = ReportWriter.Score("All cases", results);
-        await output.WriteLineAsync(string.Create(CultureInfo.InvariantCulture, $"All cases: {total.Passed}/{total.Cases} passed ({total.Percent:0.0} %)"));
-        await output.WriteLineAsync("Report: " + paths.MarkdownPath);
-        await output.WriteLineAsync("Report: " + paths.JsonPath);
 
         await host.StopAsync(cancellationToken);
         return Completed;

@@ -139,6 +139,29 @@ The rules, field by field:
 - **Cases**: `id | category | type | passed | first failing field` (with its expected and observed values).
 - **Unsupported steps**: the cases stopped by a step form not built yet.
 
+### Repeat runs (`--repeat N`)
+
+No candidate accepts temperature 0 (HTTP 400 on all three, probed on 15 Oct 2026; see [agent-model.md](agent-model.md)), so run-to-run variance is measured by playing the set several times. With `--repeat N` (1 to 20, default 1) the runner plays the whole set N times in sequence through the same driver; every case resets the wallet as it always does.
+
+- **Each run** writes its own report as above, with `-r<k>` after the label: `dev-claude-haiku-v2-r1-2026-10-15-2100`. Two runs in one minute never collide.
+- **The aggregate** (`ReportWriter.WriteRepeat`) is `<set>-<parser>[-<label>]-repeat<N>-<UTC date>-<UTC HHmm>.md` and `.json`, stamped with the first run's start. It holds:
+  - the first run's header settings, with `Model:CostUsd` summed over the runs;
+  - per group (all cases, then each category): the case count and the min, median and max of the passed count across the runs. The median of an even count is the mean of the two middle values, shown with one decimal;
+  - the flipped cases (passed in some runs and failed in others), with pass or fail per run, in run order;
+  - one line per run: passed, cost and median case time;
+  - the file names of the per-run reports.
+- The console prints the same summary. Like every report, the aggregate holds ids, categories, codes and figures only, never a case's text (rule 7).
+
+```mermaid
+flowchart LR
+    args["--repeat N"] --> loop{"run k of N"}
+    loop --> play["Play every case (wallet reset per case)"]
+    play --> report["Report ...-r&lt;k&gt;-date"]
+    report --> loop
+    loop -- "all N done" --> agg["ReportWriter.Repeat: min, median, max per group; flipped cases"]
+    agg --> write["...-repeat&lt;N&gt;-date .md and .json, console summary"]
+```
+
 ## The held-out guard (rule 7)
 
 `data/requests.heldout.jsonl` is opened only by `dotnet run --project src/Agent.Eval -- heldout --milestone-11-run`, in milestone 11. `HeldOutGuard.Check` runs first, before any set file is opened:
@@ -171,7 +194,16 @@ The runner uses the Development environment unless `DOTNET_ENVIRONMENT` says oth
 
 1. Create the wallet database once: `dotnet run --project src/Wallet.MockApi -- migrate`.
 2. Start the wallet: `dotnet run --project src/Wallet.MockApi`.
-3. Run: `dotnet run --project src/Agent.Eval -- dev`. Options: `--only CLN-01,CLN-02`, `--wallet <url>`, `--out <dir>`, `--parser scripted|claude:<candidate>`, `--label <tag>` (added to the report name after the parser).
+3. Run: `dotnet run --project src/Agent.Eval -- dev`. Options: `--only CLN-01,CLN-02`, `--wallet <url>`, `--out <dir>`, `--parser scripted|claude:<candidate>`, `--label <tag>` (added to the report name after the parser), `--repeat <N>` (play the set N times, 1 to 20; see "Repeat runs").
+
+| Option | Value | Effect |
+|---|---|---|
+| `--only` | `id,id,...` | Runs only those cases |
+| `--wallet` | http or https address | Overrides `Agent:WalletBaseUrl` |
+| `--out` | directory | Overrides `Eval:ReportDirectory` |
+| `--parser` | `scripted` or `claude:<candidate>` | The parser measured; `scripted` by default |
+| `--label` | lower-case letters, digits, `_`, `-` | A tag in the report name, after the parser |
+| `--repeat` | 1 to 20 | Plays the set that many times; each run gets `-r<k>` in its name, and an aggregate `-repeat<N>` report follows |
 
 The console prints one line per case (`CLN-01 passed`, or `CLN-01 failed at cards[0]`), one per category, the total, and the two report paths. Exit codes: 0 the run completed (whatever the pass rate); 2 a wrong command line, a wrong setting or the held-out guard refused; 1 the wallet or the agent database does not answer, the set file is missing or malformed, or the wallet stopped answering during the run (no report is written then).
 

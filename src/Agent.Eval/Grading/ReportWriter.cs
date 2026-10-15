@@ -12,6 +12,8 @@ namespace Agent.Eval.Grading;
 /// <param name="StartedUtc">When the run began.</param>
 /// <param name="Settings">The <c>Eval</c> and <c>Agent</c> settings of the run, by key (no keys or secrets).</param>
 /// <param name="Results">Every case's grade, in run order.</param>
+/// <param name="Label">The run's <c>--label</c>, or null.</param>
+/// <param name="Run">The run's number in a <c>--repeat</c> series (1 first), or null for a single run.</param>
 public sealed record RunSummary(
     string SetName,
     string SetFileSha256,
@@ -19,7 +21,8 @@ public sealed record RunSummary(
     DateTimeOffset StartedUtc,
     IReadOnlyDictionary<string, string> Settings,
     IReadOnlyList<CaseResult> Results,
-    string? Label = null);
+    string? Label = null,
+    int? Run = null);
 
 /// <summary>Cases, passes and the Wilson 95% interval of one group.</summary>
 public sealed record GroupScore(string Name, int Cases, int Passed, double Percent, double LowPercent, double HighPercent);
@@ -33,7 +36,7 @@ public sealed record ReportPaths(string JsonPath, string MarkdownPath);
 /// reported apart from the card score), the masking check, time and cost, one row per case and the unsupported steps. A
 /// report carries case ids, categories, codes, figures and verdicts, never a case's text (rule 7).
 /// </summary>
-public static class ReportWriter
+public static partial class ReportWriter
 {
     /// <summary>The category whose cases carry the red-team pass mark.</summary>
     public const string RedTeamCategory = "Red team";
@@ -98,7 +101,8 @@ public static class ReportWriter
     /// <summary>
     /// Writes the JSON and Markdown reports of <paramref name="summary"/> into <paramref name="directory"/>, named
     /// <c>&lt;set&gt;-&lt;parser&gt;-&lt;UTC date&gt;-&lt;UTC HHmm&gt;</c>, with the run's label after the parser when one was
-    /// given (<c>dev-claude-haiku-m7a-2026-10-15-1800</c>).
+    /// given (<c>dev-claude-haiku-m7a-2026-10-15-1800</c>), and the run's number in a repeat series after that
+    /// (<c>dev-claude-haiku-v2-r1-2026-10-15-2100</c>), so two runs in one minute never collide (<see cref="Stem"/>).
     /// </summary>
     public static ReportPaths Write(RunSummary summary, string directory)
     {
@@ -108,9 +112,7 @@ public static class ReportWriter
         Directory.CreateDirectory(directory);
         // One report per set, parser and minute (dev-scripted-2026-10-14-0900), so a later run on the same day never
         // overwrites a committed report (review M2).
-        var stem = summary.SetName + "-" + summary.Parser + "-"
-            + (string.IsNullOrEmpty(summary.Label) ? string.Empty : summary.Label + "-")
-            + summary.StartedUtc.UtcDateTime.ToString("yyyy-MM-dd-HHmm", CultureInfo.InvariantCulture);
+        var stem = Stem(summary);
         var jsonPath = Path.Combine(directory, stem + ".json");
         var markdownPath = Path.Combine(directory, stem + ".md");
 
@@ -118,6 +120,19 @@ public static class ReportWriter
         File.WriteAllText(markdownPath, Markdown(summary), Utf8NoBom);
         return new ReportPaths(jsonPath, markdownPath);
     }
+
+    /// <summary>The file name, without extension, of the report of <paramref name="summary"/> (see <see cref="Write"/>).</summary>
+    public static string Stem(RunSummary summary)
+    {
+        ArgumentNullException.ThrowIfNull(summary);
+        return summary.SetName + "-" + summary.Parser + "-"
+            + (string.IsNullOrEmpty(summary.Label) ? string.Empty : summary.Label + "-")
+            + (summary.Run is { } run ? "r" + run.ToString(CultureInfo.InvariantCulture) + "-" : string.Empty)
+            + StampOf(summary.StartedUtc);
+    }
+
+    private static string StampOf(DateTimeOffset startedUtc)
+        => startedUtc.UtcDateTime.ToString("yyyy-MM-dd-HHmm", CultureInfo.InvariantCulture);
 
     /// <summary>The Markdown report of <paramref name="summary"/>.</summary>
     public static string Markdown(RunSummary summary)

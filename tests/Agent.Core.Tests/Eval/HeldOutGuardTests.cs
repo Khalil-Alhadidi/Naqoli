@@ -169,6 +169,27 @@ public sealed class HeldOutGuardTests : IDisposable
         Assert.Equal(expected, parsed?.Parser);
     }
 
+    [Fact]
+    public void TheRepeatCountIsReadFromTheCommandLine()
+    {
+        Assert.Equal(3, EvalArguments.Parse(["dev", "--parser", "claude:haiku", "--repeat", "3"], out var error)?.Repeat);
+        Assert.Null(error);
+        Assert.Equal(1, EvalArguments.Parse(["dev"], out _)?.Repeat);
+        Assert.Equal(20, EvalArguments.Parse(["dev", "--repeat", "20"], out _)?.Repeat);
+    }
+
+    [Theory]
+    [InlineData("0")]
+    [InlineData("21")]
+    [InlineData("x")]
+    [InlineData("-1")]
+    [InlineData("2.5")]
+    public void ARepeatOutsideOneToTwentyIsRefused(string repeat)
+    {
+        Assert.Null(EvalArguments.Parse(["dev", "--repeat", repeat], out var error));
+        Assert.NotNull(error);
+    }
+
     [Theory]
     [InlineData("M7A")]
     [InlineData("m7a b")]

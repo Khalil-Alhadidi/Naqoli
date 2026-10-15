@@ -1,11 +1,12 @@
+using System.Globalization;
 using System.Text.RegularExpressions;
 
 namespace Agent.Eval.Running;
 
 /// <summary>
 /// The runner's command line: <c>dev</c> or <c>heldout --milestone-11-run</c>, then <c>--only id,id</c>,
-/// <c>--wallet url</c>, <c>--out dir</c>, <c>--parser scripted|claude:&lt;candidate&gt;</c> and <c>--label text</c> in any
-/// order.
+/// <c>--wallet url</c>, <c>--out dir</c>, <c>--parser scripted|claude:&lt;candidate&gt;</c>, <c>--label text</c> and
+/// <c>--repeat N</c> in any order.
 /// </summary>
 /// <param name="Set"><see cref="HeldOutGuard.DevSet"/> or <see cref="HeldOutGuard.HeldOutSet"/>.</param>
 /// <param name="Milestone11Run">The held-out flag was given.</param>
@@ -14,6 +15,7 @@ namespace Agent.Eval.Running;
 /// <param name="Out">The report directory, overriding <c>Eval:ReportDirectory</c>.</param>
 /// <param name="Parser">The parser measured: <c>scripted</c> (the default) or <c>claude:&lt;candidate&gt;</c>.</param>
 /// <param name="Label">A tag for the report name (lower-case letters, digits, <c>_</c> and <c>-</c>), or null.</param>
+/// <param name="Repeat">How many times the set is played, <see cref="MinRepeat"/> to <see cref="MaxRepeat"/>; 1 by default.</param>
 public sealed partial record EvalArguments(
     string Set,
     bool Milestone11Run,
@@ -21,11 +23,18 @@ public sealed partial record EvalArguments(
     Uri? Wallet,
     string? Out,
     string Parser = EvalArguments.ScriptedParser,
-    string? Label = null)
+    string? Label = null,
+    int Repeat = 1)
 {
     /// <summary>The usage line.</summary>
     public const string Usage =
-        "Usage: Agent.Eval dev | heldout --milestone-11-run  [--only <id,id,...>] [--wallet <url>] [--out <dir>] [--parser scripted|claude:<candidate>] [--label <a-z0-9_->]";
+        "Usage: Agent.Eval dev | heldout --milestone-11-run  [--only <id,id,...>] [--wallet <url>] [--out <dir>] [--parser scripted|claude:<candidate>] [--label <a-z0-9_->] [--repeat <1-20>]";
+
+    /// <summary>The fewest runs <c>--repeat</c> takes.</summary>
+    public const int MinRepeat = 1;
+
+    /// <summary>The most runs <c>--repeat</c> takes.</summary>
+    public const int MaxRepeat = 20;
 
     /// <summary>The default parser.</summary>
     public const string ScriptedParser = "scripted";
@@ -53,6 +62,7 @@ public sealed partial record EvalArguments(
         string? output = null;
         var parser = ScriptedParser;
         string? label = null;
+        var repeat = MinRepeat;
         for (var i = 1; i < args.Count; i++)
         {
             var arg = args[i];
@@ -62,7 +72,7 @@ public sealed partial record EvalArguments(
                 continue;
             }
 
-            if (arg is not ("--only" or "--wallet" or "--out" or "--parser" or "--label"))
+            if (arg is not ("--only" or "--wallet" or "--out" or "--parser" or "--label" or "--repeat"))
             {
                 error = "Unknown argument '" + arg + "'.";
                 return null;
@@ -106,6 +116,14 @@ public sealed partial record EvalArguments(
 
                     label = value;
                     break;
+                case "--repeat":
+                    if (!int.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out repeat) || repeat is < MinRepeat or > MaxRepeat)
+                    {
+                        error = "--repeat needs a whole number from 1 to 20.";
+                        return null;
+                    }
+
+                    break;
                 default:
                     output = value;
                     break;
@@ -118,7 +136,7 @@ public sealed partial record EvalArguments(
             return null;
         }
 
-        return new EvalArguments(args[0], flag, only, wallet, output, parser, label);
+        return new EvalArguments(args[0], flag, only, wallet, output, parser, label, repeat);
     }
 
     [GeneratedRegex("^(scripted|claude:[a-z0-9_-]+)$", RegexOptions.CultureInvariant)]
