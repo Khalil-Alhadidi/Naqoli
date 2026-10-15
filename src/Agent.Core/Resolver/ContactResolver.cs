@@ -4,8 +4,8 @@ namespace Agent.Core.Resolver;
 
 /// <summary>
 /// Resolves a typed name against a user's saved names and aliases by matching rules 1 to 8 and 15
-/// (<c>docs/matching-rules.md</c>). Pure: no I/O, no wallet calls. Steps, first that hits wins: exact, partial, near,
-/// shared word, not found.
+/// (<c>docs/matching-rules.md</c>). Pure: no I/O, no wallet calls. Steps, first that hits wins: exact, near, partial,
+/// shared word, not found (near before partial: Khalil, 15 Oct 2026).
 /// </summary>
 public static class ContactResolver
 {
@@ -53,7 +53,14 @@ public static class ContactResolver
         if (typedWords.All(w => ArabicText.IsTitle(w) || ArabicText.IsKinship(w)))
             return new Resolution.NotFound();
 
-        // 2. Partial (rules 4, 5, 7): every typed word is inside the candidate's key; a short typed word must equal
+        // 2. Near (rule 6): the whole key is one edit away from a whole saved name or alias; always a question, even
+        // with one candidate. Checked before partial (Khalil, 15 Oct 2026, CLN-03-v1): a name one letter short of a saved
+        // one is also inside it, and the user is asked rather than sent straight to the card.
+        var near = keyed.Where(k => ArabicText.EditDistance(k.Key, typedKey) == 1).Select(k => k.Candidate).ToList();
+        if (near.Count > 0)
+            return new Resolution.Options(QuestionKind.DidYouMean, OnePerAccount(near));
+
+        // 3. Partial (rules 4, 5, 7): every typed word is inside the candidate's key; a short typed word must equal
         // one of the candidate's words (both compared after the per-word leading al strip). A word's length is measured
         // on its key, after that strip.
         var wordKeys = typedWords
@@ -82,11 +89,6 @@ public static class ContactResolver
                 ? new Resolution.Card(accounts[0])
                 : new Resolution.Options(QuestionKind.WhichContact, accounts);
         }
-
-        // 3. Near (rule 6): the whole key is one edit away; always a question, even with one candidate.
-        var near = keyed.Where(k => ArabicText.EditDistance(k.Key, typedKey) == 1).Select(k => k.Candidate).ToList();
-        if (near.Count > 0)
-            return new Resolution.Options(QuestionKind.DidYouMean, OnePerAccount(near));
 
         // 4. Shared word (rule 15): a name word (not a title, not a kinship word) shared exactly; never a card.
         var nameWords = typedWords

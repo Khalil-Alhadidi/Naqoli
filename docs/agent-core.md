@@ -166,12 +166,12 @@ flowchart TD
     exact -- "several accounts" --> whichA["Resolution.Options which_contact"]
     exact -- no --> titles{"Only title and kinship words?"}
     titles -- yes --> notFound["Resolution.NotFound"]
-    titles -- no --> partial{"2. Partial: every typed word inside the key?"}
+    titles -- no --> near{"2. Near: key one edit away?"}
+    near -- yes --> didYou["Resolution.Options did_you_mean"]
+    near -- no --> partial{"3. Partial: every typed word inside the key?"}
     partial -- "one account, not title-only" --> card
     partial -- "several accounts, or title-only" --> whichB["Resolution.Options which_contact"]
-    partial -- no --> near{"3. Near: key one edit away?"}
-    near -- yes --> didYou["Resolution.Options did_you_mean"]
-    near -- no --> shared{"4. Shared name word?"}
+    partial -- no --> shared{"4. Shared name word?"}
     shared -- yes --> whichC["Resolution.Options which_contact"]
     shared -- no --> notFound
     notFound --> refuse["Refusal recipient_not_found"]
@@ -179,8 +179,8 @@ flowchart TD
 
 - **Exact** (rules 1, 2, 3, 7): the whole key equals a saved name or alias.
 - **Title and kinship only** (rules 1, 15): a typed name made only of title words (abu, umm) and kinship words is not a name.
+- **Near** (rule 6): the whole key is one edit away (`ArabicText.EditDistance`). Always a question, even with one candidate. Checked before partial (Khalil, 15 Oct 2026, CLN-03-v1): a name one letter short of a saved name is also inside it, and is asked as `did_you_mean`, not sent to the card.
 - **Partial** (rules 4, 5, 7): every typed word occurs inside the candidate's key. A typed word whose key (after the per-word leading al strip) is shorter than the setting `MinSubstringWordLength` (3, default `ContactResolver.MinSubstringWordLength`; Khalil, 14 Oct 2026) must equal a whole word of the candidate instead (both compared after that strip). The orchestrator passes the setting to `ContactResolver.Resolve(typedName, candidates, minSubstringWordLength)`; the two-argument overload uses the default. Rule 5: a "title + name" contact matched by the bare name is only ever an option.
-- **Near** (rule 6): the whole key is one edit away (`ArabicText.EditDistance`). Always a question, even with one candidate.
 - **Shared word** (rule 15): a name word (not a title, not a kinship word) shared exactly. Never a card.
 - **Not found** (rule 8): no card.
 

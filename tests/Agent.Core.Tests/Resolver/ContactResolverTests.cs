@@ -95,6 +95,38 @@ public class ContactResolverTests
     }
 
     [Fact]
+    public void ANameOneLetterShortOfAnAliasAsksDidYouMeanBeforeThePartialStep()
+    {
+        // CLN-03-v1: S12's alias without its last letter is one edit from the alias (rule 6) and also inside it (rule 4).
+        // Near is checked first (Khalil, 15 Oct 2026): a did_you_mean question with S12's account, not a card.
+        var alias = SeedFacts.Contact("S12").Alias!;
+        var typed = alias[..^1];
+
+        var options = Assert.IsType<Resolution.Options>(ContactResolver.Resolve(typed, SeedCandidates.For("U1")), exactMatch: true);
+
+        Assert.Equal(QuestionKind.DidYouMean, options.Kind);
+        var chosen = Assert.Single(options.Candidates);
+        Assert.Equal(SeedFacts.Contact("S12").Number, chosen.Phone);
+        Assert.Equal(alias, chosen.Text);
+    }
+
+    [Fact]
+    public void ExactStillBeatsNear()
+    {
+        // Two synthetic names one edit apart: the one typed exactly gives its card, not a did_you_mean question.
+        ContactCandidate[] candidates =
+        [
+            new("sajad", false, 1, "07805550901", null, "active", "X1", null, null),
+            new("sajjad", false, 2, "07805550902", null, "active", "X2", null, null),
+        ];
+
+        var card = Assert.IsType<Resolution.Card>(ContactResolver.Resolve("sajad", candidates), exactMatch: true);
+
+        Assert.Equal("X1", card.Chosen.ContactCode);
+        Assert.Equal(QuestionKind.DidYouMean, Assert.IsType<Resolution.Options>(ContactResolver.Resolve("sajjadd", candidates), exactMatch: true).Kind);
+    }
+
+    [Fact]
     public void ExactAliasDisplaysTheAlias()
     {
         var card = Assert.IsType<Resolution.Card>(

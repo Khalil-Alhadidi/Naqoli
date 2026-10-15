@@ -61,3 +61,7 @@ If a rule changes, the answer keys that depend on it change with it, and only in
 - Repeat warning: a card for the same amount to the same account as a transfer completed within the last 10 minutes carries the warning line (FLT-05). The window is a setting (`repeat_warning_window_minutes`) and is a proposal until Khalil says otherwise.
 - The order of checks applies to every request type: format, recipient (or bill, or product), per-transaction cap, daily cap, balance on the total. The first failing check is the reason shown.
 - Where the user types an answer to a question (how much, to whom), the answer goes through the same matching as a fresh request; an exact alias in the answer needs no second question (AMB-13).
+
+## Added 15/10/2026
+
+- Near (rule 6) is checked before partial (rule 4); exact still beats both. Decided by Khalil on 15/10/2026 for CLN-03-v1.
