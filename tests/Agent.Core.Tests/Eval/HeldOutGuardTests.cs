@@ -204,5 +204,15 @@ public sealed class HeldOutGuardTests : IDisposable
         Assert.Null(EvalArguments.Parse(["dev"], out _)?.Label);
         // 72 cases x (1,500 x 0.10 + 400 x 0.50) / 1,000,000.
         Assert.Equal(0.0252m, EvalCommand.EstimatedCostUsd(72, haiku));
+
+        // The header records the prompt version with the sampling settings sent.
+        var header = EvalCommand.ModelSettings("haiku", haiku).ToDictionary();
+        Assert.Equal(global::Agent.Core.Parsing.ClaudeParser.PromptVersion, header["Model:PromptVersion"]);
+        Assert.Equal("not sent", header["Model:Temperature"]);
+        Assert.Equal("low", header["Model:Effort"]);
+        haiku.Temperature = 0.5f;
+        haiku.Effort = "medium";
+        header = EvalCommand.ModelSettings("haiku", haiku).ToDictionary();
+        Assert.Equal(("0.5", "medium"), (header["Model:Temperature"], header["Model:Effort"]));
     }
 }

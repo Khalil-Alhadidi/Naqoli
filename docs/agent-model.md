@@ -123,7 +123,7 @@ Its examples are the full-request sentences of the Example column of [matching-r
 | `Model:Candidates:<name>:ModelId` | `claude-haiku-5-5`, `claude-sonnet-5-5`, `claude-opus-5-5` |
 | `...:Effort` | `low` (default); `low`, `medium`, `high`, `xhigh` or `max`. Sent as `output_config.effort` |
 | `...:MaxOutputTokens` | 1,500. The 5.5 models think by default, and thinking tokens count against this limit |
-| `...:Temperature` | Unset. Haiku 5.5 and Sonnet 5.5 answer a non-default temperature with HTTP 400, and Opus 5.5 answers any temperature with 400 |
+| `...:Temperature` | Unset. Haiku 5.5 and Sonnet 5.5 answer a non-default temperature with HTTP 400, and Opus 5.5 answers any temperature with 400. Probed again on 15 Oct 2026 with temperature 0: HTTP 400 on all three, so run-to-run variance is measured with `--repeat` instead. The report header records `Model:Temperature` (`not sent`) and `Model:Effort` |
 | `...:TimeoutSeconds` | 20. The Anthropic client never retries (`MaxRetries = 0`): one message is one request, and a 429 or 529 shows the handover message at once |
 | `...:InputPricePerMTok`, `...:OutputPricePerMTok` | USD per million tokens: haiku 0.10 and 0.50, sonnet 2 and 10, opus 4 and 20 |
 
@@ -140,7 +140,7 @@ The call goes through `Microsoft.Extensions.AI`'s `IChatClient`, from the offici
 - **Per call.** `ClaudeParser.LastUsage` (`IParserUsage`) holds the input and output tokens of `ChatResponse.Usage`, the cost at the candidate's prices, and the time. Thinking is billed as output.
 - **Per case.** The runner's `RecordingParser` collects every call's usage, and each case's tokens and cost go into the report.
 - **Before a model run.** `Agent.Eval dev --parser claude:<candidate>` prints the estimate: cases × (1,500 input + 400 output tokens) at the candidate's prices. For the 72 development cases that is about 0.03 USD on Haiku, 0.50 USD on Sonnet and 1 USD on Opus. Real runs may cost up to two or three times the estimate: questions and taps make several calls per case, and effort changes how much the model thinks.
-- **After the run.** It prints the real cost and tokens. The report header carries `Model:Candidate`, `Model:ModelId`, `Model:PromptVersion`, `Model:EstimatedCostUsd`, `Model:CostUsd`, `Model:InputTokens` and `Model:OutputTokens`.
+- **After the run.** It prints the real cost and tokens. The report header carries `Model:Candidate`, `Model:ModelId`, `Model:PromptVersion`, `Model:Temperature` (`not sent` when unset), `Model:Effort`, `Model:EstimatedCostUsd`, `Model:CostUsd`, `Model:InputTokens` and `Model:OutputTokens`.
 - **Logging.** The parser logs the model id, duration, tokens, cost and finish reason of each call, never the text.
 
 ## The learning log

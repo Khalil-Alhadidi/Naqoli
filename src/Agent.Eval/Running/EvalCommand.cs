@@ -49,6 +49,21 @@ public static class EvalCommand
         return parserName.Replace(':', '-');
     }
 
+    /// <summary>
+    /// The report header's entries for the candidate measured: its name and model, the prompt version, and the sampling
+    /// settings the call sends with it (<c>Model:Temperature</c>, <c>not sent</c> when unset; <c>Model:Effort</c>).
+    /// </summary>
+    public static IEnumerable<KeyValuePair<string, string>> ModelSettings(string candidateName, ModelCandidate candidate)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(candidateName);
+        ArgumentNullException.ThrowIfNull(candidate);
+        yield return new("Model:Candidate", candidateName);
+        yield return new("Model:ModelId", candidate.ModelId);
+        yield return new("Model:PromptVersion", ClaudeParser.PromptVersion);
+        yield return new("Model:Temperature", candidate.Temperature?.ToString(CultureInfo.InvariantCulture) ?? "not sent");
+        yield return new("Model:Effort", candidate.Effort);
+    }
+
     /// <summary>The cost estimated before a run: <paramref name="cases"/> × (1,500 input + 400 output tokens) at the candidate's prices.</summary>
     public static decimal EstimatedCostUsd(int cases, ModelCandidate candidate)
     {
@@ -171,9 +186,8 @@ public static class EvalCommand
         if (candidate is not null)
         {
             var estimate = EstimatedCostUsd(cases.Count, candidate);
-            settings["Model:Candidate"] = parsed.Candidate!;
-            settings["Model:ModelId"] = candidate.ModelId;
-            settings["Model:PromptVersion"] = ClaudeParser.PromptVersion;
+            foreach (var (key, value) in ModelSettings(parsed.Candidate!, candidate))
+                settings[key] = value;
             settings["Model:EstimatedCostUsd"] = Usd(estimate);
             await output.WriteLineAsync(string.Create(
                 CultureInfo.InvariantCulture,
