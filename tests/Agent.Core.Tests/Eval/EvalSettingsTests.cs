@@ -1,7 +1,10 @@
+extern alias AgentWeb;
+
 using System.Text.Json;
 using System.Xml.Linq;
 using Agent.Core;
 using Agent.Eval.Running;
+using AgentWeb::Agent.Web.Services;
 
 namespace Agent.Core.Tests.Eval;
 
@@ -27,8 +30,9 @@ public class EvalSettingsTests
     {
         var agent = EvalAgentSection();
 
-        Assert.Equal([Resource("Word_yes")], agent.GetProperty("YesWords").EnumerateArray().Select(e => e.GetString()!));
-        Assert.Equal([Resource("Word_no")], agent.GetProperty("NoWords").EnumerateArray().Select(e => e.GetString()!));
+        // The resource holds each list as one comma-separated string; the runner holds the split words.
+        Assert.Equal(PhoneWords.Split(Resource("Word_yes")), agent.GetProperty("YesWords").EnumerateArray().Select(e => e.GetString()!));
+        Assert.Equal(PhoneWords.Split(Resource("Word_no")), agent.GetProperty("NoWords").EnumerateArray().Select(e => e.GetString()!));
     }
 
     [Fact]

@@ -93,7 +93,8 @@ public sealed class ChatSessionTests(AgentHost host) : IAsyncDisposable
         Assert.Equal(CardStatus.Live, session.CardState);
 
         // The yes word of the resource file reaches the conversation (D6): it points to the button.
-        await session.SendAsync(circuit.Text["Word_yes"].Value);
+        // The resource is a list; any one of its words is a yes.
+        await session.SendAsync(PhoneWords.Split(circuit.Text["Word_yes"].Value)[0]);
         Assert.Equal(circuit.Text["Refusal_" + ReasonCodes.PointsToConfirm].Value, LastAgentMessage(session).Text);
         Assert.Equal(CardStatus.Live, session.CardState);
 

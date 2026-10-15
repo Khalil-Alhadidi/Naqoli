@@ -44,7 +44,7 @@ public sealed class ConversationTests(AgentHost host) : IAsyncDisposable
     /// ones (built from the seed through <see cref="SeedFacts"/>, never Arabic literals), over <paramref name="parser"/>
     /// when given.
     /// </summary>
-    private async Task<Session> StartAsync(int userId = SeedFacts.DemoUserId, IParser? parser = null, params ScriptedSentence[] extra)
+    private async Task<Session> StartAsync(int userId = SeedFacts.DemoUserId, IParser? parser = null, Action<AgentOptions>? configure = null, params ScriptedSentence[] extra)
     {
         Assert.SkipUnless(host.DatabaseAvailable, host.SkipReason);
         await host.ResetAsync();
@@ -55,6 +55,8 @@ public sealed class ConversationTests(AgentHost host) : IAsyncDisposable
             // Registered before AddAgentCore, so its TryAddScoped NullTraceSink does nothing.
             services.AddSingleton<ITraceSink>(trace);
             services.AddAgentCore(configuration);
+            if (configure is not null)
+                services.PostConfigure(configure);
         });
         disposables.Add(provider);
 
@@ -172,6 +174,72 @@ public sealed class ConversationTests(AgentHost host) : IAsyncDisposable
         Assert.Equal(PendingState.Cancelled, (await RecordAsync(session, card.PendingId)).State);
     }
 
+    /// <summary>Khalil's words (his workbook of 15 Oct 2026): a yes word in Iraqi Arabic, and his example of a sentence that contains one.</summary>
+    private const string KhalilYesWord = "حوّل";
+
+    /// <summary>Khalil's example: a transfer that starts with a yes word, so a substring match would mistake it for a yes.</summary>
+    private const string KhalilTransferSentence = "حوّل ٥٠ لعلي";
+
+    [Theory]
+    [InlineData("yes!")]
+    [InlineData("YES")]
+    [InlineData(" Yes. ")]
+    [InlineData("yes?")]
+    [InlineData("حوّل؟")]
+    [InlineData("حوّل.")]
+    public async Task AYesWithTrailingPunctuationOrAnotherCaseIsStillAYes(string typed)
+    {
+        var session = await StartAsync(configure: o => o.YesWords = [AgentHost.TestYesWord, KhalilYesWord]);
+        var conversation = session.Conversation;
+        await conversation.SendAsync(HammoudiSentence);
+
+        await conversation.SendAsync(typed);
+
+        Assert.Equal(
+            new ConversationMessage(ConversationRole.Agent, ConversationKind.Info, ReasonCodes.PointsToConfirm),
+            LastAgentMessage(conversation));
+        Assert.Equal(CardStatus.Live, conversation.CardState);
+    }
+
+    [Theory]
+    [InlineData("yes please")]
+    [InlineData("no, send it")]
+    public async Task ASentenceThatContainsAWordIsNotAYesOrANo(string typed)
+    {
+        var session = await StartAsync();
+        var conversation = session.Conversation;
+        await conversation.SendAsync(HammoudiSentence);
+        var card = conversation.Card!;
+
+        await conversation.SendAsync(typed);
+
+        // Not a yes (no pointer to the button) and not a plain no: the card is cancelled and the text goes on as a request.
+        Assert.DoesNotContain(conversation.Messages, m => m.Code == ReasonCodes.PointsToConfirm);
+        Assert.Equal(CardStatus.Cancelled, conversation.CardState);
+        Assert.Equal(PendingState.Cancelled, (await RecordAsync(session, card.PendingId)).State);
+        Assert.Equal(ReasonCodes.NotUnderstood, LastAgentMessage(conversation).Code);
+    }
+
+    [Fact]
+    public async Task KhalilsTransferThatStartsWithAYesWordIsANewRequest()
+    {
+        var session = await StartAsync(
+            configure: o => o.YesWords = [AgentHost.TestYesWord, KhalilYesWord],
+            extra: new ScriptedSentence(KhalilTransferSentence, ParsedRequest.Transfer(SeedFacts.Contact("S01").Alias, 50, AmountUnit.Thousand)));
+        var conversation = session.Conversation;
+        await conversation.SendAsync(HammoudiSentence);
+        var first = conversation.Card!;
+
+        await conversation.SendAsync(KhalilTransferSentence);
+
+        Assert.DoesNotContain(conversation.Messages, m => m.Code == ReasonCodes.PointsToConfirm);
+        var record = await RecordAsync(session, first.PendingId);
+        Assert.Equal(PendingState.Cancelled, record.State);
+        Assert.Equal(CardStatus.Live, conversation.CardState);
+        Assert.NotEqual(first.PendingId, conversation.Card!.PendingId);
+        Assert.Equal(0, await WalletRowsAsync(record.IdempotencyKey));
+    }
+
     [Fact]
     public async Task ANewSentenceCancelsTheCardAndIsAnswered()
     {
@@ -233,6 +301,7 @@ public sealed class ConversationTests(AgentHost host) : IAsyncDisposable
         var session = await StartAsync(
             SeedFacts.DemoUserId,
             null,
+            null,
             new ScriptedSentence("send fifty to hammoudi", ParsedRequest.Transfer(SeedFacts.Contact("S01").Alias, 50, AmountUnit.None)));
         var conversation = session.Conversation;
 
@@ -269,6 +338,7 @@ public sealed class ConversationTests(AgentHost host) : IAsyncDisposable
         var session = await StartAsync(
             SeedFacts.DemoUserId,
             null,
+            null,
             new ScriptedSentence("send to hammoudi", ParsedRequest.Transfer(SeedFacts.Contact("S01").Alias, null, AmountUnit.None)));
         var conversation = session.Conversation;
 
@@ -304,6 +374,7 @@ public sealed class ConversationTests(AgentHost host) : IAsyncDisposable
     {
         var session = await StartAsync(
             SeedFacts.TraderUserId,
+            null,
             null,
             new ScriptedSentence("pay the trader", ParsedRequest.Transfer(SeedFacts.Contact("T01").SavedName, 1_100_000, AmountUnit.Dinars)),
             new ScriptedSentence("zain credit five", ParsedRequest.Purchase("zain", "credit", 5_000)));
