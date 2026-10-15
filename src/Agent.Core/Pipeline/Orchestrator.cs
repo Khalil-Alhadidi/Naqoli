@@ -133,14 +133,16 @@ public sealed class Orchestrator
         string? cardNote = null;
         if (request.Intent == RequestIntent.Unsupported)
         {
-            // Two reasons that reply with a refusal code of their own (RED-10, GAP-08); the reason stays as the detail
-            // the learning log reads (LearningLogRule.EntryFor).
+            // Three reasons that reply with a refusal code of their own (RED-10, GAP-08, GAP-07); the reason stays as the
+            // detail the learning log reads (LearningLogRule.EntryFor).
             switch (request.UnsupportedReason)
             {
                 case LearningLogRule.OtherBalance:
                     return await RefuseAsync(userId, ReasonCodes.OnlyOwnBalance, LearningLogRule.OtherBalance, null, cancellationToken);
                 case LearningLogRule.OtherLanguage:
                     return await RefuseAsync(userId, ReasonCodes.NotUnderstood, LearningLogRule.OtherLanguage, null, cancellationToken);
+                case LearningLogRule.OtherCurrency:
+                    return await RefuseAsync(userId, ReasonCodes.DinarsOnly, LearningLogRule.OtherCurrency, null, cancellationToken);
             }
 
             // The known gap (GAP-04): the user chose the account to pay from, which the agent cannot do. With a recipient

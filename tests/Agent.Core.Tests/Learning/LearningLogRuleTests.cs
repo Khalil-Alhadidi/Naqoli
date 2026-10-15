@@ -140,6 +140,16 @@ public class LearningLogRuleTests
         Assert.Equal(new LearningEntry(LearningLogRule.OtherCurrency, null), entry);
     }
 
+    [Fact]
+    public void AnUnsupportedOtherCurrencyRefusedDinarsOnlyIsLoggedAsOtherCurrency()
+    {
+        // GAP-07: the orchestrator refuses an unsupported other_currency with dinars_only and the reason as detail.
+        var entry = LearningLogRule.EntryFor(
+            new AgentReply.Refusal(ReasonCodes.DinarsOnly, LearningLogRule.OtherCurrency, null), Unsupported(LearningLogRule.OtherCurrency));
+
+        Assert.Equal(new LearningEntry(LearningLogRule.OtherCurrency, null), entry);
+    }
+
     [Theory]
     [InlineData(ReasonCodes.InsufficientBalance)]
     [InlineData(ReasonCodes.OverPerTransactionCap)]

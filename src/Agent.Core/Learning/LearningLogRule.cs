@@ -93,7 +93,8 @@ public static class LearningLogRule
     /// <item>A <see cref="AgentReply.Refusal"/> whose code is logged gives that code, with the reply's detail; when the
     /// reply has none, a <c>bill_not_found</c> takes the biller asked for, and a <c>product_not_found</c> the operator,
     /// type and value asked for.</item>
-    /// <item>A <c>dinars_only</c> refusal (the request named another currency, GAP-07) gives <c>other_currency</c>.</item>
+    /// <item>A <c>dinars_only</c> refusal (the request named another currency, or was parsed as unsupported
+    /// <c>other_currency</c>, GAP-07) gives <c>other_currency</c>.</item>
     /// <item>A card issued with the note <c>account_choice_unavailable</c> (the known gap, GAP-04) gives
     /// <c>choose_account</c>.</item>
     /// <item>An <c>only_own_balance</c> refusal (a question about someone else's balance, RED-10) gives

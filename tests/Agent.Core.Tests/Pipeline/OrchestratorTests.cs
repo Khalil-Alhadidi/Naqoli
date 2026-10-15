@@ -479,6 +479,30 @@ public class OrchestratorTests(AgentHost host)
     }
 
     [Fact]
+    public async Task AnotherCurrencyParsedAsUnsupportedRepliesDinarsOnly()
+    {
+        await StartAsync();
+        var request = new ParsedRequest
+        {
+            Intent = RequestIntent.Unsupported,
+            UnsupportedReason = "other_currency",
+            RecipientText = HammoudiAlias,
+            AmountValue = 100,
+            CurrencyText = "dollars",
+        };
+
+        var reply = await HandleAsync(U1, request);
+
+        Assert.Equal(new AgentReply.Refusal(ReasonCodes.DinarsOnly, "other_currency", null), reply);
+        var row = Assert.Single(await AuditAsync());
+        Assert.Equal((AuditEvents.Refused, ReasonCodes.DinarsOnly), (row.Event, row.Reason));
+        Assert.Null(row.PendingId);
+        Assert.Equal(
+            new global::Agent.Core.Learning.LearningEntry("other_currency", null),
+            global::Agent.Core.Learning.LearningLogRule.EntryFor(reply, request));
+    }
+
+    [Fact]
     public async Task AnotherLanguageRepliesNotUnderstood()
     {
         await StartAsync();
