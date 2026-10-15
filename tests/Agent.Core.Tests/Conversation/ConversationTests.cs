@@ -1,6 +1,8 @@
 using System.Collections.Concurrent;
 using Agent.Core.Confirm;
+using Agent.Core.Audit;
 using Agent.Core.Conversation;
+using Agent.Core.Data;
 using Agent.Core.Parsing;
 using Agent.Core.Pending;
 using Agent.Core.Pipeline;
@@ -214,10 +216,12 @@ public sealed class ConversationTests(AgentHost host) : IAsyncDisposable
 
         await conversation.SendAsync(typed);
 
-        // Not a yes (no pointer to the button) and not a plain no: the card is cancelled and the text goes on as a request.
+        // Not a yes (no pointer to the button) and not a plain no (nothing cancelled before the parse): the text goes to
+        // the parser as a request. It is unclear to this parser, so the card stays until its timer ends (D6).
         Assert.DoesNotContain(conversation.Messages, m => m.Code == ReasonCodes.PointsToConfirm);
-        Assert.Equal(CardStatus.Cancelled, conversation.CardState);
-        Assert.Equal(PendingState.Cancelled, (await RecordAsync(session, card.PendingId)).State);
+        Assert.Equal(2, session.Trace.Entries.Count(e => e.Zone == TraceZone.Model));
+        Assert.Equal(CardStatus.Live, conversation.CardState);
+        Assert.Equal(PendingState.Pending, (await RecordAsync(session, card.PendingId)).State);
         Assert.Equal(ReasonCodes.NotUnderstood, LastAgentMessage(conversation).Code);
     }
 
@@ -268,9 +272,9 @@ public sealed class ConversationTests(AgentHost host) : IAsyncDisposable
         await conversation.SendAsync(typed);
 
         Assert.DoesNotContain(conversation.Messages, m => m.Code == ReasonCodes.PointsToConfirm);
-        Assert.Equal(PendingState.Cancelled, (await RecordAsync(session, card.PendingId)).State);
-        // The parser was called for the second message: it is a request.
+        // The parser was called for the second message: it is a request. This parser finds it unclear, so the card stays (D6).
         Assert.Equal(2, session.Trace.Entries.Count(e => e.Zone == TraceZone.Model));
+        Assert.Equal(PendingState.Pending, (await RecordAsync(session, card.PendingId)).State);
         Assert.Equal(ReasonCodes.NotUnderstood, LastAgentMessage(conversation).Code);
     }
 
@@ -310,9 +314,10 @@ public sealed class ConversationTests(AgentHost host) : IAsyncDisposable
 
         await conversation.SendAsync(typed);
 
-        // Not a no: the card is cancelled as for any request, and the parser is called.
-        Assert.Equal(PendingState.Cancelled, (await RecordAsync(session, card.PendingId)).State);
+        // Not a no: nothing is cancelled before the parse, and the parser is called. It finds the text unclear, so the
+        // card stays (D6).
         Assert.Equal(2, session.Trace.Entries.Count(e => e.Zone == TraceZone.Model));
+        Assert.Equal(PendingState.Pending, (await RecordAsync(session, card.PendingId)).State);
         Assert.Equal(ReasonCodes.NotUnderstood, LastAgentMessage(conversation).Code);
     }
 
@@ -329,9 +334,10 @@ public sealed class ConversationTests(AgentHost host) : IAsyncDisposable
 
         await conversation.SendAsync("ok go");
 
+        // Over the limit, so not a yes: parsed as a request, unclear to this parser, and the card stays (D6).
         Assert.DoesNotContain(conversation.Messages, m => m.Code == ReasonCodes.PointsToConfirm);
-        Assert.Equal(CardStatus.Cancelled, conversation.CardState);
         Assert.Equal(2, session.Trace.Entries.Count(e => e.Zone == TraceZone.Model));
+        Assert.Equal(CardStatus.Live, conversation.CardState);
     }
 
     [Fact]
@@ -404,6 +410,118 @@ public sealed class ConversationTests(AgentHost host) : IAsyncDisposable
         Assert.Equal(
             new ConversationMessage(ConversationRole.Agent, ConversationKind.Balance, AmountIqd: SeedFacts.DemoBalance),
             LastAgentMessage(conversation));
+    }
+
+    /// <summary>A sentence the test parser reads as asking to change the waiting card.</summary>
+    private const string ChangeSentence = "make it sixty instead";
+
+    /// <summary>A second transfer to Hammoudi, with another amount.</summary>
+    private const string TwentyThousandSentence = "send twenty thousand to my brother Hammoudi";
+
+    private static async Task<List<AuditEntry>> AuditAsync(Session session, Guid pendingId)
+    {
+        await using var scope = session.Provider.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<AgentDbContext>();
+        return await db.AuditEntries.AsNoTracking().Where(a => a.PendingId == pendingId).OrderBy(a => a.Id).ToListAsync(Token);
+    }
+
+    [Fact]
+    public async Task AnUnclearMessageLeavesTheCardUntilItsTimerEnds()
+    {
+        var session = await StartAsync();
+        var conversation = session.Conversation;
+        await conversation.SendAsync(HammoudiSentence);
+        var card = conversation.Card!;
+
+        // D6: neither a yes, nor a no, nor a request the parser understood.
+        await conversation.SendAsync("hmm what was that");
+
+        Assert.Equal(CardStatus.Live, conversation.CardState);
+        Assert.Same(card, conversation.Card);
+        Assert.Equal(ReasonCodes.NotUnderstood, Assert.IsType<AgentReply.Refusal>(conversation.LastReply).Code);
+        Assert.Equal(
+            new ConversationMessage(ConversationRole.Agent, ConversationKind.Refusal, ReasonCodes.NotUnderstood),
+            LastAgentMessage(conversation));
+        Assert.DoesNotContain(Outcome(OutcomeCodes.Cancelled), conversation.Messages);
+        Assert.Contains((TraceZone.Code, "card_kept", "unclear"), session.Trace.Entries);
+        Assert.Equal(PendingState.Pending, (await RecordAsync(session, card.PendingId)).State);
+        Assert.DoesNotContain(await AuditAsync(session, card.PendingId), a => a.Event == AuditEvents.Cancelled);
+
+        // The card still ends with its timer, and Confirm still works until then.
+        var timer = session.Provider.GetRequiredService<IOptions<AgentOptions>>().Value.CardTimerSeconds;
+        host.Clock.Advance(TimeSpan.FromSeconds(timer + 1));
+        await conversation.RefreshAsync();
+        Assert.Equal(CardStatus.Expired, conversation.CardState);
+    }
+
+    [Fact]
+    public async Task AnUnclearMessageLeavesTheCardAndConfirmStillMovesTheMoney()
+    {
+        var session = await StartAsync();
+        var conversation = session.Conversation;
+        await conversation.SendAsync(HammoudiSentence);
+
+        await conversation.SendAsync("hmm what was that");
+
+        Assert.IsType<ConfirmOutcome.Done>(await conversation.ConfirmAsync(null));
+        Assert.Equal(SeedFacts.DemoBalance - 51_000, await host.Wallet.AccountBalanceAsync(SeedFacts.DemoPhone));
+    }
+
+    [Fact]
+    public async Task AChangeRequestLeavesTheCard()
+    {
+        var change = new ScriptedSentence(ChangeSentence, new ParsedRequest { Intent = RequestIntent.Unsupported, UnsupportedReason = "change_waiting_card" });
+        var session = await StartAsync(extra: [change]);
+        var conversation = session.Conversation;
+        await conversation.SendAsync(HammoudiSentence);
+        var card = conversation.Card!;
+
+        await conversation.SendAsync(ChangeSentence);
+
+        Assert.Equal(CardStatus.Live, conversation.CardState);
+        Assert.Equal(new AgentReply.Unsupported("change_waiting_card"), conversation.LastReply);
+        Assert.Contains((TraceZone.Code, "card_kept", "change_waiting_card"), session.Trace.Entries);
+        Assert.DoesNotContain(Outcome(OutcomeCodes.Cancelled), conversation.Messages);
+        Assert.Equal(PendingState.Pending, (await RecordAsync(session, card.PendingId)).State);
+    }
+
+    [Fact]
+    public async Task ANewRequestCancelsTheCardAndStartsFresh()
+    {
+        var twenty = new ScriptedSentence(TwentyThousandSentence, ParsedRequest.Transfer(SeedFacts.Contact("S01").Alias, 20, AmountUnit.Thousand));
+        var session = await StartAsync(extra: [twenty]);
+        var conversation = session.Conversation;
+        await conversation.SendAsync(HammoudiSentence);
+        var first = conversation.Card!;
+
+        await conversation.SendAsync(TwentyThousandSentence);
+
+        Assert.Equal(PendingState.Cancelled, (await RecordAsync(session, first.PendingId)).State);
+        Assert.Contains(await AuditAsync(session, first.PendingId), a => a.Event == AuditEvents.Cancelled);
+        var second = Assert.IsType<CardView>(conversation.Card);
+        Assert.NotEqual(first.PendingId, second.PendingId);
+        Assert.Equal(CardStatus.Live, conversation.CardState);
+        Assert.Equal(20_000, second.AmountIqd);
+        Assert.Equal(PendingState.Pending, (await RecordAsync(session, second.PendingId)).State);
+        Assert.Equal([first, second], conversation.CardsIssued);
+        Assert.DoesNotContain(session.Trace.Entries, e => e.Step == "card_kept");
+    }
+
+    [Fact]
+    public async Task AnUnavailableParserLeavesALiveCard()
+    {
+        var parser = new UnavailableAfterFirstParser(
+            new ScriptedParser([new ScriptedSentence(HammoudiSentence, ParsedRequest.Transfer(SeedFacts.Contact("S01").Alias, 50, AmountUnit.Thousand))]));
+        var session = await StartAsync(SeedFacts.DemoUserId, parser);
+        var conversation = session.Conversation;
+        await conversation.SendAsync(HammoudiSentence);
+        var card = conversation.Card!;
+
+        await conversation.SendAsync(HammoudiSentence);
+
+        Assert.Equal(CardStatus.Live, conversation.CardState);
+        Assert.Equal(ReasonCodes.ModelUnavailable, Assert.IsType<AgentReply.Refusal>(conversation.LastReply).Code);
+        Assert.Equal(PendingState.Pending, (await RecordAsync(session, card.PendingId)).State);
     }
 
     [Fact]
@@ -654,6 +772,19 @@ public sealed class ConversationTests(AgentHost host) : IAsyncDisposable
         public IReadOnlyList<(TraceZone Zone, string Step, string? Detail)> Entries => [.. entries];
 
         public void Record(TraceZone zone, string step, string? detail) => entries.Enqueue((zone, step, detail));
+    }
+
+    /// <summary>A parser that answers once, then whose model is down.</summary>
+    private sealed class UnavailableAfterFirstParser(IParser first) : IParser
+    {
+        private int calls;
+
+        public string Name => "unavailable-after-first";
+
+        public Task<ParsedRequest> ParseAsync(string text, ParseContext context, CancellationToken cancellationToken)
+            => Interlocked.Increment(ref calls) == 1
+                ? first.ParseAsync(text, context, cancellationToken)
+                : throw new ParserUnavailableException();
     }
 
     /// <summary>A parser whose model is down.</summary>

@@ -52,6 +52,14 @@ internal sealed class ConversationHarness : IAsyncDisposable
         return new ConversationHarness(provider, conversation, trace);
     }
 
+    /// <summary>Every audit row, oldest first.</summary>
+    public async Task<List<global::Agent.Core.Audit.AuditEntry>> AuditRowsAsync()
+    {
+        await using var scope = provider.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<AgentDbContext>();
+        return await db.AuditEntries.AsNoTracking().OrderBy(r => r.Id).ToListAsync(TestContext.Current.CancellationToken);
+    }
+
     /// <summary>Every learning-log row, oldest first.</summary>
     public async Task<List<LearningEntryRow>> LearningRowsAsync()
     {

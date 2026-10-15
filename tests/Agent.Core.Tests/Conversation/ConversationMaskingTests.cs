@@ -105,6 +105,50 @@ public sealed class ConversationMaskingTests(AgentHost host)
         });
     }
 
+    /// <summary>D21: a 10-digit and a 12-digit number (Hammoudi's number one digit short, and one digit long), with separators.</summary>
+    public static TheoryData<string> AccountLikeNumbers => new()
+    {
+        SeedFacts.HammoudiPhone[..4] + " " + SeedFacts.HammoudiPhone[4..7] + " " + SeedFacts.HammoudiPhone[7..^1],
+        SeedFacts.HammoudiPhone[..4] + "-" + SeedFacts.HammoudiPhone[4..7] + "-" + SeedFacts.HammoudiPhone[7..] + "1",
+    };
+
+    [Theory]
+    [MemberData(nameof(AccountLikeNumbers))]
+    public async Task ATypedAccountNumberIsMaskedRefusedAndGetsNoCard(string typed)
+    {
+        var parser = new CapturingParser(new Dictionary<string, ParsedRequest>
+        {
+            ["send 25000 to <NUM_1>"] = ParsedRequest.Transfer("<NUM_1>", 25_000, AmountUnit.Dinars),
+        });
+        await using var session = await StartAsync(parser);
+
+        await session.Conversation.SendAsync("send 25000 to " + typed);
+
+        Assert.Equal("send 25000 to <NUM_1>", Assert.Single(parser.Calls).Text);
+        Assert.Equal(ReasonCodes.InvalidNumber, Assert.IsType<AgentReply.Refusal>(session.Conversation.LastReply).Code);
+        Assert.Null(session.Conversation.Card);
+        Assert.Empty(session.Conversation.CardsIssued);
+
+        var digits = Digits(typed);
+        Assert.InRange(digits.Length, 10, 12);
+        Assert.NotEqual(11, digits.Length);
+        Assert.All(session.Trace.Entries, e =>
+        {
+            Assert.DoesNotContain(digits, Digits(e.Step), StringComparison.Ordinal);
+            Assert.DoesNotContain(digits, Digits(e.Detail), StringComparison.Ordinal);
+        });
+
+        var audit = await session.AuditRowsAsync();
+        var refused = Assert.Single(audit);
+        Assert.Equal(ReasonCodes.InvalidNumber, refused.Reason);
+        Assert.All(audit, a => Assert.DoesNotContain(
+            digits, Digits(string.Join('|', a.Event, a.FromState, a.ToState, a.Reason, a.Reference, a.Detail)), StringComparison.Ordinal));
+
+        // invalid_number is neither logged nor on the not-logged list: no learning row, so the digits cannot reach it.
+        Assert.Null(session.Conversation.LastLearningEntry);
+        Assert.Empty(await session.LearningRowsAsync());
+    }
+
     [Fact]
     public async Task ATokenOfAnotherMessageIsNotUnmasked()
     {

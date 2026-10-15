@@ -203,7 +203,8 @@ public sealed class Conversation : IDisposable
             var isYes = IsPhrase(words, yesEntries, maxYesNoWords);
             var isNo = !isYes && IsPhrase(words, noEntries, maxYesNoWords);
 
-            if (IsCardLive)
+            var cardWaiting = IsCardLive;
+            if (cardWaiting)
             {
                 if (isYes)
                 {
@@ -213,9 +214,14 @@ public sealed class Conversation : IDisposable
                     return;
                 }
 
-                await CancelCardAsync(token);
                 if (isNo)
+                {
+                    await CancelCardAsync(token);
                     return;
+                }
+
+                // Anything else is parsed first, with the card still waiting (the pending note says so): only a new
+                // request cancels it (below).
             }
 
             // Rule 5: the parse call sees the typed text with every number masked, and nothing else of the user's.
@@ -229,7 +235,10 @@ public sealed class Conversation : IDisposable
             }
             catch (ParserUnavailableException)
             {
+                // Nothing was understood, so a waiting card stays until its timer ends.
                 trace.Record(TraceZone.Model, "parse:unavailable", null);
+                if (cardWaiting)
+                    trace.Record(TraceZone.Code, CardKeptStep, ReasonCodes.ModelUnavailable);
                 LastReply = new AgentReply.Refusal(ReasonCodes.ModelUnavailable, null, null);
                 LastLearningEntry = null;
                 AddRefusal(ReasonCodes.ModelUnavailable);
@@ -245,6 +254,20 @@ public sealed class Conversation : IDisposable
             {
                 trace.Record(TraceZone.Code, LearningLogRule.ModelInvalidReply, problem);
                 invalidReply = new LearningEntry(LearningLogRule.ModelInvalidReply, problem);
+            }
+
+            if (cardWaiting)
+            {
+                // D6: anything unclear leaves the card until its timer ends, and so does a request to change it (its
+                // reply tells the user to cancel and ask again). Any other request cancels the card and goes on as new.
+                if (CardKeptBecause(parsed) is { } reason)
+                {
+                    trace.Record(TraceZone.Code, CardKeptStep, reason);
+                    await HandleCoreAsync(parsed, SlotAnswers.None, token, invalidReply);
+                    return;
+                }
+
+                await CancelCardAsync(token);
             }
 
             var request = parsed;
@@ -554,6 +577,20 @@ public sealed class Conversation : IDisposable
     }
 
     private bool IsCardLive => Card is not null && CardState == CardStatus.Live;
+
+    /// <summary>The trace step of a message that left a waiting card in place; the detail says why.</summary>
+    private const string CardKeptStep = "card_kept";
+
+    /// <summary>
+    /// Why a message typed while a card waits leaves it (D6): <c>unclear</c> (including a structure the validator
+    /// refused), or <c>change_waiting_card</c>; null when the message is a new request, which cancels the card.
+    /// </summary>
+    private static string? CardKeptBecause(ParsedRequest parsed) => parsed switch
+    {
+        { Intent: RequestIntent.Unclear } => "unclear",
+        { Intent: RequestIntent.Unsupported, UnsupportedReason: LearningLogRule.ChangeWaitingCard } => LearningLogRule.ChangeWaitingCard,
+        _ => null,
+    };
 
     /// <summary>D5: the one-line note of what is pending, from the type and codes only (rule 5).</summary>
     private string? PendingNote()
