@@ -343,6 +343,10 @@ For Khalil:
 
 The deliverables not named in "Done when" are shown too. The fault switch always at hand: the fault panel, with every fault journey setting its fault through it. The duplicate warning on a repeated request: `RepeatedRequestCarriesTheDuplicateWarning` (FLT-05).
 
+**Security review, 16 Oct 2026** (`docs/reviews/milestone-8-security-review.md`): pass with changes, 0 Important, 6 Minor, 7 Recommendations. The fix wave (79c9703, d833c44) closed M1 (the side door and the fault panel never end the circuit on an `IOException` or a disposed handler), M2 (the card's tick stops at disposal and a failing tick is traced), M3 (every wallet transaction type is classified as a payment or an external debit by a test, so the daily cap cannot drift open), M4 (the docs say what the fault panel can do and that it stays on loopback), M5 (the model fault switch isolates its subscribers from the parse path), M6 (the session tests run with the parser decorator), R3 (the panel cancels its wallet calls at disposal), R4 and R5 (docs). Left as recommendations: R1, R6, R7; R2 (a real console admin key outside Development) is for Khalil.
+
+**Done and tagged `milestone-8`** on 16 Oct 2026, after the model reruns above and the fix wave. The milestone's rulings and open items are listed under "For Khalil" above.
+
 ## Milestone 9: Extras, in reverse cut order
 
 Three separate pieces. Build them in this order. Each one can be dropped without changing the others.
