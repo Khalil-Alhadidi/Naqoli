@@ -9,7 +9,7 @@ namespace Agent.Core.Confirm;
 
 /// <summary>
 /// The Confirm tap (rule 1: no tap, no money). Given one pending ID and the user it belongs to, it moves the record
-/// from Pending to Executing once, rechecks the per-transaction cap, the balance and the daily cap, and sends the one
+/// from Pending to Executing once, rechecks the per-transaction cap, the daily cap and the balance, and sends the one
 /// execute call under the record's idempotency key. An unknown outcome becomes Checking, never failed, and
 /// <see cref="SettleCheckingAsync"/> resends the same body under the same key (rule 6). <see cref="ConfirmAsync"/> and
 /// <see cref="SettleCheckingAsync"/> are the only methods in the application that call
@@ -106,7 +106,7 @@ public sealed class ConfirmHandler
             if (killSwitch.IsOn)
                 return await KillSwitchStopAsync(record);
 
-            // Section 4: recheck the per-transaction cap, the balance and the daily cap, then execute. Nothing has been sent yet.
+            // Section 4: recheck the per-transaction cap, the daily cap and the balance, then execute. Nothing has been sent yet.
             RecheckStop? stop;
             try
             {
@@ -421,9 +421,9 @@ public sealed class ConfirmHandler
     }
 
     /// <summary>
-    /// The recheck before the execute: the per-transaction cap on the amount without the fee (as <see cref="Checks"/>
-    /// compares it), then the balance on the total, then the daily cap. The caps are this scope's options, so a cap saved
-    /// in settings while the card waited applies to the tap. Null when all three pass.
+    /// The recheck before the execute, in the order of <see cref="Checks"/> (Khalil, 16 Oct 2026): the per-transaction cap
+    /// on the amount without the fee, then the daily cap, then the balance on the total. The caps are this scope's options,
+    /// so a cap saved in settings while the card waited applies to the tap. Null when all three pass.
     /// </summary>
     private async Task<RecheckStop?> RecheckAsync(PendingRecord record, CancellationToken cancellationToken)
     {
@@ -433,28 +433,28 @@ public sealed class ConfirmHandler
                 ReasonCodes.OverPerTransactionCap, null, ReasonCodes.OverPerTransactionCap, options.PerTransactionCapIqd);
         }
 
-        switch (await wallet.GetBalanceAsync(record.UserId, cancellationToken))
+        switch (await checks.DailySpentAsync(record.UserId, cancellationToken))
         {
-            case WalletResult<WalletBalance>.Ok { Value: var balance } when balance.BalanceIqd < record.TotalIqd:
-                return new RecheckStop(
-                    ReasonCodes.InsufficientBalance, null, ReasonCodes.InsufficientBalance, record.TotalIqd - balance.BalanceIqd);
-            case WalletResult<WalletBalance>.Ok:
+            case WalletResult<long>.Ok { Value: var spent } when spent + record.AmountIqd > options.PerDayCapIqd:
+                return new RecheckStop(ReasonCodes.OverDailyCap, null, ReasonCodes.OverDailyCap, Math.Max(0, options.PerDayCapIqd - spent));
+            case WalletResult<long>.Ok:
                 break;
-            case WalletResult<WalletBalance>.Unavailable unavailable:
+            case WalletResult<long>.Unavailable unavailable:
                 return NothingTaken(ReasonCodes.WalletDetailPrefix + unavailable.Reason);
-            case WalletResult<WalletBalance>.Refused refused:
+            case WalletResult<long>.Refused refused:
                 return NothingTaken(refused.Problem.Code);
             default:
                 throw new InvalidOperationException("Unknown wallet result.");
         }
 
-        return await checks.DailySpentAsync(record.UserId, cancellationToken) switch
+        return await wallet.GetBalanceAsync(record.UserId, cancellationToken) switch
         {
-            WalletResult<long>.Ok { Value: var spent } when spent + record.AmountIqd > options.PerDayCapIqd
-                => new RecheckStop(ReasonCodes.OverDailyCap, null, ReasonCodes.OverDailyCap, Math.Max(0, options.PerDayCapIqd - spent)),
-            WalletResult<long>.Ok => null,
-            WalletResult<long>.Unavailable unavailable => NothingTaken(ReasonCodes.WalletDetailPrefix + unavailable.Reason),
-            WalletResult<long>.Refused refused => NothingTaken(refused.Problem.Code),
+            WalletResult<WalletBalance>.Ok { Value: var balance } when balance.BalanceIqd < record.TotalIqd
+                => new RecheckStop(
+                    ReasonCodes.InsufficientBalance, null, ReasonCodes.InsufficientBalance, record.TotalIqd - balance.BalanceIqd),
+            WalletResult<WalletBalance>.Ok => null,
+            WalletResult<WalletBalance>.Unavailable unavailable => NothingTaken(ReasonCodes.WalletDetailPrefix + unavailable.Reason),
+            WalletResult<WalletBalance>.Refused refused => NothingTaken(refused.Problem.Code),
             _ => throw new InvalidOperationException("Unknown wallet result."),
         };
     }

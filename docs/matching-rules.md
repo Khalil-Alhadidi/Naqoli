@@ -44,7 +44,7 @@ If a rule changes, the answer keys that depend on it change with it, and only in
 | Most per transaction | 5,000,000 IQD | Agreed (D8, placeholder) |  |
 | Most per day | 10,000,000 IQD | Agreed (D8, placeholder) |  |
 | What the caps count | The amount without the fee; transfers, bills and purchases together | Agreed (Khalil, 14/10) |  |
-| Order of checks | 1 format, 2 recipient, 3 per-transaction cap, 4 daily cap, 5 balance on the total | Agreed (Khalil, 14/10) | The first check that fails is the reason shown to the user |
+| Order of checks | 1 format, 2 recipient, 3 per-transaction cap, 4 daily cap, 5 balance on the total | Agreed (Khalil, 14/10) | The first check that fails is the reason shown to the user. The Confirm recheck at the tap runs the same order for what can change: per-transaction cap, daily cap, balance (Khalil, 16/10/2026; it ran the balance before the daily cap until then) |
 | Card timer | 45 seconds | From slide 1 |  |
 | Reset | The runner reloads the seed before every case | Agreed (Khalil, 14/10) | Every case starts from the same wallet state |
 | Dates | History dates are stored as days before the seed is loaded | Agreed (Khalil, 14/10) | 'Today' is always today, whenever the tests run |

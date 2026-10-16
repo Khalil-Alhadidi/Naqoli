@@ -822,6 +822,49 @@ public class ConfirmHandlerTests(AgentHost host)
     }
 
     [Fact]
+    public async Task ACardBreakingTheBalanceAndTheDailyCapAtTheTapIsRefusedForTheDailyCap()
+    {
+        await StartAsync();
+        var card = await CardAsync(U3, TraderTransferWithPin);
+
+        // From outside while the card waits: U3 pays 4,500,000 twice (9,000,000 of today's cap spent, so the card's
+        // 1,100,000 no longer fits), then an external debit takes the balance below the card's total.
+        for (var i = 0; i < 2; i++)
+        {
+            using var message = new HttpRequestMessage(HttpMethod.Post, "/transactions")
+            {
+                Content = JsonContent.Create(new PaymentRequest(U3, "transfer", 4_500_000, null, SeedFacts.DemoAccountId, null, null, TraderPin)),
+            };
+            message.Headers.Add(WalletClient.IdempotencyKeyHeader, "test-outside-both-" + i.ToString(CultureInfo.InvariantCulture));
+            using var response = await host.Wallet.Client.SendAsync(message, Token);
+            Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        }
+
+        using (var debit = await host.Wallet.Client.PostAsJsonAsync("/admin/debit", new DebitRequest(U3, 2_500_000), Token))
+            Assert.True(debit.IsSuccessStatusCode, debit.StatusCode.ToString());
+
+        long spent;
+        await using (var scope = host.Services.CreateAsyncScope())
+        {
+            var daily = await scope.ServiceProvider.GetRequiredService<Checks>().DailySpentAsync(U3, Token);
+            spent = Assert.IsType<WalletResult<long>.Ok>(daily).Value;
+        }
+
+        var perDayCap = host.Services.GetRequiredService<IOptions<AgentOptions>>().Value.PerDayCapIqd;
+        Assert.True(spent + card.AmountIqd > perDayCap);
+        Assert.True(await host.Wallet.AccountBalanceAsync(TraderPhone) < card.TotalIqd);
+
+        var outcome = await ConfirmAsync(card.UserId, card.Id, TraderPin);
+
+        // The recheck runs in the order of the checks: per-transaction cap, daily cap, balance (Khalil, 16 Oct 2026).
+        Assert.Equal(new ConfirmOutcome.NotDone(ReasonCodes.OverDailyCap, null, Math.Max(0, perDayCap - spent)), outcome);
+        Assert.Equal(0, await WalletRowsAsync(card.IdempotencyKey));
+        var record = await RecordAsync(card.Id);
+        Assert.Equal(PendingState.NotDone, record.State);
+        Assert.Equal(ReasonCodes.OverDailyCap, record.ResultCode);
+    }
+
+    [Fact]
     public async Task SettleWindowIsAnchoredOnExecutingSince()
     {
         await StartAsync();
