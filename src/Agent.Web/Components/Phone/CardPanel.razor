@@ -61,11 +61,8 @@
             {
                 <div class="phone-card-state">@Text["Card_Cancelled"]</div>
             }
-            else if (IsChecking)
-            {
-                @* Rule 6: the outcome is unknown, so the card says it is checking, never failed; no countdown. *@
-                <div class="phone-card-state" data-testid="card-checking">@Text["Card_Checking"]</div>
-            }
+            @* Rule 6: while Checking the card has no state line of its own (Khalil, 16 Oct 2026); the chat's
+               Outcome_checking carries the message, and the card shows no countdown and never "failed". *@
         </MudCardContent>
         <MudCardActions>
             <MudButton data-testid="card-confirm" Variant="Variant.Filled" Color="Color.Primary"

@@ -47,7 +47,7 @@ public sealed class FaultJourneys(JourneyHost host) : JourneyBase(host)
         await Expect(Outcomes(page, "checking").First).ToBeVisibleAsync(UntilChecking);
         await Expect(page.GetByTestId("card")).ToHaveAttributeAsync("data-state", "checking");
         await Expect(page.GetByTestId("card-check-again")).ToBeVisibleAsync();
-        await Expect(page.GetByTestId("card-checking")).ToHaveTextAsync(Text["Card_Checking"].Value);
+        await Expect(page.GetByTestId("card-checking")).ToHaveCountAsync(0);
         await Expect(Outcomes(page, "not_done")).ToHaveCountAsync(0);
 
         // No tap: the automatic settle resends under the same key and the card resolves to done.
