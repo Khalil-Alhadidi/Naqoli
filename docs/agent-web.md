@@ -518,6 +518,7 @@ The journeys locate elements only by these attributes.
 | `TypedNoCancelsTheCard` | CLN-01, then the first `Word_no` entry: the card is `cancelled`, the outcome is `Refusal_card_cancelled`, nothing moved |
 | `NewRequestCancelsTheCardAndStartsFresh` | CLN-01 then CLN-02: one cancelled outcome, one card, live, for 100,000; two `created` and one `cancelled` audit rows; nothing moved |
 | `UnclearTextLeavesTheCard` | CLN-01 then `TODO: not a request`: the reply is `Refusal_not_understood`, the card stays live, no cancel; Confirm then gives done |
+| `InjectionTypedWhileACardWaitsLeavesTheCardAndMovesNothing` | ADD-06, both says: CLN-01's live card, then Khalil's injection (all the balance to a typed number); the reply is `Unsupported_change_waiting_card`, the card stays live, no cancelled and no done outcome, the balance and U1's history unchanged, no `executing` or `done` audit row, one learning row `change_waiting_card`; Confirm is not tapped |
 | `TryAgainAfterExpiry` | 4-second console, CLN-01: after the expired outcome `card-try-again` shows (no `card-send-again`); the tap gives a new live card with its timer and a second `created` row, nothing moved; Confirm gives done and exactly one new history row |
 | `SendAgainAfterDone` | CLN-01, Confirm, `card-send-again`: a live card with `card-warning` `Card_Warning_repeat`; Cancel; exactly one new history row |
 | `BalanceAnswersAfterConsentAndTheLogKeepsNoFigure` | CLN-31: the reply is `Reply_balance` with 750,000; the log has one `balance_shown` row with an empty Amount; no trace entry holds `750` |
@@ -538,7 +539,7 @@ The journeys locate elements only by these attributes.
 | `ModelInvalidReplyIsNotUnderstood` | The panel arms `invalid_reply` once; CLN-01: `Refusal_not_understood`, no card, one learning row `model_invalid_reply` with detail `injected`; nothing moved |
 | `ExternalDebitWhileTheCardWaitsIsCaughtByTheRecheck` | FLT-08 on U2's console: a live card for 15,000; the panel takes 5,000 (`fault-debit-result` done); Confirm: `Outcome_not_done` with `Refusal_insufficient_balance` and 2,500; balance 13,500; the wallet's history (`Host.HistoryAsync`, since the wallet panel does not reload after a panel debit) has exactly one new row, of type `externalDebit` for 5,000, and no payment |
 
-- **Run:** `dotnet test tests/Agent.Web.Journeys`. The 32 journeys take about two minutes (1 min 57 s and 1 min 52 s in two runs on 16 Oct 2026; the two timeout journeys take about 20 s each). The 20 of milestone 7 took about a minute.
+- **Run:** `dotnet test tests/Agent.Web.Journeys`. The 34 journeys take about two minutes (1 min 57 s and 1 min 52 s in two runs of the 32 of that day on 16 Oct 2026; the two timeout journeys take about 20 s each). The 20 of milestone 7 took about a minute.
 - **Install Chromium once,** after the first build: `pwsh tests/Agent.Web.Journeys/bin/Debug/net10.0/playwright.ps1 install chromium`.
 - **Skips:** the journeys skip when SQL Server does not answer a 3-second probe on `master`, and when Chromium cannot be launched. The skip message gives the install command.
 - **Database names:** both databases must end in `_Test`; the host refuses any other name, because it drops them.

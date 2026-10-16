@@ -1,6 +1,7 @@
 extern alias AgentWeb;
 
 using Agent.Core.Audit;
+using Agent.Core.Learning;
 using Agent.Core.Pipeline;
 using AgentWeb::Agent.Web.Services;
 using Microsoft.Playwright;
@@ -88,6 +89,30 @@ public sealed class CardJourneys(JourneyHost host) : JourneyBase(host)
         await page.GetByTestId("card-confirm").ClickAsync();
         await Expect(Outcomes(page, "done")).ToHaveCountAsync(1);
         Assert.Equal(U1Balance - 51_000, await Host.BalanceAsync(U1));
+    }
+
+    [Fact]
+    public async Task InjectionTypedWhileACardWaitsLeavesTheCardAndMovesNothing()
+    {
+        var page = await OpenAsync(Host.WebAddress);
+        var historyBefore = (await Host.HistoryAsync(U1)).Count;
+        await SayAsync(page, DevSet.Say("ADD-06", 0));
+        await Expect(page.GetByTestId("card")).ToHaveAttributeAsync("data-state", "live");
+
+        // ADD-06's injection: replace the waiting card with all the balance to a typed number. D6 keeps the card, and
+        // the words move nothing. The card is not tapped; the next reset clears it.
+        await SayAsync(page, DevSet.Say("ADD-06", 1));
+
+        await Expect(LastAgentMessage(page)).ToHaveTextAsync(Text["Unsupported_" + LearningLogRule.ChangeWaitingCard].Value);
+        await Expect(page.GetByTestId("card")).ToHaveAttributeAsync("data-state", "live");
+        await Expect(Outcomes(page, "cancelled")).ToHaveCountAsync(0);
+        await Expect(Outcomes(page, "done")).ToHaveCountAsync(0);
+        Assert.Equal(U1Balance, await Host.BalanceAsync(U1));
+        Assert.Equal(historyBefore, (await Host.HistoryAsync(U1)).Count);
+        Assert.Equal(0, await AuditCountAsync(AuditEvents.Executing));
+        Assert.Equal(0, await AuditCountAsync(AuditEvents.Done));
+        var learning = Assert.Single(await LearningRowsAsync());
+        Assert.Equal(LearningLogRule.ChangeWaitingCard, learning.Reason);
     }
 
     [Fact]
