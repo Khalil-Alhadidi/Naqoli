@@ -780,7 +780,7 @@ The conversation calls it after every reply that yields an entry, with the maske
 |---|---|---|
 | `MinAmountIqd` | 1,000 | Checks, format |
 | `PerTransactionCapIqd` | 5,000,000 | Checks; `AmountRule` drops a rule-9 reading above it |
-| `PerDayCapIqd` | 10,000,000 | Checks and the Confirm recheck |
+| `PerDayCapIqd` | 10,000,000 | Checks and the Confirm recheck. The three limits must be ordered, `MinAmountIqd` <= `PerTransactionCapIqd` <= `PerDayCapIqd`, validated at start and on every save (review M4, Khalil, 16 Oct 2026) |
 | `CardTimerSeconds` | 45 | `PendingStore.CreateAsync` |
 | `MaxRequestsPerMessage` | 3 | Not read yet (compound requests, milestone 9c) |
 | `MaxProductsInOneQuestion` | 8 | Product and internet-card questions |

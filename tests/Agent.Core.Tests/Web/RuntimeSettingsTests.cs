@@ -174,4 +174,21 @@ public sealed class RuntimeSettingsTests : IDisposable
         Assert.Equal(0, reloads);
         Assert.Equal(5_000_000, CapOfTheMonitor);
     }
+
+    /// <summary>
+    /// Review M4: a save that breaks the order minimum, per-transaction cap, daily cap is refused with the rule's
+    /// message, and the value in force stays.
+    /// </summary>
+    [Fact]
+    public void ASaveThatBreaksTheOrderOfTheLimitsIsRefused()
+    {
+        // The daily cap is 10,000,000 by default: a per-transaction cap above it breaks the order.
+        Assert.False(Settings.TrySet(Cap, "20000000", out var error));
+
+        Assert.NotNull(error);
+        Assert.Contains("PerDayCapIqd", error, StringComparison.Ordinal);
+        Assert.Contains("MinAmountIqd", error, StringComparison.Ordinal);
+        Assert.Empty(Settings.Overrides);
+        Assert.Equal(5_000_000, CapInANewScope());
+    }
 }

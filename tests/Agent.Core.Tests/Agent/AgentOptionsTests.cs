@@ -59,6 +59,40 @@ public class AgentOptionsTests
             Assert.Throws<OptionsValidationException>(read);
     }
 
+    /// <summary>Review M4 (Khalil, 16 Oct 2026): the minimum, the per-transaction cap and the daily cap are in that order.</summary>
+    [Theory]
+    [InlineData("1000", "5000000", "10000000", true)]
+    [InlineData("5000000", "5000000", "5000000", true)]
+    [InlineData("6000", "5000", "10000000", false)]
+    [InlineData("1000", "20000000", "10000000", false)]
+    public void TheThreeLimitsMustBeOrdered(string minimum, string perTransaction, string perDay, bool valid)
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Agent:WalletBaseUrl"] = "http://localhost",
+                ["Agent:WalletClientKey"] = AgentHost.TestWalletClientKey,
+                ["Agent:MinAmountIqd"] = minimum,
+                ["Agent:PerTransactionCapIqd"] = perTransaction,
+                ["Agent:PerDayCapIqd"] = perDay,
+            })
+            .Build();
+        using var provider = new ServiceCollection().AddAgentCore(configuration).BuildServiceProvider();
+
+        var read = () => provider.GetRequiredService<IOptions<AgentOptions>>().Value;
+
+        if (valid)
+        {
+            Assert.NotNull(read());
+            return;
+        }
+
+        var error = Assert.Throws<OptionsValidationException>(read);
+        Assert.Contains("MinAmountIqd", error.Message, StringComparison.Ordinal);
+        Assert.Contains("PerTransactionCapIqd", error.Message, StringComparison.Ordinal);
+        Assert.Contains("PerDayCapIqd", error.Message, StringComparison.Ordinal);
+    }
+
     [Theory]
     [InlineData("2026-10-14T22:30:00+00:00", "2026-10-15T00:00:00+03:00")]
     [InlineData("2026-10-14T20:59:59+00:00", "2026-10-14T00:00:00+03:00")]

@@ -44,6 +44,10 @@ public static class AgentCoreServiceCollectionExtensions
             .Validate(
                 o => o.StaleExecutingOutlastsAConfirm,
                 "Agent:StaleExecutingAfterSeconds must be more than three times Agent:WalletTimeoutSeconds: a Confirm makes three timed wallet calls while its record is Executing.")
+            // Review M4 (Khalil, 16 Oct 2026): out-of-order limits would refuse everything without saying why.
+            .Validate(
+                o => o.LimitsAreOrdered,
+                "Agent:MinAmountIqd must not be above Agent:PerTransactionCapIqd, and Agent:PerTransactionCapIqd must not be above Agent:PerDayCapIqd.")
             .ValidateOnStart();
 
         services.TryAddSingleton(TimeProvider.System);

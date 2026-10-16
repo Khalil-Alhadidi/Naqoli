@@ -74,4 +74,4 @@ The three Important items: the kill switch is checked once, before the recheck, 
 
 ## Fix wave (controller, 16 Oct 2026)
 
-Fixed through the implementer in one wave after this review: I1, I2, I3, M1, M2, M3, M5, R1, R2, R3, R4. Parked for Khalil: M4 (a new cross-field validation rule for the three limits). The commit and the re-verification are recorded in `docs/build-plan.md`, milestone 7 status.
+Fixed through the implementer in one wave after this review: I1, I2, I3, M1, M2, M3, M5, R1, R2, R3, R4. M4 (the cross-field rule `MinAmountIqd` <= `PerTransactionCapIqd` <= `PerDayCapIqd` in `AddAgentCore`) was added on 16 Oct 2026 at Khalil's request, after the tag. The commit and the re-verification are recorded in `docs/build-plan.md`, milestone 7 status.

@@ -146,4 +146,7 @@ public sealed class AgentOptions
 
     /// <summary>True when <see cref="StaleExecutingAfterSeconds"/> outlasts the three timed wallet calls of a Confirm.</summary>
     internal bool StaleExecutingOutlastsAConfirm => StaleExecutingAfterSeconds > 3 * WalletTimeoutSeconds;
+
+    /// <summary>True when <see cref="MinAmountIqd"/> &lt;= <see cref="PerTransactionCapIqd"/> &lt;= <see cref="PerDayCapIqd"/>.</summary>
+    internal bool LimitsAreOrdered => MinAmountIqd <= PerTransactionCapIqd && PerTransactionCapIqd <= PerDayCapIqd;
 }
