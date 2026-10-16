@@ -189,7 +189,7 @@ A tap is accepted only for a value that the open question offered. Anything else
 
 `CardPanel` shows the `CardView` fields with the resource labels. Names from the wallet render through Razor encoding inside `<bdi>`.
 
-- **Countdown.** A one-second display tick computes the seconds left from `ExpiresAt`, and `MudProgressLinear` shows them as a bar. At zero, the panel calls `RefreshAsync`, and the server's record decides; the browser's clock only decides when to ask. The real timer is `CardTimerSeconds`, enforced by `PendingStore`.
+- **Countdown.** A one-second display tick computes the seconds left from `ExpiresAt`, and `MudProgressLinear` shows them as a bar. At zero, the panel calls `RefreshAsync`, and the server's record decides; the browser's clock only decides when to ask. The real timer is `CardTimerSeconds`, enforced by `PendingStore`. The line under the bar (`card-timer`, `Card_Timer`) says the card is cancelled after the seconds left unless Confirm is tapped. Khalil changed it from a bare "N seconds left" on 16 Oct 2026, after his testing: a bare countdown could be read as automatic approval, as if the payment would go through when the time ran out, which is the opposite of what happens (rule 1). No journey or test asserts the timer's text; they use `card-timer` and the key only.
 - **Buttons.** Confirm and Cancel are disabled when any of these holds:
   - the card is not live;
   - the countdown is at zero;
@@ -287,7 +287,7 @@ No key is a placeholder. `Card_TryAgain` and `Card_SendAgain` (milestone 7, D19)
 | `Card_Pin` | PIN | |
 | `Card_Expired` | This card has expired. Nothing was sent | |
 | `Card_Cancelled` | Cancelled | |
-| `Card_Timer` | {0} seconds left | |
+| `Card_Timer` | Cancelled after {0} seconds unless you tap Confirm | Khalil's wording of 16 Oct 2026, replacing "{0} seconds left": a bare countdown could read as automatic approval |
 | `Card_TryAgain` | Try again | Milestone 7, D19; Khalil's Arabic, 16 Oct 2026 |
 | `Card_SendAgain` | Send again | Milestone 7, D19; Khalil's Arabic, 16 Oct 2026 |
 | `Outcome_done` | Done. Reference {0}. Your balance is now {1} | |

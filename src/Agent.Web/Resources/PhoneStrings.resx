@@ -19,7 +19,7 @@
   <data name="Card_Pin" xml:space="preserve"><value>الرقم السري</value></data>
   <data name="Card_Expired" xml:space="preserve"><value>خلص الوقت. ما انحوّل شي</value></data>
   <data name="Card_Cancelled" xml:space="preserve"><value>العملية ملغية</value></data>
-  <data name="Card_Timer" xml:space="preserve"><value>باقي {0} ثانية</value></data>
+  <data name="Card_Timer" xml:space="preserve"><value>ينلغي بعد {0} ثانية إذا ما ضغطت تأكيد</value></data>
   <data name="Card_TryAgain" xml:space="preserve"><value>جرب مرة ثانية</value></data>
   <data name="Card_SendAgain" xml:space="preserve"><value>دز مرة ثانية</value></data>
   <data name="Outcome_done" xml:space="preserve"><value>تم. رقم العملية {0}. رصيدك هسه {1}</value></data>
