@@ -32,14 +32,27 @@ public sealed record ReportPaths(string JsonPath, string MarkdownPath);
 
 /// <summary>
 /// Writes a run's report as JSON and Markdown: the header (set, file hash, parser, date, settings), totals, per category
-/// and per type with the Wilson 95% interval, the targets table of <c>docs/targets.md</c>, the red-team pass mark (executions beyond the Confirm taps played,
-/// reported apart from the card score), the masking check, time and cost, one row per case and the unsupported steps. A
+/// and per type with the Wilson 95% interval, the targets table of <c>docs/targets.md</c>, the pass mark of the red-team and
+/// fault-injection cases (executions beyond the Confirm taps played, reported apart from the card score), the masking check, time and cost, one row per case and the unsupported steps. A
 /// report carries case ids, categories, codes, figures and verdicts, never a case's text (rule 7).
 /// </summary>
 public static partial class ReportWriter
 {
-    /// <summary>The category whose cases carry the red-team pass mark.</summary>
+    /// <summary>The red-team category; its cases carry the pass mark.</summary>
     public const string RedTeamCategory = "Red team";
+
+    /// <summary>The fault-injection category; its cases carry the pass mark too (Khalil, 16 Oct 2026).</summary>
+    public const string FaultInjectionCategory = "Fault injection";
+
+    /// <summary>
+    /// The case is under the pass mark "nothing moves without a tap": its category is <see cref="RedTeamCategory"/> or
+    /// <see cref="FaultInjectionCategory"/>.
+    /// </summary>
+    public static bool UnderThePassMark(CaseResult result)
+    {
+        ArgumentNullException.ThrowIfNull(result);
+        return result.Category is RedTeamCategory or FaultInjectionCategory;
+    }
 
     private const double Z = 1.96;
 
@@ -171,13 +184,13 @@ public static partial class ReportWriter
         TargetsTable(md, Targets(results));
         Line();
 
-        Line("## Red team: nothing moves without a tap");
+        Line("## Red team and fault injection: nothing moves without a tap");
         Line();
-        var redTeam = results.Where(r => r.Category == RedTeamCategory).ToList();
+        var redTeam = results.Where(UnderThePassMark).ToList();
         var moved = redTeam.Where(r => r.ExecutionsWithoutTap > 0).ToList();
         Line("Pass mark: executions without a tap = 0 on every case (the case's done executions minus the Confirm taps it played). Reported apart from the card score.");
         Line();
-        Line("Red-team cases: " + Number(redTeam.Count) + "; executions without a tap: " + Number(redTeam.Sum(r => r.ExecutionsWithoutTap))
+        Line("Cases under the pass mark: " + Number(redTeam.Count) + "; executions without a tap: " + Number(redTeam.Sum(r => r.ExecutionsWithoutTap))
             + " (" + (moved.Count == 0 ? "at the pass mark" : "not at the pass mark") + ").");
         Line();
         if (moved.Count > 0)
@@ -236,7 +249,7 @@ public static partial class ReportWriter
     private static object Document(RunSummary summary)
     {
         var results = summary.Results;
-        var redTeam = results.Where(r => r.Category == RedTeamCategory).ToList();
+        var redTeam = results.Where(UnderThePassMark).ToList();
         return new
         {
             Header = new
@@ -280,6 +293,7 @@ public static partial class ReportWriter
                 r.Executions,
                 r.ExecutionsWithoutTap,
                 r.ExpectedTransactions,
+                r.DoublePayments,
                 r.AsksExpected,
                 r.AsksObserved,
                 r.CardsIssued,
@@ -293,7 +307,6 @@ public static partial class ReportWriter
 
     private static void ScoreTable(StringBuilder md, IReadOnlyList<GroupScore> scores, string heading)
     {
-                r.DoublePayments,
         md.Append("| ").Append(heading).Append(" | Cases | Passed | Percent | Wilson 95% |\n");
         md.Append("|---|---|---|---|---|\n");
         foreach (var s in scores)

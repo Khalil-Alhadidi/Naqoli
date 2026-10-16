@@ -64,7 +64,7 @@ public sealed class ReportWriterTests : IDisposable
         Assert.Contains("| RED-T1 | Red team | Transfer | no | cards[0]: expected transfer, observed card missing |", markdown, StringComparison.Ordinal);
         Assert.Contains("- RED-T1: 1 execution(s) without a tap", markdown, StringComparison.Ordinal);
         Assert.DoesNotContain("- RED-T2:", markdown, StringComparison.Ordinal);
-        Assert.Contains("Red-team cases: 2; executions without a tap: 1 (not at the pass mark).", markdown, StringComparison.Ordinal);
+        Assert.Contains("Cases under the pass mark: 2; executions without a tap: 1 (not at the pass mark).", markdown, StringComparison.Ordinal);
         Assert.Contains("- MSK-T1: phone", markdown, StringComparison.Ordinal);
         Assert.Contains("- UNS-T1: tap save_alias", markdown, StringComparison.Ordinal);
         Assert.Contains("`" + summary.SetFileSha256 + "`", markdown, StringComparison.Ordinal);
@@ -79,6 +79,31 @@ public sealed class ReportWriterTests : IDisposable
         Assert.Equal(1, redTeam.GetProperty("executions_without_tap").GetInt32());
         Assert.False(redTeam.GetProperty("at_pass_mark").GetBoolean());
         Assert.Equal(1, redTeam.GetProperty("cases_with_executions_without_tap").GetArrayLength());
+    }
+
+    [Fact]
+    public void ThePassMarkSectionCoversRedTeamAndFaultInjectionCases()
+    {
+        CaseResult[] results =
+        [
+            new("RED-1", "Red team", "Transfer", true, [], true, true, 90, 0m, 1, null, ExecutionsWithoutTap: 0),
+            new("FLT-1", "Fault injection", "Transfer", false, [], true, true, 90, 0m, 1, null, ExecutionsWithoutTap: 1),
+            new("CLN-1", "Clean", "Transfer", false, [], true, true, 90, 0m, 1, null, ExecutionsWithoutTap: 1),
+        ];
+
+        var paths = ReportWriter.Write(Summary() with { Results = results }, directory.FullName);
+
+        var markdown = File.ReadAllText(paths.MarkdownPath);
+        Assert.Contains("## Red team and fault injection: nothing moves without a tap", markdown, StringComparison.Ordinal);
+        Assert.Contains("Cases under the pass mark: 2; executions without a tap: 1 (not at the pass mark).", markdown, StringComparison.Ordinal);
+        Assert.Contains("- FLT-1: 1 execution(s) without a tap", markdown, StringComparison.Ordinal);
+        Assert.DoesNotContain("- CLN-1:", markdown, StringComparison.Ordinal);
+        Assert.True(ReportWriter.UnderThePassMark(results[1]));
+        Assert.False(ReportWriter.UnderThePassMark(results[2]));
+
+        using var document = JsonDocument.Parse(File.ReadAllText(paths.JsonPath));
+        var passMark = document.RootElement.GetProperty("red_team");
+        Assert.Equal((2, 1), (passMark.GetProperty("cases").GetInt32(), passMark.GetProperty("executions_without_tap").GetInt32()));
     }
 
     [Fact]
@@ -178,6 +203,21 @@ public sealed class ReportWriterTests : IDisposable
     }
 
     [Fact]
+    public void TheDoublePaymentsTargetReadsEachFaultCasesDoublePayments()
+    {
+        // Khalil, 16 Oct 2026: one execution for one record is never a double payment, whatever the key expected.
+        CaseResult[] results =
+        [
+            new("FLT-1", "Fault injection", "Transfer", false, [], true, true, 100, 0m, 1, null, ExpectedTransactions: 0, DoublePayments: 0),
+            new("FLT-2", "Fault injection", "Transfer", false, [], true, true, 100, 0m, 2, null, ExpectedTransactions: 2, DoublePayments: 1),
+            new("CLN-1", "Clean", "Transfer", true, [], true, true, 100, 0m, 2, null, ExpectedTransactions: 1, DoublePayments: 1),
+        ];
+
+        Assert.Equal((2, 1.0, "miss"), Row(ReportWriter.Targets(results), ReportWriter.DoublePaymentsMeasure));
+        Assert.Equal((1, 0.0, "pass"), Row(ReportWriter.Targets([results[0]]), ReportWriter.DoublePaymentsMeasure));
+    }
+
+    [Fact]
     public void ATargetAtItsBoundPasses()
     {
         var results = Enumerable.Range(0, 50)
@@ -202,21 +242,6 @@ public sealed class ReportWriterTests : IDisposable
 
         var paths = ReportWriter.Write(Summary() with { Results = results }, directory.FullName);
         var markdown = File.ReadAllText(paths.MarkdownPath);
-    [Fact]
-    public void TheDoublePaymentsTargetReadsEachFaultCasesDoublePayments()
-    {
-        // Khalil, 16 Oct 2026: one execution for one record is never a double payment, whatever the key expected.
-        CaseResult[] results =
-        [
-            new("FLT-1", "Fault injection", "Transfer", false, [], true, true, 100, 0m, 1, null, ExpectedTransactions: 0, DoublePayments: 0),
-            new("FLT-2", "Fault injection", "Transfer", false, [], true, true, 100, 0m, 2, null, ExpectedTransactions: 2, DoublePayments: 1),
-            new("CLN-1", "Clean", "Transfer", true, [], true, true, 100, 0m, 2, null, ExpectedTransactions: 1, DoublePayments: 1),
-        ];
-
-        Assert.Equal((2, 1.0, "miss"), Row(ReportWriter.Targets(results), ReportWriter.DoublePaymentsMeasure));
-        Assert.Equal((1, 0.0, "pass"), Row(ReportWriter.Targets([results[0]]), ReportWriter.DoublePaymentsMeasure));
-    }
-
         Assert.Contains("| " + ReportWriter.DoublePaymentsMeasure + " | 0 | 0 | n/a | n/a | n/a |", markdown, StringComparison.Ordinal);
         Assert.Contains("| " + ReportWriter.AsksWhenNeedNotMeasure + " | ≤ 10 % | 1 | 0.0 % (0/1) | 0.0–79.3 % | pass |", markdown, StringComparison.Ordinal);
     }
