@@ -98,6 +98,7 @@
         (nameof(AgentOptions.HistoryDays), o => o.HistoryDays),
         (nameof(AgentOptions.MinSubstringWordLength), o => o.MinSubstringWordLength),
         (nameof(AgentOptions.MaxYesNoWords), o => o.MaxYesNoWords),
+        (nameof(AgentOptions.LogPageSize), o => o.LogPageSize),
     ];
 
     private readonly Dictionary<string, string> drafts = new(StringComparer.Ordinal);

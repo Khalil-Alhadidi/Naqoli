@@ -19,7 +19,7 @@ The agent's logic is in [agent-core.md](agent-core.md). `Agent.Web` references `
 flowchart LR
     subgraph ltr["Console: English, left to right (data-testid console, dir ltr)"]
         menu["Side menu (MudDrawer)<br/>Wallet data, Settings, Log, Learning data"]
-        middle["Middle component<br/>WalletDataPanel (default), SettingsPlaceholder,<br/>Placeholder Log (milestone 7), Placeholder Learning data (milestone 10)"]
+        middle["Middle component<br/>WalletDataPanel (default), SettingsPlaceholder,<br/>LogPanel (milestone 7), Placeholder Learning data (milestone 10)"]
         trace["LiveTrace<br/>always visible, newest first"]
     end
     subgraph rtl["Phone: Iraqi Arabic, right to left (data-testid phone-frame, dir rtl, lang ar)"]
@@ -331,6 +331,21 @@ Options validation requires `StaleExecutingAfterSeconds` to be more than three t
 
 Khalil replaces the two sentences; the requests stay. A sentence may hold a phone number written as the user would type it: the parser masks each sentence at load as the conversation masks the typed text. The journeys type the transfer sentence through `ScriptedParser.EmbeddedSentences()`, so they keep working after the change.
 
+## The log component
+
+`LogPanel` (`Components/Console/LogPanel.razor`, the side menu's Log) lists the latest `LogPageSize` (100, a setting) audit rows, newest first, through `AuditLog.ReadLatestAsync` in a fresh scope (the `WalletDataPanel` pattern). It reads when it opens, when the session raises `Changed` with no action running (so once per action, not once per message), and on its Refresh button (`log-refresh`). A read that arrives while one runs is followed by one more read. Columns, English and left to right: At (UTC, `yyyy-MM-dd HH:mm:ss`), User, Event, Pending (the first 8 characters of the ID), From → To, Reason, Reference, Amount (`PhoneFormat.Console`, blank when null), Detail. No PIN, balance figure or purchase code can appear, because an audit row never holds one (`AuditLogTests`).
+
+```mermaid
+sequenceDiagram
+    participant S as ChatSession
+    participant L as LogPanel
+    participant A as AuditLog (new scope)
+    L->>A: ReadLatestAsync(LogPageSize) on open
+    S-->>L: Changed (Busy false, the action ended)
+    L->>A: ReadLatestAsync(LogPageSize)
+    A-->>L: rows, newest first (At, then Id)
+```
+
 ## The `data-testid` contract
 
 The journeys locate elements only by these attributes.
@@ -352,6 +367,7 @@ The journeys locate elements only by these attributes.
 | Wallet balance | `wallet-balance` | `data-value` (ASCII) |
 | Wallet history row | `wallet-history-row` | `data-reference` |
 | Settings row | `setting-row` | `data-name` |
+| Log row, log refresh button | `log-row`, `log-refresh` | `log-row`: `data-event`, `data-reason` (empty when null), `data-pending` (the first 8 characters of the pending ID, empty when null) |
 | Settings value, input, Save, Reset, error (editable agent rows) | `setting-value`, `setting-input`, `setting-save`, `setting-reset`, `setting-error` | `data-name` (the setting's name, as on its row) |
 | Menu items | `menu-wallet`, `menu-settings`, `menu-log`, `menu-learning` | |
 
@@ -385,7 +401,7 @@ The journeys locate elements only by these attributes.
 | Gap | Plan |
 |---|---|
 | The card shows the amount in figures only, not in words | Needs Khalil's Iraqi number words |
-| Settings is read only; Log and Learning data are placeholders | The settings and log components in milestone 7, learning data in milestone 10 |
+| Learning data is a placeholder | Milestone 10 (the settings and log components came in milestone 7) |
 | Option taps send the request again with the slot filled, so an ambiguous display text asks again | The orchestrator's answer entry point, milestone 7 |
 | Text typed before the circuit is interactive is lost | The `data-interactive` marker tells the journeys; a person types again |
 | A Checking record whose circuit is gone has no "check again" button in a new circuit | The Checking screen in milestone 8; the record stays Checking and is never shown as failed |

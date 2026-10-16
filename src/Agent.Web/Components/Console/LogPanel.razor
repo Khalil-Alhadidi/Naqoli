@@ -1,0 +1,119 @@
+@implements IDisposable
+@using System.Globalization
+@using Agent.Core.Audit
+@inject IServiceScopeFactory Scopes
+@inject ChatSession Session
+@inject IOptionsMonitor<AgentOptions> Options
+
+@* Read only: the latest audit rows, newest first. The rows hold no PIN, balance figure or purchase code, so none can be
+   shown. Each read goes through a fresh scope's AuditLog. *@
+<MudPaper Class="pa-3" Elevation="1">
+    <div class="d-flex align-center">
+        <MudText Typo="Typo.h6">Log (latest @pageSize)</MudText>
+        <MudSpacer />
+        <MudButton data-testid="log-refresh" Size="Size.Small" Variant="Variant.Outlined" Disabled="@loading"
+                   OnClick="LoadAsync">Refresh</MudButton>
+    </div>
+
+    @if (loading)
+    {
+        <MudProgressLinear Indeterminate="true" />
+    }
+
+    @if (failure is not null)
+    {
+        <MudText Color="Color.Error">@failure</MudText>
+    }
+
+    <MudSimpleTable Dense="true" Hover="true">
+        <thead>
+            <tr>
+                <th>At (UTC)</th><th>User</th><th>Event</th><th>Pending</th><th>From → To</th><th>Reason</th>
+                <th>Reference</th><th>Amount</th><th>Detail</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var row in rows)
+            {
+                var pending = ShortId(row.PendingId);
+                <tr data-testid="log-row" data-event="@row.Event" data-reason="@(row.Reason ?? string.Empty)" data-pending="@pending">
+                    <td>@row.At.UtcDateTime.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture)</td>
+                    <td>@row.UserId</td>
+                    <td>@row.Event</td>
+                    <td>@pending</td>
+                    <td>@Transition(row)</td>
+                    <td>@row.Reason</td>
+                    <td>@row.Reference</td>
+                    <td>@(row.AmountIqd is { } amount ? PhoneFormat.Console(amount) : string.Empty)</td>
+                    <td>@row.Detail</td>
+                </tr>
+            }
+        </tbody>
+    </MudSimpleTable>
+</MudPaper>
+
+@code {
+    /// <summary>How many characters of a pending ID the table shows.</summary>
+    private const int PendingIdChars = 8;
+
+    private IReadOnlyList<AuditEntry> rows = [];
+    private int pageSize;
+    private bool loading;
+    private bool reloadRequested;
+    private string? failure;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Session.Changed += OnSessionChanged;
+        await LoadAsync();
+    }
+
+    public void Dispose() => Session.Changed -= OnSessionChanged;
+
+    private void OnSessionChanged()
+    {
+        // The session raises Changed many times during one action; read once it has finished.
+        if (Session.Busy)
+            return;
+        _ = InvokeAsync(LoadAsync);
+    }
+
+    private async Task LoadAsync()
+    {
+        // A read already running is followed by one more, so the last action's rows are always shown.
+        if (loading)
+        {
+            reloadRequested = true;
+            return;
+        }
+
+        loading = true;
+        StateHasChanged();
+        try
+        {
+            do
+            {
+                reloadRequested = false;
+                pageSize = Options.CurrentValue.LogPageSize;
+                await using var scope = Scopes.CreateAsyncScope();
+                rows = await scope.ServiceProvider.GetRequiredService<AuditLog>().ReadLatestAsync(pageSize, CancellationToken.None);
+                failure = null;
+            }
+            while (reloadRequested);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            failure = "log unavailable: " + ex.GetType().Name;
+        }
+        finally
+        {
+            loading = false;
+            StateHasChanged();
+        }
+    }
+
+    private static string ShortId(Guid? id) => id is { } value ? value.ToString("N")[..PendingIdChars] : string.Empty;
+
+    private static string Transition(AuditEntry row)
+        => row.FromState is null && row.ToState is null ? string.Empty : $"{row.FromState ?? "-"} → {row.ToState ?? "-"}";
+}

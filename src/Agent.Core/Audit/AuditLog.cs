@@ -1,5 +1,6 @@
 using Agent.Core.Data;
 using Agent.Core.Pipeline;
+using Microsoft.EntityFrameworkCore;
 
 namespace Agent.Core.Audit;
 
@@ -40,6 +41,23 @@ public sealed class AuditLog(AgentDbContext db, TimeProvider time)
 
         Stage(userId, null, AuditEvents.Refused, null, null, reason, null, null, kept);
         await db.SaveChangesAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// The newest <paramref name="take"/> entries, newest first (by <see cref="AuditEntry.At"/>, then by
+    /// <see cref="AuditEntry.Id"/>), untracked: the console's log component reads them. The rows hold no PIN, balance
+    /// figure or purchase code, so none can be shown.
+    /// </summary>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="take"/> is below 1.</exception>
+    public async Task<IReadOnlyList<AuditEntry>> ReadLatestAsync(int take, CancellationToken cancellationToken)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(take, 1);
+
+        return await db.AuditEntries.AsNoTracking()
+            .OrderByDescending(e => e.At)
+            .ThenByDescending(e => e.Id)
+            .Take(take)
+            .ToListAsync(cancellationToken);
     }
 
     /// <summary>Adds one entry to the context without saving, so the caller saves it with its own change.</summary>

@@ -720,6 +720,7 @@ The conversation calls it after every reply that yields an entry, with the maske
 | `StaleExecutingAfterSeconds` | 40; must be more than three times `WalletTimeoutSeconds` (validated at start) | `PendingSweeper`: a record Executing this long becomes Checking. A Confirm makes three timed wallet calls (balance, history, execute) while the record is Executing, so 40 is 3 x 10 s plus a margin |
 | `MinSubstringWordLength` | 3; 1 to 20 | `ContactResolver`, rule 4: a shorter typed word must equal a whole word |
 | `MaxYesNoWords` | 4; 1 to 20 | `Conversation`, D6: a yes or a no has at most this many words |
+| `LogPageSize` | 100; 1 to 1,000 | The console's log component: how many audit rows, newest first, it shows (`AuditLog.ReadLatestAsync`) |
 | `YesWords`, `NoWords` | empty | `Conversation`, D6. Phone text, so not set in `Agent.Core`: the console post-configures them from `Word_yes` and `Word_no` in its resource file, and the test host sets `yes` and `no` |
 
 The settings component (milestone 7) shows them; milestone 4 shows them read only. The client key goes in user secrets or the environment, never in a committed file.

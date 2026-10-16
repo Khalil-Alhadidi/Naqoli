@@ -109,6 +109,10 @@ public sealed class AgentOptions
     [Range(1, 20)]
     public int MaxYesNoWords { get; set; } = 4;
 
+    /// <summary>How many audit rows, newest first, the console's log component shows.</summary>
+    [Range(1, 1_000)]
+    public int LogPageSize { get; set; } = 100;
+
     /// <summary>
     /// D6: the typed words that mean "yes" while a card is live. A yes never confirms; it points to the Confirm button.
     /// Each entry is a phrase: its words, normalised as a message is (<see cref="Text.ArabicText.Normalize"/>,
