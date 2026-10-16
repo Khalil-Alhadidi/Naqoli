@@ -152,9 +152,11 @@ public sealed class JourneyHost : IAsyncLifetime
         await db.LearningEntries.ExecuteDeleteAsync();
 
         // A journey that stopped half way must not leave the kill switch on or a saved setting behind for the next one.
+        // The wallet's reset above clears its fault switch; each console's model fault is cleared here (milestone 8).
         foreach (var services in AllWebServices)
         {
             services.GetRequiredService<KillSwitch>().Set(false);
+            services.GetRequiredService<ModelFaultSwitch>().Clear();
             var runtime = services.GetRequiredService<RuntimeSettings>();
             foreach (var key in runtime.Overrides.Keys.ToList())
                 runtime.Reset(key);
@@ -176,6 +178,17 @@ public sealed class JourneyHost : IAsyncLifetime
     /// <summary>The demo user's history, newest first.</summary>
     public async Task<IReadOnlyList<WalletHistoryItem>> HistoryAsync(int userId)
         => (await Wallet.GetFromJsonAsync<List<WalletHistoryItem>>($"/users/{userId}/history?take=200"))!;
+
+    /// <summary>The user's bills, with the amount due now, from the wallet.</summary>
+    public async Task<IReadOnlyList<WalletBill>> BillsAsync(int userId)
+        => (await Wallet.GetFromJsonAsync<List<WalletBill>>($"/users/{userId}/bills"))!;
+
+    /// <summary>The wallet's fault switch now, as <c>GET /admin/faults</c> reports it (mode name only).</summary>
+    public async Task<string> WalletFaultModeAsync()
+    {
+        using var document = System.Text.Json.JsonDocument.Parse(await Wallet.GetStringAsync("/admin/faults"));
+        return document.RootElement.GetProperty("mode").GetString()!;
+    }
 
     public async Task<WalletContacts> ContactsAsync(int userId)
         => (await Wallet.GetFromJsonAsync<WalletContacts>($"/users/{userId}/contacts"))!;

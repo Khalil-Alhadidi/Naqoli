@@ -104,6 +104,60 @@ public abstract partial class JourneyBase(JourneyHost host) : IAsyncLifetime
         return await db.AuditEntries.CountAsync(a => a.Event == @event, Token);
     }
 
+    /// <summary>Every learning row of the agent database as (reason, detail).</summary>
+    protected async Task<IReadOnlyList<(string Reason, string? Detail)>> LearningRowsAsync()
+    {
+        await using var scope = host.WebServices.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<AgentDbContext>();
+        return [.. (await db.LearningEntries.AsNoTracking().ToListAsync(Token)).Select(l => (l.Reason, l.Detail))];
+    }
+
+    /// <summary>
+    /// Sets the wallet's fault switch through the fault panel of <paramref name="page"/> (milestone 8): the mode, the
+    /// delay, once, Apply; then waits until the panel shows the state the wallet reports back.
+    /// </summary>
+    protected static async Task SetWalletFaultAsync(IPage page, string mode, int delayMs, bool once)
+    {
+        await page.GetByTestId("fault-wallet-mode").SelectOptionAsync(mode);
+        await page.GetByTestId("fault-wallet-delay").FillAsync(delayMs.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        await page.GetByTestId("fault-wallet-once").SetCheckedAsync(once);
+        await page.GetByTestId("fault-wallet-apply").ClickAsync();
+        var expected = mode is "error" or "none"
+            ? new Regex("^" + Regex.Escape(mode) + "( |$)")
+            : new Regex("^" + Regex.Escape(mode) + " " + delayMs.ToString(System.Globalization.CultureInfo.InvariantCulture) + " " + (once ? "once" : "every call") + "$");
+        await Expect(page.GetByTestId("fault-wallet-state")).ToHaveTextAsync(expected);
+    }
+
+    /// <summary>Arms a model fault (<c>unreachable</c> or <c>invalid_reply</c>) through the fault panel of <paramref name="page"/>.</summary>
+    protected static async Task ArmModelFaultAsync(IPage page, string mode, bool once)
+    {
+        await page.GetByTestId("fault-model-mode").SelectOptionAsync(mode);
+        await page.GetByTestId("fault-model-once").SetCheckedAsync(once);
+        await page.GetByTestId("fault-model-apply").ClickAsync();
+        await Expect(page.GetByTestId("fault-model-state")).ToHaveTextAsync(mode + " " + (once ? "once" : "every call"));
+    }
+
+    /// <summary>Takes <paramref name="amountIqd"/> from the console's user through the fault panel; waits for the done result.</summary>
+    protected static async Task DebitAsync(IPage page, long amountIqd)
+    {
+        await page.GetByTestId("fault-debit-amount").FillAsync(amountIqd.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        await page.GetByTestId("fault-debit-apply").ClickAsync();
+        await Expect(page.GetByTestId("fault-debit-result")).ToHaveTextAsync(new Regex("^done "));
+    }
+
+    /// <summary>
+    /// The end of every fault journey: the wallet's switch is back to none (a once fault cleared itself), and the
+    /// panel's Clear all reads both switches back as <c>none</c>.
+    /// </summary>
+    protected async Task AssertFaultsClearedAsync(IPage page)
+    {
+        Assert.Equal("none", await host.WalletFaultModeAsync());
+        await page.GetByTestId("fault-clear").ClickAsync();
+        await Expect(page.GetByTestId("fault-wallet-state")).ToHaveTextAsync("none");
+        await Expect(page.GetByTestId("fault-model-state")).ToHaveTextAsync("none");
+        await Expect(page.GetByTestId("fault-error")).ToHaveCountAsync(0);
+    }
+
     /// <summary>The text of <paramref name="key"/> with an amount, as the phone formats it.</summary>
     protected string WithAmount(string key, long amountIqd) => Text[key, PhoneFormat.Amount(amountIqd, Text)].Value;
 
