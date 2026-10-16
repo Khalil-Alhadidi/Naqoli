@@ -268,7 +268,9 @@ flowchart TD
         b2 -- "0, internet" --> bStore["StoreInternet: which_product"]
         b2 -- "0, other biller" --> bNF
         b2 -- "1, nothing due" --> bDue["NothingDue: nothing_due"]
-        b2 -- "1, internet, due" --> bOr["AskBillOrStore: bill_or_store"]
+        b2 -- "1, internet, due" --> bProv{"BillerText names a provider of the bill?"}
+        bProv -- yes --> bCard
+        bProv -- no --> bOr["AskBillOrStore: bill_or_store"]
         b2 -- "1, other biller, due" --> bCard
         b2 -- "2 or more" --> b3{"BillLabelText matches one label?"}
         b3 -- "yes, due" --> bCard
@@ -295,6 +297,8 @@ flowchart TD
 ```
 
 Rule 11: when the user named no operator, the agent asks for it, even when one product fits. Rule 12 (more products than fit one question: operator first) then gives the same answer. An operator text that names no provider is refused `product_not_found`, so the learning log sees it; one that names several providers (a shared other name) asks `which_operator` among those (Khalil, 14 Oct 2026). With no biller named, a user whose bills all have nothing due gets `nothing_due` (the first bill in wallet order), and only a user with no bills gets `bill_not_found` (Khalil, 14 Oct 2026).
+
+The provider-name branch (the bill-or-store rule, Khalil, 16 Oct 2026): where rule 13 applies (one bill of the internet biller with an amount due), `BillResolver.NamesProvider` reads `ParsedRequest.BillerText` (schema version 2, the user's words for the biller). When a word of it is a provider name of the bill, the bill goes straight to the card; otherwise the agent asks `bill_or_store` as before. The provider names are `ProviderNames.Of(bill)`: the first word inside the parentheses of the wallet's Arabic and English biller names (`Internet (Earthlink subscription)` gives `Earthlink`); a name without parentheses gives none (ruling 1 of the milestone 8 plan). A word matches when its `ArabicText.Key` (rule 1: a leading `al` dropped) equals the name's key, ignoring case for the English name; a part of a word does not match. The other branches are unchanged, and `BillerText` is read only here: it is never on the card, the trace or the audit log. So "pay the Earthlink subscription" (CLN-09, CLN-09-v1) is the card, and "pay the internet subscription" (CLN-25) or "pay the internet" (AMB-09, AMB-21) asks.
 
 ### The checks
 

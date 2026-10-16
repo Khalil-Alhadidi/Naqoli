@@ -29,6 +29,13 @@ public sealed record ParsedRequestDto
     [JsonPropertyName("biller_code")]
     public string? BillerCode { get; init; }
 
+    /// <summary>
+    /// For a bill, the user's words that name the biller or the service, verbatim (schema version 2, 16 Oct 2026); read
+    /// only by the bill resolver to find a provider name.
+    /// </summary>
+    [JsonPropertyName("biller_text")]
+    public string? BillerText { get; init; }
+
     [JsonPropertyName("bill_label_text")]
     public string? BillLabelText { get; init; }
 

@@ -17,7 +17,7 @@ namespace Agent.Core.Tests.Parsing;
 /// </summary>
 public class ClaudeParserTests
 {
-    private const string Transfer = """{"requests":[{"intent":"transfer","recipient_text":"Ali","amount_value":50,"amount_unit":"thousand","biller_code":null,"bill_label_text":null,"operator_text":null,"product_type":null,"product_value":null,"unsupported_reason":null,"currency_text":null}]}""";
+    private const string Transfer = """{"requests":[{"intent":"transfer","recipient_text":"Ali","amount_value":50,"amount_unit":"thousand","biller_code":null,"biller_text":null,"bill_label_text":null,"operator_text":null,"product_type":null,"product_value":null,"unsupported_reason":null,"currency_text":null}]}""";
 
     private static CancellationToken Token => TestContext.Current.CancellationToken;
 
@@ -122,8 +122,8 @@ public class ClaudeParserTests
         var required = item.GetProperty("required").EnumerateArray().Select(e => e.GetString()!).ToHashSet();
         string[] fields =
         [
-            "intent", "recipient_text", "amount_value", "amount_unit", "biller_code", "bill_label_text", "operator_text",
-            "product_type", "product_value", "unsupported_reason", "currency_text",
+            "intent", "recipient_text", "amount_value", "amount_unit", "biller_code", "biller_text", "bill_label_text",
+            "operator_text", "product_type", "product_value", "unsupported_reason", "currency_text",
         ];
         Assert.Equal(fields.ToHashSet(), required);
 
@@ -152,6 +152,13 @@ public class ClaudeParserTests
         Assert.Equal(["electricity", "water", "internet", "school_fees", null], Enum("biller_code"));
         Assert.Equal(["credit", "internet", null], Enum("product_type"));
         Assert.Equal([.. ParsedRequestValidator.UnsupportedReasons, null], Enum("unsupported_reason"));
+
+        // Schema version 2 (16 Oct 2026): the user's words for the biller, a free nullable string with no set.
+        var billerText = properties.GetProperty("biller_text");
+        Assert.False(billerText.TryGetProperty("enum", out _));
+        Assert.Equal(
+            ["null", "string"],
+            billerText.GetProperty("type").EnumerateArray().Select(e => e.GetString()!).Order(StringComparer.Ordinal));
     }
 
     [Fact]
@@ -200,7 +207,7 @@ public class ClaudeParserTests
     {
         var (parser, client, _) = Start();
         client.Reply = (_, _, _) => Task.FromResult(FakeChatClient.Json(Dto(
-            "\"intent\":\"transfer\",\"recipient_text\":\"<NUM_1>\",\"amount_value\":50000,\"amount_unit\":\"none\",\"biller_code\":null,\"bill_label_text\":null,\"operator_text\":null,\"product_type\":null,\"product_value\":null,\"unsupported_reason\":null,\"currency_text\":null")));
+            "\"intent\":\"transfer\",\"recipient_text\":\"<NUM_1>\",\"amount_value\":50000,\"amount_unit\":\"none\",\"biller_code\":null,\"biller_text\":null,\"bill_label_text\":null,\"operator_text\":null,\"product_type\":null,\"product_value\":null,\"unsupported_reason\":null,\"currency_text\":null")));
 
         var withMap = await parser.ParseAsync("send 50000 to <NUM_1>", new ParseContext(null, Masker.Mask("send 50000 to 07701234567").Map), Token);
         var withoutMap = await parser.ParseAsync("send 50000 to <NUM_1>", new ParseContext(null), Token);
@@ -215,7 +222,7 @@ public class ClaudeParserTests
         // Review M3: a caller that did not mask cannot send a number to the model.
         var (parser, client, _) = Start();
         client.Reply = (_, _, _) => Task.FromResult(FakeChatClient.Json(Dto(
-            "\"intent\":\"transfer\",\"recipient_text\":\"<NUM_1>\",\"amount_value\":50000,\"amount_unit\":\"none\",\"biller_code\":null,\"bill_label_text\":null,\"operator_text\":null,\"product_type\":null,\"product_value\":null,\"unsupported_reason\":null,\"currency_text\":null")));
+            "\"intent\":\"transfer\",\"recipient_text\":\"<NUM_1>\",\"amount_value\":50000,\"amount_unit\":\"none\",\"biller_code\":null,\"biller_text\":null,\"bill_label_text\":null,\"operator_text\":null,\"product_type\":null,\"product_value\":null,\"unsupported_reason\":null,\"currency_text\":null")));
 
         var parsed = await parser.ParseAsync("send 50000 to 07701234567", new ParseContext(null), Token);
 
@@ -351,8 +358,8 @@ public class ClaudeParserTests
         var (parser, _, _) = Start();
 
         Assert.Equal("claude:haiku", parser.Name);
-        Assert.Equal("2", ClaudeParser.PromptVersion);
-        Assert.StartsWith("version: 2", ClaudeParser.Prompt, StringComparison.Ordinal);
+        Assert.Equal("3", ClaudeParser.PromptVersion);
+        Assert.StartsWith("version: 3", ClaudeParser.Prompt, StringComparison.Ordinal);
     }
 
     [Fact]

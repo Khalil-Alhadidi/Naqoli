@@ -20,6 +20,12 @@ public sealed record ParsedRequest
     /// <summary><c>electricity</c>, <c>water</c>, <c>internet</c>, <c>school_fees</c> or null.</summary>
     public string? BillerCode { get; init; }
 
+    /// <summary>
+    /// For a bill, the user's words that name the biller or the service (schema version 2, 16 Oct 2026). Read only by
+    /// the bill resolver, which looks in it for a provider name of the wallet's billers; never shown on the card.
+    /// </summary>
+    public string? BillerText { get; init; }
+
     /// <summary>The user's words for one of several bills of a biller (its label), or null.</summary>
     public string? BillLabelText { get; init; }
 
@@ -54,8 +60,16 @@ public sealed record ParsedRequest
         => new() { Intent = RequestIntent.Transfer, RecipientText = recipientText, AmountValue = amountValue, AmountUnit = unit };
 
     /// <summary>A bill request.</summary>
-    public static ParsedRequest Bill(string? billerCode, string? label, decimal? amountValue, AmountUnit unit)
-        => new() { Intent = RequestIntent.Bill, BillerCode = billerCode, BillLabelText = label, AmountValue = amountValue, AmountUnit = unit };
+    public static ParsedRequest Bill(string? billerCode, string? label, decimal? amountValue, AmountUnit unit, string? billerText = null)
+        => new()
+        {
+            Intent = RequestIntent.Bill,
+            BillerCode = billerCode,
+            BillerText = billerText,
+            BillLabelText = label,
+            AmountValue = amountValue,
+            AmountUnit = unit,
+        };
 
     /// <summary>A store purchase request.</summary>
     public static ParsedRequest Purchase(string? operatorText, string? productType, long? productValue)

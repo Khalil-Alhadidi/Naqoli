@@ -253,6 +253,7 @@ public sealed class ScriptedParser : IParser, IParserUsage
         RecipientText = Tokenize(request.RecipientText, map),
         AmountUnit = Tokenize(request.AmountUnit, map),
         BillerCode = Tokenize(request.BillerCode, map),
+        BillerText = Tokenize(request.BillerText, map),
         BillLabelText = Tokenize(request.BillLabelText, map),
         OperatorText = Tokenize(request.OperatorText, map),
         ProductType = Tokenize(request.ProductType, map),

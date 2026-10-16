@@ -45,7 +45,10 @@ public static class BillResolver
     /// <summary>The store product type of an internet card.</summary>
     public const string InternetProductType = "internet";
 
-    /// <param name="request">The parsed request; <see cref="ParsedRequest.BillerCode"/> and <see cref="ParsedRequest.BillLabelText"/> are read.</param>
+    /// <param name="request">
+    /// The parsed request; <see cref="ParsedRequest.BillerCode"/>, <see cref="ParsedRequest.BillerText"/> and
+    /// <see cref="ParsedRequest.BillLabelText"/> are read.
+    /// </param>
     /// <param name="bills">The user's bills, in wallet order.</param>
     /// <param name="products">The store catalogue, in wallet order (for the internet cards of rules 13 and 17).</param>
     /// <param name="options">The agent's options; no limit applies to bills today.</param>
@@ -86,8 +89,9 @@ public static class BillResolver
             if (bill.AmountDueIqd <= 0)
                 return new BillResolution.NothingDue(bill);
 
-            // Rule 13: the internet bill, or a card from the store.
-            return isInternet
+            // Rule 13: the internet bill, or a card from the store; a provider name of the bill in the user's words
+            // means the bill (the bill-or-store rule, Khalil, 16 Oct 2026).
+            return isInternet && !NamesProvider(request.BillerText, bill)
                 ? new BillResolution.AskBillOrStore(bill, InternetCards(products))
                 : new BillResolution.Card(bill);
         }
@@ -108,6 +112,22 @@ public static class BillResolver
         }
 
         return new BillResolution.Options(ofBiller);
+    }
+
+    /// <summary>
+    /// True when a word of <paramref name="billerText"/> is a provider name of <paramref name="bill"/>
+    /// (<see cref="ProviderNames.Of"/>): equal after <see cref="ArabicText.Key"/> (rule 1: a leading <c>al</c> dropped),
+    /// ignoring case for the English name. False for a null or blank text.
+    /// </summary>
+    public static bool NamesProvider(string? billerText, WalletBill bill)
+    {
+        ArgumentNullException.ThrowIfNull(bill);
+        if (string.IsNullOrWhiteSpace(billerText))
+            return false;
+
+        var names = ProviderNames.Of(bill).Select(ArabicText.Key).Where(k => k.Length > 0).ToList();
+        return names.Count > 0
+            && ArabicText.Words(billerText).Any(word => names.Contains(ArabicText.Key(word), StringComparer.OrdinalIgnoreCase));
     }
 
     private static List<WalletProduct> InternetCards(IReadOnlyList<WalletProduct> products)

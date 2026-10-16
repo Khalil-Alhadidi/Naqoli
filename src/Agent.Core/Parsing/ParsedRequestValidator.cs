@@ -94,6 +94,8 @@ public static class ParsedRequestValidator
 
         if (TooLong(dto.RecipientText))
             return Invalid("recipient_text");
+        if (TooLong(dto.BillerText))
+            return Invalid("biller_text");
         if (TooLong(dto.BillLabelText))
             return Invalid("bill_label_text");
         if (TooLong(dto.OperatorText))
@@ -124,6 +126,7 @@ public static class ParsedRequestValidator
             AmountValue = amount,
             AmountUnit = unit,
             BillerCode = dto.BillerCode,
+            BillerText = Blank(dto.BillerText),
             BillLabelText = Blank(dto.BillLabelText),
             OperatorText = Blank(dto.OperatorText),
             ProductType = dto.ProductType,

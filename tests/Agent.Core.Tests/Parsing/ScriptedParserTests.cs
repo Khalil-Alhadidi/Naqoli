@@ -130,6 +130,37 @@ public sealed class ScriptedParserTests : IDisposable
     }
 
     [Fact]
+    public void EveryBillOfTheSidecarNamesItsBillerInTheUsersOwnWords()
+    {
+        // Schema version 2 (16 Oct 2026): a bill's biller_text is copied verbatim from the message; any other request has none.
+        var sidecar = Path.Combine(RepositoryRoot.Find(), "data", ScriptedParser.SidecarFileName);
+        var bills = 0;
+        foreach (var line in File.ReadLines(sidecar).Where(l => l.Length > 0))
+        {
+            using var document = JsonDocument.Parse(line);
+            var root = document.RootElement;
+            var where = root.GetProperty("id").GetString() + " step " + root.GetProperty("step").GetInt32();
+            var say = root.GetProperty("say").GetString()!;
+            foreach (var request in root.GetProperty("parse").GetProperty("requests").EnumerateArray())
+            {
+                Assert.True(request.TryGetProperty("biller_text", out var billerText), where);
+                if (request.GetProperty("intent").GetString() == "bill")
+                {
+                    bills++;
+                    Assert.True(billerText.ValueKind == JsonValueKind.String, where);
+                    Assert.True(say.Contains(billerText.GetString()!, StringComparison.Ordinal), where);
+                }
+                else
+                {
+                    Assert.True(billerText.ValueKind == JsonValueKind.Null, where);
+                }
+            }
+        }
+
+        Assert.True(bills > 0);
+    }
+
+    [Fact]
     public async Task TheHammoudiCaseIsTheTransferToS01()
     {
         var parser = ScriptedParser.Load(DevSetPath);

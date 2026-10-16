@@ -45,7 +45,7 @@ public class ParsedRequestValidatorTests
     public void AValidBillPurchaseAndUnsupportedMapEveryField()
     {
         var bill = ParsedRequestValidator.Validate(
-            new ParsedRequestDto { Intent = "bill", AmountUnit = "none", BillerCode = "water", BillLabelText = "home" }, Map);
+            new ParsedRequestDto { Intent = "bill", AmountUnit = "none", BillerCode = "water", BillerText = " water company ", BillLabelText = "home" }, Map);
         var purchase = ParsedRequestValidator.Validate(
             new ParsedRequestDto { Intent = "purchase", AmountUnit = "none", OperatorText = "zain", ProductType = "credit", ProductValue = 5_000 }, Map);
         var unsupported = ParsedRequestValidator.Validate(
@@ -53,7 +53,7 @@ public class ParsedRequestValidatorTests
         var currency = ParsedRequestValidator.Validate(
             new ParsedRequestDto { Intent = "transfer", RecipientText = "Ali", AmountValue = 100, AmountUnit = "none", CurrencyText = "dollars" }, Map);
 
-        Assert.Equal(ParsedRequest.Bill("water", "home", null, AmountUnit.None), bill.Request);
+        Assert.Equal(ParsedRequest.Bill("water", "home", null, AmountUnit.None, billerText: "water company"), bill.Request);
         Assert.Equal(ParsedRequest.Purchase("zain", "credit", 5_000), purchase.Request);
         Assert.Equal(new ParsedRequest { Intent = RequestIntent.Unsupported, UnsupportedReason = "withdrawal" }, unsupported.Request);
         Assert.Equal("dollars", currency.Request.CurrencyText);
@@ -188,6 +188,7 @@ public class ParsedRequestValidatorTests
 
     [Theory]
     [InlineData("recipient_text")]
+    [InlineData("biller_text")]
     [InlineData("bill_label_text")]
     [InlineData("operator_text")]
     [InlineData("currency_text")]
@@ -198,6 +199,7 @@ public class ParsedRequestValidatorTests
         ParsedRequestDto With(string text) => field switch
         {
             "recipient_text" => Transfer(recipient: text),
+            "biller_text" => Transfer() with { BillerText = text },
             "bill_label_text" => Transfer() with { BillLabelText = text },
             "operator_text" => Transfer() with { OperatorText = text },
             _ => Transfer() with { CurrencyText = text },
@@ -296,18 +298,19 @@ public class ParsedRequestValidatorTests
     [Fact]
     public void BlankTextsAreRead()
     {
-        var result = ParsedRequestValidator.Validate(Transfer(recipient: "  ") with { OperatorText = string.Empty }, Map);
+        var result = ParsedRequestValidator.Validate(Transfer(recipient: "  ") with { OperatorText = string.Empty, BillerText = " " }, Map);
 
         Assert.Null(result.Problem);
         Assert.Null(result.Request.RecipientText);
+        Assert.Null(result.Request.BillerText);
         Assert.Null(result.Request.OperatorText);
     }
 
     [Fact]
     public void AnExtraFieldIsRefusedWhenTheReplyIsRead()
     {
-        const string withExtra = """{"intent":"transfer","recipient_text":"Ali","amount_value":50,"amount_unit":"thousand","biller_code":null,"bill_label_text":null,"operator_text":null,"product_type":null,"product_value":null,"unsupported_reason":null,"currency_text":null,"execute":true}""";
-        const string exact = """{"intent":"transfer","recipient_text":"Ali","amount_value":50,"amount_unit":"thousand","biller_code":null,"bill_label_text":null,"operator_text":null,"product_type":null,"product_value":null,"unsupported_reason":null,"currency_text":null}""";
+        const string withExtra = """{"intent":"transfer","recipient_text":"Ali","amount_value":50,"amount_unit":"thousand","biller_code":null,"biller_text":null,"bill_label_text":null,"operator_text":null,"product_type":null,"product_value":null,"unsupported_reason":null,"currency_text":null,"execute":true}""";
+        const string exact = """{"intent":"transfer","recipient_text":"Ali","amount_value":50,"amount_unit":"thousand","biller_code":null,"biller_text":null,"bill_label_text":null,"operator_text":null,"product_type":null,"product_value":null,"unsupported_reason":null,"currency_text":null}""";
 
         Assert.Throws<JsonException>(() => JsonSerializer.Deserialize<ParsedRequestDto>(withExtra));
         Assert.Throws<JsonException>(() => JsonSerializer.Deserialize<ParsedRequestsDto>("""{"requests":[],"note":"x"}"""));
