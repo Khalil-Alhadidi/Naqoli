@@ -60,6 +60,43 @@ public sealed class ScriptedParserTests : IDisposable
         Assert.Throws<ArgumentException>(() => ScriptedParser.Load(missing));
     }
 
+    /// <summary>
+    /// Security review R1: a symbolic link named <c>requests.dev.jsonl</c> (or a sidecar that is one) is refused, since
+    /// the name check holds only if the name is the file. Creating a link needs a privilege Windows grants only in
+    /// developer mode or to an administrator; without it the test is skipped and says why.
+    /// </summary>
+    [Theory]
+    [InlineData(ScriptedParser.DevSetFileName)]
+    [InlineData(ScriptedParser.SidecarFileName)]
+    public void ALinkInPlaceOfTheSetOrTheSidecarIsRefused(string linked)
+    {
+        var targetDirectory = Directory.CreateDirectory(Path.Combine(temp, "target")).FullName;
+        var linkDirectory = Directory.CreateDirectory(Path.Combine(temp, "link")).FullName;
+        foreach (var name in new[] { ScriptedParser.DevSetFileName, ScriptedParser.SidecarFileName })
+        {
+            var target = Path.Combine(targetDirectory, name);
+            File.WriteAllText(target, string.Empty);
+            var path = Path.Combine(linkDirectory, name);
+            if (name != linked)
+            {
+                File.Copy(target, path);
+                continue;
+            }
+
+            try
+            {
+                File.CreateSymbolicLink(path, target);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                Assert.Skip("This account cannot create a symbolic link (" + ex.GetType().Name + "); the check is ScriptedParser.Load's LinkTarget test.");
+            }
+        }
+
+        var error = Assert.Throws<ArgumentException>(() => ScriptedParser.Load(Path.Combine(linkDirectory, ScriptedParser.DevSetFileName)));
+        Assert.Contains(linked, error.Message, StringComparison.Ordinal);
+    }
+
     [Fact]
     public async Task TheDevSetLoadsAndEverySayStepHasAParse()
     {

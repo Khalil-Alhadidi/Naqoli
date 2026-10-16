@@ -1,3 +1,4 @@
+@implements IDisposable
 @using System.Globalization
 @using Agent.Core.Parsing
 @using Agent.Core.Wallet
@@ -19,6 +20,10 @@
     <MudSwitch T="bool" Value="@Kill.IsOn" ValueChanged="SetKillSwitchAsync" Color="Color.Error"
                Label="Kill switch (nothing moves while on)"
                data-testid="kill-switch" data-on="@(Kill.IsOn ? "true" : "false")" />
+    @if (killSwitchError is not null)
+    {
+        <MudText data-testid="setting-error" data-name="KillSwitch" Typo="Typo.caption" Color="Color.Error">@killSwitchError</MudText>
+    }
     <MudSimpleTable Dense="true">
         <tbody>
             @{ var current = Options.CurrentValue; }
@@ -85,21 +90,30 @@
 </MudPaper>
 
 @code {
-    /// <summary>The agent limits that can be changed while the console runs, in the order shown.</summary>
+    /// <summary>
+    /// The agent limits that can be changed while the console runs, in the order shown: exactly
+    /// <see cref="RuntimeSettings.EditableNames"/>, the list the runtime store itself enforces.
+    /// </summary>
     private static readonly (string Name, Func<AgentOptions, long> Read)[] Editable =
-    [
-        (nameof(AgentOptions.MinAmountIqd), o => o.MinAmountIqd),
-        (nameof(AgentOptions.PerTransactionCapIqd), o => o.PerTransactionCapIqd),
-        (nameof(AgentOptions.PerDayCapIqd), o => o.PerDayCapIqd),
-        (nameof(AgentOptions.CardTimerSeconds), o => o.CardTimerSeconds),
-        (nameof(AgentOptions.MaxRequestsPerMessage), o => o.MaxRequestsPerMessage),
-        (nameof(AgentOptions.MaxProductsInOneQuestion), o => o.MaxProductsInOneQuestion),
-        (nameof(AgentOptions.RepeatWarningWindowMinutes), o => o.RepeatWarningWindowMinutes),
-        (nameof(AgentOptions.HistoryDays), o => o.HistoryDays),
-        (nameof(AgentOptions.MinSubstringWordLength), o => o.MinSubstringWordLength),
-        (nameof(AgentOptions.MaxYesNoWords), o => o.MaxYesNoWords),
-        (nameof(AgentOptions.LogPageSize), o => o.LogPageSize),
-    ];
+        [.. RuntimeSettings.EditableNames.Select(name => (name, Reader(name)))];
+
+    private static Func<AgentOptions, long> Reader(string name) => name switch
+    {
+        nameof(AgentOptions.MinAmountIqd) => o => o.MinAmountIqd,
+        nameof(AgentOptions.PerTransactionCapIqd) => o => o.PerTransactionCapIqd,
+        nameof(AgentOptions.PerDayCapIqd) => o => o.PerDayCapIqd,
+        nameof(AgentOptions.CardTimerSeconds) => o => o.CardTimerSeconds,
+        nameof(AgentOptions.MaxProductsInOneQuestion) => o => o.MaxProductsInOneQuestion,
+        nameof(AgentOptions.RepeatWarningWindowMinutes) => o => o.RepeatWarningWindowMinutes,
+        nameof(AgentOptions.HistoryDays) => o => o.HistoryDays,
+        nameof(AgentOptions.MinSubstringWordLength) => o => o.MinSubstringWordLength,
+        nameof(AgentOptions.MaxYesNoWords) => o => o.MaxYesNoWords,
+        nameof(AgentOptions.LogPageSize) => o => o.LogPageSize,
+        _ => throw new InvalidOperationException("No reader for the editable setting " + name + "."),
+    };
+
+    /// <summary>The audit write of the last kill-switch flip failed; the switch keeps its state.</summary>
+    private string? killSwitchError;
 
     private readonly Dictionary<string, string> drafts = new(StringComparer.Ordinal);
     private WalletResult<WalletSettings>? wallet;
@@ -107,6 +121,8 @@
     /// <summary>The wallet's own limits, read once through a fresh scope's client when the panel opens.</summary>
     protected override async Task OnInitializedAsync()
     {
+        // Every open console follows a flip made in any of them (R4).
+        Kill.Changed += OnKillSwitchChanged;
         await using var scope = Scopes.CreateAsyncScope();
         wallet = await scope.ServiceProvider.GetRequiredService<WalletClient>().GetSettingsAsync();
     }
@@ -153,14 +169,29 @@
         }
     }
 
-    /// <summary>Flips the kill switch and writes one audit row for the flip, in a scope of its own.</summary>
+    /// <summary>
+    /// Flips the kill switch and writes one audit row for the flip, in a scope of its own. A failed write keeps the
+    /// switch as set and shows an error line, so the circuit stays up (an exception here would end it).
+    /// </summary>
     private async Task SetKillSwitchAsync(bool on)
     {
         Kill.Set(on);
-        await using var scope = Scopes.CreateAsyncScope();
-        await scope.ServiceProvider.GetRequiredService<AuditLog>().WriteAsync(
-            Options.CurrentValue.DemoUserId, null, AuditEvents.KillSwitch, null, null, on ? "on" : "off", null, null, CancellationToken.None);
+        try
+        {
+            await using var scope = Scopes.CreateAsyncScope();
+            await scope.ServiceProvider.GetRequiredService<AuditLog>().WriteAsync(
+                Options.CurrentValue.DemoUserId, null, AuditEvents.KillSwitch, null, null, on ? "on" : "off", null, null, CancellationToken.None);
+            killSwitchError = null;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            killSwitchError = "The kill switch is " + (on ? "on" : "off") + ", but its audit row was not written (" + ex.GetType().Name + ").";
+        }
     }
+
+    private void OnKillSwitchChanged() => _ = InvokeAsync(StateHasChanged);
+
+    public void Dispose() => Kill.Changed -= OnKillSwitchChanged;
 
     private void Reset(string name)
     {
@@ -174,6 +205,8 @@
         yield return (nameof(AgentOptions.Parser), o.Parser);
         yield return (nameof(AgentOptions.DevSetPath), o.DevSetPath);
         yield return (nameof(AgentOptions.DemoUserId), Number(o.DemoUserId));
+        // Nothing reads it yet (compound requests, milestone 9c), so it is shown, not edited.
+        yield return (nameof(AgentOptions.MaxRequestsPerMessage), Number(o.MaxRequestsPerMessage));
         yield return (nameof(AgentOptions.WalletBaseUrl), o.WalletBaseUrl?.ToString() ?? "-");
         yield return (nameof(AgentOptions.WalletTimeoutSeconds), Number(o.WalletTimeoutSeconds));
         yield return (nameof(AgentOptions.SettleWindowSeconds), Number(o.SettleWindowSeconds));

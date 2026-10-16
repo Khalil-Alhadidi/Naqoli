@@ -18,10 +18,11 @@ public sealed class RuntimeSettingsTests : IDisposable
     private const string Cap = "Agent:PerTransactionCapIqd";
 
     private readonly ServiceProvider provider;
+    private readonly RuntimeSettingsProvider runtimeProvider;
 
     public RuntimeSettingsTests()
     {
-        var configuration = new ConfigurationBuilder()
+        IConfigurationRoot configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["Agent:WalletBaseUrl"] = "http://localhost",
@@ -33,6 +34,8 @@ public sealed class RuntimeSettingsTests : IDisposable
             })
             .AddRuntimeSettings()
             .Build();
+
+        runtimeProvider = configuration.Providers.OfType<RuntimeSettingsProvider>().Single();
 
         var services = new ServiceCollection();
         services.AddLogging();
@@ -126,10 +129,49 @@ public sealed class RuntimeSettingsTests : IDisposable
     [InlineData("Anthropic:ApiKey")]
     [InlineData("AgentX:PerTransactionCapIqd")]
     [InlineData("Agent:")]
-    public void AKeyOutsideTheAgentSectionIsRefused(string key)
+    [InlineData("Agent:WalletClientKey")]
+    [InlineData("Agent:WalletBaseUrl")]
+    [InlineData("Agent:DevSetPath")]
+    [InlineData("Agent:Parser")]
+    [InlineData("Agent:DemoUserId")]
+    [InlineData("Agent:MaxRequestsPerMessage")]
+    public void AKeyThatIsNotEditableIsRefused(string key)
     {
         Assert.Throws<ArgumentException>(() => Settings.TrySet(key, "1", out _));
         Assert.Throws<ArgumentException>(() => Settings.Reset(key));
         Assert.Empty(Settings.Overrides);
+    }
+
+    /// <summary>Security review M2: the keys the runtime store accepts are exactly the editable names.</summary>
+    [Fact]
+    public void EveryEditableNameCanBeSaved()
+    {
+        var current = provider.GetRequiredService<IOptionsMonitor<AgentOptions>>().CurrentValue;
+        foreach (var name in RuntimeSettings.EditableNames)
+        {
+            // Saving the value in force is always valid.
+            var value = typeof(AgentOptions).GetProperty(name)!.GetValue(current)!.ToString()!;
+            Assert.True(Settings.TrySet("Agent:" + name, value, out var error), name + ": " + error);
+        }
+    }
+
+    /// <summary>
+    /// Security review M1: a refused value is checked on a candidate and never published: the provider's data never
+    /// holds it and its reload token never fires, so no other circuit can build options from it.
+    /// </summary>
+    [Theory]
+    [InlineData("0")]
+    [InlineData("forty")]
+    public void AnInvalidSaveNeverReachesTheProvider(string value)
+    {
+        var reloads = 0;
+        using var subscription = Microsoft.Extensions.Primitives.ChangeToken.OnChange(runtimeProvider.GetReloadToken, () => reloads++);
+
+        Assert.False(Settings.TrySet(Cap, value, out var error));
+
+        Assert.NotNull(error);
+        Assert.False(runtimeProvider.TryGet(Cap, out _));
+        Assert.Equal(0, reloads);
+        Assert.Equal(5_000_000, CapOfTheMonitor);
     }
 }

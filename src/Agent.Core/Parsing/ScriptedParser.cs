@@ -75,7 +75,10 @@ public sealed class ScriptedParser : IParser, IParserUsage
     /// <see cref="ParsedRequestValidator"/> checks the parse against the message's map; its first request is what the
     /// message returns.
     /// </summary>
-    /// <exception cref="ArgumentException">The file name is not exactly <see cref="DevSetFileName"/>; nothing is opened.</exception>
+    /// <exception cref="ArgumentException">
+    /// The file name is not exactly <see cref="DevSetFileName"/> (nothing is opened), or the set or the sidecar is a
+    /// symbolic link.
+    /// </exception>
     /// <exception cref="InvalidDataException">
     /// The files disagree: a sidecar line for a step that does not say, or whose text differs from the set's; a say step
     /// with no line; a parse the validator refuses; the same message with two different parses. The message names the
@@ -88,8 +91,17 @@ public sealed class ScriptedParser : IParser, IParserUsage
         if (!string.Equals(Path.GetFileName(full), DevSetFileName, StringComparison.Ordinal))
             throw new ArgumentException("The scripted parser loads only a file named " + DevSetFileName + ".", nameof(devSetPath));
 
-        var says = ReadSays(full);
         var sidecar = Path.Combine(Path.GetDirectoryName(full)!, SidecarFileName);
+
+        // The name check holds only if the name is the file: a symbolic link (or junction) named requests.dev.jsonl could
+        // point anywhere, so neither file may be one. (A hard link has no link target and cannot be told from a file.)
+        foreach (var file in new[] { full, sidecar })
+        {
+            if (new FileInfo(file).LinkTarget is not null)
+                throw new ArgumentException("The scripted parser does not follow a link: " + Path.GetFileName(file) + " is one.", nameof(devSetPath));
+        }
+
+        var says = ReadSays(full);
 
         var sentences = new Dictionary<string, ParsedRequest>(StringComparer.Ordinal);
         var parseJson = new Dictionary<string, string>(StringComparer.Ordinal);

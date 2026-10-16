@@ -219,6 +219,62 @@ public class ConfirmHandlerTests(AgentHost host)
         }
     }
 
+    /// <summary>
+    /// Security review I1: the switch is turned on while the recheck reads the balance, after the first check passed.
+    /// The second check, after the recheck, stops the Confirm before the execute: nothing is sent.
+    /// </summary>
+    [Fact]
+    public async Task TheKillSwitchTurnedOnDuringTheRecheckStopsTheExecute()
+    {
+        await StartAsync();
+        var card = await CardAsync(U1, FiftyThousandToHammoudi);
+        var killSwitch = host.Services.GetRequiredService<KillSwitch>();
+        var executes = 0;
+        var flipping = new FlipOnRequestHandler("/balance", () => killSwitch.Set(true))
+        {
+            InnerHandler = new StubExecuteHandler(() =>
+            {
+                Interlocked.Increment(ref executes);
+                return new HttpResponseMessage(HttpStatusCode.InternalServerError);
+            })
+            { InnerHandler = host.Wallet.CreateHandler() },
+        };
+        try
+        {
+            var outcome = await ConfirmThroughAsync(host.CreateClient(flipping, TimeSpan.FromSeconds(10)), card);
+
+            Assert.Equal(new ConfirmOutcome.NotDone(ReasonCodes.NotDoneNothingTaken, ReasonCodes.KillSwitchDetail), outcome);
+            Assert.True(flipping.Flipped);
+            Assert.Equal(0, executes);
+            var record = await RecordAsync(card.Id);
+            Assert.Equal(PendingState.NotDone, record.State);
+            Assert.Equal(ReasonCodes.KillSwitchDetail, record.ResultCode);
+            Assert.Equal(0, await WalletRowsAsync(card.IdempotencyKey));
+            Assert.Equal(SeedFacts.DemoBalance, await host.Wallet.AccountBalanceAsync(SeedFacts.DemoPhone));
+        }
+        finally
+        {
+            killSwitch.Set(false);
+        }
+    }
+
+    /// <summary>Runs <paramref name="flip"/> when a request to a path ending in <paramref name="pathEnd"/> passes, then sends it on.</summary>
+    private sealed class FlipOnRequestHandler(string pathEnd, Action flip) : DelegatingHandler
+    {
+        public bool Flipped { get; private set; }
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            if (request.RequestUri?.AbsolutePath.EndsWith(pathEnd, StringComparison.Ordinal) == true)
+            {
+                flip();
+                Flipped = true;
+            }
+
+            return base.SendAsync(request, cancellationToken);
+        }
+    }
+
     [Fact]
     public async Task TheKillSwitchLeavesACheckingRecordCheckingWithoutAResend()
     {

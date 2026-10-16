@@ -1,3 +1,5 @@
+extern alias AgentWeb;
+
 using System.Collections.Concurrent;
 using Agent.Core.Confirm;
 using Agent.Core.Audit;
@@ -11,7 +13,9 @@ using Agent.Core.Tests.Agent;
 using Agent.Core.Tests.Wallet;
 using Agent.Core.Text;
 using Agent.Core.Trace;
+using AgentWeb::Agent.Web.Services;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Wallet.MockApi.Data;
@@ -74,7 +78,7 @@ public sealed class ConversationTests(AgentHost host) : IAsyncDisposable
             provider.GetRequiredService<IServiceScopeFactory>(),
             parser ?? new ScriptedParser(sentences),
             host.Clock,
-            provider.GetRequiredService<IOptions<AgentOptions>>(),
+            provider.GetRequiredService<IOptionsMonitor<AgentOptions>>(),
             trace,
             userId);
         disposables.Add(new DisposeAction(conversation.Dispose));
@@ -338,6 +342,50 @@ public sealed class ConversationTests(AgentHost host) : IAsyncDisposable
         // Over the limit, so not a yes: parsed as a request, unclear to this parser, and the card stays (D6).
         Assert.DoesNotContain(conversation.Messages, m => m.Code == ReasonCodes.PointsToConfirm);
         Assert.Equal(2, session.Trace.Entries.Count(e => e.Zone == TraceZone.Model));
+        Assert.Equal(CardStatus.Live, conversation.CardState);
+    }
+
+    /// <summary>
+    /// Security review I3: a <c>MaxYesNoWords</c> saved in the settings (through <see cref="RuntimeSettings"/>, as the
+    /// console saves it) applies to the next message of a conversation that is already open.
+    /// </summary>
+    [Fact]
+    public async Task AMaxYesNoWordsSavedInTheSettingsAppliesToTheNextMessage()
+    {
+        Assert.SkipUnless(host.DatabaseAvailable, host.SkipReason);
+        await host.ResetAsync();
+        var trace = new RecordingSink();
+        var provider = host.BuildProvider((services, configuration) =>
+        {
+            // The host's configuration with the console's runtime source last, as Program.cs adds it.
+            var live = new ConfigurationBuilder().AddConfiguration(configuration).AddRuntimeSettings().Build();
+            services.AddSingleton<ITraceSink>(trace);
+            services.AddAgentCore(live);
+            services.PostConfigure(PhraseWords);
+            services.AddRuntimeSettings(live);
+        });
+        disposables.Add(provider);
+        var conversation = new AgentConversation(
+            provider.GetRequiredService<IServiceScopeFactory>(),
+            new ScriptedParser([new ScriptedSentence(HammoudiSentence, ParsedRequest.Transfer(SeedFacts.Contact("S01").Alias, 50, AmountUnit.Thousand))]),
+            host.Clock,
+            provider.GetRequiredService<IOptionsMonitor<AgentOptions>>(),
+            trace,
+            SeedFacts.DemoUserId);
+        disposables.Add(new DisposeAction(conversation.Dispose));
+        await conversation.SendAsync(HammoudiSentence);
+
+        // Two words, within the default limit: a yes.
+        await conversation.SendAsync("ok go");
+        Assert.Single(conversation.Messages, m => m.Code == ReasonCodes.PointsToConfirm);
+
+        var runtime = provider.GetRequiredService<RuntimeSettings>();
+        Assert.True(runtime.TrySet("Agent:" + nameof(AgentOptions.MaxYesNoWords), "1", out var error), error);
+
+        // The same two words in the same conversation are now over the limit: not a yes, and the card stays (D6).
+        await conversation.SendAsync("ok go");
+        Assert.Single(conversation.Messages, m => m.Code == ReasonCodes.PointsToConfirm);
+        Assert.Equal(ReasonCodes.NotUnderstood, Assert.IsType<AgentReply.Refusal>(conversation.LastReply).Code);
         Assert.Equal(CardStatus.Live, conversation.CardState);
     }
 
@@ -695,7 +743,7 @@ public sealed class ConversationTests(AgentHost host) : IAsyncDisposable
             provider.GetRequiredService<IServiceScopeFactory>(),
             new ScriptedParser([new ScriptedSentence(HammoudiSentence, ParsedRequest.Transfer(SeedFacts.Contact("S01").Alias, 50, AmountUnit.Thousand))]),
             host.Clock,
-            provider.GetRequiredService<IOptions<AgentOptions>>(),
+            provider.GetRequiredService<IOptionsMonitor<AgentOptions>>(),
             new RecordingSink(),
             SeedFacts.DemoUserId);
 

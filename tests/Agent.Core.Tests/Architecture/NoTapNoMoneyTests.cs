@@ -268,7 +268,10 @@ public class NoTapNoMoneyTests
 
     /// <summary>
     /// The calls of every method in <paramref name="assembly"/>, by user-facing name: a state machine's or a lambda's
-    /// IL counts as its declaring method's, and a callee is named by its own declaring type and name.
+    /// IL counts as its declaring method's, and a callee is named by its own declaring type and name. Interface and virtual
+    /// dispatch are not followed (a call to an interface method does not lead to its implementations). That is acceptable
+    /// here: execute is reached through no interface (it is <c>internal</c>, see <see cref="ExecuteIsInternal"/>), and
+    /// <see cref="OnlyTheConfirmHandlerCanReachExecute"/> checks every caller of it in the whole assembly, whatever leads there.
     /// </summary>
     private static Dictionary<string, HashSet<string>> CallGraph(Assembly assembly)
     {

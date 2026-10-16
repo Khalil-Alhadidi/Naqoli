@@ -13,6 +13,16 @@ public sealed class KillSwitch
     /// <summary>True while the switch is on.</summary>
     public bool IsOn => on;
 
-    /// <summary>Turns the switch on or off.</summary>
-    public void Set(bool on) => this.on = on;
+    /// <summary>
+    /// Raised after every <see cref="Set"/>, on the caller's thread, so every open console shows the true state.
+    /// Handlers must not block.
+    /// </summary>
+    public event Action? Changed;
+
+    /// <summary>Turns the switch on or off, then raises <see cref="Changed"/>.</summary>
+    public void Set(bool on)
+    {
+        this.on = on;
+        Changed?.Invoke();
+    }
 }

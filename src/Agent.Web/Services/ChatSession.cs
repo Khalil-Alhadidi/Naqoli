@@ -44,7 +44,7 @@ public sealed class ChatSession : IDisposable
         TimeProvider clock,
         IStringLocalizer<PhoneStrings> text,
         TraceLog trace,
-        IOptions<AgentOptions> options)
+        IOptionsMonitor<AgentOptions> options)
     {
         ArgumentNullException.ThrowIfNull(text);
         ArgumentNullException.ThrowIfNull(trace);
@@ -52,7 +52,7 @@ public sealed class ChatSession : IDisposable
 
         this.text = text;
         this.trace = trace;
-        conversation = new Conversation(scopes, parser, clock, options, trace, options.Value.DemoUserId);
+        conversation = new Conversation(scopes, parser, clock, options, trace, options.CurrentValue.DemoUserId);
         conversation.Changed += OnConversationChanged;
     }
 

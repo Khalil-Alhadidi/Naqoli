@@ -56,6 +56,7 @@
     /// <summary>How many characters of a pending ID the table shows.</summary>
     private const int PendingIdChars = 8;
 
+    private readonly CancellationTokenSource disposed = new();
     private IReadOnlyList<AuditEntry> rows = [];
     private int pageSize;
     private bool loading;
@@ -68,7 +69,14 @@
         await LoadAsync();
     }
 
-    public void Dispose() => Session.Changed -= OnSessionChanged;
+    public void Dispose()
+    {
+        Session.Changed -= OnSessionChanged;
+
+        // A read still running when the component goes away is cancelled, not left to finish for nothing.
+        disposed.Cancel();
+        disposed.Dispose();
+    }
 
     private void OnSessionChanged()
     {
@@ -80,6 +88,11 @@
 
     private async Task LoadAsync()
     {
+        // A read queued before the component went away does nothing.
+        if (disposed.IsCancellationRequested)
+            return;
+        var token = disposed.Token;
+
         // A read already running is followed by one more, so the last action's rows are always shown.
         if (loading)
         {
@@ -96,10 +109,15 @@
                 reloadRequested = false;
                 pageSize = Options.CurrentValue.LogPageSize;
                 await using var scope = Scopes.CreateAsyncScope();
-                rows = await scope.ServiceProvider.GetRequiredService<AuditLog>().ReadLatestAsync(pageSize, CancellationToken.None);
+                rows = await scope.ServiceProvider.GetRequiredService<AuditLog>().ReadLatestAsync(pageSize, token);
                 failure = null;
             }
             while (reloadRequested);
+        }
+        catch (OperationCanceledException) when (token.IsCancellationRequested)
+        {
+            // The component is gone: nothing to show.
+            return;
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -108,8 +126,9 @@
         finally
         {
             loading = false;
-            StateHasChanged();
         }
+
+        StateHasChanged();
     }
 
     private static string ShortId(Guid? id) => id is { } value ? value.ToString("N")[..PendingIdChars] : string.Empty;

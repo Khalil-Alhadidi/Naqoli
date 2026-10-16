@@ -117,7 +117,7 @@ public sealed class CaseDriver
             services.GetRequiredService<IServiceScopeFactory>(),
             parser,
             clock,
-            services.GetRequiredService<IOptions<AgentOptions>>(),
+            services.GetRequiredService<IOptionsMonitor<AgentOptions>>(),
             trace,
             userId);
         conversation.Changed += () => watcher.Observe(conversation.Card, conversation.CardState);

@@ -104,15 +104,7 @@ public sealed class ConfirmHandler
             // The kill switch: the record has left Pending, nothing has been sent, and nothing will be. It ends NotDone
             // the way a failed recheck ends it.
             if (killSwitch.IsOn)
-            {
-                trace.Record(TraceZone.Write, TraceSteps.RecheckFailedPrefix + ReasonCodes.KillSwitchDetail, null);
-                return Traced(
-                    TraceSteps.OutcomePrefix,
-                    await CompleteNotDoneAsync(
-                        record,
-                        ReasonCodes.KillSwitchDetail,
-                        new ConfirmOutcome.NotDone(ReasonCodes.NotDoneNothingTaken, ReasonCodes.KillSwitchDetail)));
-            }
+                return await KillSwitchStopAsync(record);
 
             // Section 4: recheck the balance (and the daily cap), then execute. Nothing has been sent yet.
             RecheckStop? stop;
@@ -137,6 +129,11 @@ public sealed class ConfirmHandler
             }
 
             trace.Record(TraceZone.Write, TraceSteps.RecheckOk, null);
+
+            // Read again after the recheck: the switch may have been turned on while the wallet answered (the recheck can
+            // take two wallet timeouts). Nothing has been sent yet, so the record ends NotDone the same way.
+            if (killSwitch.IsOn)
+                return await KillSwitchStopAsync(record);
 
             ExecuteOutcome executed;
             try
@@ -402,6 +399,21 @@ public sealed class ConfirmHandler
         WalletCodes.PinLocked => (PinLocked, null),
         _ => (ReasonCodes.NotDoneNothingTaken, code),
     };
+
+    /// <summary>
+    /// The kill switch stops an Executing record before its execute call: nothing was sent and nothing will be, so it ends
+    /// NotDone (<c>kill_switch</c>) the way a failed recheck ends it.
+    /// </summary>
+    private async Task<ConfirmOutcome> KillSwitchStopAsync(PendingRecord record)
+    {
+        trace.Record(TraceZone.Write, TraceSteps.RecheckFailedPrefix + ReasonCodes.KillSwitchDetail, null);
+        return Traced(
+            TraceSteps.OutcomePrefix,
+            await CompleteNotDoneAsync(
+                record,
+                ReasonCodes.KillSwitchDetail,
+                new ConfirmOutcome.NotDone(ReasonCodes.NotDoneNothingTaken, ReasonCodes.KillSwitchDetail)));
+    }
 
     /// <summary>The recheck before the execute: the balance on the total, then the daily cap. Null when both pass.</summary>
     private async Task<RecheckStop?> RecheckAsync(PendingRecord record, CancellationToken cancellationToken)

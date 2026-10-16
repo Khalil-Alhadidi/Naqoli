@@ -8,8 +8,10 @@ using Agent.Core.Requests;
 using Agent.Core.Resolver;
 using Agent.Core.Tests.Agent;
 using Agent.Core.Tests.Wallet;
+using Agent.Core.Wallet;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Wallet.MockApi.Data;
 
 namespace Agent.Core.Tests.Pipeline;
 
@@ -712,6 +714,97 @@ public class OrchestratorTests(AgentHost host)
         finally
         {
             killSwitch.Set(false);
+        }
+    }
+
+    /// <summary>An orchestrator (with its checks and card builder) that reaches the wallet through <paramref name="client"/>.</summary>
+    private static Orchestrator OrchestratorThrough(IServiceProvider services, WalletClient client)
+    {
+        var checks = ActivatorUtilities.CreateInstance<Checks>(services, client);
+        var cards = ActivatorUtilities.CreateInstance<CardBuilder>(services, client);
+        return ActivatorUtilities.CreateInstance<Orchestrator>(services, client, checks, cards);
+    }
+
+    /// <summary>
+    /// Security review I1: the switch is turned on while the checks wait for the wallet's quote, after the first check
+    /// passed. The second check, just before the record opens, refuses: no card.
+    /// </summary>
+    [Fact]
+    public async Task TheKillSwitchTurnedOnDuringTheChecksIssuesNoCard()
+    {
+        await StartAsync();
+        var killSwitch = host.Services.GetRequiredService<KillSwitch>();
+        var flipping = new RewritingHandler(path => path == "/quotes" ? path : null, () => killSwitch.Set(true))
+        {
+            InnerHandler = host.Wallet.CreateHandler(),
+        };
+        try
+        {
+            await using var scope = host.Services.CreateAsyncScope();
+            var orchestrator = OrchestratorThrough(scope.ServiceProvider, host.CreateClient(flipping, TimeSpan.FromSeconds(10)));
+
+            var reply = await orchestrator.HandleAsync(U1, ParsedRequest.Transfer(HammoudiAlias, 50_000, AmountUnit.Dinars), Token);
+
+            Assert.True(flipping.Matched);
+            Assert.Equal(ReasonCodes.KillSwitchDetail, Refusal(reply, ReasonCodes.NotDoneNothingTaken).Detail);
+            Assert.DoesNotContain(await AuditAsync(), a => a.Event == AuditEvents.Created);
+        }
+        finally
+        {
+            killSwitch.Set(false);
+        }
+    }
+
+    /// <summary>
+    /// Security review I2: between the first card and the reissue the phone was given to another account (here X01's
+    /// account takes Hammoudi's number in the wallet). The new card carries that account's ID and registered name, so the
+    /// name shown is the account paid; the stored phone and display name stay.
+    /// </summary>
+    [Fact]
+    public async Task AReissuedTransferCarriesTheAccountReadFresh()
+    {
+        await StartAsync();
+        var first = Card(await HandleAsync(U1, ParsedRequest.Transfer(HammoudiAlias, 50_000, AmountUnit.Dinars)));
+        await using (var wallet = host.Wallet.CreateScope())
+        {
+            var db = wallet.ServiceProvider.GetRequiredService<WalletDbContext>();
+            Assert.Equal(1, await db.Accounts.Where(a => a.Phone == SeedFacts.HammoudiPhone)
+                .ExecuteUpdateAsync(u => u.SetProperty(a => a.Phone, "07805559998"), Token));
+            Assert.Equal(1, await db.Accounts.Where(a => a.Phone == NewPhone)
+                .ExecuteUpdateAsync(u => u.SetProperty(a => a.Phone, SeedFacts.HammoudiPhone), Token));
+        }
+
+        await using var scope = host.Services.CreateAsyncScope();
+        var read = await scope.ServiceProvider.GetRequiredService<WalletClient>().GetAccountByPhoneAsync(SeedFacts.HammoudiPhone, Token);
+        var now = Assert.IsType<WalletResult<WalletAccount>.Ok>(read).Value;
+        Assert.NotEqual(first.ToAccountId, now.AccountId);
+
+        var again = Card(await scope.ServiceProvider.GetRequiredService<Orchestrator>().ReissueAsync(U1, first, ReissueKind.TryAgain, Token));
+
+        Assert.Equal(now.AccountId, again.ToAccountId);
+        Assert.Equal(SeedFacts.Account(NewPhone).RegisteredName, again.RegisteredName);
+        Assert.NotEqual(first.RegisteredName, again.RegisteredName);
+        Assert.Equal((first.ToPhone, first.DisplayName), (again.ToPhone, again.DisplayName));
+    }
+
+    /// <summary>
+    /// For a request whose path <paramref name="rewrite"/> maps to a path (not null): runs <paramref name="onMatch"/>,
+    /// sends it to that path instead, and records the match. Every other request passes on as it is.
+    /// </summary>
+    private sealed class RewritingHandler(Func<string, string?> rewrite, Action onMatch) : DelegatingHandler
+    {
+        public bool Matched { get; private set; }
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            if (request.RequestUri is { } uri && rewrite(uri.AbsolutePath) is { } path)
+            {
+                Matched = true;
+                onMatch();
+                request.RequestUri = new UriBuilder(uri) { Path = path }.Uri;
+            }
+
+            return base.SendAsync(request, cancellationToken);
         }
     }
 }

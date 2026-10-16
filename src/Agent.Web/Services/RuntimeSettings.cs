@@ -54,92 +54,134 @@ public sealed class RuntimeSettingsProvider : ConfigurationProvider
 
 /// <summary>
 /// Saves agent settings while the console runs (D8): a saved value applies to the next action, whose scope reads a fresh
-/// <see cref="IOptionsSnapshot{TOptions}"/>. A save is checked against every rule of <see cref="AgentOptions"/> (its data
-/// annotations and the cross-field rules of <c>AddAgentCore</c>); a refused save leaves the previous value in place.
-/// Only keys of the <c>Agent</c> section are accepted. Nothing is written to a file.
+/// <see cref="IOptionsSnapshot{TOptions}"/>. Only the keys of <see cref="EditableNames"/> can be saved. A save is checked
+/// first on a candidate (the configuration as it is plus the one value, bound to a fresh <see cref="AgentOptions"/>, then
+/// the registered post-configuration and every registered validator: the data annotations and the cross-field rules of
+/// <c>AddAgentCore</c>); only a valid value is published, so no other circuit ever sees an invalid one. Nothing is
+/// written to a file.
 /// </summary>
-public sealed class RuntimeSettings(RuntimeSettingsProvider provider, IOptionsMonitor<AgentOptions> monitor)
+public sealed class RuntimeSettings
 {
+    /// <summary>
+    /// The agent settings the console may change while it runs: the limits, timers and counts that something reads
+    /// (D8). Infrastructure (the wallet's address and key, the parser, the set's path, the user) is never editable.
+    /// </summary>
+    public static IReadOnlyList<string> EditableNames { get; } =
+    [
+        nameof(AgentOptions.MinAmountIqd),
+        nameof(AgentOptions.PerTransactionCapIqd),
+        nameof(AgentOptions.PerDayCapIqd),
+        nameof(AgentOptions.CardTimerSeconds),
+        nameof(AgentOptions.MaxProductsInOneQuestion),
+        nameof(AgentOptions.RepeatWarningWindowMinutes),
+        nameof(AgentOptions.HistoryDays),
+        nameof(AgentOptions.MinSubstringWordLength),
+        nameof(AgentOptions.MaxYesNoWords),
+        nameof(AgentOptions.LogPageSize),
+    ];
+
     private const string Prefix = AgentOptions.SectionName + ":";
 
+    private readonly RuntimeSettingsProvider provider;
+    private readonly IConfiguration configuration;
+    private readonly IEnumerable<IPostConfigureOptions<AgentOptions>> postConfigures;
+    private readonly IEnumerable<IValidateOptions<AgentOptions>> validators;
     private readonly Lock gate = new();
+
+    /// <param name="provider">Where a saved value is published.</param>
+    /// <param name="configuration">The whole configuration, the runtime source included, that the options bind from.</param>
+    /// <param name="postConfigures">The registered post-configuration of <see cref="AgentOptions"/>.</param>
+    /// <param name="validators">The registered validators of <see cref="AgentOptions"/>.</param>
+    public RuntimeSettings(
+        RuntimeSettingsProvider provider,
+        IConfiguration configuration,
+        IEnumerable<IPostConfigureOptions<AgentOptions>> postConfigures,
+        IEnumerable<IValidateOptions<AgentOptions>> validators)
+    {
+        ArgumentNullException.ThrowIfNull(provider);
+        ArgumentNullException.ThrowIfNull(configuration);
+        ArgumentNullException.ThrowIfNull(postConfigures);
+        ArgumentNullException.ThrowIfNull(validators);
+
+        this.provider = provider;
+        this.configuration = configuration;
+        this.postConfigures = postConfigures;
+        this.validators = validators;
+    }
 
     /// <summary>The values saved since the start, by key (<c>Agent:PerTransactionCapIqd</c>).</summary>
     public IReadOnlyDictionary<string, string> Overrides => provider.Values;
 
     /// <summary>
-    /// Saves <paramref name="value"/> under <paramref name="key"/> when the options it gives are valid; otherwise restores
-    /// what was there and returns false with the failure messages, which name the setting.
+    /// Saves <paramref name="value"/> under <paramref name="key"/> when the options it gives are valid; otherwise publishes
+    /// nothing and returns false with the failure messages, which name the setting.
     /// </summary>
-    /// <exception cref="ArgumentException"><paramref name="key"/> is not a key of the <c>Agent</c> section.</exception>
+    /// <exception cref="ArgumentException"><paramref name="key"/> is not <c>Agent:</c> and one of <see cref="EditableNames"/>.</exception>
     public bool TrySet(string key, string value, [NotNullWhen(false)] out string? error)
     {
-        RequireAgentKey(key);
+        RequireEditableKey(key);
         ArgumentNullException.ThrowIfNull(value);
 
         lock (gate)
         {
-            var previous = provider.Values.TryGetValue(key, out var saved) ? saved : null;
-            error = Apply(key, value);
-            if (error is null)
-                return true;
+            error = Validate(key, value);
+            if (error is not null)
+                return false;
 
-            // Refused: the previous value (or none) comes back, and the monitor recomputes valid options from it.
-            provider.Write(key, previous);
-            return false;
+            provider.Write(key, value);
+            return true;
         }
     }
 
     /// <summary>Removes the saved value of <paramref name="key"/>: the value of the other sources applies again.</summary>
-    /// <exception cref="ArgumentException"><paramref name="key"/> is not a key of the <c>Agent</c> section.</exception>
+    /// <exception cref="ArgumentException"><paramref name="key"/> is not <c>Agent:</c> and one of <see cref="EditableNames"/>.</exception>
     public void Reset(string key)
     {
-        RequireAgentKey(key);
+        RequireEditableKey(key);
         lock (gate)
             provider.Write(key, null);
     }
 
-    /// <summary>Writes the value and reads the options it gives; the failure messages, or null when they are valid.</summary>
-    private string? Apply(string key, string value)
+    /// <summary>
+    /// The options the configuration gives with <paramref name="value"/> under <paramref name="key"/>, built and checked
+    /// as the options pipeline builds them (bind, post-configure, validate) without publishing anything: the failure
+    /// messages, or null when they are valid.
+    /// </summary>
+    private string? Validate(string key, string value)
     {
+        var candidate = new ConfigurationBuilder()
+            .AddConfiguration(configuration, shouldDisposeConfiguration: false)
+            .AddInMemoryCollection(new Dictionary<string, string?> { [key] = value })
+            .Build();
+
+        var options = new AgentOptions();
         try
         {
-            // The reload makes the monitor recompute at once, so an invalid value can already throw here.
-            provider.Write(key, value);
-            _ = monitor.CurrentValue;
-            return null;
+            candidate.GetSection(AgentOptions.SectionName).Bind(options);
         }
-        catch (Exception ex) when (Failure(ex, key) is { } message)
+        catch (InvalidOperationException ex) when (ex.Message.Contains(key, StringComparison.OrdinalIgnoreCase))
         {
-            return message;
-        }
-    }
-
-    /// <summary>
-    /// The message of a refused value: the validation failures, or a value the binder cannot convert. Null for anything
-    /// else, which is not caught. The reload token may wrap the exception in an <see cref="AggregateException"/>.
-    /// </summary>
-    private static string? Failure(Exception ex, string key)
-    {
-        switch (ex)
-        {
-            case OptionsValidationException validation:
-                return string.Join(" ", validation.Failures);
             // The binder names the configuration path of a value it cannot convert to the property's type.
-            case InvalidOperationException when ex.Message.Contains(key, StringComparison.OrdinalIgnoreCase):
-                return key + " is not a valid value for this setting.";
-            case AggregateException aggregate:
-                return aggregate.Flatten().InnerExceptions.Select(inner => Failure(inner, key)).FirstOrDefault(m => m is not null);
-            default:
-                return ex.InnerException is { } inner ? Failure(inner, key) : null;
+            return key + " is not a valid value for this setting.";
         }
+
+        foreach (var postConfigure in postConfigures)
+            postConfigure.PostConfigure(Options.DefaultName, options);
+
+        var failures = validators
+            .Select(v => v.Validate(Options.DefaultName, options))
+            .Where(r => r.Failed)
+            .SelectMany(r => r.Failures ?? [])
+            .ToList();
+        return failures.Count == 0 ? null : string.Join(" ", failures);
     }
 
-    private static void RequireAgentKey(string key)
+    private static void RequireEditableKey(string key)
     {
         ArgumentNullException.ThrowIfNull(key);
-        if (!key.StartsWith(Prefix, StringComparison.OrdinalIgnoreCase) || key.Length == Prefix.Length)
-            throw new ArgumentException("Only keys of the " + AgentOptions.SectionName + " section can be saved.", nameof(key));
+        var name = key.StartsWith(Prefix, StringComparison.OrdinalIgnoreCase) ? key[Prefix.Length..] : null;
+        if (name is null || !EditableNames.Contains(name, StringComparer.OrdinalIgnoreCase))
+            throw new ArgumentException("Only the editable keys of the " + AgentOptions.SectionName + " section can be saved.", nameof(key));
     }
 }
 
@@ -164,7 +206,11 @@ public static class RuntimeSettingsExtensions
 
         var provider = (configuration as IConfigurationRoot)?.Providers.OfType<RuntimeSettingsProvider>().LastOrDefault();
         if (provider is not null)
-            services.AddSingleton(sp => new RuntimeSettings(provider, sp.GetRequiredService<IOptionsMonitor<AgentOptions>>()));
+            services.AddSingleton(sp => new RuntimeSettings(
+                provider,
+                configuration,
+                sp.GetServices<IPostConfigureOptions<AgentOptions>>(),
+                sp.GetServices<IValidateOptions<AgentOptions>>()));
         return services;
     }
 }

@@ -46,7 +46,7 @@ internal sealed class ConversationHarness : IAsyncDisposable
             provider.GetRequiredService<IServiceScopeFactory>(),
             parser,
             host.Clock,
-            provider.GetRequiredService<IOptions<AgentOptions>>(),
+            provider.GetRequiredService<IOptionsMonitor<AgentOptions>>(),
             trace,
             userId);
         return new ConversationHarness(provider, conversation, trace);

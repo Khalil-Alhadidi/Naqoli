@@ -207,8 +207,9 @@ public sealed class Orchestrator
 
     /// <summary>
     /// D19, "Try again" and "Send again": rebuilds a card from <paramref name="previous"/>, the stored record of the card
-    /// shown, in code and without the model. The subject (type, phone, account, names, bill, product) is the record's;
-    /// what the checks need is read again: a transfer's account by its phone (closed: <c>account_closed</c>; gone:
+    /// shown, in code and without the model. The subject (type, phone, display name, bill, product) is the record's;
+    /// what the checks need is read again: a transfer's account by its phone, whose ID and registered name replace the
+    /// stored ones (closed: <c>account_closed</c>; gone:
     /// <c>number_has_no_wallet</c>), a bill's current amount due (0: <c>nothing_due</c>; missing: <c>bill_not_found</c>),
     /// a product's catalogue price (missing: <c>product_not_found</c>). Then the same consent gate, ordered checks and
     /// issue as <see cref="HandleAsync(int, ParsedRequest, SlotAnswers, CancellationToken)"/>, so a card is a new record
@@ -255,10 +256,14 @@ public sealed class Orchestrator
                 switch (await wallet.GetAccountByPhoneAsync(phone, cancellationToken))
                 {
                     case WalletResult<WalletAccount>.Ok { Value: var account }:
+                        // The account behind the phone now: its ID and registered name go on the card and into the
+                        // checks together, as on the first card, so the name shown is the account paid. The stored
+                        // phone and display name stay.
                         trace.Record(TraceZone.Code, TraceSteps.AmountResolved, previous.AmountIqd.ToString(CultureInfo.InvariantCulture));
+                        var fresh = subject with { ToAccountId = account.AccountId, RegisteredName = account.RegisteredName };
                         var transfer = new CheckInput(
-                            userId, TransferType, previous.AmountIqd, phone, previous.ToAccountId, account.Status, null, null, SkipFormat: false);
-                        return await CheckAndIssueAsync(userId, transfer, subject, repeat, cancellationToken);
+                            userId, TransferType, previous.AmountIqd, phone, account.AccountId, account.Status, null, null, SkipFormat: false);
+                        return await CheckAndIssueAsync(userId, transfer, fresh, repeat, cancellationToken);
                     case WalletResult<WalletAccount>.Refused { Problem: { Status: 404 } or { Code: UnknownAccountCode } }:
                         return await RefuseAsync(userId, ReasonCodes.NumberHasNoWallet, null, null, cancellationToken);
                     case var unread:
@@ -570,6 +575,14 @@ public sealed class Orchestrator
             return await RefuseUnreadAsync(userId, built, cancellationToken);
         if (repeatWarning)
             draft = draft with { Warning = CardBuilder.RepeatWarning };
+
+        // Read again just before the record opens: the switch may have been turned on while the wallet answered the
+        // checks and the history read. No card is issued while it is on.
+        if (killSwitch.IsOn)
+        {
+            trace.Record(TraceZone.Code, TraceSteps.KillSwitch, "on");
+            return await RefuseAsync(userId, ReasonCodes.NotDoneNothingTaken, ReasonCodes.KillSwitchDetail, null, cancellationToken);
+        }
 
         var record = await store.CreateAsync(draft, cancellationToken);
         trace.Record(

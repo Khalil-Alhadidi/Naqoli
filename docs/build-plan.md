@@ -254,6 +254,8 @@ For Khalil:
 | A changed limit in settings takes effect without a restart | The journey `AChangedCapTakesEffectWithoutARestart` (a cap of 40,000 saved, CLN-01 refused with 40,000; after reset, a card). Also `ChecksTests.ACapChangedLiveAppliesToTheNextCheck`, `RuntimeSettingsTests` (an invalid value is refused and the old one stays; reset restores the file value), and the journeys' own `UseSetting` 4-second timer (`TimerKillsTheButton`, `TryAgainAfterExpiry`) |
 | The PIN never appears in the chat, the audit log or the learning log | The journey `PinFieldShowsForALargeAmountAndThePinIsNeverLogged` (RED-09 on U3: a wrong PIN, then the right one; neither, in either digit form, is in any chat message, trace entry, audit row or learning row). Also `ConversationTests.TheTraceKeepsNoPinKeyOrCodeAfterAPinPaymentAndAPurchase`, `AuditLogTests.WriteHasNoParameterForAPinABalanceOrAPurchaseCode`, and the runner's `pin_in_chat_or_logs` check on RED-09 |
 
+**Security review, 16 Oct 2026** (`docs/reviews/milestone-7-security-review.md`): one fix wave closed I1 (the kill switch is read again before the execute and before a card opens), I2 (a rebuilt transfer card carries the account read fresh), I3 (`MaxYesNoWords` applies to the next message of an open page; `MaxRequestsPerMessage` is read only until something reads it), M1 (a setting is validated before it is published), M2 (the runtime store accepts only the editable keys), M3 (a failed kill-switch audit write keeps the circuit up), M5 (the console stays on loopback), and R1 to R4. M4 (a cross-field rule between the three limits) is parked for Khalil.
+
 ## Milestone 8: Bills and faults on screen
 
 **Delivers**

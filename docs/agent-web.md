@@ -354,32 +354,34 @@ The parses were drafted by Claude from Khalil's answer keys for his review (his 
 
 `SettingsPanel` (`Components/Console/SettingsPanel.razor`, the side menu's Settings) has a kill switch (below) and four tables, all English and left to right:
 
-- **Agent, editable (D8).** One row (`setting-row`, `data-name`) per agent limit, timer or count: `MinAmountIqd`, `PerTransactionCapIqd`, `PerDayCapIqd`, `CardTimerSeconds`, `MaxRequestsPerMessage`, `MaxProductsInOneQuestion`, `RepeatWarningWindowMinutes`, `HistoryDays`, `MinSubstringWordLength`, `MaxYesNoWords`, `LogPageSize`. Each shows its value in force (`setting-value`), an input (`setting-input`), Save (`setting-save`), and Reset (`setting-reset`) once a value has been saved. A refused value shows the validation message (`setting-error`), and the value in force does not change.
-- **Agent, read only.** `Parser`, `DevSetPath`, `DemoUserId`, `WalletBaseUrl`, `WalletTimeoutSeconds`, `SettleWindowSeconds`, `HistoryPageSize`, `SweepIntervalSeconds`, `StaleExecutingAfterSeconds`. No key is ever shown (wallet or Anthropic).
+- **Agent, editable (D8).** One row (`setting-row`, `data-name`) per agent limit, timer or count: `MinAmountIqd`, `PerTransactionCapIqd`, `PerDayCapIqd`, `CardTimerSeconds`, `MaxProductsInOneQuestion`, `RepeatWarningWindowMinutes`, `HistoryDays`, `MinSubstringWordLength`, `MaxYesNoWords`, `LogPageSize`: exactly `RuntimeSettings.EditableNames`, which the runtime store itself enforces (any other key, `Agent:WalletClientKey` or `Agent:DevSetPath` among them, is refused with an `ArgumentException`). Each shows its value in force (`setting-value`), an input (`setting-input`), Save (`setting-save`), and Reset (`setting-reset`) once a value has been saved. A refused value shows the validation message (`setting-error`), and the value in force does not change.
+- **Agent, read only.** `Parser`, `DevSetPath`, `DemoUserId`, `MaxRequestsPerMessage` (nothing reads it until compound requests, milestone 9c), `WalletBaseUrl`, `WalletTimeoutSeconds`, `SettleWindowSeconds`, `HistoryPageSize`, `SweepIntervalSeconds`, `StaleExecutingAfterSeconds`. No key is ever shown (wallet or Anthropic).
 - **Wallet, read only.** The wallet's own limits from `GET /settings` (`Wallet:PinRequiredAboveIqd`, `Wallet:MaxPinAttempts`, the transfer, bill and purchase fees and the rest; [wallet-api.md](wallet-api.md)), read once when the panel opens. A wallet that does not answer gives one `setting-error` row (`data-name="Wallet"`) with the reason.
 - **Model, read only.** The candidate in use and each candidate's model, output limit, effort, temperature, timeout and prices.
 
-A saved value lives in memory only, in `RuntimeSettingsProvider`. That is a configuration provider that `Program.cs` adds last, so a saved value wins over the files, the user secrets and the environment. A saved value is gone when the console restarts. It applies to the next action without a restart: every action and every eval step opens its own scope, and every scoped service reads `IOptionsSnapshot<AgentOptions>`, which is computed again per scope. The singletons (the sweeper, the wallet client's configuration) keep `IOptions`. A value the `[Range]` or the binder refuses is put back at once. `RuntimeSettingsTests` covers this: `AnInvalidValueIsRefusedAndTheOldOneStays`, `AnInvalidFirstValueLeavesNoOverride` and `ResetRestoresTheFileValue`. `ChecksTests.ACapChangedLiveAppliesToTheNextCheck` and the journey `AChangedCapTakesEffectWithoutARestart` show the saved cap applying to the next request.
+A saved value lives in memory only, in `RuntimeSettingsProvider`. That is a configuration provider that `Program.cs` adds last, so a saved value wins over the files, the user secrets and the environment. A saved value is gone when the console restarts. It applies to the next action without a restart: every action and every eval step opens its own scope, and every scoped service reads `IOptionsSnapshot<AgentOptions>`, which is computed again per scope. The singletons (the sweeper, the wallet client's configuration) keep `IOptions`; the conversation reads `MaxYesNoWords` from `IOptionsMonitor` for every message. A value is checked before it is published: `RuntimeSettings.TrySet` binds a fresh `AgentOptions` from the configuration plus the one value, runs the registered post-configuration and validators (the data annotations and the cross-field rules), and writes to the provider only when they pass. So a refused value never reaches another circuit. `RuntimeSettingsTests` covers this: `AnInvalidValueIsRefusedAndTheOldOneStays`, `AnInvalidFirstValueLeavesNoOverride`, `AnInvalidSaveNeverReachesTheProvider`, `ResetRestoresTheFileValue`, `AKeyThatIsNotEditableIsRefused` and `EveryEditableNameCanBeSaved`. `ChecksTests.ACapChangedLiveAppliesToTheNextCheck` and the journey `AChangedCapTakesEffectWithoutARestart` show the saved cap applying to the next request.
 
 ```mermaid
 flowchart LR
     panel["SettingsPanel: setting-input, setting-save"] --> set["RuntimeSettings.TrySet(Agent:Key, value)"]
-    set --> write["RuntimeSettingsProvider.Write: OnReload"]
-    write --> monitor["IOptionsMonitor recomputes and validates ([Range], binder)"]
-    monitor -- valid --> next["Next action's scope: IOptionsSnapshot of AgentOptions has the new value"]
-    monitor -- refused --> back["Previous value written back; setting-error shows the message"]
+    set --> allow{"An editable key (RuntimeSettings.EditableNames)?"}
+    allow -- no --> refuse["ArgumentException"]
+    allow -- yes --> candidate["Candidate: bind a fresh AgentOptions from the configuration plus the value, post-configure, validate"]
+    candidate -- refused --> back["Nothing published; setting-error shows the message"]
+    candidate -- valid --> write["RuntimeSettingsProvider.Write: OnReload"]
+    write --> next["IOptionsMonitor and the next action's IOptionsSnapshot of AgentOptions have the new value"]
 ```
 
 ## The kill switch
 
-The kill switch is Khalil's ruling of 15 Oct 2026. It is a `MudSwitch` at the top of the settings component (`kill-switch`, with `data-on` `true` or `false`), bound to the singleton `KillSwitch` of `Agent.Core`. It is held in memory and is off at every start. Each flip writes a `kill_switch` audit row (reason `on` or `off`) under `DemoUserId`. While it is on:
+The kill switch is Khalil's ruling of 15 Oct 2026. It is a `MudSwitch` at the top of the settings component (`kill-switch`, with `data-on` `true` or `false`), bound to the singleton `KillSwitch` of `Agent.Core`. It is held in memory and is off at every start. Each flip writes a `kill_switch` audit row (reason `on` or `off`). A flip is a console action, not a user's, and the row is attributed to the console's `DemoUserId` (the audit row needs a user). If that write fails, the switch keeps its new state and the panel shows an error line (`setting-error`, `data-name="KillSwitch"`), and the circuit stays up. While it is on:
 
 - no card is issued;
 - Confirm is refused, and the live card ends NotDone with nothing taken;
 - "check again" sends nothing, and a Checking card stays Checking;
 - the balance question still answers.
 
-The gates are described in [agent-core.md](agent-core.md), "The kill switch". Another console that is already open shows a flip on its next render; the switch itself is read on every request.
+The gates are described in [agent-core.md](agent-core.md), "The kill switch". `KillSwitch` raises `Changed` on every flip, and every open settings component re-renders on it, so each console shows the true state. The switch itself is read on every request.
 
 ## The log component
 
@@ -474,9 +476,7 @@ The journeys locate elements only by these attributes.
 | Learning data is a placeholder | Milestone 10 (the settings and log components came in milestone 7) |
 | `Refusal_invalid_number` does not yet ask for a phone number or a saved name (D21) | Khalil's wording |
 | `Card_TryAgain` and `Card_SendAgain` are English placeholders | Khalil's wording |
-| Another open console shows a kill-switch flip only on its next render | The switch is read on every request, so nothing moves meanwhile |
 | A reissued card of the known gap `choose_account` does not carry the `account_choice_unavailable` note | Deferred, minor |
-| A saved `MaxYesNoWords` applies from the next opened page, not in one already open | agent-core.md, "Known limits" |
 | Text typed before the circuit is interactive is lost | The `data-interactive` marker tells the journeys; a person types again |
 | A Checking record whose circuit is gone has no "check again" button in a new circuit | The Checking screen in milestone 8; the record stays Checking and is never shown as failed |
 | The live trace keeps every entry for the life of the circuit | A cap would be a new setting |

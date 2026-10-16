@@ -60,7 +60,7 @@ The scripted implementation is `ScriptedParser` (`src/Agent.Core/Parsing/Scripte
 
 A typed text that equals a say step gives that step's first request, and anything else is `Unclear`. The two are compared after masking (`Masker`) and `ArabicText.Normalize`, ordinal and whole. The checks:
 
-- **File name.** `Load` accepts only a file named exactly `requests.dev.jsonl` (`ArgumentException`, nothing opened). So the held-out set can never be loaded (rule 7). `ScriptedParserTests.OnlyTheDevSetFileNameIsAccepted` tests this with throwaway files, never with the real path.
+- **File name.** `Load` accepts only a file named exactly `requests.dev.jsonl` (`ArgumentException`, nothing opened), and neither it nor the sidecar may be a symbolic link (`FileInfo.LinkTarget`; `ScriptedParserTests.ALinkInPlaceOfTheSetOrTheSidecarIsRefused`, skipped where the account may not create links). So the held-out set can never be loaded (rule 7). `ScriptedParserTests.OnlyTheDevSetFileNameIsAccepted` tests this with throwaway files, never with the real path.
 - **Consistency at load.** Each say is masked, and every number in its parse becomes its token. `ParsedRequestValidator` then checks the parse against the message's map. The load is refused (`InvalidDataException`) when:
   - a sidecar line points at a step that does not say;
   - a line's text differs from the set's;
@@ -159,9 +159,9 @@ flowchart TD
 
 ### Try again and Send again (D19)
 
-`Orchestrator.ReissueAsync(userId, previous, kind, cancellationToken)` rebuilds a card from `previous`, the stored record of the card shown, in code and without the model. `previous.UserId` must be `userId` (`ArgumentException` otherwise). It traces `reissue` (`try_again` or `send_again`), then the kill switch (on: `not_done_nothing_taken` with detail `kill_switch`, before any wallet read) and the consent gate as above. The subject (type, phone, account, display and registered names, bill account and code, product and code) is the record's; what the checks need is read again:
+`Orchestrator.ReissueAsync(userId, previous, kind, cancellationToken)` rebuilds a card from `previous`, the stored record of the card shown, in code and without the model. `previous.UserId` must be `userId` (`ArgumentException` otherwise). It traces `reissue` (`try_again` or `send_again`), then the kill switch (on: `not_done_nothing_taken` with detail `kill_switch`, before any wallet read) and the consent gate as above. The subject (type, phone, display name, bill account and code, product and code) is the record's; what the checks need is read again:
 
-- a transfer reads the account by its phone: a closed account is refused `account_closed` by the checks, and a number with no account any more `number_has_no_wallet`;
+- a transfer reads the account by its phone, and that account's ID and registered name go on the card and into the checks (security review I2: the name shown is the account paid); a closed account is refused `account_closed` by the checks, and a number with no account any more `number_has_no_wallet`;
 - a bill reads the user's bills and takes the current amount due of the same bill account: 0 is `nothing_due`, a missing one `bill_not_found`;
 - a purchase reads the catalogue product by its code and takes its price: a missing one is `product_not_found`.
 
@@ -403,8 +403,8 @@ sequenceDiagram
 
 The kill switch is Khalil's ruling of 15 Oct 2026. `KillSwitch` (`src/Agent.Core/Pipeline/KillSwitch.cs`) is a singleton registered by `AddAgentCore`, held in memory and off at every start. The console's settings component flips it, and each flip writes a `kill_switch` audit row (reason `on` or `off`) under the console's `DemoUserId`. While it is on, three gates stop money and cards, and the balance question still answers:
 
-- **Before a card.** `Orchestrator.HandleAsync` refuses a transfer, a bill or a purchase (including the known gap that goes on as a transfer) before any wallet read or question. The refusal is `not_done_nothing_taken` with detail `kill_switch`, traced `kill_switch on`. `ReissueAsync` (D19) refuses the same way (`OrchestratorTests.TheKillSwitchRefusesARequestThatWouldGetACard`, `TheKillSwitchRefusesAReissue`).
-- **Before an execute.** `ConfirmHandler.ConfirmAsync` moves the record Pending to Executing as usual, so it leaves Pending once. It then ends the record NotDone (`kill_switch`) the way a failed recheck does, without calling the wallet (`ConfirmHandlerTests.TheKillSwitchEndsALiveCardNotDoneWithoutAnExecute`).
+- **Before a card.** `Orchestrator.HandleAsync` refuses a transfer, a bill or a purchase (including the known gap that goes on as a transfer) before any wallet read or question. The switch is read again just before the record opens (`CheckAndIssueAsync`, before `PendingStore.CreateAsync`), so a flip while the checks wait for the wallet still gives no card (`OrchestratorTests.TheKillSwitchTurnedOnDuringTheChecksIssuesNoCard`). The refusal is `not_done_nothing_taken` with detail `kill_switch`, traced `kill_switch on`. `ReissueAsync` (D19) refuses the same way (`OrchestratorTests.TheKillSwitchRefusesARequestThatWouldGetACard`, `TheKillSwitchRefusesAReissue`).
+- **Before an execute.** `ConfirmHandler.ConfirmAsync` moves the record Pending to Executing as usual, so it leaves Pending once. It then ends the record NotDone (`kill_switch`) the way a failed recheck does, without calling the wallet (`ConfirmHandlerTests.TheKillSwitchEndsALiveCardNotDoneWithoutAnExecute`). The switch is read again after the recheck and before the execute, since the recheck can wait two wallet timeouts; a flip in between ends the record the same way, with nothing sent (`TheKillSwitchTurnedOnDuringTheRecheckStopsTheExecute`).
 - **Before a settle.** `ConfirmHandler.SettleCheckingAsync` sends nothing, and a Checking record stays Checking until the switch is off and the user checks again (`TheKillSwitchLeavesACheckingRecordCheckingWithoutAResend`).
 
 The journey `KillSwitchStopsEverything` shows all of this on screen.
@@ -415,11 +415,17 @@ flowchart TD
     kind -- "balance question" --> bal["Answers as usual (D22)"]
     kind -- "transfer, bill, purchase, Try again, Send again" --> g1{"Kill switch on?"}
     g1 -- yes --> r1["Refusal not_done_nothing_taken (kill_switch); no wallet read, no card"]
-    g1 -- no --> card["Consent, resolve, checks, card"]
+    g1 -- no --> checks["Consent, resolve, checks, card draft"]
+    checks --> g1b{"Kill switch on now?"}
+    g1b -- yes --> r1
+    g1b -- no --> card["PendingStore.CreateAsync: the card"]
     kind -- "Confirm tap" --> begin["TryBeginExecuteAsync: Pending to Executing (once)"]
     begin --> g2{"Kill switch on?"}
     g2 -- yes --> r2["NotDone (kill_switch); no execute call"]
-    g2 -- no --> exec["Recheck, then execute under the key"]
+    g2 -- no --> recheck["Recheck balance and daily cap"]
+    recheck --> g2b{"Kill switch on now?"}
+    g2b -- yes --> r2
+    g2b -- no --> exec["Execute under the key"]
     kind -- "check again on a Checking card" --> g3{"Kill switch on?"}
     g3 -- yes --> r3["Stays Checking; nothing resent"]
     g3 -- no --> settle["Resend the same body under the same key"]
@@ -795,9 +801,9 @@ The conversation calls it after every reply that yields an entry, with the maske
 | `DevSetPath` | `data/requests.dev.jsonl` | The oracle: the development set, relative to the repository root unless rooted; its file name must be `requests.dev.jsonl` (rule 7) |
 | `YesWords`, `NoWords` | empty | `Conversation`, D6. Phone text, so not set in `Agent.Core`: the console post-configures them from `Word_yes` and `Word_no` in its resource file, and the test host sets `yes` and `no` |
 
-The settings component shows them ([agent-web.md](agent-web.md), "The settings component"). It edits the limits, timers and counts: `MinAmountIqd` to `MaxYesNoWords` above, and `LogPageSize`. The rest stays read only. The client key goes in user secrets or the environment, never in a committed file.
+The settings component shows them ([agent-web.md](agent-web.md), "The settings component"). It edits exactly `RuntimeSettings.EditableNames`: `MinAmountIqd`, `PerTransactionCapIqd`, `PerDayCapIqd`, `CardTimerSeconds`, `MaxProductsInOneQuestion`, `RepeatWarningWindowMinutes`, `HistoryDays`, `MinSubstringWordLength`, `MaxYesNoWords` and `LogPageSize`. The runtime store refuses any other key. The rest, `MaxRequestsPerMessage` included (nothing reads it yet), is read only. The client key goes in user secrets or the environment, never in a committed file.
 
-**Options at run time (D8, milestone 7).** Every scoped service that reads `AgentOptions` reads `IOptionsSnapshot<AgentOptions>`, which is computed again per scope. Every conversation action and every eval step opens its own scope, so a value saved in the settings component applies to the next action without a restart. The singletons (`PendingSweeper`, the `WalletClient` configuration) keep `IOptions`. The one exception is the conversation, which reads the D6 words and `MaxYesNoWords` once, when it is built. So a saved `MaxYesNoWords` applies from the next conversation (a newly opened page), not in one already open. A saved value is validated as the options are at start (`[Range]` and the cross-field rules), and a refused one never takes effect (`RuntimeSettingsTests`, `ChecksTests.ACapChangedLiveAppliesToTheNextCheck`).
+**Options at run time (D8, milestone 7).** Every scoped service that reads `AgentOptions` reads `IOptionsSnapshot<AgentOptions>`, which is computed again per scope. Every conversation action and every eval step opens its own scope, so a value saved in the settings component applies to the next action without a restart. The singletons (`PendingSweeper`, the `WalletClient` configuration) keep `IOptions`. The conversation takes `IOptionsMonitor<AgentOptions>`: it reads the D6 word lists once, when it is built, and `MaxYesNoWords` again for every message, so a saved limit applies to the next message of an open page (`ConversationTests.AMaxYesNoWordsSavedInTheSettingsAppliesToTheNextMessage`). A value is validated before it is published, as the options are at start (`[Range]` and the cross-field rules), so a refused one never takes effect anywhere (`RuntimeSettingsTests`, `ChecksTests.ACapChangedLiveAppliesToTheNextCheck`).
 
 ## The test host and running the tests
 
@@ -844,6 +850,5 @@ Still open:
 | The daily cap and the recheck read one page of `HistoryPageSize` (200) history rows; rows beyond it are not counted | Fail closed on a full page, or read further pages; the seed has at most two rows a day |
 | `UnsupportedReason` is stored and returned verbatim | Milestone 6 validates the parsed structure against the allowed list |
 | Checking rows are not counted toward the daily cap (only `done` rows) | Decide whether an open Checking record blocks new cards |
-| A saved `MaxYesNoWords` (or new D6 words) reaches a conversation only when it is built, so an open page keeps the old value | Read them per message through the scope's options, if Khalil wants it live in an open page |
 | A reissued `choose_account` card (GAP-04) does not carry the `account_choice_unavailable` note | Deferred, minor |
 | `Attempts` counts Confirm taps that began an execute, not settle resends | Display only |

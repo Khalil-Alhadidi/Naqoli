@@ -38,7 +38,7 @@ public sealed class Conversation : IDisposable
     private readonly int userId;
     private readonly string[][] yesEntries;
     private readonly string[][] noEntries;
-    private readonly int maxYesNoWords;
+    private readonly IOptionsMonitor<AgentOptions> options;
     private readonly SemaphoreSlim gate = new(1, 1);
     private readonly CancellationTokenSource lifetime = new();
     private readonly CancellationToken stopping;
@@ -57,14 +57,18 @@ public sealed class Conversation : IDisposable
     /// <param name="scopes">Opens one scope per action.</param>
     /// <param name="parser">The parse call (rule 2).</param>
     /// <param name="clock">The agent's clock; the card's timer is measured against it.</param>
-    /// <param name="options">The agent's options; <see cref="AgentOptions.YesWords"/> and <see cref="AgentOptions.NoWords"/> are read once here.</param>
+    /// <param name="options">
+    /// The agent's options. <see cref="AgentOptions.YesWords"/> and <see cref="AgentOptions.NoWords"/> are read once here;
+    /// <see cref="AgentOptions.MaxYesNoWords"/> is read again for every message, so a value saved in the settings applies
+    /// to the next message of an open conversation.
+    /// </param>
     /// <param name="trace">Where this conversation's own steps go (the services resolved per action write to the scope's sink).</param>
     /// <param name="userId">The wallet user the conversation acts for.</param>
     public Conversation(
         IServiceScopeFactory scopes,
         IParser parser,
         TimeProvider clock,
-        IOptions<AgentOptions> options,
+        IOptionsMonitor<AgentOptions> options,
         ITraceSink trace,
         int userId)
     {
@@ -80,9 +84,10 @@ public sealed class Conversation : IDisposable
         this.clock = clock;
         this.trace = trace;
         this.userId = userId;
-        yesEntries = Entries(options.Value.YesWords);
-        noEntries = Entries(options.Value.NoWords);
-        maxYesNoWords = options.Value.MaxYesNoWords;
+        this.options = options;
+        var current = options.CurrentValue;
+        yesEntries = Entries(current.YesWords);
+        noEntries = Entries(current.NoWords);
         stopping = lifetime.Token;
     }
 
@@ -200,6 +205,7 @@ public sealed class Conversation : IDisposable
             // D6: a yes or a no is a message of at most MaxYesNoWords words made only of whole yes (or no) entries; a
             // sentence with any other word in it is a request.
             var words = WordsOf(typedText);
+            var maxYesNoWords = options.CurrentValue.MaxYesNoWords;
             var isYes = IsPhrase(words, yesEntries, maxYesNoWords);
             var isNo = !isYes && IsPhrase(words, noEntries, maxYesNoWords);
 
