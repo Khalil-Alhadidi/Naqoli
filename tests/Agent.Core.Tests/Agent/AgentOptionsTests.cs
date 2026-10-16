@@ -35,6 +35,33 @@ public class AgentOptionsTests
     }
 
     [Theory]
+    [InlineData(null, true)]
+    [InlineData("1", true)]
+    [InlineData("600", true)]
+    [InlineData("0", false)]
+    [InlineData("601", false)]
+    public void CheckingRetrySecondsDefaultsToFiveAndStaysInRange(string? value, bool valid)
+    {
+        Assert.Equal(5, new AgentOptions().CheckingRetrySeconds);
+        var settings = new Dictionary<string, string?>
+        {
+            ["Agent:WalletBaseUrl"] = "http://localhost",
+            ["Agent:WalletClientKey"] = AgentHost.TestWalletClientKey,
+        };
+        if (value is not null)
+            settings["Agent:CheckingRetrySeconds"] = value;
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(settings).Build();
+        using var provider = new ServiceCollection().AddAgentCore(configuration).BuildServiceProvider();
+
+        var read = () => provider.GetRequiredService<IOptions<AgentOptions>>().Value;
+
+        if (valid)
+            Assert.Equal(value is null ? 5 : int.Parse(value, System.Globalization.CultureInfo.InvariantCulture), read().CheckingRetrySeconds);
+        else
+            Assert.Throws<OptionsValidationException>(read);
+    }
+
+    [Theory]
     [InlineData("40", "10", true)]
     [InlineData("30", "10", false)]
     [InlineData("31", "10", true)]

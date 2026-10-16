@@ -246,6 +246,11 @@ public sealed class ConfirmHandler
             return Traced(TraceSteps.SettleOutcomePrefix, new ConfirmOutcome.Checking());
         }
 
+        // The lookup by key is display only: it traces what the wallet holds under the key, and the outcome still comes
+        // from the resend under the same key (a by-key 404 is not final, docs/wallet-api.md).
+        var lookup = await wallet.FindByKeyAsync(record.IdempotencyKey, userId, cancellationToken);
+        trace.Record(TraceZone.Write, TraceSteps.LookupByKey, LookupDetail(lookup));
+
         trace.Record(TraceZone.Write, TraceSteps.SettleSent, null);
         var executed = await wallet.ExecuteAsync(record.IdempotencyKey, RequestFrom(record, pin: null), cancellationToken);
         ConfirmOutcome outcome;
@@ -463,4 +468,19 @@ public sealed class ConfirmHandler
         public const string NothingDue = "nothing_due";
         public const string AccountClosed = "account_closed";
     }
+
+    /// <summary>
+    /// The trace detail of the by-key lookup: the stored row's status (<c>done</c>, <c>failed</c>, <c>executing</c>),
+    /// <c>unknown_key</c> for a 404 or that code, else <c>unavailable</c> and the reason or the code.
+    /// </summary>
+    private static string LookupDetail(WalletResult<WalletTransaction> lookup) => lookup switch
+    {
+        WalletResult<WalletTransaction>.Ok { Value: var row } => row.Status,
+        WalletResult<WalletTransaction>.Refused { Problem: { Code: UnknownKeyCode } or { Status: 404 } } => UnknownKeyCode,
+        WalletResult<WalletTransaction>.Refused { Problem: var problem } => "unavailable " + problem.Code,
+        WalletResult<WalletTransaction>.Unavailable { Reason: var reason } => "unavailable " + reason,
+        _ => "unavailable",
+    };
+
+    private const string UnknownKeyCode = "unknown_key";
 }

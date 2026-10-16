@@ -203,6 +203,27 @@ A tap is accepted only for a value that the open question offered. Anything else
   - neither while the card is live or its payment is Checking (`ChatSession.Reissue`).
 
   The button is disabled while the session is busy or a click is in flight. A tap calls `ChatSession.ReissueAsync`, which rebuilds the card from its stored record with fresh checks (agent-core.md, "Try again and Send again"). The new card has its own panel, keyed by its pending ID, its own timer, and waits for its own Confirm. A Send again card carries `Card_Warning_repeat`.
+- **Checking (rule 6, milestone 8).** While the payment's outcome is unknown the card has `data-state="checking"`, the state line `Card_Checking` (`card-checking`), no countdown and no progress bar, Confirm and Cancel disabled, no reissue, and a `card-check-again` button (`Outcome_check_again`, disabled while the session is busy or a click is in flight). The button and the chat's `check-again` both call `ChatSession.SettleAsync`, the same body under the same key. The panel also settles by itself: its one-second tick notes when it first sees the card Checking, and once `CheckingRetrySeconds` (5, editable; read from `IOptionsMonitor` on every tick) have passed since then or since the last settle, it calls `ChatSession.SettleAsync` when the session is not busy and no click is in flight. The session's lock serialises it with a tapped settle. After a settle the card shows done or not done as for any outcome. The card never shows "failed" while the outcome is unknown.
+
+  ```mermaid
+  sequenceDiagram
+      participant T as CardPanel tick (1 s)
+      participant S as ChatSession
+      participant H as ConfirmHandler
+      participant W as Wallet
+      T->>T: first tick in Checking: lastSettle = now
+      loop every tick while Checking
+          alt now - lastSettle >= CheckingRetrySeconds, not busy, not acting
+              T->>S: SettleAsync()
+              S->>H: SettleCheckingAsync (same key)
+              H->>W: GET by-key (traced lookup_by_key)
+              H->>W: POST /transactions (same key, same body)
+              W-->>H: done, a refusal, or still unknown
+              H-->>S: Done, NotDone or Checking
+              T->>T: lastSettle = now
+          end
+      end
+  ```
 - **PIN field** (`PinField`). It is `type="password"`, `inputmode="numeric"`, `autocomplete="off"`. It shows when the card needs a PIN or after a PIN outcome. The value lives only in the card component's field and the `ConfirmAsync` call, and is cleared at every call.
 
 ### Figures in the phone
@@ -248,7 +269,7 @@ Options validation requires `StaleExecutingAfterSeconds` to be more than three t
 
 `src/Agent.Web/Resources/PhoneStrings.resx` (neutral culture, read through `IStringLocalizer<PhoneStrings>`) holds every text the phone shows (rule 4). Khalil wrote the values in Iraqi Arabic on 15 Oct 2026 (commit a32ac1d); nothing else writes or changes them. `{0}` and `{1}` are filled by code, with figures in Arabic-Indic digits. `Word_yes` and `Word_no` are comma-separated lists (`PhoneWords.Split`), compared after `ArabicText.Normalize`. The table gives each key's meaning in English, not its Arabic value.
 
-No key is a placeholder. The last two, `Card_TryAgain` and `Card_SendAgain` (milestone 7, D19), and the D21 wording of `Refusal_invalid_number` (it now asks for the full mobile number or a saved name) were written by Khalil on 16 Oct 2026. `PhoneStringsTests.NoValueIsAPlaceholderExceptTheKeysAwaitingKhalil` keeps the allow-list, now empty: a new key is added there with a `TODO-AR` value until he writes it.
+One key is a placeholder: `Card_Checking` (milestone 8), an English `TODO-AR` value until Khalil writes it. `Card_TryAgain` and `Card_SendAgain` (milestone 7, D19), and the D21 wording of `Refusal_invalid_number` (it now asks for the full mobile number or a saved name), were written by Khalil on 16 Oct 2026. `PhoneStringsTests.NoValueIsAPlaceholderExceptTheKeysAwaitingKhalil` keeps the allow-list, now `Card_Checking`: a new key is added there with a `TODO-AR` value until he writes it.
 
 | Key | Meaning | Note |
 |---|---|---|
@@ -267,6 +288,7 @@ No key is a placeholder. The last two, `Card_TryAgain` and `Card_SendAgain` (mil
 | `Card_Expired` | This card has expired. Nothing was sent | |
 | `Card_Cancelled` | Cancelled | |
 | `Card_Timer` | {0} seconds left | |
+| `Card_Checking` | Checking with the wallet whether the payment went through. Nothing is paid twice | Milestone 8, the card's Checking state line. `TODO-AR`: Khalil to write |
 | `Card_TryAgain` | Try again | Milestone 7, D19; Khalil's Arabic, 16 Oct 2026 |
 | `Card_SendAgain` | Send again | Milestone 7, D19; Khalil's Arabic, 16 Oct 2026 |
 | `Outcome_done` | Done. Reference {0}. Your balance is now {1} | |
@@ -448,7 +470,8 @@ The journeys locate elements only by these attributes.
 | Card buttons and PIN | `card-confirm`, `card-cancel`, `card-pin` | |
 | Card reissue buttons (D19) | `card-try-again` (state `expired`, `cancelled` or `notdone`), `card-send-again` (state `done`); neither while live or checking | |
 | Question option | `question-option` | `data-value` |
-| Consent and settle buttons | `consent-button`, `check-again` | |
+| Consent and settle buttons | `consent-button`, `check-again` (in the chat), `card-check-again` (on the card while Checking) | |
+| The card's Checking state line | `card-checking` | |
 | Trace entry | `trace-entry` | `data-zone` (`user`, `code`, `model`, `write`) |
 | Wallet balance | `wallet-balance` | `data-value` (ASCII) |
 | Wallet history row | `wallet-history-row` | `data-reference` |
@@ -516,6 +539,6 @@ The journeys locate elements only by these attributes.
 | Learning data is a placeholder | Milestone 10 (the settings and log components came in milestone 7) |
 | A reissued card of the known gap `choose_account` does not carry the `account_choice_unavailable` note | Deferred, minor |
 | Text typed before the circuit is interactive is lost | The `data-interactive` marker tells the journeys; a person types again |
-| A Checking record whose circuit is gone has no "check again" button in a new circuit | The Checking screen in milestone 8; the record stays Checking and is never shown as failed |
+| A Checking record whose circuit is gone has no "check again" button in a new circuit | Still open after milestone 8: the Checking card and its automatic settle live in the card's own circuit. The record stays Checking and is never shown as failed |
 | The live trace keeps every entry for the life of the circuit | A cap would be a new setting |
 | The wallet data component does not reload after an external debit from the fault panel (it reloads after a payment) | Reopen the component; the phone's card recheck reads the wallet itself |

@@ -24,7 +24,7 @@ public class PhoneStringsTests
     /// since 16 Oct 2026 (<c>Card_TryAgain</c> and <c>Card_SendAgain</c> were the last); a new key goes here until its
     /// Arabic is in, and no other key may be a placeholder.
     /// </summary>
-    private static readonly string[] AwaitingKhalil = [];
+    private static readonly string[] AwaitingKhalil = ["Card_Checking"];
 
     [Fact]
     public void NoValueIsAPlaceholderExceptTheKeysAwaitingKhalil()

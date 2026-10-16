@@ -1,4 +1,5 @@
 @inherits SessionComponent
+@inject IOptionsMonitor<AgentOptions> Options
 
 @* Every field comes from the CardView the session holds (rule 3); names from the wallet render inside bdi. *@
 @if (Session.Card is { } card)
@@ -59,12 +60,23 @@
             {
                 <div class="phone-card-state">@Text["Card_Cancelled"]</div>
             }
+            else if (IsChecking)
+            {
+                @* Rule 6: the outcome is unknown, so the card says it is checking, never failed; no countdown. *@
+                <div class="phone-card-state" data-testid="card-checking">@Text["Card_Checking"]</div>
+            }
         </MudCardContent>
         <MudCardActions>
             <MudButton data-testid="card-confirm" Variant="Variant.Filled" Color="Color.Primary"
                        Disabled="@(!CanAct)" OnClick="ConfirmAsync">@Text["Card_Confirm"]</MudButton>
             <MudButton data-testid="card-cancel" Variant="Variant.Text"
                        Disabled="@(!CanAct)" OnClick="CancelAsync">@Text["Card_Cancel"]</MudButton>
+            @if (IsChecking)
+            {
+                @* The same settle as the chat's "check again" (ChatSession.SettleAsync, same key); the tick also settles. *@
+                <MudButton data-testid="card-check-again" Variant="Variant.Outlined" Color="Color.Primary"
+                           Disabled="@(Session.Busy || acting)" OnClick="CheckAgainAsync">@Text["Outcome_check_again"]</MudButton>
+            }
             @* D19: a new card from the stored request; never while the card is live or its payment is checking. *@
             @if (!IsLive && Session.Reissue == ReissueKind.TryAgain)
             {
@@ -88,7 +100,12 @@
     private bool acting;
     private bool refreshRequested;
 
+    /// <summary>When the card was first seen Checking, or last settled; null while it is not Checking.</summary>
+    private DateTimeOffset? lastSettle;
+
     private bool IsLive => Session.CardState == CardStatus.Live && remaining > 0;
+
+    private bool IsChecking => Session.CardState == CardStatus.Checking;
 
     private bool CanAct => IsLive && !Session.Busy && !acting;
 
@@ -124,6 +141,50 @@
             // The timer has ended on screen: the session reads the record and marks the card expired.
             refreshRequested = true;
             await Session.RefreshAsync();
+        }
+
+        await SettleIfDueAsync();
+    }
+
+    /// <summary>
+    /// Ruling 5 of milestone 8: while the card is Checking, settle it by itself every <c>CheckingRetrySeconds</c> (read
+    /// on each tick, so a saved value applies at once) through <see cref="ChatSession.SettleAsync"/>, the same method as
+    /// the "check again" buttons, the same key. Never while the session is busy or a button is acting.
+    /// </summary>
+    private async Task SettleIfDueAsync()
+    {
+        if (!IsChecking)
+        {
+            lastSettle = null;
+            return;
+        }
+
+        var now = Session.Now;
+        if (lastSettle is not { } last)
+        {
+            lastSettle = now;
+            return;
+        }
+
+        if (Session.Busy || acting || now - last < TimeSpan.FromSeconds(Options.CurrentValue.CheckingRetrySeconds))
+            return;
+
+        await SettleAsync();
+    }
+
+    private Task CheckAgainAsync() => SettleAsync();
+
+    private async Task SettleAsync()
+    {
+        acting = true;
+        try
+        {
+            await Session.SettleAsync();
+        }
+        finally
+        {
+            lastSettle = Session.Now;
+            acting = false;
         }
     }
 

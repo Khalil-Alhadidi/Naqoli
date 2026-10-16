@@ -31,5 +31,11 @@ public static class TraceSteps
     public const string ExecuteSent = "execute_sent";
     public const string OutcomePrefix = "outcome:";
     public const string SettleSent = "settle_sent";
+
+    /// <summary>
+    /// The by-key lookup before a settle's resend (milestone 8): <c>done</c>, <c>failed</c>, <c>unknown_key</c> or
+    /// <c>unavailable</c> and the reason. Display only: the outcome comes from the resend.
+    /// </summary>
+    public const string LookupByKey = "lookup_by_key";
     public const string SettleOutcomePrefix = "settle_outcome:";
 }

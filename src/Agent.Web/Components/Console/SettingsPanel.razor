@@ -116,6 +116,7 @@
         nameof(AgentOptions.MinSubstringWordLength) => o => o.MinSubstringWordLength,
         nameof(AgentOptions.MaxYesNoWords) => o => o.MaxYesNoWords,
         nameof(AgentOptions.LogPageSize) => o => o.LogPageSize,
+        nameof(AgentOptions.CheckingRetrySeconds) => o => o.CheckingRetrySeconds,
         _ => throw new InvalidOperationException("No reader for the editable setting " + name + "."),
     };
 

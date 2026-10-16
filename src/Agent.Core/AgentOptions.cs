@@ -72,6 +72,13 @@ public sealed class AgentOptions
     [Range(1, 86_400)]
     public int SettleWindowSeconds { get; set; } = 610;
 
+    /// <summary>
+    /// While a card is Checking, the phone settles it by itself every this many seconds (the same settle as the "check
+    /// again" button, under the same key; rule 6), until the record leaves Checking. Milestone 8; editable live.
+    /// </summary>
+    [Range(1, 600)]
+    public int CheckingRetrySeconds { get; set; } = 5;
+
     /// <summary>The most history items read in one call; the wallet clamps <c>take</c> to 200.</summary>
     [Range(1, 200)]
     public int HistoryPageSize { get; set; } = 200;

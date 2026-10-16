@@ -146,6 +146,8 @@ public sealed class RuntimeSettingsTests : IDisposable
     [Fact]
     public void EveryEditableNameCanBeSaved()
     {
+        // Milestone 8: the automatic settle's interval is read live by the card panel.
+        Assert.Contains(nameof(AgentOptions.CheckingRetrySeconds), RuntimeSettings.EditableNames);
         var current = provider.GetRequiredService<IOptionsMonitor<AgentOptions>>().CurrentValue;
         foreach (var name in RuntimeSettings.EditableNames)
         {

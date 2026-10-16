@@ -486,6 +486,8 @@ sequenceDiagram
     Note over C,W: Later, for a Checking record
     U->>C: SettleCheckingAsync(userId, pendingId)
     C->>S: FindAsync(pendingId, userId): still Checking?
+    C->>W: FindByKeyAsync(same key, userId), display only
+    Note over C: trace lookup_by_key: done, failed, unknown_key or unavailable (a 404 is not final)
     C->>W: ExecuteAsync(same key, same body, no PIN)
     alt still unknown, or a PIN refusal within SettleWindowSeconds of ExecutingSince
         C-->>U: Checking (record unchanged)
@@ -498,6 +500,8 @@ sequenceDiagram
         end
     end
 ```
+
+The lookup by key (milestone 8, ruling 6): once the record is found Checking and the kill switch allows a resend, `SettleCheckingAsync` reads `GET /transactions/by-key/{key}?userId=` and traces `lookup_by_key` in the Write zone with the stored row's status (`done`, `failed`), `unknown_key` (a 404) or `unavailable` and the reason. It is display only: the outcome still comes from the resend under the same key, since a by-key 404 is not final ([wallet-api.md](wallet-api.md)), and a lookup with no answer does not stop the resend (`ConfirmHandlerTests.TheSettleLooksTheKeyUpAndTracesUnknownKeyWhenNothingWasWritten`, `TheSettleLooksTheKeyUpAndTracesDoneWhenTheWalletPaid`, `ALookupThatGetsNoAnswerDoesNotStopTheSettle`).
 
 - The execute body is rebuilt from the record every time (`RequestFrom`), so every call under its key (Confirm and settle) carries the same request fingerprint. A transfer names the recipient by the account the quote resolved (the phone only when no account is stored). Every type carries the confirmed amount, `AmountIqd` of the record, bills and purchases included, so the wallet refuses (`bills_paid_in_full`, `invalid_amount`) a bill or a price that no longer matches the card.
 - The PIN travels only in the execute body, converted from Arabic-Indic digits to ASCII. It is never stored, logged or written to an audit row.
@@ -697,7 +701,7 @@ stateDiagram-v2
 | Zone | Written by | Steps (detail) |
 |---|---|---|
 | Code | `Orchestrator` | `parse_received` (the intent), `consent_checked` (`given` or `required`), `recipient_resolved` (`contact`, `alias`, `number`, `option`, `bill` or `purchase`), `amount_resolved` (the amount), `checks_passed` (the quote's total) or `check_failed:<reason>` (the figure), `card_created` (type, total, `pin` when one is needed), `question:<kind>` (how many options), `refusal:<code>` (the wallet code for `not_done_nothing_taken`, else the figure), `balance_shown` (no figure), `known_gap` (`choose_account` or `part_of_bill`), `reissue` (`try_again` or `send_again`) |
-| Write | `ConfirmHandler` | `begin_execute` (type and total), `recheck_ok` or `recheck_failed:<reason>` (the wallet code, if any), `execute_sent`, `outcome:<done, not_done, checking, expired, already_handled, not_found, pin_required, pin_wrong, pin_malformed, cancelled or exception>` (the record's state, the reason, or the attempts left), `settle_sent`, `settle_outcome:<the same names>` |
+| Write | `ConfirmHandler` | `begin_execute` (type and total), `recheck_ok` or `recheck_failed:<reason>` (the wallet code, if any), `execute_sent`, `outcome:<done, not_done, checking, expired, already_handled, not_found, pin_required, pin_wrong, pin_malformed, cancelled or exception>` (the record's state, the reason, or the attempts left), `lookup_by_key` (`done`, `failed`, `unknown_key` or `unavailable <reason>`; milestone 8), `settle_sent`, `settle_outcome:<the same names>` |
 
 The User and Model zones are written by the `Conversation` (below; `message_received`, `confirm_tapped`, `check_again_tapped`, `cancel_tapped`, `reissue_tapped`, `parse:<parser name>` with the intent, `parse:unavailable`) and the Claude parser (`more_than_one_request`, Model zone, with the count). The `Conversation` also writes, in the Code zone, `model_invalid_reply` (the field the validator refused), `answer_merged` (the typed question's kind), `option_rejected`, `reissue_rejected` (the card's or the record's state), `learning_logged` (the reason) and `error` (an exception's type). A detail holds codes, states and amounts only: never a PIN, an idempotency key, a purchase code, a phone, a name, a balance or any text the user typed (the unsupported reason stays out of the trace). `TraceSinkTests.NoPinKeyCodeOrPhoneInAnyStep` runs a PIN payment and a purchase through a recording sink and checks every step and detail.
 
@@ -809,11 +813,12 @@ The conversation calls it after every reply that yields an entry, with the maske
 | `MinSubstringWordLength` | 3; 1 to 20 | `ContactResolver`, rule 4: a shorter typed word must equal a whole word |
 | `MaxYesNoWords` | 4; 1 to 20 | `Conversation`, D6: a yes or a no has at most this many words |
 | `LogPageSize` | 100; 1 to 1,000 | The console's log component: how many audit rows, newest first, it shows (`AuditLog.ReadLatestAsync`) |
+| `CheckingRetrySeconds` | 5; 1 to 600 | The phone's card panel (milestone 8, ruling 5): while a card is Checking it settles it by itself every this many seconds through `ChatSession.SettleAsync`, the same settle as "check again", under the same key. Read on every tick, so a saved value applies at once |
 | `Parser` | `scripted` | `ParserFactory.AddAgentParser`: `scripted` (the oracle) or `claude` |
 | `DevSetPath` | `data/requests.dev.jsonl` | The oracle: the development set, relative to the repository root unless rooted; its file name must be `requests.dev.jsonl` (rule 7) |
 | `YesWords`, `NoWords` | empty | `Conversation`, D6. Phone text, so not set in `Agent.Core`: the console post-configures them from `Word_yes` and `Word_no` in its resource file, and the test host sets `yes` and `no` |
 
-The settings component shows them ([agent-web.md](agent-web.md), "The settings component"). It edits exactly `RuntimeSettings.EditableNames`: `MinAmountIqd`, `PerTransactionCapIqd`, `PerDayCapIqd`, `CardTimerSeconds`, `MaxProductsInOneQuestion`, `RepeatWarningWindowMinutes`, `HistoryDays`, `MinSubstringWordLength`, `MaxYesNoWords` and `LogPageSize`. The runtime store refuses any other key. The rest, `MaxRequestsPerMessage` included (nothing reads it yet), is read only. The client key goes in user secrets or the environment, never in a committed file.
+The settings component shows them ([agent-web.md](agent-web.md), "The settings component"). It edits exactly `RuntimeSettings.EditableNames`: `MinAmountIqd`, `PerTransactionCapIqd`, `PerDayCapIqd`, `CardTimerSeconds`, `MaxProductsInOneQuestion`, `RepeatWarningWindowMinutes`, `HistoryDays`, `MinSubstringWordLength`, `MaxYesNoWords`, `LogPageSize` and `CheckingRetrySeconds`. The runtime store refuses any other key. The rest, `MaxRequestsPerMessage` included (nothing reads it yet), is read only. The client key goes in user secrets or the environment, never in a committed file.
 
 **Options at run time (D8, milestone 7).** Every scoped service that reads `AgentOptions` reads `IOptionsSnapshot<AgentOptions>`, which is computed again per scope. Every conversation action and every eval step opens its own scope, so a value saved in the settings component applies to the next action without a restart. The singletons (`PendingSweeper`, the `WalletClient` configuration) keep `IOptions`. The conversation takes `IOptionsMonitor<AgentOptions>`: it reads the D6 word lists once, when it is built, and `MaxYesNoWords` again for every message, so a saved limit applies to the next message of an open page (`ConversationTests.AMaxYesNoWordsSavedInTheSettingsAppliesToTheNextMessage`). A value is validated before it is published, as the options are at start (`[Range]` and the cross-field rules), so a refused one never takes effect anywhere (`RuntimeSettingsTests`, `ChecksTests.ACapChangedLiveAppliesToTheNextCheck`).
 

@@ -9,8 +9,10 @@ using Agent.Core.Pending;
 using Agent.Core.Pipeline;
 using Agent.Core.Requests;
 using Agent.Core.Tests.Agent;
+using Agent.Core.Tests.Conversation;
 using Agent.Core.Tests.Wallet;
 using Agent.Core.Text;
+using Agent.Core.Trace;
 using Agent.Core.Wallet;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -830,6 +832,85 @@ public class ConfirmHandlerTests(AgentHost host)
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
             => request.RequestUri?.AbsolutePath.EndsWith("/balance", StringComparison.Ordinal) == true
                 ? throw new InvalidOperationException("Stub failure during the recheck.")
+                : base.SendAsync(request, cancellationToken);
+    }
+
+    /// <summary>A settle through a handler that writes its trace to a recording sink, its wallet calls through <paramref name="client"/> (the host's by default).</summary>
+    private async Task<(ConfirmOutcome Outcome, IReadOnlyList<(TraceZone Zone, string Step, string? Detail)> Trace)> SettleTracedAsync(
+        PendingRecord card, WalletClient? client = null)
+    {
+        await using var scope = host.Services.CreateAsyncScope();
+        var wallet = client ?? scope.ServiceProvider.GetRequiredService<WalletClient>();
+        var trace = new ConversationHarness.RecordingTrace();
+        var checks = ActivatorUtilities.CreateInstance<Checks>(scope.ServiceProvider, wallet);
+        var handler = ActivatorUtilities.CreateInstance<ConfirmHandler>(scope.ServiceProvider, wallet, checks, (ITraceSink)trace);
+        var outcome = await handler.SettleCheckingAsync(card.UserId, card.Id, Token);
+        return (outcome, trace.Entries);
+    }
+
+    private static string? LookupBeforeTheResend(IReadOnlyList<(TraceZone Zone, string Step, string? Detail)> trace)
+    {
+        var lookup = trace.ToList().FindIndex(e => e.Step == TraceSteps.LookupByKey);
+        var sent = trace.ToList().FindIndex(e => e.Step == TraceSteps.SettleSent);
+        Assert.True(lookup >= 0, "The settle did not look the key up.");
+        Assert.True(lookup < sent, "The lookup by key must come before the resend.");
+        Assert.Equal(TraceZone.Write, trace[lookup].Zone);
+        return trace[lookup].Detail;
+    }
+
+    [Fact]
+    public async Task TheSettleLooksTheKeyUpAndTracesUnknownKeyWhenNothingWasWritten()
+    {
+        await StartAsync();
+        var card = await CardAsync(U1, FiftyThousandToHammoudi);
+        Assert.IsType<ConfirmOutcome.Checking>(await ConfirmIntoCheckingAsync(card));
+
+        var (outcome, trace) = await SettleTracedAsync(card);
+
+        // A 404 is not final: the resend under the same key still executes, once.
+        Assert.Equal("unknown_key", LookupBeforeTheResend(trace));
+        Assert.IsType<ConfirmOutcome.Done>(outcome);
+        Assert.Equal(1, await WalletRowsAsync(card.IdempotencyKey));
+    }
+
+    [Fact]
+    public async Task TheSettleLooksTheKeyUpAndTracesDoneWhenTheWalletPaid()
+    {
+        await StartAsync();
+        var card = await CardAsync(U1, FiftyThousandToHammoudi);
+        await SetFaultAsync(new FaultRequest("timeoutAfterExecute", 3_000, Once: true));
+        Assert.IsType<ConfirmOutcome.Checking>(await ConfirmImpatientlyAsync(card));
+        var stored = await WaitUntilDoneAsync(card.IdempotencyKey, U1);
+
+        var (outcome, trace) = await SettleTracedAsync(card);
+
+        Assert.Equal("done", LookupBeforeTheResend(trace));
+        Assert.Equal(stored.Reference, Assert.IsType<ConfirmOutcome.Done>(outcome).Reference);
+        Assert.Equal(1, await WalletRowsAsync(card.IdempotencyKey));
+        await SetFaultAsync(new FaultRequest("none", null));
+    }
+
+    [Fact]
+    public async Task ALookupThatGetsNoAnswerDoesNotStopTheSettle()
+    {
+        await StartAsync();
+        var card = await CardAsync(U1, FiftyThousandToHammoudi);
+        Assert.IsType<ConfirmOutcome.Checking>(await ConfirmIntoCheckingAsync(card));
+        var client = host.CreateClient(new FailingByKeyHandler { InnerHandler = host.Wallet.CreateHandler() }, TimeSpan.FromSeconds(10));
+
+        var (outcome, trace) = await SettleTracedAsync(card, client);
+
+        Assert.StartsWith("unavailable ", LookupBeforeTheResend(trace), StringComparison.Ordinal);
+        Assert.IsType<ConfirmOutcome.Done>(outcome);
+        Assert.Equal(1, await WalletRowsAsync(card.IdempotencyKey));
+    }
+
+    /// <summary>Fails every <c>GET /transactions/by-key</c> as a lost connection would, and passes every other request on.</summary>
+    private sealed class FailingByKeyHandler : DelegatingHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+            => request.RequestUri?.AbsolutePath.StartsWith("/transactions/by-key/", StringComparison.Ordinal) == true
+                ? throw new HttpRequestException("Stub: no answer.")
                 : base.SendAsync(request, cancellationToken);
     }
 
