@@ -77,3 +77,21 @@ No Important item was found. The Minor items are robustness and documentation: a
 ## Suggested fix wave
 
 M1, M2, M3, M5 are small code changes with one test each; M4 and M6 are one line each. R2 is optional hardening worth a Khalil decision (it changes startup behaviour outside Development).
+
+## Fix wave
+
+Applied on 16 Oct 2026 in 79c9703 (`fix: milestone 8 security review (M1 to M6, R3 to R5): ...`):
+
+- **M1.** `WalletFaults.IsNoAnswer` also takes `IOException` and `ObjectDisposedException` (both `unreachable`); the fault panel wraps every side-door call (the read on open, apply, clear, the debit) in a `try`/`catch` that shows a fixed text, never the exception's message. Tests: `WalletFaultsTests` (a body that drops mid-read, an `IOException` from the handler, a disposed handler: each `Failed("unreachable")`).
+- **M2.** `CardPanel` sets a `disposed` flag first in `Dispose` and disposes the timer; the timer callback queues nothing once it is set, `TickAsync` returns at once, and the automatic settle checks it again before it sends. An exception in a tick is caught and traced as `error` with its type. The 32 journeys pass.
+- **M3.** `Checks.PaymentTypes` is `internal`; `PaymentTypesTests.EveryWalletTransactionTypeIsClassifiedOnce` requires every wallet `TransactionType` to be either a payment or in the non-payment set `{ externalDebit }`, so a new type fails until classified; `ThePaymentTypesAreTheThreeTheWalletExecutes` pins the three.
+- **M4.** `docs/failure-modes.md` (the console-reach row) and `README.md` (the console line): the fault panel can debit the demo wallet and set the wallet's process-wide switch; loopback by design (ruling 4); off loopback it needs ASP.NET Core authorization on the panel and a real `Wallet:AdminKey`; in Development the wallet accepts any non-empty admin header.
+- **M5.** `ModelFaultSwitch` raises `Changed` to each subscriber in its own `try`/`catch`, so a throwing panel never reaches the parse path. Test: `FaultingParserTests.ASubscriberThatThrowsNeverReachesTheParsePath`.
+- **M6.** `ChatSessionTests` call `AddFaultingParser()` after registering their parser, so the sessions under test run with the decorator, as the console does.
+- **R3.** The fault panel holds a `CancellationTokenSource`, cancelled in `Dispose` and passed to every side-door call.
+- **R4.** `docs/agent-web.md`, the card section: the automatic settle has no ceiling; each settle is bounded by the wallet timeouts and idempotent; a cap or back-off is a later setting.
+- **R5.** `docs/wallet-api.md`, `POST /admin/debit`: `unknown_user` and `insufficient_funds` are distinct answers, as the balance read behind the client key already is.
+
+Left as recommendations: **R1** (the inner parser built by `ActivatorUtilities` is not disposal-tracked; no parser is disposable today), **R2** (a fail-fast on `Console:WalletAdminKey` outside Development: a decision for Khalil), **R6** (the side door's client reads `IOptions`, as `WalletClient` does), **R7** (provider names take the first word in the parentheses; right for the frozen seed).
+
+Counts after the wave: `dotnet test` 1065 total, 1057 passed, 0 failed, 8 skipped (6 live model, 2 symbolic link); the journeys 32 of 32; build 0 warnings.
