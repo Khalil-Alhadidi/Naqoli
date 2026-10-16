@@ -95,6 +95,12 @@
     private string? error;
     private bool busy;
 
+    /// <summary>Cancelled when the panel goes away, so a call in flight does not run on to the client's timeout (review R3).</summary>
+    private readonly CancellationTokenSource disposed = new();
+
+    /// <summary>What the panel shows when a side-door call threw: a fixed text, never the exception's message (review M1).</summary>
+    private const string CallFailed = "The wallet's fault switch could not be reached.";
+
     private string WalletStateText => walletState switch
     {
         null => "unknown",
@@ -109,12 +115,17 @@
     protected override async Task OnInitializedAsync()
     {
         ModelFaults.Changed += OnModelChanged;
-        var read = await CallAsync(faults => faults.GetAsync());
+        var read = await CallAsync((faults, token) => faults.GetAsync(token));
         if (read is WalletFaultResult.Ok ok)
             walletDelay = ok.State.DelayMs.ToString(CultureInfo.InvariantCulture);
     }
 
-    public void Dispose() => ModelFaults.Changed -= OnModelChanged;
+    public void Dispose()
+    {
+        ModelFaults.Changed -= OnModelChanged;
+        disposed.Cancel();
+        disposed.Dispose();
+    }
 
     private void OnModelChanged() => _ = InvokeAsync(StateHasChanged);
 
@@ -134,9 +145,9 @@
 
         await RunAsync(async () =>
         {
-            await CallAsync(faults => walletMode == WalletNone ? faults.ClearAsync() : faults.SetAsync(walletMode, delay, walletOnce));
+            await CallAsync((faults, token) => walletMode == WalletNone ? faults.ClearAsync(token) : faults.SetAsync(walletMode, delay, walletOnce, token));
             // Read back after every apply: the state shown is the wallet's.
-            await CallAsync(faults => faults.GetAsync());
+            await CallAsync((faults, token) => faults.GetAsync(token));
         });
     }
 
@@ -162,9 +173,23 @@
 
         await RunAsync(async () =>
         {
-            await using var scope = Scopes.CreateAsyncScope();
-            var faults = scope.ServiceProvider.GetRequiredService<WalletFaults>();
-            switch (await faults.DebitAsync(Options.Value.DemoUserId, amount))
+            if (disposed.IsCancellationRequested)
+                return;
+            WalletDebitResult result;
+            try
+            {
+                await using var scope = Scopes.CreateAsyncScope();
+                var faults = scope.ServiceProvider.GetRequiredService<WalletFaults>();
+                result = await faults.DebitAsync(Options.Value.DemoUserId, amount, disposed.Token);
+            }
+            catch (Exception)
+            {
+                // Review M1: nothing a side-door call throws may end the circuit; the cause is never shown.
+                error = CallFailed;
+                return;
+            }
+
+            switch (result)
             {
                 case WalletDebitResult.Done done:
                     debitResult = string.Create(CultureInfo.InvariantCulture, $"done {done.Reference} balance {done.BalanceAfterIqd}");
@@ -184,8 +209,8 @@
         walletMode = WalletNone;
         await RunAsync(async () =>
         {
-            await CallAsync(faults => faults.ClearAsync());
-            await CallAsync(faults => faults.GetAsync());
+            await CallAsync((faults, token) => faults.ClearAsync(token));
+            await CallAsync((faults, token) => faults.GetAsync(token));
         });
     }
 
@@ -204,10 +229,26 @@
     }
 
     /// <summary>One fault-switch call through a fresh scope's client; the state read back is kept, a failure shown.</summary>
-    private async Task<WalletFaultResult> CallAsync(Func<WalletFaults, Task<WalletFaultResult>> call)
+    private async Task<WalletFaultResult?> CallAsync(Func<WalletFaults, CancellationToken, Task<WalletFaultResult>> call)
     {
-        await using var scope = Scopes.CreateAsyncScope();
-        var result = await call(scope.ServiceProvider.GetRequiredService<WalletFaults>());
+        if (disposed.IsCancellationRequested)
+            return null;
+
+        WalletFaultResult result;
+        try
+        {
+            await using var scope = Scopes.CreateAsyncScope();
+            result = await call(scope.ServiceProvider.GetRequiredService<WalletFaults>(), disposed.Token);
+        }
+        catch (Exception)
+        {
+            // Review M1: nothing a side-door call throws (the panel going away included) may end the circuit; the
+            // cause is never shown, since a message could carry a URL.
+            walletState = null;
+            error = CallFailed;
+            return null;
+        }
+
         switch (result)
         {
             case WalletFaultResult.Ok ok:

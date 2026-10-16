@@ -1,5 +1,6 @@
 @inherits SessionComponent
 @inject IOptionsMonitor<AgentOptions> Options
+@inject TraceLog Trace
 
 @* Every field comes from the CardView the session holds (rule 3); names from the wallet render inside bdi. *@
 @if (Session.Card is { } card)
@@ -94,6 +95,12 @@
 
 @code {
     private Timer? timer;
+
+    /// <summary>
+    /// Set first in <see cref="Dispose(bool)"/>, read by the timer thread and the dispatcher: a tick that was already
+    /// queued when the panel went away does nothing, so no settle runs for a card the panel no longer shows (review M2).
+    /// </summary>
+    private volatile bool disposed;
     private int remaining;
     private int total = 1;
     private string? pin;
@@ -122,7 +129,11 @@
         total = Math.Max(1, remaining);
 
         // The countdown is a display tick; the timer itself is CardTimerSeconds, enforced by the store.
-        timer = new Timer(_ => _ = InvokeAsync(TickAsync), null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
+        timer = new Timer(_ =>
+        {
+            if (!disposed)
+                _ = InvokeAsync(TickAsync);
+        }, null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
     }
 
     private void Tick()
@@ -134,16 +145,28 @@
 
     private async Task TickAsync()
     {
-        Tick();
-        StateHasChanged();
-        if (remaining == 0 && Session.CardState == CardStatus.Live && !refreshRequested)
-        {
-            // The timer has ended on screen: the session reads the record and marks the card expired.
-            refreshRequested = true;
-            await Session.RefreshAsync();
-        }
+        if (disposed)
+            return;
 
-        await SettleIfDueAsync();
+        try
+        {
+            Tick();
+            StateHasChanged();
+            if (remaining == 0 && Session.CardState == CardStatus.Live && !refreshRequested)
+            {
+                // The timer has ended on screen: the session reads the record and marks the card expired.
+                refreshRequested = true;
+                await Session.RefreshAsync();
+            }
+
+            await SettleIfDueAsync();
+        }
+        catch (Exception ex)
+        {
+            // The tick's task is discarded by the timer, so a failure is traced here rather than left unobserved
+            // (review M2); the type only, as every trace error is. The next tick tries again.
+            Trace.Record(TraceZone.Code, "error", ex.GetType().Name);
+        }
     }
 
     /// <summary>
@@ -169,6 +192,8 @@
         if (Session.Busy || acting || now - last < TimeSpan.FromSeconds(Options.CurrentValue.CheckingRetrySeconds))
             return;
 
+        if (disposed)
+            return;
         await SettleAsync();
     }
 
@@ -235,6 +260,10 @@
     protected override void Dispose(bool disposing)
     {
         if (disposing)
+        {
+            // The flag first: a callback already running sees it and queues nothing, and a queued tick returns at once.
+            disposed = true;
             timer?.Dispose();
+        }
     }
 }

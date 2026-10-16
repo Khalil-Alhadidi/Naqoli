@@ -605,6 +605,7 @@ Khalil's contract of 14 Oct 2026, built on 16 Oct 2026 (`Services/ExternalDebitS
 - Debits the user's default account with one conditional update (`BalanceIqd >= amountIqd`); if the balance would go below zero it is 422 `insufficient_funds` and nothing changes (no row). The whole balance may be taken.
 - On success, one `Transaction` row in the same database transaction: type `externalDebit`, status `done`, amount `amountIqd`, fee 0, total `amountIqd`, the balance after read inside the transaction, a `ZC-` reference, and an idempotency key `admin-` plus a GUID (the column is required). `admin-` keys are refused on execute and unknown on by-key, as `seed-` keys are. The user's history shows the row, with no counterparty. The answer is 201 with its `TransactionResponse` (`code` and `errorCode` null).
 - A reset removes the row and restores the balance, as for any row.
+- `unknown_user` and `insufficient_funds` are distinct answers, so an admin caller learns whether a user exists and whether the balance covers the amount. Nothing new: the client key alone already reads `GET /users/{id}/balance` (security review R5 of milestone 8).
 - The type is stored as the string `ExternalDebit`, which fits the existing 16-character column, so no migration was needed.
 - The agent's daily cap counts payments only (`transfer`, `bill`, `purchase`), so an external debit never counts toward it.
 

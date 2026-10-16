@@ -53,7 +53,7 @@ public sealed class Checks
     /// The history types that are payments; an external debit (<c>externalDebit</c>, <c>POST /admin/debit</c>) is money
     /// taken from outside and never counts toward the daily cap.
     /// </summary>
-    private static readonly HashSet<string> PaymentTypes = new(StringComparer.OrdinalIgnoreCase) { "transfer", "bill", "purchase" };
+    internal static readonly HashSet<string> PaymentTypes = new(StringComparer.OrdinalIgnoreCase) { "transfer", "bill", "purchase" };
 
     private readonly WalletClient wallet;
     private readonly AgentOptions options;

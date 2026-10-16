@@ -107,6 +107,24 @@ public class FaultingParserTests
         Assert.Same(inner, parser.Inner);
     }
 
+    [Fact]
+    public async Task ASubscriberThatThrowsNeverReachesTheParsePath()
+    {
+        // Security review M5 of milestone 8: a panel whose circuit is tearing down must not break a user's message.
+        var (parser, inner, faults) = Create();
+        var after = 0;
+        faults.Changed += () => throw new InvalidOperationException("Stub: a panel that is going away.");
+        faults.Changed += () => after++;
+
+        faults.Set(ModelFaultMode.Unreachable, once: true);
+        Assert.Equal(1, after);
+
+        await Assert.ThrowsAsync<ParserUnavailableException>(() => parser.ParseAsync(Sentence, Context, Token));
+        Assert.Equal(2, after);
+        Assert.Equal(Expected, await parser.ParseAsync(Sentence, Context, Token));
+        Assert.Equal(1, inner.Calls);
+    }
+
     [Theory]
     [InlineData(ModelFaultMode.None, "none")]
     [InlineData(ModelFaultMode.Unreachable, "unreachable")]

@@ -56,6 +56,9 @@ public sealed class ChatSessionTests(AgentHost host) : IAsyncDisposable
             };
             sentences.AddRange(extra);
             services.AddSingleton<IParser>(new ScriptedParser(sentences));
+
+            // As the console does: the parser in use is wrapped in the fault decorator (review M6 of milestone 8).
+            services.AddFaultingParser();
         });
         var scope = provider.CreateAsyncScope();
         disposables.Add(provider);

@@ -55,7 +55,7 @@ public sealed class ModelFaultSwitch
             this.once = faultMode != ModelFaultMode.None && once;
         }
 
-        Changed?.Invoke();
+        RaiseChanged();
     }
 
     /// <summary>No fault.</summary>
@@ -78,8 +78,31 @@ public sealed class ModelFaultSwitch
         }
 
         if (cleared)
-            Changed?.Invoke();
+            RaiseChanged();
         return taken;
+    }
+
+    /// <summary>
+    /// Calls each subscriber in its own try/catch: <see cref="Take"/> runs on a user's parse path, and a panel whose
+    /// circuit is tearing down must never turn that message into an exception (security review M5 of milestone 8).
+    /// </summary>
+    private void RaiseChanged()
+    {
+        if (Changed is not { } handlers)
+            return;
+
+        foreach (var handler in handlers.GetInvocationList().Cast<Action>())
+        {
+            try
+            {
+                handler();
+            }
+            catch (Exception)
+            {
+                // A subscriber's failure is its own: the panel re-reads the state on its next render, and nothing else
+                // depends on this notification.
+            }
+        }
     }
 
     /// <summary>The mode's name on the panel: <c>none</c>, <c>unreachable</c> or <c>invalid_reply</c>.</summary>

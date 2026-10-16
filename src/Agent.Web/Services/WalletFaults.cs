@@ -147,15 +147,18 @@ public sealed class WalletFaults(HttpClient http)
         }
     }
 
-    /// <summary>No answer: the wallet is down, the call timed out, or the answer could not be read. Not the caller's cancellation.</summary>
+    /// <summary>
+    /// No answer: the wallet is down, the connection dropped (also while the body was read), the client was disposed
+    /// during circuit teardown, the call timed out, or the answer could not be read. Not the caller's cancellation.
+    /// </summary>
     private static bool IsNoAnswer(Exception ex, CancellationToken cancellationToken)
-        => ex is HttpRequestException or JsonException or NotSupportedException
+        => ex is HttpRequestException or IOException or ObjectDisposedException or JsonException or NotSupportedException
             || (ex is TaskCanceledException && !cancellationToken.IsCancellationRequested);
 
     private static string NoAnswer(Exception ex) => ex switch
     {
         TaskCanceledException => "timeout",
-        HttpRequestException => "unreachable",
+        HttpRequestException or IOException or ObjectDisposedException => "unreachable",
         _ => "unreadable_answer",
     };
 
