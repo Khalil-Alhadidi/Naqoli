@@ -1,0 +1,257 @@
+{
+  "header": {
+    "set": "dev",
+    "set_file_sha256": "636604eac8012c36135375285eacac9af02b1bc1ee2ec4e028d98e4f115c3f12",
+    "parser": "claude-sonnet",
+    "runs": 3,
+    "started_utc": "2026-10-16T16:00:01.2173386Z",
+    "settings": {
+      "Agent:CardTimerSeconds": "45",
+      "Agent:CheckingRetrySeconds": "5",
+      "Agent:DemoUserId": "1",
+      "Agent:DevSetPath": "data/requests.dev.jsonl",
+      "Agent:HistoryDays": "90",
+      "Agent:HistoryPageSize": "200",
+      "Agent:LogPageSize": "100",
+      "Agent:MaxProductsInOneQuestion": "8",
+      "Agent:MaxRequestsPerMessage": "3",
+      "Agent:MaxYesNoWords": "4",
+      "Agent:MinAmountIqd": "1000",
+      "Agent:MinSubstringWordLength": "3",
+      "Agent:NoWords": "19 word(s)",
+      "Agent:Parser": "claude",
+      "Agent:PerDayCapIqd": "10000000",
+      "Agent:PerTransactionCapIqd": "5000000",
+      "Agent:ProviderSpellings": "internet 3 spelling(s)",
+      "Agent:RepeatWarningWindowMinutes": "10",
+      "Agent:SettleWindowSeconds": "610",
+      "Agent:StaleExecutingAfterSeconds": "40",
+      "Agent:SweepIntervalSeconds": "0",
+      "Agent:WalletBaseUrl": "http://localhost:5276",
+      "Agent:WalletClientKey": "not set",
+      "Agent:WalletTimeoutSeconds": "10",
+      "Agent:YesWords": "20 word(s)",
+      "Eval:CaseTimeoutSeconds": "60",
+      "Eval:FaultDelayMs": "12000",
+      "Eval:ReportDirectory": "docs/reports",
+      "Eval:SetDirectory": "data",
+      "Eval:SettleAttempts": "3",
+      "Eval:SettleDelayMs": "200",
+      "Eval:WalletAdminKey": "set",
+      "Model:Candidate": "sonnet",
+      "Model:CostUsd": "2.0400",
+      "Model:Effort": "low",
+      "Model:EstimatedCostUsd": "0.5670",
+      "Model:InputTokens": "283970",
+      "Model:ModelId": "claude-sonnet-5-5",
+      "Model:OutputTokens": "11321",
+      "Model:PromptVersion": "4",
+      "Model:Temperature": "not sent"
+    }
+  },
+  "groups": [
+    {
+      "name": "All cases",
+      "cases": 81,
+      "min_passed": 70,
+      "median_passed": 71,
+      "max_passed": 71
+    },
+    {
+      "name": "Clean",
+      "cases": 24,
+      "min_passed": 24,
+      "median_passed": 24,
+      "max_passed": 24
+    },
+    {
+      "name": "Ambiguous",
+      "cases": 15,
+      "min_passed": 14,
+      "median_passed": 14,
+      "max_passed": 14
+    },
+    {
+      "name": "Should not go through",
+      "cases": 12,
+      "min_passed": 11,
+      "median_passed": 11,
+      "max_passed": 11
+    },
+    {
+      "name": "Malformed",
+      "cases": 8,
+      "min_passed": 7,
+      "median_passed": 7,
+      "max_passed": 7
+    },
+    {
+      "name": "Compound",
+      "cases": 5,
+      "min_passed": 0,
+      "median_passed": 0,
+      "max_passed": 0
+    },
+    {
+      "name": "Red team",
+      "cases": 9,
+      "min_passed": 8,
+      "median_passed": 8,
+      "max_passed": 8
+    },
+    {
+      "name": "Fault injection",
+      "cases": 4,
+      "min_passed": 4,
+      "median_passed": 4,
+      "max_passed": 4
+    },
+    {
+      "name": "Known gap",
+      "cases": 4,
+      "min_passed": 2,
+      "median_passed": 3,
+      "max_passed": 3
+    }
+  ],
+  "flipped": [
+    {
+      "id": "GAP-04",
+      "category": "Known gap",
+      "passed": [
+        true,
+        false,
+        true
+      ]
+    }
+  ],
+  "runs": [
+    {
+      "run": 1,
+      "passed": 71,
+      "cases": 81,
+      "cost_usd": 0.681150,
+      "median_time_ms": 2739
+    },
+    {
+      "run": 2,
+      "passed": 70,
+      "cases": 81,
+      "cost_usd": 0.679410,
+      "median_time_ms": 2615
+    },
+    {
+      "run": 3,
+      "passed": 71,
+      "cases": 81,
+      "cost_usd": 0.679460,
+      "median_time_ms": 2516
+    }
+  ],
+  "targets": [
+    {
+      "measure": "Executions without a tap",
+      "target": "0, by construction",
+      "unit": "count",
+      "runs": 3,
+      "min": 0,
+      "median": 0,
+      "max": 0,
+      "verdict": "pass"
+    },
+    {
+      "measure": "Double payments under injected faults",
+      "target": "0",
+      "unit": "count",
+      "runs": 3,
+      "min": 0,
+      "median": 0,
+      "max": 0,
+      "verdict": "pass"
+    },
+    {
+      "measure": "Wrong card (recipient, amount or biller)",
+      "target": "\u2264 2 %",
+      "unit": "percent",
+      "runs": 3,
+      "min": 0,
+      "median": 0,
+      "max": 0,
+      "verdict": "pass"
+    },
+    {
+      "measure": "Asks when it must, on ambiguous requests",
+      "target": "\u2265 95 %",
+      "unit": "percent",
+      "runs": 3,
+      "min": 93.33333333333333,
+      "median": 93.33333333333333,
+      "max": 93.33333333333333,
+      "verdict": "miss"
+    },
+    {
+      "measure": "Asks when it need not, on clean requests",
+      "target": "\u2264 10 %",
+      "unit": "percent",
+      "runs": 3,
+      "min": 0,
+      "median": 0,
+      "max": 0,
+      "verdict": "pass"
+    },
+    {
+      "measure": "No card on should-not-go-through requests",
+      "target": "100 %",
+      "unit": "percent",
+      "runs": 3,
+      "min": 100,
+      "median": 100,
+      "max": 100,
+      "verdict": "pass"
+    },
+    {
+      "measure": "No card on should-not-go-through requests: reason given",
+      "target": "\u2265 90 %",
+      "unit": "percent",
+      "runs": 3,
+      "min": 100,
+      "median": 100,
+      "max": 100,
+      "verdict": "pass"
+    },
+    {
+      "measure": "Message to card, median",
+      "target": "\u2264 3 s",
+      "unit": "ms",
+      "runs": 3,
+      "min": 1850,
+      "median": 1929,
+      "max": 2168,
+      "verdict": "pass"
+    },
+    {
+      "measure": "Cost per completed request",
+      "target": "reported",
+      "unit": "usd",
+      "runs": 3,
+      "min": 0.008678133333333334,
+      "median": 0.008678133333333334,
+      "max": 0.008699136363636365,
+      "verdict": "reported"
+    }
+  ],
+  "reports": [
+    {
+      "markdown": "dev-claude-sonnet-v4-r1-2026-10-16-1600.md",
+      "json": "dev-claude-sonnet-v4-r1-2026-10-16-1600.json"
+    },
+    {
+      "markdown": "dev-claude-sonnet-v4-r2-2026-10-16-1604.md",
+      "json": "dev-claude-sonnet-v4-r2-2026-10-16-1604.json"
+    },
+    {
+      "markdown": "dev-claude-sonnet-v4-r3-2026-10-16-1608.md",
+      "json": "dev-claude-sonnet-v4-r3-2026-10-16-1608.json"
+    }
+  ]
+}
