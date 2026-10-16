@@ -29,6 +29,13 @@ namespace Agent.Web.Journeys;
 /// <see cref="OtherUserIds"/> (<see cref="UserWebAddress"/>). The journeys use the scripted parser, never a live model.
 /// Skips when SQL Server or Chromium is missing.
 /// </summary>
+/// <remarks>
+/// The two databases are named per process and per host (<see cref="WalletDatabaseName"/>, <see cref="AgentDatabaseName"/>):
+/// the configured name, which must end with <c>_Test</c>, becomes <c>{stem}_{process id}_{host ordinal}_Test</c>, so two
+/// runs on one SQL Server (two clones, an IDE run beside a terminal run) never drop each other's databases. The server part
+/// of the connection string is kept. Both databases are dropped when the host is disposed; a run that is killed leaves them
+/// behind.
+/// </remarks>
 public sealed class JourneyHost : IAsyncLifetime
 {
     public const string DefaultWalletConnectionString =
@@ -53,6 +60,11 @@ public sealed class JourneyHost : IAsyncLifetime
 
     private const int ProbeTimeoutSeconds = 3;
 
+    private const string TestSuffix = "_Test";
+
+    /// <summary>The hosts created in this process, so two hosts in one process get different database names too.</summary>
+    private static int hostCount;
+
     private readonly Dictionary<int, (WebApplicationFactory<WebProgram> Factory, Uri Address)> userWebs = [];
 
     private WebApplicationFactory<WalletProgram>? wallet;
@@ -60,9 +72,28 @@ public sealed class JourneyHost : IAsyncLifetime
     private WebApplicationFactory<WebProgram>? shortTimerWeb;
     private IPlaywright? playwright;
 
-    public string WalletConnectionString { get; } = Read("ConnectionStrings__WalletJourneysTest", DefaultWalletConnectionString);
+    /// <summary>Set once the server answered the probe: from then on the host may have created its databases.</summary>
+    private bool started;
 
-    public string AgentConnectionString { get; } = Read("ConnectionStrings__AgentJourneysTest", DefaultAgentConnectionString);
+    /// <exception cref="InvalidOperationException">A configured database name does not end with <c>_Test</c>.</exception>
+    public JourneyHost()
+    {
+        var ordinal = Interlocked.Increment(ref hostCount);
+        (WalletConnectionString, WalletDatabaseName) = PerProcess(
+            Read("ConnectionStrings__WalletJourneysTest", DefaultWalletConnectionString), ordinal);
+        (AgentConnectionString, AgentDatabaseName) = PerProcess(
+            Read("ConnectionStrings__AgentJourneysTest", DefaultAgentConnectionString), ordinal);
+    }
+
+    public string WalletConnectionString { get; }
+
+    public string AgentConnectionString { get; }
+
+    /// <summary>The wallet database of this host: <c>{stem}_{process id}_{host ordinal}_Test</c>.</summary>
+    public string WalletDatabaseName { get; }
+
+    /// <summary>The agent database of this host: <c>{stem}_{process id}_{host ordinal}_Test</c>.</summary>
+    public string AgentDatabaseName { get; }
 
     /// <summary>Why the journeys skip; null when they can run.</summary>
     public string? SkipReason { get; private set; }
@@ -96,7 +127,7 @@ public sealed class JourneyHost : IAsyncLifetime
         {
             // The host drops these databases, so refuse anything that is not clearly a test database.
             var name = new SqlConnectionStringBuilder(connection).InitialCatalog;
-            if (!name.EndsWith("_Test", StringComparison.OrdinalIgnoreCase))
+            if (!name.EndsWith(TestSuffix, StringComparison.OrdinalIgnoreCase))
                 throw new InvalidOperationException($"A journey database name must end with _Test, but was '{name}'.");
         }
 
@@ -107,6 +138,7 @@ public sealed class JourneyHost : IAsyncLifetime
             return;
         }
 
+        started = true;
         try
         {
             playwright = await Microsoft.Playwright.Playwright.CreateAsync();
@@ -207,6 +239,57 @@ public sealed class JourneyHost : IAsyncLifetime
             await web.DisposeAsync();
         if (wallet is not null)
             await wallet.DisposeAsync();
+
+        if (started)
+            await DropDatabasesAsync();
+    }
+
+    /// <summary>
+    /// Drops this host's two databases once every host using them is gone. A server that went away at the end of the run
+    /// must not fail it, so a <see cref="SqlException"/> is swallowed.
+    /// </summary>
+    private async Task DropDatabasesAsync()
+    {
+        // Pooled connections of the disposed hosts would hold the databases open.
+        SqlConnection.ClearAllPools();
+
+        try
+        {
+            var options = new DbContextOptionsBuilder<WalletDbContext>().UseSqlServer(WalletConnectionString).Options;
+            await using var db = new WalletDbContext(options);
+            await db.Database.EnsureDeletedAsync();
+        }
+        catch (SqlException)
+        {
+        }
+
+        try
+        {
+            var options = new DbContextOptionsBuilder<AgentDbContext>().UseSqlServer(AgentConnectionString).Options;
+            await using var db = new AgentDbContext(options);
+            await db.Database.EnsureDeletedAsync();
+        }
+        catch (SqlException)
+        {
+        }
+    }
+
+    /// <summary>
+    /// <paramref name="connectionString"/> with its database renamed <c>{stem}_{process id}_{ordinal}_Test</c>, and that
+    /// name. The server part is kept.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">The configured name does not end with <c>_Test</c>.</exception>
+    private static (string ConnectionString, string DatabaseName) PerProcess(string connectionString, int ordinal)
+    {
+        var builder = new SqlConnectionStringBuilder(connectionString);
+        var configured = builder.InitialCatalog;
+        if (!configured.EndsWith(TestSuffix, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException($"A journey database name must end with _Test, but was '{configured}'.");
+
+        var stem = configured[..^TestSuffix.Length];
+        builder.InitialCatalog = string.Create(
+            System.Globalization.CultureInfo.InvariantCulture, $"{stem}_{Environment.ProcessId}_{ordinal}{TestSuffix}");
+        return (builder.ConnectionString, builder.InitialCatalog);
     }
 
     /// <summary>Hosts the wallet on its own test database, recreated, migrated and seeded as the wallet tests do.</summary>
