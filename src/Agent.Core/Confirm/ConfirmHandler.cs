@@ -9,11 +9,11 @@ namespace Agent.Core.Confirm;
 
 /// <summary>
 /// The Confirm tap (rule 1: no tap, no money). Given one pending ID and the user it belongs to, it moves the record
-/// from Pending to Executing once, rechecks the balance and the daily cap, and sends the one execute call under the
-/// record's idempotency key. An unknown outcome becomes Checking, never failed, and <see cref="SettleCheckingAsync"/>
-/// resends the same body under the same key (rule 6). <see cref="ConfirmAsync"/> and <see cref="SettleCheckingAsync"/>
-/// are the only methods in the application that call <see cref="WalletClient.ExecuteAsync"/> (<c>NoTapNoMoneyTests</c>),
-/// so neither may hand that call to a helper.
+/// from Pending to Executing once, rechecks the per-transaction cap, the balance and the daily cap, and sends the one
+/// execute call under the record's idempotency key. An unknown outcome becomes Checking, never failed, and
+/// <see cref="SettleCheckingAsync"/> resends the same body under the same key (rule 6). <see cref="ConfirmAsync"/> and
+/// <see cref="SettleCheckingAsync"/> are the only methods in the application that call
+/// <see cref="WalletClient.ExecuteAsync"/> (<c>NoTapNoMoneyTests</c>), so neither may hand that call to a helper.
 /// </summary>
 /// <remarks>
 /// The PIN travels only in the execute body: it is never stored, logged, traced or written to an audit row. Once the
@@ -106,7 +106,7 @@ public sealed class ConfirmHandler
             if (killSwitch.IsOn)
                 return await KillSwitchStopAsync(record);
 
-            // Section 4: recheck the balance (and the daily cap), then execute. Nothing has been sent yet.
+            // Section 4: recheck the per-transaction cap, the balance and the daily cap, then execute. Nothing has been sent yet.
             RecheckStop? stop;
             try
             {
@@ -420,9 +420,19 @@ public sealed class ConfirmHandler
                 new ConfirmOutcome.NotDone(ReasonCodes.NotDoneNothingTaken, ReasonCodes.KillSwitchDetail)));
     }
 
-    /// <summary>The recheck before the execute: the balance on the total, then the daily cap. Null when both pass.</summary>
+    /// <summary>
+    /// The recheck before the execute: the per-transaction cap on the amount without the fee (as <see cref="Checks"/>
+    /// compares it), then the balance on the total, then the daily cap. The caps are this scope's options, so a cap saved
+    /// in settings while the card waited applies to the tap. Null when all three pass.
+    /// </summary>
     private async Task<RecheckStop?> RecheckAsync(PendingRecord record, CancellationToken cancellationToken)
     {
+        if (record.AmountIqd > options.PerTransactionCapIqd)
+        {
+            return new RecheckStop(
+                ReasonCodes.OverPerTransactionCap, null, ReasonCodes.OverPerTransactionCap, options.PerTransactionCapIqd);
+        }
+
         switch (await wallet.GetBalanceAsync(record.UserId, cancellationToken))
         {
             case WalletResult<WalletBalance>.Ok { Value: var balance } when balance.BalanceIqd < record.TotalIqd:
@@ -452,8 +462,8 @@ public sealed class ConfirmHandler
     private static RecheckStop NothingTaken(string detail) => new(ReasonCodes.NotDoneNothingTaken, detail, detail, null);
 
     /// <summary>
-    /// Why the recheck stopped the payment: the reply's reason, detail and figure (the shortfall, or what is left of the
-    /// daily cap), and the record's result code.
+    /// Why the recheck stopped the payment: the reply's reason, detail and figure (the per-transaction cap, the shortfall,
+    /// or what is left of the daily cap), and the record's result code.
     /// </summary>
     private sealed record RecheckStop(string Reason, string? Detail, string ResultCode, long? AmountIqd);
 

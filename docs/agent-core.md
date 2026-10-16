@@ -432,7 +432,7 @@ flowchart TD
     kind -- "Confirm tap" --> begin["TryBeginExecuteAsync: Pending to Executing (once)"]
     begin --> g2{"Kill switch on?"}
     g2 -- yes --> r2["NotDone (kill_switch); no execute call"]
-    g2 -- no --> recheck["Recheck balance and daily cap"]
+    g2 -- no --> recheck["Recheck the per-transaction cap, the balance and the daily cap"]
     recheck --> g2b{"Kill switch on now?"}
     g2b -- yes --> r2
     g2b -- no --> exec["Execute under the key"]
@@ -459,8 +459,9 @@ sequenceDiagram
         C-->>U: Expired, AlreadyHandled(state) or NotFound
     else Begun
         S-->>C: record, now Executing
+        C->>C: amount against PerTransactionCapIqd (this scope's options)
         C->>W: GetBalanceAsync, then GetHistoryAsync since midnight in Iraq
-        alt balance below the total, or over the daily cap, or no answer
+        alt over the per-transaction cap, balance below the total, over the daily cap, or no answer
             C->>S: CompleteAsync(NotDone)
             C-->>U: NotDone(reason)
         else recheck passes
@@ -507,7 +508,8 @@ The lookup by key (milestone 8, ruling 6): once the record is found Checking and
 - The PIN travels only in the execute body, converted from Arabic-Indic digits to ASCII. It is never stored, logged or written to an audit row.
 - Once the wallet has answered, the outcome is recorded with `CancellationToken.None`, so a caller who leaves cannot strand a record in Executing. A cancellation during the recheck puts the record back to Pending (`caller_cancelled`); a cancellation during the execute call marks it Checking (`caller_cancelled`), since the request may have reached the wallet.
 - Any other exception after the begin is split by a local `sent` flag, set immediately before the execute call. Before it (the recheck threw, say), nothing reached the wallet, so the record goes back to Pending with the reason `exception` and the card stays open. After it (a database error writing the outcome, an unexpected exception from the wallet client), the call may have reached the wallet, so the record moves to Checking with the reason `exception`. Both writes are best effort and without the caller's token, and the exception then propagates. If even that write fails, the stale-Executing sweep moves the record to Checking later.
-- A recheck that stops the payment carries its figure: `NotDone(insufficient_balance, null, shortfall)` with the card's total less the balance now, and `NotDone(over_daily_cap, null, left)` with what is left of the daily cap.
+- The recheck reads, in order, the per-transaction cap (the record's amount without the fee against `PerTransactionCapIqd`, the comparison `Checks` makes), the balance on the total, and the daily cap. The caps come from the Confirm scope's `IOptionsSnapshot<AgentOptions>`, so a cap saved in settings while a card waits applies to its tap (`ConfirmHandlerTests.ACapLoweredAfterTheCardRefusesAtTheTapWithTheCap`). The order around it: the kill switch, the per-transaction cap, the balance, the daily cap, the kill switch again.
+- A recheck that stops the payment carries its figure: `NotDone(over_per_transaction_cap, null, cap)` with the cap now, `NotDone(insufficient_balance, null, shortfall)` with the card's total less the balance now, and `NotDone(over_daily_cap, null, left)` with what is left of the daily cap.
 - A settle sends no PIN: a replay needs none. The wallet stores nothing for a PIN refusal, so a settle's `pin_required`, `pin_invalid`, `pin_malformed` or `pin_locked` may only mean the original call (with its PIN) has not reached the wallet's database yet, for instance behind a `slow` fault. Within `SettleWindowSeconds` (610) of `ExecutingSince`, the moment the record last entered Executing (its creation when that is not stored), such a refusal leaves the record Checking; after it the original call can no longer be running, and the record ends NotDone with the wallet's code. Counting from the card's creation would have cut the window short for a Confirm sent late in the card's timer.
 
 ### Outcome mapping
@@ -519,6 +521,7 @@ As in `ConfirmHandler.cs`.
 | Record not Pending (`AlreadyLeft`) | unchanged | `AlreadyHandled(state)` |
 | Record Pending past its timer | Expired | `Expired` |
 | No record, or another user's record | none | `NotFound` |
+| Recheck: amount above `PerTransactionCapIqd` | NotDone, `over_per_transaction_cap` | `NotDone(over_per_transaction_cap, null, the cap)` |
 | Recheck: balance below the card's total | NotDone, `insufficient_balance` | `NotDone(insufficient_balance, null, total - balance)` |
 | Recheck: done today plus the amount above `PerDayCapIqd` | NotDone, `over_daily_cap` | `NotDone(over_daily_cap, null, what is left today)` |
 | Recheck: balance or history read with no answer | NotDone, `wallet_` plus the reason | `NotDone(not_done_nothing_taken, wallet_<reason>)` |
@@ -795,7 +798,7 @@ The conversation calls it after every reply that yields an entry, with the maske
 | Setting | Default | Used by |
 |---|---|---|
 | `MinAmountIqd` | 1,000 | Checks, format |
-| `PerTransactionCapIqd` | 5,000,000 | Checks; `AmountRule` drops a rule-9 reading above it |
+| `PerTransactionCapIqd` | 5,000,000 | Checks and the Confirm recheck; `AmountRule` drops a rule-9 reading above it |
 | `PerDayCapIqd` | 10,000,000 | Checks and the Confirm recheck. The three limits must be ordered, `MinAmountIqd` <= `PerTransactionCapIqd` <= `PerDayCapIqd`, validated at start and on every save (review M4, Khalil, 16 Oct 2026) |
 | `CardTimerSeconds` | 45 | `PendingStore.CreateAsync` |
 | `MaxRequestsPerMessage` | 3 | Not read yet (compound requests, milestone 9c) |

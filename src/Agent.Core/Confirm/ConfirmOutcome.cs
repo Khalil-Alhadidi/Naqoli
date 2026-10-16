@@ -25,8 +25,9 @@ public abstract record ConfirmOutcome
 
     /// <summary>
     /// Nothing moved. <see cref="Reason"/> is one of <c>ReasonCodes</c> (or <c>pin_locked</c>), with an optional detail.
-    /// <see cref="AmountIqd"/> is the figure the reply shows, when it has one: the shortfall for the recheck's
-    /// <c>insufficient_balance</c>, what is left of the daily cap for its <c>over_daily_cap</c>.
+    /// <see cref="AmountIqd"/> is the figure the reply shows, when it has one: the cap for the recheck's
+    /// <c>over_per_transaction_cap</c>, the shortfall for its <c>insufficient_balance</c>, what is left of the daily cap
+    /// for its <c>over_daily_cap</c>.
     /// </summary>
     public sealed record NotDone(string Reason, string? Detail, long? AmountIqd = null) : ConfirmOutcome;
 

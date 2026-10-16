@@ -1,3 +1,5 @@
+extern alias AgentWeb;
+
 using System.Globalization;
 using System.Net;
 using System.Net.Http.Json;
@@ -14,6 +16,8 @@ using Agent.Core.Tests.Wallet;
 using Agent.Core.Text;
 using Agent.Core.Trace;
 using Agent.Core.Wallet;
+using AgentWeb::Agent.Web.Services;
+using Microsoft.Extensions.Configuration;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
@@ -417,6 +421,46 @@ public class ConfirmHandlerTests(AgentHost host)
         var record = await RecordAsync(card.Id);
         Assert.Equal(PendingState.NotDone, record.State);
         Assert.Equal(ReasonCodes.InsufficientBalance, record.ResultCode);
+    }
+
+    [Fact]
+    public async Task ACapLoweredAfterTheCardRefusesAtTheTapWithTheCap()
+    {
+        await StartAsync();
+
+        // The card is issued under the host's cap (5,000,000): CLN-01's 50,000 transfer passes.
+        var card = await CardAsync(U1, FiftyThousandToHammoudi);
+        Assert.Equal(50_000, card.AmountIqd);
+
+        // D8: the cap is lowered in settings while the card waits, through the runtime source the web console has.
+        await using var provider = host.BuildProvider((services, configuration) =>
+        {
+            var live = new ConfigurationBuilder().AddConfiguration(configuration).AddRuntimeSettings().Build();
+            services.AddAgentCore(live);
+            services.AddRuntimeSettings(live);
+        });
+        Assert.True(provider.GetRequiredService<RuntimeSettings>().TrySet("Agent:PerTransactionCapIqd", "40000", out var error), error);
+
+        // The tap's scope reads the saved cap.
+        var trace = new ConversationHarness.RecordingTrace();
+        ConfirmOutcome outcome;
+        await using (var scope = provider.CreateAsyncScope())
+        {
+            Assert.Equal(40_000, scope.ServiceProvider.GetRequiredService<IOptionsSnapshot<AgentOptions>>().Value.PerTransactionCapIqd);
+            var handler = ActivatorUtilities.CreateInstance<ConfirmHandler>(scope.ServiceProvider, (ITraceSink)trace);
+            outcome = await handler.ConfirmAsync(card.UserId, card.Id, null, Token);
+        }
+
+        Assert.Equal(new ConfirmOutcome.NotDone(ReasonCodes.OverPerTransactionCap, null, 40_000), outcome);
+        Assert.Equal(0, await WalletRowsAsync(card.IdempotencyKey));
+        Assert.Equal(SeedFacts.DemoBalance, await host.Wallet.AccountBalanceAsync(SeedFacts.DemoPhone));
+        var record = await RecordAsync(card.Id);
+        Assert.Equal(PendingState.NotDone, record.State);
+        Assert.Equal(ReasonCodes.OverPerTransactionCap, record.ResultCode);
+        Assert.Contains(
+            (TraceZone.Write, TraceSteps.RecheckFailedPrefix + ReasonCodes.OverPerTransactionCap, (string?)null),
+            trace.Entries);
+        Assert.DoesNotContain(trace.Entries, e => e.Step == TraceSteps.RecheckOk);
     }
 
     [Fact]
