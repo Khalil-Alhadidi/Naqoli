@@ -20,7 +20,7 @@ The API serves plain HTTP on loopback and does not redirect to HTTPS. `GET /heal
 - JSON in both directions, camelCase property names (the ASP.NET Core web defaults).
 - Amounts are whole Iraqi dinars, as integers, in fields ending `Iqd`.
 - Times are `DateTimeOffset` in ISO 8601. Seeded rows carry Iraq time (`+03:00`) and are dated relative to the day the seed was applied (see Seed); rows and clocks written at run time are UTC (`+00:00`). Treat every time as an instant and compare instants, never the text.
-- Every name the wallet puts on the wire for a type, status or kind is lower case: transaction types `transfer`, `bill`, `purchase`; statuses `executing`, `done`, `failed`; product types `credit`, `internet`; account statuses `active`, `closed`; provider codes `zain`, `asiacell`, `korek`. Fault modes are camelCase (`timeoutAfterExecute`).
+- Every name the wallet puts on the wire for a type, status or kind is lower case: transaction types `transfer`, `bill`, `purchase` (and, in history and the debit's response only, `externalDebit`, camelCase like the fault modes); statuses `executing`, `done`, `failed`; product types `credit`, `internet`; account statuses `active`, `closed`; provider codes `zain`, `asiacell`, `korek`. Fault modes are camelCase (`timeoutAfterExecute`).
 - Every user has exactly one default account (D10), and payments are paid from it; the database enforces it with a filtered unique index on `Accounts.UserId` where `IsDefault = 1`. The wallet also holds accounts that belong to no user (the people behind contacts and other numbers); a phone number reaches the account with that number, whoever holds it. An account is `active` or `closed`; a closed account exists but takes no money. In the seed, user ids 1 to 5 and their account ids 1 to 5 coincide; other accounts start at 6.
 - Seeded rows carry the test set's id as `code` (`U1`, `S01`, `BS1`, `ZN-CR-5`) so answer keys can name them; integer ids are what payments take.
 - Every route except `GET /health` (and `/openapi/v1.json` in Development) needs the `X-Wallet-Client-Key` header (see Client key); without it, the answer is 403 `client_key_required` before any of the wallet's own checks.
@@ -47,6 +47,7 @@ The API serves plain HTTP on loopback and does not redirect to HTTPS. `GET /heal
 | `GET /admin/faults` | Current fault switch | 200 `FaultState` | 403 |
 | `POST /admin/faults` | Set the fault switch | 200 `FaultState` | 403, 422 |
 | `POST /admin/reset` | Restore the seed, clear faults | 200 `ResetResponse` | 403 |
+| `POST /admin/debit` | Take money from a user's wallet from outside the agent (milestone 8) | 201 `TransactionResponse` | 403, 422 `invalid_amount`, `unknown_user`, `insufficient_funds` |
 
 Every route in the table except `/health` (and `/openapi/v1.json` in Development) also answers 403 `client_key_required` (see Client key), and the `/admin` routes 403 `admin_key_required` as well (see Admin key).
 
@@ -141,7 +142,7 @@ There is no due date: `dueDate` was removed in milestone 2b, since the test set 
 |---|---|---|
 | `transactionId` | int | |
 | `reference` | string | `ZC-` and the id padded to 10 digits |
-| `type` | string | `transfer`, `bill`, `purchase` |
+| `type` | string | `transfer`, `bill`, `purchase`, or `externalDebit` (money taken from outside by `POST /admin/debit`; fee 0, no counterparty) |
 | `status` | string | `executing`, `done`, `failed` |
 | `amountIqd`, `feeIqd`, `totalIqd` | long | |
 | `counterpartyPhone`, `counterpartyName` | string or null | Transfers only: the recipient account's phone and registered name (the name can be null) |
@@ -275,7 +276,7 @@ The only endpoint that moves money. Header `Idempotency-Key` is required. A miss
 |---|---|---|
 | `transactionId` | int | |
 | `reference` | string | `ZC-` and the id padded to 10 digits |
-| `type` | string | `transfer`, `bill`, `purchase` |
+| `type` | string | `transfer`, `bill`, `purchase`; `externalDebit` from `POST /admin/debit` |
 | `status` | string | `executing`, `done`, `failed` |
 | `amountIqd`, `feeIqd`, `totalIqd` | long | |
 | `balanceAfterIqd` | long | The payer's balance right after that payment; for seeded rows, the balance now. Stored on the row inside the payment's database transaction, so a replay or a lookup returns the same figure as the first response, whatever has happened since. A `failed` row stores the balance when the failure was stored |
@@ -369,26 +370,26 @@ Every code is the `code` extension of a ProblemDetails. Source: `PaymentErrors` 
 | Code | Status | Raised by | Meaning | Extensions |
 |---|---|---|---|---|
 | `missing_idempotency_key` | 400 | execute | Header missing, empty or whitespace | |
-| `invalid_idempotency_key` | 400 | execute | Header present but not `^[A-Za-z0-9_-]{1,64}$`, or starting with `seed-` | |
+| `invalid_idempotency_key` | 400 | execute | Header present but not `^[A-Za-z0-9_-]{1,64}$`, or starting with `seed-` or `admin-` (in any case) | |
 | `missing_user_id` | 400 | by-key | The `userId` query parameter is missing | |
 | `idempotency_key_reused` | 422 | execute | The key was used before for a different request (another user, type, amount, recipient, bill or product). Nothing of the stored row is returned | |
 | `invalid_type` | 422 | quote, execute | `type` is not `transfer`, `bill` or `purchase` | |
-| `unknown_user` | 422 / 404 | quote, execute (422); every `/users/...` route, consent included (404) | The payer, or the user asked for, does not exist | |
+| `unknown_user` | 422 / 404 | quote, execute, `POST /admin/debit` (422); every `/users/...` route, consent included (404) | The payer, the user to debit, or the user asked for, does not exist | |
 | `unknown_account` | 404 | `GET /accounts/by-phone/{phone}` | No wallet account has that number | |
 | `unknown_recipient` | 422 | quote, execute | Transfer recipient missing or unknown; bill account missing or not the payer's | |
 | `account_closed` | 422 | quote, execute | The payer's own account, or the transfer's recipient account, is closed. Refused in validation: nothing written | |
 | `same_account` | 422 | quote, execute | Transfer to the payer's own account | |
-| `invalid_amount` | 422 | quote, execute | Transfer amount not above 0; purchase amount not the price; total would overflow | |
+| `invalid_amount` | 422 | quote, execute, `POST /admin/debit` | Transfer or debit amount not above 0; purchase amount not the price; total would overflow | |
 | `nothing_due` | 422 | quote, execute | The bill has nothing due (also stored when a concurrent payment cleared it first) | |
 | `bills_paid_in_full` | 422 | quote, execute | An amount other than the amount due was sent for a bill (D9) | `amountDueIqd` |
 | `unknown_product` | 422 | quote, execute | Product missing or unknown | |
-| `insufficient_funds` | 422 | execute | The balance does not cover the total at the moment of the debit. Stored against the key | |
+| `insufficient_funds` | 422 | execute, `POST /admin/debit` | The balance does not cover the total at the moment of the debit. Stored against the key on execute; nothing written on the admin debit | |
 | `pin_required` | 422 | execute | Total above the PIN threshold and no PIN sent | |
 | `pin_malformed` | 422 | execute | The PIN sent is not 4 to 6 ASCII digits. No attempt counted | |
 | `pin_invalid` | 422 | execute | Wrong PIN | `attemptsLeft` |
 | `pin_locked` | 423 | execute | The user's PIN is locked | |
 | `in_progress` | 409 | execute | Reserved: the key's payment is still executing. Not produced today | |
-| `unknown_key` | 404 | by-key | No transaction of this user has this key, or the key is malformed or a `seed-` key | |
+| `unknown_key` | 404 | by-key | No transaction of this user has this key, or the key is malformed, a `seed-` key or an `admin-` key | |
 | `injected_error` | 500 | execute | Fault switch, mode `error` | |
 | `injected_timeout` | 504 | execute | Fault switch, mode `timeoutBeforeExecute` | |
 | `client_key_required` | 403 | every route except `/health` (and `/openapi/v1.json` in Development) | Client header missing, or wrong key, or no key configured outside Development | |
@@ -401,7 +402,7 @@ A ProblemDetails without `code` comes from ASP.NET Core, not from the wallet's r
 ## Idempotency
 
 - The key is the `Idempotency-Key` header: 1 to 64 characters of `A-Z`, `a-z`, `0-9`, `_` and `-`. It is unique in the database (a unique index on `Transactions.IdempotencyKey`). Keys compare under the database collation, which is case-insensitive by default, so `AbC` and `abc` are one key; that is the safe direction (a retry can never run twice). Use lower-case GUIDs.
-- Keys starting with `seed-` belong to the seeded history and are refused from callers: execute answers 400 `invalid_idempotency_key` and by-key 404 `unknown_key`. Seeded rows keep their keys; they can be neither replayed nor looked up by key.
+- Keys starting with `seed-` belong to the seeded history, and keys starting with `admin-` to the external debits of `POST /admin/debit` (from 16 Oct 2026); both are refused from callers, in any case (keys compare without case in the database): execute answers 400 `invalid_idempotency_key` and by-key 404 `unknown_key`. Those rows keep their keys; they can be neither replayed nor looked up by key (`AdminDebitTests.TheDebitsKeyCanNeitherBeReplayedNorLookedUp`).
 - Each row stores a request fingerprint: SHA-256, lower-case hex, of `userId|type|amountIqd|toPhone|toAccountId|billAccountId|productId` from the body as received, each field empty when absent (`RequestFingerprint.Of`). The PIN is not part of it, so a retry with the PIN added or corrected is the same request. A retry must send the same body: a different value in any of those fields (a different user, amount or recipient, or the recipient by id instead of by phone) under a used key is 422 `idempotency_key_reused`, with no reference, no balance and nothing else of the stored row (`ReplayFingerprintTests.SameKeyDifferentBodyIs422WithoutStoredBody`, `SameKeyDifferentUserIs422`). Seeded rows store the fingerprint of their own fields (the recipient's phone for a transfer, their bill account or product id); since their keys are refused, it is never compared.
 - A key executes at most once. A call with a used key and the same fingerprint is looked up first, inside the gate, and returns the stored outcome without running again:
   - stored `done`: 200 with the stored `TransactionResponse` (`balanceAfterIqd` is the stored balance right after that payment; `ReplayFingerprintTests.ReplayReturnsTheStoredBalanceAfter`);
@@ -594,14 +595,20 @@ Invoke-RestMethod -Method Post http://localhost:5276/admin/reset -Headers @{ 'X-
 
 Tests: `FaultTests.AdminKeyRequiredWhenConfigured`, `AdminIsClosedOutsideDevelopmentWithoutKey`, `AdminNeedsTheHeaderInDevelopmentWithoutKey`, `ClientKeyTests.ProductionWithoutKeyIsClosed`.
 
-### Planned (milestone 8): `POST /admin/debit`
+### `POST /admin/debit` (milestone 8)
 
-Not implemented in milestone 3; recorded here so the contract is known. It takes money out of a user's wallet from outside the agent, to show "balance changed between card and tap" on screen.
+Khalil's contract of 14 Oct 2026, built on 16 Oct 2026 (`Services/ExternalDebitService.cs`). It takes money out of a user's wallet from outside the agent, to show "balance changed between card and tap" on screen and to play the fault `external_debit`.
 
-- Body: `{ "userId": 1, "amountIqd": 5000 }`. Both keys required, like every admin route.
-- Runs under the wallet gate held exclusive, so no payment interleaves with it.
-- Debits the user's default account with one conditional update; if the balance would go below zero it is refused with `insufficient_funds` and nothing changes.
-- Writes a `Transaction` of a new type `externalDebit`, fee 0, so the user's history shows it.
+- Body (`DebitRequest`): `{ "userId": 1, "amountIqd": 5000 }`. Admin key and client key, like every admin route.
+- `amountIqd` not above 0 is 422 `invalid_amount`, the code quote and execute use for a transfer amount not above 0. A user with no default account is 422 `unknown_user`, as quote and execute answer an unknown payer named in a body (the 404 form is for a user named in the path). Both are checked before anything is written.
+- Runs under the wallet gate held exclusive, so no payment and no reset interleaves with it. The fault switch does not apply to it.
+- Debits the user's default account with one conditional update (`BalanceIqd >= amountIqd`); if the balance would go below zero it is 422 `insufficient_funds` and nothing changes (no row). The whole balance may be taken.
+- On success, one `Transaction` row in the same database transaction: type `externalDebit`, status `done`, amount `amountIqd`, fee 0, total `amountIqd`, the balance after read inside the transaction, a `ZC-` reference, and an idempotency key `admin-` plus a GUID (the column is required). `admin-` keys are refused on execute and unknown on by-key, as `seed-` keys are. The user's history shows the row, with no counterparty. The answer is 201 with its `TransactionResponse` (`code` and `errorCode` null).
+- A reset removes the row and restores the balance, as for any row.
+- The type is stored as the string `ExternalDebit`, which fits the existing 16-character column, so no migration was needed.
+- The agent's daily cap counts payments only (`transfer`, `bill`, `purchase`), so an external debit never counts toward it.
+
+Tests: `AdminDebitTests.DebitLowersTheBalanceAndWritesAnExternalDebitRow`, `DebitBelowZeroIsRefusedAndNothingChanges`, `DebitNeedsTheAdminKey`, `DebitOfZeroOrNegativeIsRefused`, `DebitOfAnUnknownUserIsRefused`, `TheDebitsKeyCanNeitherBeReplayedNorLookedUp`, `ResetRemovesTheDebit`.
 
 ## Configuration
 

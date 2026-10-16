@@ -42,7 +42,7 @@ public sealed class RunnerSmokeTests(AgentHost host) : IAsyncDisposable
         disposables.Add(new Disposer(http.Dispose));
 
         var pins = SeedPins.Load(SeedSetTests.SeedDirectory);
-        var admin = new WalletAdmin(http, WalletApiFixture.DevelopmentAdminHeaderValue, pins);
+        var admin = new WalletAdmin(http, WalletApiFixture.DevelopmentAdminHeaderValue);
         var parser = new RecordingParser(new ScriptedParser(
         [
             new ScriptedSentence(TransferSentence, ParsedRequest.Transfer(SeedFacts.Contact("S01").Alias, 50, AmountUnit.Thousand)),

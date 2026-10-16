@@ -1,6 +1,9 @@
 namespace Wallet.MockApi.Data.Entities;
 
-/// <summary>One executed or executing money movement: a transfer, a bill payment or a purchase.</summary>
+/// <summary>
+/// One executed or executing money movement: a transfer, a bill payment or a purchase; or money taken from outside the
+/// agent by <c>POST /admin/debit</c> (an external debit, milestone 8).
+/// </summary>
 public class Transaction
 {
     public int Id { get; set; }
@@ -68,6 +71,9 @@ public enum TransactionType
     Transfer,
     Bill,
     Purchase,
+
+    /// <summary>Money taken from the user's wallet from outside the agent (<c>POST /admin/debit</c>); never a payment type.</summary>
+    ExternalDebit,
 }
 
 public enum TransactionStatus

@@ -16,7 +16,7 @@ public static class AdminErrors
 }
 
 /// <summary>
-/// The fault switch and the reset (architecture, section 7). Every route is in the <c>/admin</c> group, behind
+/// The fault switch, the reset (architecture, section 7) and the external debit (Khalil, 14 Oct 2026). Every route is in the <c>/admin</c> group, behind
 /// <see cref="AdminKeyFilter"/>.
 /// </summary>
 public static class AdminEndpoints
@@ -37,6 +37,10 @@ public static class AdminEndpoints
 
         admin.MapPost("/reset", ResetAsync).WithName("Reset");
 
+        admin.MapPost("/debit", DebitAsync)
+            .WithName("ExternalDebit")
+            .ProducesProblem(StatusCodes.Status422UnprocessableEntity);
+
         return app;
     }
 
@@ -51,6 +55,19 @@ public static class AdminEndpoints
 
         return TypedResults.Ok(faults.Set(mode, request.DelayMs, request.Once).ToState());
     }
+
+    /// <summary>
+    /// Takes money from a user's default account from outside the agent: 201 with the <c>externalDebit</c> row, or 422
+    /// <c>invalid_amount</c> (not above 0), <c>unknown_user</c> or <c>insufficient_funds</c> with nothing written.
+    /// </summary>
+    private static async Task<Results<Created<TransactionResponse>, ProblemHttpResult>> DebitAsync(
+        DebitRequest request, ExternalDebitService debits, CancellationToken cancellationToken)
+        => await debits.DebitAsync(request, cancellationToken) switch
+        {
+            DebitResult.Debited debited => TypedResults.Created((string?)null, debited.Response),
+            DebitResult.Refused refused => WalletProblems.From(refused.Refusal),
+            _ => throw new InvalidOperationException("Unknown debit result."),
+        };
 
     /// <summary>
     /// Holds the gate exclusive, so no payment and no other reset runs alongside; restores the seed and clears the

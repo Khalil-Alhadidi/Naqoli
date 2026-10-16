@@ -51,15 +51,20 @@ public sealed partial class TransactionService(
     /// <summary>The prefix of the seeded rows' keys; no caller may use a key that starts with it.</summary>
     public const string SeedKeyPrefix = "seed-";
 
+    /// <summary>The prefix of the external debits' keys (<c>POST /admin/debit</c>); no caller may use a key that starts with it.</summary>
+    public const string AdminKeyPrefix = "admin-";
+
     /// <summary>
     /// True when <paramref name="key"/> is 1 to <see cref="MaxIdempotencyKeyLength"/> characters of ASCII letters,
     /// digits, <c>_</c> and <c>-</c> (a GUID in "N" or "D" form fits), and does not start with
-    /// <see cref="SeedKeyPrefix"/>: seeded rows can be neither replayed nor looked up by key.
+    /// <see cref="SeedKeyPrefix"/> or <see cref="AdminKeyPrefix"/> in any case (keys compare without case in the
+    /// database): seeded rows and external debits can be neither replayed nor looked up by key.
     /// </summary>
     public static bool IsValidIdempotencyKey(string? key)
         => key is not null
             && IdempotencyKeyFormat().IsMatch(key)
-            && !key.StartsWith(SeedKeyPrefix, StringComparison.Ordinal);
+            && !key.StartsWith(SeedKeyPrefix, StringComparison.OrdinalIgnoreCase)
+            && !key.StartsWith(AdminKeyPrefix, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// Applies the injected fault, if any; then, inside the gate, replays a known key, or validates, checks the PIN,

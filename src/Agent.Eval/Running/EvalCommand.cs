@@ -199,7 +199,7 @@ public static class EvalCommand
             }
         }
 
-        var admin = new WalletAdmin(http, options.WalletAdminKey, seed);
+        var admin = new WalletAdmin(http, options.WalletAdminKey);
         var parser = new RecordingParser(measured);
         var driver = new CaseDriver(host.Services, admin, seed, host.Services.GetRequiredService<EvalClock>(), parser, options);
         var grader = new CaseGrader(seed);

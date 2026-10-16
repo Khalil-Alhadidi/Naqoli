@@ -64,11 +64,13 @@ public class ChecksWalletUnavailableTests
     }
 
     [Fact]
-    public async Task DailyCapCountsOnlyDoneRowsOfEveryType()
+    public async Task DailyCapCountsOnlyDonePayments()
     {
-        // 4,000,000 transfer done, 2,000,000 bill done, 3,000,000 failed: 6,000,000 counts, so 4,000,000 more fits and 4,000,001 does not.
+        // 4,000,000 transfer done, 2,000,000 bill done, 3,000,000 failed, and 2,500,000 taken by an external debit (POST
+        // /admin/debit, milestone 8), which is no payment: 6,000,000 counts, so 4,000,000 more fits and 4,000,001 does not.
         const string history = """
             [
+              {"transactionId":4,"reference":"r4","type":"externalDebit","status":"done","amountIqd":2500000,"feeIqd":0,"totalIqd":2500000,"createdAt":"2026-10-14T10:00:00+03:00"},
               {"transactionId":3,"reference":"r3","type":"transfer","status":"done","amountIqd":4000000,"feeIqd":1000,"totalIqd":4001000,"createdAt":"2026-10-14T09:00:00+03:00"},
               {"transactionId":2,"reference":"r2","type":"bill","status":"done","amountIqd":2000000,"feeIqd":500,"totalIqd":2000500,"createdAt":"2026-10-14T08:00:00+03:00"},
               {"transactionId":1,"reference":"r1","type":"transfer","status":"failed","amountIqd":3000000,"feeIqd":1000,"totalIqd":3001000,"createdAt":"2026-10-14T07:00:00+03:00"}

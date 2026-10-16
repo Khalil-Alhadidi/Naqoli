@@ -330,7 +330,7 @@ flowchart TD
 ```
 
 - The format check runs for transfers only. Bills and purchases set `SkipFormat`, since their amount comes from the wallet (the amount due, the catalogue price).
-- The daily cap counts the amounts, without fees, of every `done` transaction the user paid since midnight in Iraq (`AgentClock.StartOfIraqDay`, offset +03:00), of every type. `Checks.DailySpentAsync` reads it, for the checks and for the Confirm recheck alike.
+- The daily cap counts the amounts, without fees, of every `done` payment the user made since midnight in Iraq (`AgentClock.StartOfIraqDay`, offset +03:00): the history types `transfer`, `bill` and `purchase`, compared ignoring case. An external debit (`externalDebit`, `POST /admin/debit`, from 16 Oct 2026) is money taken from outside and never counts. `Checks.DailySpentAsync` reads it, for the checks and for the Confirm recheck alike.
 - Quote refusals are mapped as a safety net: `account_closed` to `account_closed`, `unknown_recipient` to `recipient_not_found`, `same_account` to `not_supported` with detail `own_number`, `nothing_due` and `bills_paid_in_full` to themselves, anything else to `not_done_nothing_taken` with the wallet's code.
 
 ## The card

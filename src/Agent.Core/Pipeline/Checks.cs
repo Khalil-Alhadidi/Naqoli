@@ -49,6 +49,12 @@ public sealed class Checks
 
     private const string DoneStatus = "done";
 
+    /// <summary>
+    /// The history types that are payments; an external debit (<c>externalDebit</c>, <c>POST /admin/debit</c>) is money
+    /// taken from outside and never counts toward the daily cap.
+    /// </summary>
+    private static readonly HashSet<string> PaymentTypes = new(StringComparer.OrdinalIgnoreCase) { "transfer", "bill", "purchase" };
+
     private readonly WalletClient wallet;
     private readonly AgentOptions options;
     private readonly TimeProvider clock;
@@ -120,7 +126,7 @@ public sealed class Checks
 
     /// <summary>
     /// What <paramref name="userId"/> has paid today: the amounts (without fees) of every <c>done</c> transaction since
-    /// midnight in Iraq, of every type, read in one page of <see cref="AgentOptions.HistoryPageSize"/> items. Used by
+    /// midnight in Iraq that is a payment (a transfer, a bill or a purchase; not an external debit), read in one page of <see cref="AgentOptions.HistoryPageSize"/> items. Used by
     /// the daily-cap check here and by the Confirm recheck. The history read's refusal or missing answer is passed on.
     /// </summary>
     public async Task<WalletResult<long>> DailySpentAsync(int userId, CancellationToken cancellationToken)
@@ -130,7 +136,7 @@ public sealed class Checks
         {
             WalletResult<IReadOnlyList<WalletHistoryItem>>.Ok ok => new WalletResult<long>.Ok(
                 ok.Value
-                    .Where(h => string.Equals(h.Status, DoneStatus, StringComparison.OrdinalIgnoreCase))
+                    .Where(h => string.Equals(h.Status, DoneStatus, StringComparison.OrdinalIgnoreCase) && PaymentTypes.Contains(h.Type))
                     .Sum(h => h.AmountIqd)),
             WalletResult<IReadOnlyList<WalletHistoryItem>>.Unavailable unavailable => new WalletResult<long>.Unavailable(unavailable.Reason),
             WalletResult<IReadOnlyList<WalletHistoryItem>>.Refused refused => new WalletResult<long>.Refused(refused.Problem),

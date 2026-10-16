@@ -67,7 +67,7 @@ Faults (`fault` in the case):
 | `model_unreachable` on `request` | The recording parser throws `ParserUnavailableException` for the next `times` calls; the conversation answers `model_unavailable` |
 | `model_invalid_reply` on `request` | The recording parser returns what the structure validator returns for a refused reply: an unclear request with `Problem` `injected`. The conversation answers `not_understood`, traces `model_invalid_reply` and logs the entry `model_invalid_reply` (detail `injected`), which is the one graded |
 | `wallet_error`, `wallet_timeout_before_execute`, `wallet_timeout_after_execute` on `confirm` | `POST /admin/faults` (modes `error`, `timeoutBeforeExecute`, `timeoutAfterExecute`, `once`, `delayMs` = `FaultDelayMs`) before the first Confirm |
-| `external_debit` on `card_waiting` | After the first step that leaves a live card, the runner pays `amount` minus the transfer fee from the user to seed account X01, so the balance drops by exactly `amount`; that transaction is left out of the case's own transactions |
+| `external_debit` on `card_waiting` | After the first step that leaves a live card, the runner takes `amount` from the user's wallet through `POST /admin/debit` (from 16 Oct 2026, milestone 8; before, a transfer to seed account X01), so the balance drops by exactly `amount`; the wallet's `externalDebit` row is left out of the case's own transactions by its id. A refusal of the debit (`insufficient_funds`, for example) stops the case with a step error |
 
 Only `Conversation.ConfirmAsync` and `Conversation.SettleAsync` reach the Confirm handler, and in `Agent.Eval` only the driver's step player and its settle loop call them. `NoTapNoMoneyTests` proves both on the compiled code (rule 1).
 
@@ -81,7 +81,6 @@ These are reported, never faked, so the figures stay honest:
 | `then_reply`, `no_card_N` (compound requests) | The second and later parts of a compound message are not graded part by part yet | Recorded, not graded |
 | `alias_offer`, `final.alias_saved` | 9a | Recorded, not graded |
 | `not_prepared` of a reply | 9c | Recorded, not graded |
-| `external_debit` with an amount not above the transfer fee | A transfer of zero or less cannot be made | The case stops with `external_debit amount` as unsupported |
 
 A step that throws stops its case with `step_error` (the exception's type only, never its message: the observation keeps `CaseDriver.StepErrorOf`, the type name and a fixed sentence, because a model library's exception may echo the input; review M1); a step that outlasts `CaseTimeoutSeconds` stops it with `timeout`. The run goes on with the next case.
 

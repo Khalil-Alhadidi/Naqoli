@@ -174,8 +174,6 @@ public sealed class CaseDriver
                             var debit = await admin.ExternalDebitAsync(userId, amount, cancellationToken);
                             if (debit.TransactionId is { } debitId)
                                 excluded.Add(debitId);
-                            else if (debit.Status == ExternalDebitResult.Unsupported)
-                                unsupported = "external_debit amount";
                             else
                                 error = "external_debit failed: " + debit.Problem;
                         }

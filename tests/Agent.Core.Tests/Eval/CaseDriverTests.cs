@@ -44,7 +44,7 @@ public sealed class CaseDriverTests(AgentHost host) : IAsyncDisposable
         disposables.Add(new Disposer(http.Dispose));
 
         var pins = SeedPins.Load(SeedSetTests.SeedDirectory);
-        var admin = new WalletAdmin(http, WalletApiFixture.DevelopmentAdminHeaderValue, pins);
+        var admin = new WalletAdmin(http, WalletApiFixture.DevelopmentAdminHeaderValue);
         var parser = new RecordingParser(new ScriptedParser(
         [
             new ScriptedSentence(HammoudiSentence, ParsedRequest.Transfer(SeedFacts.Contact("S01").Alias, 50, AmountUnit.Thousand)),
@@ -220,16 +220,19 @@ public sealed class CaseDriverTests(AgentHost host) : IAsyncDisposable
     [Fact]
     public async Task AnExternalDebitWhileTheCardWaitsIsLeftOutOfTheCasesTransactions()
     {
+        const long externalDebit = 500;
         var runner = Start();
 
         var seen = await runner.Driver.PlayAsync(
-            Case("U1", new CaseFault("external_debit", "card_waiting", Amount: 5_000), Say(HammoudiSentence), Confirm()), Token);
+            Case("U1", new CaseFault("external_debit", "card_waiting", Amount: externalDebit), Say(HammoudiSentence), Confirm()), Token);
 
+        // Played through POST /admin/debit (milestone 8): any amount above 0, even one below the transfer fee.
         Assert.Null(seen.StepError);
+        Assert.Null(seen.UnsupportedStep);
         Assert.Equal("done", seen.Steps[1].CardState);
         var transaction = Assert.Single(seen.WalletDiff.NewTransactions);
         Assert.Equal(SeedFacts.HammoudiPhone, transaction.ToPhone);
-        Assert.Equal(SeedFacts.DemoBalance - 5_000 - 51_000, seen.WalletDiff.BalanceIqd);
+        Assert.Equal(SeedFacts.DemoBalance - externalDebit - 51_000, seen.WalletDiff.BalanceIqd);
         Assert.Equal(51_000L, seen.Steps[1].MovedIqd);
     }
 

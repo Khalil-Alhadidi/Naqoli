@@ -161,6 +161,17 @@ X-Wallet-Admin-Key: {{adminKey}}
   "mode": "none"
 }
 
+### External debit: take 5,000 IQD from U1 from outside the agent (milestone 8)
+POST {{Wallet.MockApi_HostAddress}}/admin/debit
+X-Wallet-Client-Key: {{clientKey}}
+Content-Type: application/json
+X-Wallet-Admin-Key: {{adminKey}}
+
+{
+  "userId": 1,
+  "amountIqd": 5000
+}
+
 ### Reset: restore the seed exactly and clear faults
 POST {{Wallet.MockApi_HostAddress}}/admin/reset
 X-Wallet-Client-Key: {{clientKey}}

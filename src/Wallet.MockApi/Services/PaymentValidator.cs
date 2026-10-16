@@ -85,6 +85,7 @@ public static class TransactionNames
         TransactionType.Transfer => "transfer",
         TransactionType.Bill => "bill",
         TransactionType.Purchase => "purchase",
+        TransactionType.ExternalDebit => "externalDebit",
         _ => throw new ArgumentOutOfRangeException(nameof(type), type, null),
     };
 

@@ -5,29 +5,21 @@ namespace Agent.Eval.Running;
 
 /// <summary>
 /// The seed facts the runner needs at run time, read from Khalil's synthetic seed files: each user's PIN and number
-/// (<c>users.json</c>), every wallet number (<c>accounts.json</c>), every bill subscriber number (<c>bills.json</c>),
-/// the transfer fee (<c>settings.json</c>) and the number of account <c>X01</c>, the external debit's target. A PIN is
-/// handed to the Confirm call and never written to a report or a log.
+/// (<c>users.json</c>), every wallet number (<c>accounts.json</c>), and every bill subscriber number (<c>bills.json</c>).
+/// A PIN is handed to the Confirm call and never written to a report or a log.
 /// </summary>
 public sealed partial class SeedPins
 {
-    /// <summary>The seed account an external debit pays (a number with a wallet that belongs to no user).</summary>
-    public const string ExternalDebitAccountId = "X01";
-
     private readonly Dictionary<string, (string Pin, string Number)> users;
 
     private SeedPins(
         Dictionary<string, (string Pin, string Number)> users,
         IReadOnlyList<string> accountNumbers,
-        IReadOnlyList<string> subscriberNumbers,
-        long transferFeeIqd,
-        string externalDebitPhone)
+        IReadOnlyList<string> subscriberNumbers)
     {
         this.users = users;
         AllAccountNumbers = accountNumbers;
         SubscriberNumbers = subscriberNumbers;
-        TransferFeeIqd = transferFeeIqd;
-        ExternalDebitPhone = externalDebitPhone;
     }
 
     /// <summary>Every wallet number of the seed (users' and others'), 11 digits.</summary>
@@ -35,12 +27,6 @@ public sealed partial class SeedPins
 
     /// <summary>Every bill subscriber number of the seed, digits only.</summary>
     public IReadOnlyList<string> SubscriberNumbers { get; }
-
-    /// <summary>The flat transfer fee, in IQD.</summary>
-    public long TransferFeeIqd { get; }
-
-    /// <summary>The number of seed account <see cref="ExternalDebitAccountId"/>.</summary>
-    public string ExternalDebitPhone { get; }
 
     /// <summary>The seed user codes (<c>U1</c>...).</summary>
     public IEnumerable<string> UserCodes => users.Keys;
@@ -59,16 +45,10 @@ public sealed partial class SeedPins
         }
 
         var numbers = new List<string>();
-        string? externalPhone = null;
         using (var document = Read(seedDirectory, "accounts.json"))
         {
             foreach (var account in document.RootElement.EnumerateArray())
-            {
-                var number = Text(account, "number");
-                numbers.Add(number);
-                if (account.TryGetProperty("id", out var id) && id.GetString() == ExternalDebitAccountId)
-                    externalPhone = number;
-            }
+                numbers.Add(Text(account, "number"));
         }
 
         foreach (var (_, number) in users.Values)
@@ -87,16 +67,7 @@ public sealed partial class SeedPins
             }
         }
 
-        long fee;
-        using (var document = Read(seedDirectory, "settings.json"))
-            fee = document.RootElement.GetProperty("fees").GetProperty("transfer").GetInt64();
-
-        return new SeedPins(
-            users,
-            numbers,
-            subscribers,
-            fee,
-            externalPhone ?? throw new InvalidDataException("accounts.json has no account " + ExternalDebitAccountId + "."));
+        return new SeedPins(users, numbers, subscribers);
     }
 
     /// <summary>The seed PIN of <paramref name="userCode"/>.</summary>

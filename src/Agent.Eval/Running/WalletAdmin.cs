@@ -5,13 +5,12 @@ using System.Text.Json;
 namespace Agent.Eval.Running;
 
 /// <summary>What an external debit did.</summary>
-/// <param name="Status"><c>done</c>, <c>unsupported</c> (the amount is not above the transfer fee) or <c>failed</c>.</param>
+/// <param name="Status"><c>done</c> or <c>failed</c>.</param>
 /// <param name="TransactionId">The wallet's transaction id of the debit, when done; the snapshot diff leaves it out.</param>
 /// <param name="Problem">The HTTP status or wallet code of a failure.</param>
 public sealed record ExternalDebitResult(string Status, int? TransactionId, string? Problem)
 {
     public const string Done = "done";
-    public const string Unsupported = "unsupported";
     public const string Failed = "failed";
 }
 
@@ -25,22 +24,18 @@ public sealed record ExternalDebitResult(string Status, int? TransactionId, stri
 public sealed class WalletAdmin
 {
     public const string AdminKeyHeader = "X-Wallet-Admin-Key";
-    private const string IdempotencyKeyHeader = "Idempotency-Key";
 
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
     private readonly HttpClient http;
     private readonly string adminKey;
-    private readonly SeedPins seed;
 
-    public WalletAdmin(HttpClient http, string adminKey, SeedPins seed)
+    public WalletAdmin(HttpClient http, string adminKey)
     {
         ArgumentNullException.ThrowIfNull(http);
         ArgumentException.ThrowIfNullOrWhiteSpace(adminKey);
-        ArgumentNullException.ThrowIfNull(seed);
         this.http = http;
         this.adminKey = adminKey;
-        this.seed = seed;
     }
 
     /// <summary>Returns the wallet to the seed and clears the fault switch (<c>POST /admin/reset</c>).</summary>
@@ -80,25 +75,22 @@ public sealed class WalletAdmin
     }
 
     /// <summary>
-    /// Money leaves <paramref name="userId"/>'s wallet from outside while a card waits: a transfer of
-    /// <paramref name="amountIqd"/> minus the transfer fee to seed account <c>X01</c>, so the balance drops by exactly
-    /// <paramref name="amountIqd"/>. An amount not above the fee is <see cref="ExternalDebitResult.Unsupported"/>.
+    /// Money leaves <paramref name="userId"/>'s wallet from outside while a card waits (<c>POST /admin/debit</c>, Khalil,
+    /// 14 Oct 2026): the balance drops by exactly <paramref name="amountIqd"/>, and the wallet writes an
+    /// <c>externalDebit</c> row whose id is returned so the case's diff leaves it out. A refusal is
+    /// <see cref="ExternalDebitResult.Failed"/> with the wallet's code, or the HTTP status when there is none.
     /// </summary>
     public async Task<ExternalDebitResult> ExternalDebitAsync(int userId, long amountIqd, CancellationToken cancellationToken)
     {
-        if (amountIqd <= seed.TransferFeeIqd)
-            return new ExternalDebitResult(ExternalDebitResult.Unsupported, null, null);
-
-        using var request = new HttpRequestMessage(HttpMethod.Post, "transactions")
-        {
-            Content = JsonContent.Create(
-                new { userId, type = "transfer", amountIqd = amountIqd - seed.TransferFeeIqd, toPhone = seed.ExternalDebitPhone },
-                options: Json),
-        };
-        request.Headers.Add(IdempotencyKeyHeader, "eval-" + Guid.NewGuid().ToString("N"));
+        using var request = Admin(HttpMethod.Post, "admin/debit");
+        request.Content = JsonContent.Create(new { userId, amountIqd }, options: Json);
         using var response = await http.SendAsync(request, cancellationToken);
         if (!response.IsSuccessStatusCode)
-            return new ExternalDebitResult(ExternalDebitResult.Failed, null, ((int)response.StatusCode).ToString(CultureInfo.InvariantCulture));
+        {
+            var problem = await CodeAsync(response, cancellationToken)
+                ?? ((int)response.StatusCode).ToString(CultureInfo.InvariantCulture);
+            return new ExternalDebitResult(ExternalDebitResult.Failed, null, problem);
+        }
 
         using var document = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync(cancellationToken), cancellationToken: cancellationToken);
         return new ExternalDebitResult(ExternalDebitResult.Done, document.RootElement.GetProperty("transactionId").GetInt32(), null);
@@ -116,21 +108,27 @@ public sealed class WalletAdmin
         if (response.IsSuccessStatusCode)
             return;
 
-        string? code = null;
-        try
-        {
-            using var document = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync(cancellationToken), cancellationToken: cancellationToken);
-            if (document.RootElement.TryGetProperty("code", out var value))
-                code = value.GetString();
-        }
-        catch (JsonException)
-        {
-            // No problem body.
-        }
-
+        var code = await CodeAsync(response, cancellationToken);
         throw new HttpRequestException(
             string.Create(CultureInfo.InvariantCulture, $"Wallet {what} call failed: {(int)response.StatusCode} {code}"),
             null,
             response.StatusCode);
+    }
+
+    /// <summary>The wallet's <c>code</c> of a ProblemDetails response, or null when the body has none.</summary>
+    private static async Task<string?> CodeAsync(HttpResponseMessage response, CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var document = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync(cancellationToken), cancellationToken: cancellationToken);
+            return document.RootElement.ValueKind == JsonValueKind.Object && document.RootElement.TryGetProperty("code", out var value)
+                ? value.GetString()
+                : null;
+        }
+        catch (JsonException)
+        {
+            // No problem body.
+            return null;
+        }
     }
 }

@@ -45,6 +45,7 @@ builder.Services.AddSingleton(sp => SeedSet.Load(sp.GetRequiredService<IOptions<
 builder.Services.AddSingleton<FeeCalculator>();
 builder.Services.AddScoped<PaymentValidator>();
 builder.Services.AddScoped<TransactionService>();
+builder.Services.AddScoped<ExternalDebitService>();
 builder.Services.AddSingleton<FaultSwitch>();
 builder.Services.AddSingleton<WalletGate>();
 
