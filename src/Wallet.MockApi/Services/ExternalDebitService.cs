@@ -21,7 +21,8 @@ public abstract record DebitResult
 /// <summary>
 /// <c>POST /admin/debit</c> (Khalil, 14 Oct 2026): money leaves a user's wallet from outside the agent, to show a balance
 /// that changed between the card and the tap. Holds the <see cref="WalletGate"/> exclusive, so no payment and no reset
-/// interleaves; debits the user's default account with one conditional update that never goes below zero; and writes a
+/// interleaves; refuses a closed default account (<c>account_closed</c>); debits the user's default account with one
+/// conditional update that never goes below zero; and writes a
 /// <c>done</c> <see cref="TransactionType.ExternalDebit"/> row, fee 0, so the history shows it. The fault switch does
 /// not apply. The row's key is <c>admin-</c> and a GUID, which callers can neither replay nor look up.
 /// </summary>
@@ -36,13 +37,17 @@ public sealed class ExternalDebitService(WalletDbContext db, TimeProvider clock,
 
         using (await gate.EnterExclusiveAsync(cancellationToken))
         {
-            // Every user has exactly one default account (D10); the debit is taken from it.
-            var accountId = await db.Accounts.AsNoTracking()
+            // Every user has exactly one default account (D10); the debit is taken from it. A closed account gives
+            // nothing, as it pays nothing on execute (Khalil, 16 Oct 2026): account_closed, nothing written.
+            var account = await db.Accounts.AsNoTracking()
                 .Where(a => a.UserId == request.UserId && a.IsDefault)
-                .Select(a => (int?)a.Id)
+                .Select(a => new { a.Id, a.Status })
                 .SingleOrDefaultAsync(cancellationToken);
-            if (accountId is not { } fromAccountId)
+            if (account is null)
                 return new DebitResult.Refused(PaymentRefusal.Unprocessable(PaymentErrors.UnknownUser));
+            if (account.Status == AccountStatus.Closed)
+                return new DebitResult.Refused(PaymentRefusal.Unprocessable(PaymentErrors.AccountClosed));
+            var fromAccountId = account.Id;
 
             await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted, cancellationToken);
 

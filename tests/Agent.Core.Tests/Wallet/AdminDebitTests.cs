@@ -1,6 +1,10 @@
 using System.Net;
 using System.Net.Http.Json;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Wallet.MockApi.Contracts;
+using Wallet.MockApi.Data;
+using Wallet.MockApi.Data.Entities;
 
 namespace Agent.Core.Tests.Wallet;
 
@@ -128,6 +132,38 @@ public class AdminDebitTests(WalletApiFixture fixture)
         var lookup = await fixture.Client.GetAsync($"/transactions/by-key/admin-0123456789abcdef?userId={DemoUserId}", Token);
         Assert.Equal(HttpStatusCode.NotFound, lookup.StatusCode);
         Assert.Equal("unknown_key", (await lookup.ReadProblemAsync(Token)).Code());
+    }
+
+    [Fact]
+    public async Task DebitOfAClosedDefaultAccountIsRefused()
+    {
+        // Khalil, 16 Oct 2026: the same rule as a closed payer on execute; nothing is written.
+        await StartAsync();
+        await using (var scope = fixture.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<WalletDbContext>();
+            var closed = await db.Accounts
+                .Where(a => a.UserId == DemoUserId && a.IsDefault)
+                .ExecuteUpdateAsync(s => s.SetProperty(a => a.Status, AccountStatus.Closed), Token);
+            Assert.Equal(1, closed);
+        }
+
+        try
+        {
+            var response = await DebitAsync(DemoUserId, 5_000);
+
+            Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+            Assert.Equal("account_closed", (await response.ReadProblemAsync(Token)).Code());
+            Assert.Equal(DemoSeedBalance, await BalanceAsync(DemoUserId));
+            Assert.DoesNotContain(await HistoryAsync(DemoUserId), h => h.Type == "externalDebit");
+        }
+        finally
+        {
+            await fixture.ResetAsync();
+        }
+
+        // The reset restores the seed's open account, and a debit goes through again.
+        Assert.Equal(HttpStatusCode.Created, (await DebitAsync(DemoUserId, 5_000)).StatusCode);
     }
 
     [Fact]

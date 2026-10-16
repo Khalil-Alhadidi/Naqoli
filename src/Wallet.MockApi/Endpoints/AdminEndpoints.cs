@@ -58,7 +58,8 @@ public static class AdminEndpoints
 
     /// <summary>
     /// Takes money from a user's default account from outside the agent: 201 with the <c>externalDebit</c> row, or 422
-    /// <c>invalid_amount</c> (not above 0), <c>unknown_user</c> or <c>insufficient_funds</c> with nothing written.
+    /// <c>invalid_amount</c> (not above 0), <c>unknown_user</c>, <c>account_closed</c> or <c>insufficient_funds</c> with
+    /// nothing written.
     /// </summary>
     private static async Task<Results<Created<TransactionResponse>, ProblemHttpResult>> DebitAsync(
         DebitRequest request, ExternalDebitService debits, CancellationToken cancellationToken)

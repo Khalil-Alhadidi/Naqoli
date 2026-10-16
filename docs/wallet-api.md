@@ -47,7 +47,7 @@ The API serves plain HTTP on loopback and does not redirect to HTTPS. `GET /heal
 | `GET /admin/faults` | Current fault switch | 200 `FaultState` | 403 |
 | `POST /admin/faults` | Set the fault switch | 200 `FaultState` | 403, 422 |
 | `POST /admin/reset` | Restore the seed, clear faults | 200 `ResetResponse` | 403 |
-| `POST /admin/debit` | Take money from a user's wallet from outside the agent (milestone 8) | 201 `TransactionResponse` | 403, 422 `invalid_amount`, `unknown_user`, `insufficient_funds` |
+| `POST /admin/debit` | Take money from a user's wallet from outside the agent (milestone 8) | 201 `TransactionResponse` | 403, 422 `invalid_amount`, `unknown_user`, `account_closed`, `insufficient_funds` |
 
 Every route in the table except `/health` (and `/openapi/v1.json` in Development) also answers 403 `client_key_required` (see Client key), and the `/admin` routes 403 `admin_key_required` as well (see Admin key).
 
@@ -377,7 +377,7 @@ Every code is the `code` extension of a ProblemDetails. Source: `PaymentErrors` 
 | `unknown_user` | 422 / 404 | quote, execute, `POST /admin/debit` (422); every `/users/...` route, consent included (404) | The payer, the user to debit, or the user asked for, does not exist | |
 | `unknown_account` | 404 | `GET /accounts/by-phone/{phone}` | No wallet account has that number | |
 | `unknown_recipient` | 422 | quote, execute | Transfer recipient missing or unknown; bill account missing or not the payer's | |
-| `account_closed` | 422 | quote, execute | The payer's own account, or the transfer's recipient account, is closed. Refused in validation: nothing written | |
+| `account_closed` | 422 | quote, execute, `POST /admin/debit` | The payer's own account (or the default account to debit), or the transfer's recipient account, is closed. Refused before anything is written | |
 | `same_account` | 422 | quote, execute | Transfer to the payer's own account | |
 | `invalid_amount` | 422 | quote, execute, `POST /admin/debit` | Transfer or debit amount not above 0; purchase amount not the price; total would overflow | |
 | `nothing_due` | 422 | quote, execute | The bill has nothing due (also stored when a concurrent payment cleared it first) | |
@@ -600,7 +600,7 @@ Tests: `FaultTests.AdminKeyRequiredWhenConfigured`, `AdminIsClosedOutsideDevelop
 Khalil's contract of 14 Oct 2026, built on 16 Oct 2026 (`Services/ExternalDebitService.cs`). It takes money out of a user's wallet from outside the agent, to show "balance changed between card and tap" on screen and to play the fault `external_debit`.
 
 - Body (`DebitRequest`): `{ "userId": 1, "amountIqd": 5000 }`. Admin key and client key, like every admin route.
-- `amountIqd` not above 0 is 422 `invalid_amount`, the code quote and execute use for a transfer amount not above 0. A user with no default account is 422 `unknown_user`, as quote and execute answer an unknown payer named in a body (the 404 form is for a user named in the path). Both are checked before anything is written.
+- `amountIqd` not above 0 is 422 `invalid_amount`, the code quote and execute use for a transfer amount not above 0. A user with no default account is 422 `unknown_user`, as quote and execute answer an unknown payer named in a body (the 404 form is for a user named in the path). A user whose default account is closed is 422 `account_closed`, the code execute gives a closed payer (Khalil, 16 Oct 2026). All three are checked before anything is written.
 - Runs under the wallet gate held exclusive, so no payment and no reset interleaves with it. The fault switch does not apply to it.
 - Debits the user's default account with one conditional update (`BalanceIqd >= amountIqd`); if the balance would go below zero it is 422 `insufficient_funds` and nothing changes (no row). The whole balance may be taken.
 - On success, one `Transaction` row in the same database transaction: type `externalDebit`, status `done`, amount `amountIqd`, fee 0, total `amountIqd`, the balance after read inside the transaction, a `ZC-` reference, and an idempotency key `admin-` plus a GUID (the column is required). `admin-` keys are refused on execute and unknown on by-key, as `seed-` keys are. The user's history shows the row, with no counterparty. The answer is 201 with its `TransactionResponse` (`code` and `errorCode` null).
@@ -609,7 +609,7 @@ Khalil's contract of 14 Oct 2026, built on 16 Oct 2026 (`Services/ExternalDebitS
 - The type is stored as the string `ExternalDebit`, which fits the existing 16-character column, so no migration was needed.
 - The agent's daily cap counts payments only (`transfer`, `bill`, `purchase`), so an external debit never counts toward it.
 
-Tests: `AdminDebitTests.DebitLowersTheBalanceAndWritesAnExternalDebitRow`, `DebitBelowZeroIsRefusedAndNothingChanges`, `DebitNeedsTheAdminKey`, `DebitOfZeroOrNegativeIsRefused`, `DebitOfAnUnknownUserIsRefused`, `TheDebitsKeyCanNeitherBeReplayedNorLookedUp`, `ResetRemovesTheDebit`.
+Tests: `AdminDebitTests.DebitLowersTheBalanceAndWritesAnExternalDebitRow`, `DebitBelowZeroIsRefusedAndNothingChanges`, `DebitNeedsTheAdminKey`, `DebitOfZeroOrNegativeIsRefused`, `DebitOfAnUnknownUserIsRefused`, `DebitOfAClosedDefaultAccountIsRefused`, `TheDebitsKeyCanNeitherBeReplayedNorLookedUp`, `ResetRemovesTheDebit`.
 
 ## Configuration
 
