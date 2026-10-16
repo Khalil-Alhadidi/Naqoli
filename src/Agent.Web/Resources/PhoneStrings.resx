@@ -9,6 +9,7 @@
   <data name="Card_To" xml:space="preserve"><value>إلى</value></data>
   <data name="Card_Registered" xml:space="preserve"><value>الاسم المسجل</value></data>
   <data name="Card_Amount" xml:space="preserve"><value>المبلغ</value></data>
+  <data name="Card_AmountWords" xml:space="preserve"><value>{0} دينار</value></data>
   <data name="Card_Fee" xml:space="preserve"><value>العمولة</value></data>
   <data name="Card_Total" xml:space="preserve"><value>المجموع</value></data>
   <data name="Card_BalanceAfter" xml:space="preserve"><value>الرصيد بعد الدفع</value></data>
@@ -92,4 +93,55 @@
   <data name="Currency_iqd" xml:space="preserve"><value>دينار</value></data>
   <data name="Phone_Placeholder" xml:space="preserve"><value>اكتب الطلب مالتك</value></data>
   <data name="Phone_Send" xml:space="preserve"><value>إرسال</value></data>
+  <data name="Words_1" xml:space="preserve"><value>واحد</value></data>
+  <data name="Words_2" xml:space="preserve"><value>اثنين</value></data>
+  <data name="Words_3" xml:space="preserve"><value>ثلاثة</value></data>
+  <data name="Words_4" xml:space="preserve"><value>اربعة</value></data>
+  <data name="Words_5" xml:space="preserve"><value>خمسة</value></data>
+  <data name="Words_6" xml:space="preserve"><value>ستة</value></data>
+  <data name="Words_7" xml:space="preserve"><value>سبعة</value></data>
+  <data name="Words_8" xml:space="preserve"><value>ثمانية</value></data>
+  <data name="Words_9" xml:space="preserve"><value>تسعة</value></data>
+  <data name="Words_10" xml:space="preserve"><value>عشرة</value></data>
+  <data name="Words_11" xml:space="preserve"><value>دعش</value></data>
+  <data name="Words_12" xml:space="preserve"><value>اثنعش</value></data>
+  <data name="Words_13" xml:space="preserve"><value>ثلطعش</value></data>
+  <data name="Words_14" xml:space="preserve"><value>اربعطعش</value></data>
+  <data name="Words_15" xml:space="preserve"><value>خمسطعش</value></data>
+  <data name="Words_16" xml:space="preserve"><value>سطعش</value></data>
+  <data name="Words_17" xml:space="preserve"><value>سبعطعش</value></data>
+  <data name="Words_18" xml:space="preserve"><value>ثمنطعش</value></data>
+  <data name="Words_19" xml:space="preserve"><value>تسعطعش</value></data>
+  <data name="Words_20" xml:space="preserve"><value>عشرين</value></data>
+  <data name="Words_30" xml:space="preserve"><value>ثلاثين</value></data>
+  <data name="Words_40" xml:space="preserve"><value>اربعين</value></data>
+  <data name="Words_50" xml:space="preserve"><value>خمسين</value></data>
+  <data name="Words_60" xml:space="preserve"><value>ستين</value></data>
+  <data name="Words_70" xml:space="preserve"><value>سبعين</value></data>
+  <data name="Words_80" xml:space="preserve"><value>ثمانين</value></data>
+  <data name="Words_90" xml:space="preserve"><value>تسعين</value></data>
+  <data name="Words_100" xml:space="preserve"><value>مية</value></data>
+  <data name="Words_200" xml:space="preserve"><value>ميتين</value></data>
+  <data name="Words_300" xml:space="preserve"><value>ثلثمية</value></data>
+  <data name="Words_400" xml:space="preserve"><value>اربعمية</value></data>
+  <data name="Words_500" xml:space="preserve"><value>خمسمية</value></data>
+  <data name="Words_600" xml:space="preserve"><value>ستمية</value></data>
+  <data name="Words_700" xml:space="preserve"><value>سبعمية</value></data>
+  <data name="Words_800" xml:space="preserve"><value>ثمنمية</value></data>
+  <data name="Words_900" xml:space="preserve"><value>تسعمية</value></data>
+  <data name="Words_Thousand" xml:space="preserve"><value>الف</value></data>
+  <data name="Words_TwoThousand" xml:space="preserve"><value>الفين</value></data>
+  <data name="Words_Thousands" xml:space="preserve"><value>آلاف</value></data>
+  <data name="Words_Million" xml:space="preserve"><value>مليون</value></data>
+  <data name="Words_TwoMillion" xml:space="preserve"><value>مليونين</value></data>
+  <data name="Words_Millions" xml:space="preserve"><value>ملايين</value></data>
+  <data name="Words_Construct_3" xml:space="preserve"><value>ثلث</value></data>
+  <data name="Words_Construct_4" xml:space="preserve"><value>اربع</value><comment>derived from Khalil's hundreds; for his review</comment></data>
+  <data name="Words_Construct_5" xml:space="preserve"><value>خمس</value><comment>derived from Khalil's hundreds; for his review</comment></data>
+  <data name="Words_Construct_6" xml:space="preserve"><value>ست</value><comment>derived from Khalil's hundreds; for his review</comment></data>
+  <data name="Words_Construct_7" xml:space="preserve"><value>سبع</value><comment>derived from Khalil's hundreds; for his review</comment></data>
+  <data name="Words_Construct_8" xml:space="preserve"><value>ثمن</value><comment>derived from Khalil's hundreds; for his review</comment></data>
+  <data name="Words_Construct_9" xml:space="preserve"><value>تسع</value><comment>derived from Khalil's hundreds; for his review</comment></data>
+  <data name="Words_Construct_10" xml:space="preserve"><value>عشر</value></data>
+  <data name="Words_And" xml:space="preserve"><value>و</value></data>
 </root>

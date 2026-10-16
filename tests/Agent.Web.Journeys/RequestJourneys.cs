@@ -1,6 +1,7 @@
 extern alias AgentWeb;
 
 using Agent.Core.Audit;
+using Agent.Core.Text;
 using AgentWeb::Agent.Web.Services;
 using Microsoft.Playwright;
 using static Microsoft.Playwright.Assertions;
@@ -82,6 +83,9 @@ public sealed class RequestJourneys(JourneyHost host) : JourneyBase(host)
         await Expect(page.GetByTestId("card-display")).ToHaveTextAsync(contact.SavedName);
         await Expect(page.GetByTestId("card-registered")).ToHaveTextAsync(contact.RegisteredName!);
         await Expect(page.GetByTestId("card-amount")).ToHaveTextAsync(PhoneFormat.Amount(50_000, Text));
+        // The amount in words under the figure, composed from the resource file's words (Khalil's list, 17 Oct 2026).
+        await Expect(page.GetByTestId("card-amount-words"))
+            .ToHaveTextAsync(Text["Card_AmountWords", AmountWords.Compose(50_000, AmountWordParts.FromResources(Text))!].Value);
         Assert.Equal(U1Balance, await Host.BalanceAsync(U1));
         Assert.Equal(historyBefore, (await Host.HistoryAsync(U1)).Count);
 

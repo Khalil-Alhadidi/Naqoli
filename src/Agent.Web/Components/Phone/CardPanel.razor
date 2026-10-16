@@ -1,6 +1,7 @@
 @inherits SessionComponent
 @inject IOptionsMonitor<AgentOptions> Options
 @inject TraceLog Trace
+@inject Agent.Core.Text.AmountWordParts Words
 
 @* Every field comes from the CardView the session holds (rule 3); names from the wallet render inside bdi. *@
 @if (Session.Card is { } card)
@@ -23,6 +24,11 @@
                 <span>@Text["Card_Amount"]</span>
                 <span data-testid="card-amount">@PhoneFormat.Amount(card.AmountIqd, Text)</span>
             </div>
+            @* The amount in words, a second guard under the figure: composed at render from the card's amount, never stored. *@
+            @if (Agent.Core.Text.AmountWords.Compose(card.AmountIqd, Words) is { } words)
+            {
+                <div class="phone-card-words"><span data-testid="card-amount-words">@Text["Card_AmountWords", words]</span></div>
+            }
             <div class="phone-card-row">
                 <span>@Text["Card_Fee"]</span>
                 <span data-testid="card-fee">@PhoneFormat.Amount(card.FeeIqd, Text)</span>

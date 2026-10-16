@@ -1,5 +1,6 @@
 using Agent.Core;
 using Agent.Core.Parsing;
+using Agent.Core.Text;
 using Agent.Core.Trace;
 using Agent.Web.Resources;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -42,6 +43,8 @@ public static class ServiceCollectionExtensions
             options.YesWords = PhoneWords.Split(text["Word_yes"].Value);
             options.NoWords = PhoneWords.Split(text["Word_no"].Value);
         });
+        // The card's amount in words: the resource file's number words, built once (Khalil's list, 17 Oct 2026).
+        services.AddSingleton(sp => AmountWordParts.FromResources(sp.GetRequiredService<IStringLocalizer<PhoneStrings>>()));
         services.AddAgentParser(configuration);
         services.AddFaultingParser();
         services.AddOptions<ConsoleOptions>()

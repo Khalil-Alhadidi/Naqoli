@@ -2,6 +2,7 @@ extern alias AgentWeb;
 
 using System.Globalization;
 using Agent.Core.Audit;
+using Agent.Core.Text;
 using Agent.Core.Data;
 using AgentWeb::Agent.Web.Resources;
 using AgentWeb::Agent.Web.Services;
@@ -72,6 +73,8 @@ public sealed class Journeys(JourneyHost host) : IAsyncLifetime
         await Expect(page.GetByTestId("card-fee")).ToHaveTextAsync(PhoneFormat.Amount(1_000, Text));
         await Expect(page.GetByTestId("card-total")).ToHaveTextAsync(PhoneFormat.Amount(51_000, Text));
         await Expect(page.GetByTestId("card-balance-after")).ToHaveTextAsync(PhoneFormat.Amount(699_000, Text));
+        await Expect(page.GetByTestId("card-amount-words"))
+            .ToHaveTextAsync(Text["Card_AmountWords", AmountWords.Compose(50_000, AmountWordParts.FromResources(Text))!].Value);
 
         // The names, read from the wallet, shown as text.
         var contacts = await host.ContactsAsync(DemoUserId);

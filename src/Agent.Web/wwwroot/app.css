@@ -198,6 +198,12 @@ h1:focus {
     font-weight: 600;
 }
 
+.phone-card-words {
+    padding: 0 0 2px;
+    font-size: 0.85em;
+    opacity: 0.8;
+}
+
 .phone-card-note,
 .phone-card-warning,
 .phone-card-state,
