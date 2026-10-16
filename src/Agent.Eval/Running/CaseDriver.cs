@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Globalization;
 using Agent.Core;
+using Agent.Core.Audit;
 using Agent.Core.Conversation;
 using Agent.Core.Data;
 using Agent.Core.Parsing;
@@ -201,9 +202,11 @@ public sealed class CaseDriver
         }
 
         WalletSnapshot after;
+        IReadOnlyList<RecordLink> links = [];
         try
         {
             after = await WalletSnapshot.TakeAsync(services, admin, userId, cancellationToken);
+            links = await RecordLinksAsync(cancellationToken);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -239,7 +242,23 @@ public sealed class CaseDriver
             unsupported,
             error,
             watcher.Sequence,
-            confirmTaps);
+            confirmTaps,
+            links);
+    }
+
+    /// <summary>
+    /// The case's <c>done</c> audit rows as links from a wallet reference to its pending record (the audit log is emptied
+    /// before each case, so every row is this case's).
+    /// </summary>
+    private async Task<IReadOnlyList<RecordLink>> RecordLinksAsync(CancellationToken cancellationToken)
+    {
+        await using var scope = services.CreateAsyncScope();
+        var rows = await scope.ServiceProvider.GetRequiredService<AgentDbContext>().AuditEntries.AsNoTracking()
+            .Where(e => e.Event == AuditEvents.Done && e.PendingId != null && e.Reference != null)
+            .OrderBy(e => e.Id)
+            .Select(e => new { e.PendingId, e.Reference })
+            .ToListAsync(cancellationToken);
+        return [.. rows.Select(r => new RecordLink(r.PendingId!.Value, r.Reference!))];
     }
 
     /// <summary>The step form, as the observation names it (no case text).</summary>

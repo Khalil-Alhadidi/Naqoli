@@ -94,7 +94,36 @@ public sealed class CaseGrader
             (expect.Asks ?? []).Count,
             observation.QuestionsAsked.Count,
             observation.Cards.Count,
-            TimeToFirstCardMs(observation.Steps));
+            TimeToFirstCardMs(observation.Steps),
+            DoublePayments(observation));
+    }
+
+    /// <summary>The wallet transaction types that are payments (an <c>externalDebit</c> is the fault, not a payment).</summary>
+    public static readonly IReadOnlyList<string> PaymentTypes = ["transfer", "bill", "purchase"];
+
+    /// <summary>
+    /// Khalil's double payments (16 Oct 2026): for each pending record, its new <c>done</c> payment rows beyond the first,
+    /// summed, plus every new <c>done</c> payment row that no record's <c>done</c> audit row names. A payment row belongs
+    /// to the record whose <c>done</c> audit row names its reference (<see cref="CaseObservation.RecordLinks"/>). In a case
+    /// run the agent is the only payer, so a payment row no record reached is a second payment; an <c>externalDebit</c>
+    /// row is never a payment and never counts.
+    /// </summary>
+    public static int DoublePayments(CaseObservation observation)
+    {
+        ArgumentNullException.ThrowIfNull(observation);
+        var payments = DoneTransactions(observation).Where(t => PaymentTypes.Contains(t.Type, StringComparer.Ordinal)).ToList();
+        var links = observation.RecordLinks ?? [];
+        var named = links.Select(l => l.Reference).ToHashSet(StringComparer.Ordinal);
+
+        var beyondFirst = links
+            .GroupBy(l => l.PendingId)
+            .Sum(record =>
+            {
+                var references = record.Select(l => l.Reference).ToHashSet(StringComparer.Ordinal);
+                return Math.Max(0, payments.Count(t => t.Reference is { } reference && references.Contains(reference)) - 1);
+            });
+        var unlinked = payments.Count(t => t.Reference is not { } reference || !named.Contains(reference));
+        return beyondFirst + unlinked;
     }
 
     /// <summary>

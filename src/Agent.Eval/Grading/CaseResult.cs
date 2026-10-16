@@ -29,7 +29,7 @@ public sealed record FieldVerdict(string Field, string Expected, string Observed
 /// </param>
 /// <param name="ExpectedTransactions">
 /// The number of transactions the key's <c>final.transactions</c> expects (0 when it names none), or null when the key has
-/// no <c>final</c>. The double-payment target counts the executions beyond it (<c>docs/targets.md</c>).
+/// no <c>final</c>. Kept for the report; the double-payments target does not read it.
 /// </param>
 /// <param name="AsksExpected">The questions the key expects (<c>asks</c>).</param>
 /// <param name="AsksObserved">The questions the agent asked.</param>
@@ -37,6 +37,12 @@ public sealed record FieldVerdict(string Field, string Expected, string Observed
 /// <param name="TimeToFirstCardMs">
 /// The time from the start of the case's first step to the end of the step in which the first card was issued, or null
 /// when no card was issued.
+/// </param>
+/// <param name="DoublePayments">
+/// Khalil's double payments (16 Oct 2026): over the case's pending records, the wallet's <c>done</c> payment rows of each
+/// record beyond its first, summed, plus the case's <c>done</c> payment rows (transfer, bill, purchase) that no record's
+/// <c>done</c> audit row names. One execution for one record is never counted; an <c>externalDebit</c> row never counts.
+/// The double-payments target sums it over the fault cases.
 /// </param>
 public sealed record CaseResult(
     string Id,
@@ -55,7 +61,8 @@ public sealed record CaseResult(
     int AsksExpected = 0,
     int AsksObserved = 0,
     int CardsIssued = 0,
-    long? TimeToFirstCardMs = null)
+    long? TimeToFirstCardMs = null,
+    int DoublePayments = 0)
 {
     /// <summary>The card fields whose failing verdict makes a wrong card: recipient, amount, or biller and product.</summary>
     public static readonly IReadOnlyList<string> WrongCardFields = ["to_number", "display", "registered_name", "amount", "bill", "product"];

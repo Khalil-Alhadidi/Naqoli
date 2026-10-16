@@ -3,7 +3,11 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Agent.Eval.Running;
 
-/// <summary>One transaction the user paid, as the runner compares it: no reference, no purchase code.</summary>
+/// <summary>
+/// One transaction the user paid, as the runner compares it: no purchase code. <see cref="Reference"/> is the wallet's
+/// reference code, kept only to link the row to the pending record whose <c>done</c> audit row names it (the
+/// double-payments measure); no report prints it.
+/// </summary>
 public sealed record SnapshotTransaction(
     int TransactionId,
     string Type,
@@ -13,7 +17,8 @@ public sealed record SnapshotTransaction(
     long TotalIqd,
     string? ToPhone,
     string? BillCode,
-    string? ProductCode);
+    string? ProductCode,
+    string? Reference = null);
 
 /// <summary>What the case changed in the wallet.</summary>
 /// <param name="NewTransactions">The new transactions, in the order the wallet ran them (the external debit left out).</param>
@@ -68,7 +73,8 @@ public sealed record WalletSnapshot(
                 h.TotalIqd,
                 h.Type == "transfer" ? h.CounterpartyPhone : null,
                 h.BillAccountId is { } bill && billCodes.TryGetValue(bill, out var billCode) ? billCode : null,
-                h.ProductId is { } product && productCodes.TryGetValue(product, out var productCode) ? productCode : null))
+                h.ProductId is { } product && productCodes.TryGetValue(product, out var productCode) ? productCode : null,
+                h.Reference))
             .ToList();
 
         return new WalletSnapshot(

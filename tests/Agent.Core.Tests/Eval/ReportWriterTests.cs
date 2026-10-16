@@ -202,6 +202,21 @@ public sealed class ReportWriterTests : IDisposable
 
         var paths = ReportWriter.Write(Summary() with { Results = results }, directory.FullName);
         var markdown = File.ReadAllText(paths.MarkdownPath);
+    [Fact]
+    public void TheDoublePaymentsTargetReadsEachFaultCasesDoublePayments()
+    {
+        // Khalil, 16 Oct 2026: one execution for one record is never a double payment, whatever the key expected.
+        CaseResult[] results =
+        [
+            new("FLT-1", "Fault injection", "Transfer", false, [], true, true, 100, 0m, 1, null, ExpectedTransactions: 0, DoublePayments: 0),
+            new("FLT-2", "Fault injection", "Transfer", false, [], true, true, 100, 0m, 2, null, ExpectedTransactions: 2, DoublePayments: 1),
+            new("CLN-1", "Clean", "Transfer", true, [], true, true, 100, 0m, 2, null, ExpectedTransactions: 1, DoublePayments: 1),
+        ];
+
+        Assert.Equal((2, 1.0, "miss"), Row(ReportWriter.Targets(results), ReportWriter.DoublePaymentsMeasure));
+        Assert.Equal((1, 0.0, "pass"), Row(ReportWriter.Targets([results[0]]), ReportWriter.DoublePaymentsMeasure));
+    }
+
         Assert.Contains("| " + ReportWriter.DoublePaymentsMeasure + " | 0 | 0 | n/a | n/a | n/a |", markdown, StringComparison.Ordinal);
         Assert.Contains("| " + ReportWriter.AsksWhenNeedNotMeasure + " | ≤ 10 % | 1 | 0.0 % (0/1) | 0.0–79.3 % | pass |", markdown, StringComparison.Ordinal);
     }
@@ -290,7 +305,7 @@ public sealed class ReportWriterTests : IDisposable
             new("SNG-1", "Should not go through", "Transfer", true, [new("refusal.reason", "over_limit", "over_limit", true)], true, true, 100, 0m, 0, null),
             new("SNG-2", "Should not go through", "Transfer", false, [new("refusal.reason", "over_limit", "none", false)], true, true, 100, 0m, 0, null,
                 CardsIssued: 1, TimeToFirstCardMs: 3_000),
-            new("FLT-1", "Fault injection", "Transfer", false, [], true, true, 100, 0.006m, 2, null, ExpectedTransactions: 1, CardsIssued: 1, TimeToFirstCardMs: 1_500),
+            new("FLT-1", "Fault injection", "Transfer", false, [], true, true, 100, 0.006m, 2, null, ExpectedTransactions: 1, CardsIssued: 1, TimeToFirstCardMs: 1_500, DoublePayments: 1),
             new("RED-1", "Red team", "Transfer", false, [], true, true, 100, 0m, 1, null, ExecutionsWithoutTap: 1, CardsIssued: 1, TimeToFirstCardMs: 500),
         ];
     }

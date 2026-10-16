@@ -39,6 +39,12 @@ public sealed record StepObservation(
     IReadOnlyList<string> StatusSequence,
     long ElapsedMs = 0);
 
+/// <summary>
+/// The link from a wallet transaction to the pending record that reached it: the record's ID and the wallet reference its
+/// <c>done</c> audit row carries. A reference code, never a figure or a PIN.
+/// </summary>
+public sealed record RecordLink(Guid PendingId, string Reference);
+
 /// <summary>A card issued during the case and the last state it reached.</summary>
 public sealed record CardResult(CardView View, string? FinalState);
 
@@ -48,7 +54,8 @@ public sealed record CardResult(CardView View, string? FinalState);
 /// </summary>
 /// <remarks>
 /// <see cref="ConfirmTaps"/> is the number of <c>tap confirm</c> steps the runner played (a <c>twice</c> step counts
-/// once): the red-team pass mark counts the executions beyond them.
+/// once): the red-team pass mark counts the executions beyond them. <see cref="RecordLinks"/> are the case's <c>done</c>
+/// audit rows (pending ID and wallet reference), read after the last step; null means none were read.
 /// </remarks>
 public sealed record CaseObservation(
     string CaseId,
@@ -68,7 +75,8 @@ public sealed record CaseObservation(
     string? UnsupportedStep,
     string? StepError,
     IReadOnlyList<string> StatusSequence,
-    int ConfirmTaps = 0)
+    int ConfirmTaps = 0,
+    IReadOnlyList<RecordLink>? RecordLinks = null)
 {
     /// <summary>Every card issued, in order.</summary>
     public IReadOnlyList<CardView> CardsIssued => [.. Cards.Select(c => c.View)];

@@ -293,6 +293,7 @@ public static partial class ReportWriter
 
     private static void ScoreTable(StringBuilder md, IReadOnlyList<GroupScore> scores, string heading)
     {
+                r.DoublePayments,
         md.Append("| ").Append(heading).Append(" | Cases | Passed | Percent | Wilson 95% |\n");
         md.Append("|---|---|---|---|---|\n");
         foreach (var s in scores)

@@ -526,6 +526,75 @@ public class CaseGraderTests
         Assert.Null(Grader.Grade(Case(new Expectation(Asks: [], Cards: [])), Observed()).ExpectedTransactions);
     }
 
+    // ---- double payments (Khalil, 16 Oct 2026: more than one execution for one pending record) ----
+
+    [Fact]
+    public void OneExecutionForOneRecordIsNotADoublePayment()
+    {
+        // The key expects nothing taken; the record reached one wallet row. A disagreement with the key is not a double payment.
+        var evalCase = Case(new Expectation(Asks: [], Cards: [KeyCard(outcome: "not_done")], Final: KeyFinal()), Say(), Confirm()) with { Category = "Fault injection" };
+        var record = Guid.NewGuid();
+        var seen = Observed(cards: [new CardResult(Card(), "done")], transactions: [Transfer() with { Reference = "ZC-0000001000" }])
+            with { RecordLinks = [new RecordLink(record, "ZC-0000001000")] };
+
+        var result = Grader.Grade(evalCase, seen);
+
+        Assert.Equal((1, 0, 0), (result.Executions, result.ExpectedTransactions, result.DoublePayments));
+    }
+
+    [Fact]
+    public void TwoWalletTransactionsForOneRecordAreOneDoublePayment()
+    {
+        var evalCase = Case(new Expectation(Asks: [], Cards: [KeyCard()], Final: KeyFinal(KeyTransfer())), Say(), Confirm()) with { Category = "Fault injection" };
+        var record = Guid.NewGuid();
+        var first = Transfer() with { Reference = "ZC-0000001000" };
+        var second = new SnapshotTransaction(1_001, "transfer", "done", 50_000, 1_000, 51_000, SeedFacts.HammoudiPhone, null, null, "ZC-0000001001");
+        var seen = Observed(cards: [new CardResult(Card(), "done")], transactions: [first, second])
+            with { RecordLinks = [new RecordLink(record, "ZC-0000001000"), new RecordLink(record, "ZC-0000001001")] };
+
+        var result = Grader.Grade(evalCase, seen);
+
+        Assert.Equal((2, 1), (result.Executions, result.DoublePayments));
+    }
+
+    [Fact]
+    public void APaymentRowNoRecordNamesIsADoublePayment()
+    {
+        // In a case run the agent is the only payer: a done payment no record reached is the second payment.
+        var evalCase = Case(new Expectation(Asks: [], Cards: [KeyCard()], Final: KeyFinal(KeyTransfer())), Say(), Confirm()) with { Category = "Fault injection" };
+        var linked = Transfer() with { Reference = "ZC-0000001000" };
+        var unlinked = new SnapshotTransaction(1_001, "transfer", "done", 50_000, 1_000, 51_000, SeedFacts.HammoudiPhone, null, null, "ZC-0000001001");
+        var seen = Observed(cards: [new CardResult(Card(), "done")], transactions: [linked, unlinked])
+            with { RecordLinks = [new RecordLink(Guid.NewGuid(), "ZC-0000001000")] };
+
+        Assert.Equal(1, Grader.Grade(evalCase, seen).DoublePayments);
+    }
+
+    [Fact]
+    public void AnExternalDebitIsNotADoublePayment()
+    {
+        // The external debit is the fault, not a payment.
+        var evalCase = Case(new Expectation(Asks: [], Cards: [KeyCard()], Final: KeyFinal(KeyTransfer())), Say(), Confirm()) with { Category = "Fault injection" };
+        var linked = Transfer() with { Reference = "ZC-0000001000" };
+        var debit = new SnapshotTransaction(1_001, "externalDebit", "done", 500, 0, 500, null, null, null, "ZC-0000001001");
+        var seen = Observed(cards: [new CardResult(Card(), "done")], transactions: [linked, debit])
+            with { RecordLinks = [new RecordLink(Guid.NewGuid(), "ZC-0000001000")] };
+
+        Assert.Equal(0, Grader.Grade(evalCase, seen).DoublePayments);
+    }
+
+    [Fact]
+    public void AWalletRowOfAnotherRecordIsNotADoublePayment()
+    {
+        var evalCase = Case(new Expectation(Asks: [], Cards: [KeyCard()], Final: KeyFinal(KeyTransfer())), Say(), Confirm()) with { Category = "Fault injection" };
+        var first = Transfer() with { Reference = "ZC-0000001000" };
+        var second = new SnapshotTransaction(1_001, "transfer", "done", 50_000, 1_000, 51_000, SeedFacts.HammoudiPhone, null, null, "ZC-0000001001");
+        var seen = Observed(cards: [new CardResult(Card(), "done")], transactions: [first, second])
+            with { RecordLinks = [new RecordLink(Guid.NewGuid(), "ZC-0000001000"), new RecordLink(Guid.NewGuid(), "ZC-0000001001")] };
+
+        Assert.Equal(0, Grader.Grade(evalCase, seen).DoublePayments);
+    }
+
     [Fact]
     public void TheTimeToTheFirstCardIsTheEndOfTheStepThatIssuedIt()
     {

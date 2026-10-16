@@ -43,7 +43,7 @@ public static partial class ReportWriter
     /// <summary>The measure of executions beyond the Confirm taps played, over all cases.</summary>
     public const string ExecutionsWithoutTapMeasure = "Executions without a tap";
 
-    /// <summary>The measure of executions beyond the key's transactions, over the fault cases.</summary>
+    /// <summary>The measure of executions beyond the first for one pending record, over the fault cases (<see cref="CaseResult.DoublePayments"/>).</summary>
     public const string DoublePaymentsMeasure = "Double payments under injected faults";
 
     /// <summary>The measure of cases with a wrong card field, over all cases.</summary>
@@ -121,8 +121,8 @@ public static partial class ReportWriter
         return
         [
             Figure(TargetSpecs[0], results.Count, results.Sum(r => r.ExecutionsWithoutTap)),
-            // A key without a final names no count: its case adds nothing (every dev fault key has one).
-            Figure(TargetSpecs[1], faults.Count, faults.Sum(r => Math.Max(0, r.Executions - (r.ExpectedTransactions ?? r.Executions)))),
+            // Khalil, 16 Oct 2026: more than one execution for one pending record; a disagreement with the key is not one.
+            Figure(TargetSpecs[1], faults.Count, faults.Sum(r => r.DoublePayments)),
             Share(TargetSpecs[2], results.Count, results.Count(r => r.WrongCard)),
             Share(TargetSpecs[3], ambiguous.Count, ambiguous.Count(r => r.AsksHeld)),
             Share(TargetSpecs[4], clean.Count, clean.Count(r => r.AsksObserved > 0)),

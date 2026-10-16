@@ -139,6 +139,23 @@ public sealed class CaseDriverTests(AgentHost host) : IAsyncDisposable
     }
 
     [Fact]
+    public async Task ATimeoutBeforeExecuteSettlesOnceAndLinksTheWalletRowToItsRecord()
+    {
+        // Khalil, 16 Oct 2026: the settle resends under the same key and the payment executes once. The done audit row
+        // carries the wallet's reference, which links the case's wallet row to its pending record.
+        var runner = Start();
+
+        var seen = await runner.Driver.PlayAsync(
+            Case("U1", new CaseFault("wallet_timeout_before_execute", "confirm", 1), Say(HammoudiSentence), Confirm()), Token);
+
+        Assert.Null(seen.StepError);
+        Assert.Equal(["live", "checking", "done"], seen.StatusSequence);
+        var transaction = Assert.Single(seen.WalletDiff.NewTransactions);
+        var link = Assert.Single(seen.RecordLinks!);
+        Assert.Equal((Assert.Single(seen.Cards).View.PendingId, transaction.Reference), (link.PendingId, link.Reference));
+    }
+
+    [Fact]
     public async Task AWrongPinThenTheRightOneForTheTrader()
     {
         var runner = Start();
