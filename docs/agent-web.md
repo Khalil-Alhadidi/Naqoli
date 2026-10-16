@@ -554,3 +554,6 @@ The journeys locate elements only by these attributes.
 | A Checking record whose circuit is gone has no "check again" button in a new circuit | Still open after milestone 8: the Checking card and its automatic settle live in the card's own circuit. The record stays Checking and is never shown as failed |
 | The live trace keeps every entry for the life of the circuit | A cap would be a new setting |
 | The wallet data component does not reload after an external debit from the fault panel (it reloads after a payment) | Reopen the component; the phone's card recheck reads the wallet itself |
+| `Card_Checking` is an English `TODO-AR` placeholder | Khalil writes the Arabic; it is the one key in the `AwaitingKhalil` allow-list |
+| The live trace's height does not allow for the fault panel above it, so the trace column can be taller than the window | The page scrolls and the panel stays at the top; a layout change if it matters in the demo |
+| The model fault is per console process, the wallet's fault switch is shared by every console | Shown as read back on each panel; the demo runs one console |

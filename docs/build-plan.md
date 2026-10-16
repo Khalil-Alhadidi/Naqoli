@@ -302,6 +302,37 @@ The two misses are the items already deferred: AMB-23 asks the operator where th
 - **`BillResolver`:** if `biller_text` contains a known provider name, the bill goes straight to the card; otherwise rule 13 stands and bill-or-store is asked. Recorded in `docs/matching-rules.md` (added 16/10/2026).
 - **CLN-25's key** changes to bill-or-store, tap, card, and the sidecar parse follows. The change, the reason and the date are noted in `docs/disclosure.md`.
 
+**Status, 16 Oct 2026:** the milestone is in, one commit per task of the plan (`docs/plans/milestone-8-bills-and-faults.md`):
+
+- **The bill-or-store rule (Task 1, 10dfa5f).** Schema version 2 (`biller_text`) and prompt version 3. A provider name in the user's words sends the internet bill straight to the card; without one, rule 13 asks bill or store. The sidecar gained `biller_text` on every line, each value copied verbatim from its message.
+- **Part of a bill and nothing due (Task 2, 057b086; the oracle report 360a410).** A request to pay part of a bill is read as a bill and refused `bills_paid_in_full` with the bill's amount due from the wallet (learning row `part_of_bill`); nothing due is `nothing_due`. The runner grades a refusal's `amount_due`.
+- **`POST /admin/debit` (Task 3, eba6674).** Khalil's contract of 14 Oct 2026: admin key, gate exclusive, never below zero, a `done` `externalDebit` row with fee 0. The runner plays `external_debit` through it, and the daily cap counts payments only.
+- **The fault panel (Task 4, f9b7398).** Beside the live trace, always at hand: the wallet's fault switch, a model fault (`FaultingParser` over the registered parser) and the external debit, each state read back. The console's admin key is `Console:WalletAdminKey`.
+- **The Checking state on screen (Task 5, 150786d).** The card shows `Card_Checking` and a check-again button, and settles itself every `CheckingRetrySeconds` (5, editable) through `ChatSession.SettleAsync`. The lookup by key is traced before every resend.
+- **Journeys (Task 6, c9da089).** Twelve new journeys, 32 in all, in about two minutes.
+- **The six failure modes (Task 7).** The first section of [failure-modes.md](failure-modes.md).
+
+**The development set on the oracle** (`docs/reports/dev-scripted-m8-2026-10-16-1028`): 68 of 77. All 17 bill cases pass, and so do the two added cases and the four fault-injection cases, with 0 double payments, 0 executions without a tap and 0 masking failures. The nine failures are the items deferred to milestones 9b and 9c: AMB-23, NOGO-12, MAL-09, GAP-06, CMP-01, CMP-03, CMP-05, CMP-07 and CMP-09. Targets: 7 pass, 1 reported, and 1 miss, "asks when it must" at 14 of 15 (AMB-23, milestone 9b). "Asks when it need not" now passes, 0 of 23, since CLN-09, CLN-09-v1 and CLN-25 follow the bill-or-store rule.
+
+**The development set on the models (prompt version 3):** _to be filled in by the controller after the reruns (`dotnet run --project src/Agent.Eval -- dev --parser claude:<candidate> --repeat 3 --label m8` for haiku, sonnet and opus): the medians, the flipped cases and the targets table._
+
+**Cases and keys.** Two cases were added, drafted by Claude for Khalil: ADD-04 (U1, part of the water bill, refused `bills_paid_in_full` with 9,250, learning `part_of_bill`) and ADD-05 (U2, electricity with nothing due, `nothing_due`). Both have English `TODO-AR` messages and `pending_wording_recheck` true. One key changed: CLN-25 now asks bill or store, then a tap and the card (Khalil, 16 Oct 2026; recorded in [disclosure.md](disclosure.md)).
+
+For Khalil:
+- the Arabic of `Card_Checking` (the card's Checking line, a `TODO-AR` placeholder in `PhoneStrings.resx`);
+- the Arabic messages of ADD-04 and ADD-05. When they are written, each case's sidecar `say` and `biller_text` follow;
+- the controller's rulings 1 to 7 at the head of the plan, taken for him to confirm. Among them: provider names are read from the parenthesised part of a biller's name, the first word (ruling 1); part of a bill is read as a bill request (2); the six failure modes are the six faults of the matching rules (3); the fault panel sits in the trace column (4); the Checking state settles by itself (5); the lookup by key is display only (6);
+- whether `POST /admin/debit` should refuse a user whose default account is closed (the contract does not say).
+
+| Done when | Shown by |
+|---|---|
+| The bill cases in the development set meet the targets | On the oracle, all 17 bill cases pass, and wrong card is 0 of 77 (`docs/reports/dev-scripted-m8-2026-10-16-1028`, per type and the targets table; ADD-04 and ADD-05 included). On screen: `NamedProviderGoesStraightToTheBillCard` (CLN-09), `TwoAccountsAtOneBillerBecomeOptions` (AMB-07), `InternetWithoutAProviderAsksBillOrStore` (CLN-25), `NothingDueGivesNoCard` (ADD-05) and `PartOfABillIsRefusedWithTheFullAmount` (ADD-04). Tests: `BillResolverTests` (the provider-name branch), `ProviderNamesTests`, `OrchestratorTests.PartOfABill*`, `ConversationAnswerTests.ATapOnWhichBillAfterAPartOfBillRequestGivesTheRefusalNotACard`, `LearningLogRuleTests.APartOfBillRefusalIsLoggedAsPartOfBill`. The model figures are the controller's (above) |
+| The fault-injection cases give zero double payments | On the oracle, FLT-03, FLT-04, FLT-05 and FLT-08 pass with 0 double payments (same report, the targets row). On screen, the two timeout journeys move the money once (one history row, one `done` audit row): `TimeoutAfterExecuteShowsCheckingThenDone` and `TimeoutBeforeExecuteShowsCheckingThenResolves`. `WalletErrorEndsTheCardNotDone` and `ExternalDebitWhileTheCardWaitsIsCaughtByTheRecheck` move none. Also `ConfirmHandlerTests.ConcurrentSettlesSettleOnce`, `RetryReusesTheSameKey` and `AdminDebitTests` |
+| A timeout shows "checking", never "failed", and resolves to done or not done by key | The journeys `TimeoutAfterExecuteShowsCheckingThenDone` and `TimeoutBeforeExecuteShowsCheckingThenResolves`: the `checking` outcome, the card `checking` with `Card_Checking` and `card-check-again`, no `not_done`, then done with no tap; the trace has `lookup_by_key` and one `settle_outcome:done`. Tests: `ConfirmHandlerTests.TheSettleLooksTheKeyUpAndTracesUnknownKeyWhenNothingWasWritten`, `TheSettleLooksTheKeyUpAndTracesDoneWhenTheWalletPaid`, `ALookupThatGetsNoAnswerDoesNotStopTheSettle`, and the earlier settle tests (`TimeoutAfterExecuteIsCheckingThenDone`, `PinRefusalAfterTheSettleWindowIsNotDone` for not done) |
+| `docs/failure-modes.md` describes all six failure modes from slide 2, each with how it is handled and which test shows it | Its first section, "The six failure modes of slide 2": one row per mode with what the user sees, what the system does, where it is handled, the tests and the journey, pointing at the detailed rows below |
+
+The deliverables not named in "Done when" are shown too. The fault switch always at hand: the fault panel, with every fault journey setting its fault through it. The duplicate warning on a repeated request: `RepeatedRequestCarriesTheDuplicateWarning` (FLT-05).
+
 ## Milestone 9: Extras, in reverse cut order
 
 Three separate pieces. Build them in this order. Each one can be dropped without changing the others.
