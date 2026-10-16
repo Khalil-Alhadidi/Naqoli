@@ -405,7 +405,7 @@ public sealed class Orchestrator
         }
 
         long amount;
-        switch (AmountRule.Resolve(request, options))
+        switch (AmountRule.Resolve(request))
         {
             case AmountResolution.Dinars dinars:
                 amount = dinars.AmountIqd;
@@ -413,14 +413,6 @@ public sealed class Orchestrator
                 break;
             case AmountResolution.Missing:
                 return await AskAsync(userId, QuestionKinds.WhichAmount, [], cancellationToken);
-            case AmountResolution.Ask ask:
-                var amountOptions = ask.Options
-                    .Select(a => new Option(a.ToString(CultureInfo.InvariantCulture), null, null, null, null, a))
-                    .ToList();
-                return await AskAsync(userId, QuestionKinds.WhichAmount, amountOptions, cancellationToken);
-            case AmountResolution.Invalid { Reason: ReasonCodes.AmountBelowMinimum } belowMinimum:
-                // The reply shows the minimum, as the format check does.
-                return await RefuseAsync(userId, belowMinimum.Reason, null, options.MinAmountIqd, cancellationToken);
             case AmountResolution.Invalid invalid:
                 return await RefuseAsync(userId, invalid.Reason, null, null, cancellationToken);
             default:
@@ -510,10 +502,9 @@ public sealed class Orchestrator
         // D9: a bill is paid in full. An amount the user named must be the amount due, else no card.
         if (request.AmountValue is not null)
         {
-            var named = AmountRule.Resolve(request, options) switch
+            var named = AmountRule.Resolve(request) switch
             {
                 AmountResolution.Dinars dinars => dinars.AmountIqd == bill.AmountDueIqd,
-                AmountResolution.Ask ask => ask.Options.Contains(bill.AmountDueIqd),
                 _ => false,
             };
             if (!named)

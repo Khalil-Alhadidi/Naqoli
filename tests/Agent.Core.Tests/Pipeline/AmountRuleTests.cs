@@ -6,25 +6,20 @@ namespace Agent.Core.Tests.Pipeline;
 /// <summary>Matching rules 9 and 10: how the amount of a request is read.</summary>
 public class AmountRuleTests
 {
-    private static readonly AgentOptions Options = new();
-
     private static AmountResolution Resolve(decimal? value, AmountUnit unit)
-        => AmountRule.Resolve(ParsedRequest.Transfer("x", value, unit), Options);
+        => AmountRule.Resolve(ParsedRequest.Transfer("x", value, unit));
 
     [Fact]
-    public void BareFiftyAsksOnlyTheThousandReading()
-    {
-        // Rule 9: 50,000,000 is over the per-transaction cap, so only 50,000 is offered.
-        var ask = Assert.IsType<AmountResolution.Ask>(Resolve(50m, AmountUnit.None));
-        Assert.Equal([50_000L], ask.Options);
-    }
+    public void BareTwoAndAHalfIsTwoThousandFiveHundred()
+        => Assert.Equal(new AmountResolution.Dinars(2_500), Resolve(2.5m, AmountUnit.None));
 
     [Fact]
-    public void BareTwoAndAHalfAsksBothReadings()
-    {
-        var ask = Assert.IsType<AmountResolution.Ask>(Resolve(2.5m, AmountUnit.None));
-        Assert.Equal([2_500L, 2_500_000L], ask.Options);
-    }
+    public void BareFiftyIsFiftyThousand()
+        => Assert.Equal(new AmountResolution.Dinars(50_000), Resolve(50m, AmountUnit.None));
+
+    [Fact]
+    public void BareNumberJustBelowAThousandIsThousands()
+        => Assert.Equal(new AmountResolution.Dinars(999_000), Resolve(999m, AmountUnit.None));
 
     [Fact]
     public void BareNumberOfAThousandOrMoreIsDinars()
@@ -34,38 +29,27 @@ public class AmountRuleTests
     }
 
     [Fact]
-    public void BareNumberJustBelowAThousandAsks()
+    public void ABareReadingBelowTheMinimumIsLeftToTheChecks()
     {
-        var ask = Assert.IsType<AmountResolution.Ask>(Resolve(999m, AmountUnit.None));
-        Assert.Equal([999_000L], ask.Options);
+        // Rule 9 (Khalil, 16 Oct 2026): 0.5 is 500, below the minimum of 1,000. The reader does not drop it or ask;
+        // the checks refuse it amount_below_minimum.
+        Assert.Equal(new AmountResolution.Dinars(500), Resolve(0.5m, AmountUnit.None));
     }
 
     [Fact]
-    public void ReadingsBelowTheMinimumAreDropped()
+    public void AReadingThatIsNotWholeDinarsIsNotUnderstood()
     {
-        // Khalil, 14 Oct 2026: 0.5 thousand is 500, below the minimum of 1,000, so only 500,000 is offered.
-        var ask = Assert.IsType<AmountResolution.Ask>(Resolve(0.5m, AmountUnit.None));
-        Assert.Equal([500_000L], ask.Options);
+        // 0.0005 thousand is half a dinar.
+        Assert.Equal(new AmountResolution.Invalid(ReasonCodes.NotUnderstood), Resolve(0.0005m, AmountUnit.None));
+        Assert.Equal(new AmountResolution.Invalid(ReasonCodes.NotUnderstood), Resolve(0.0000001m, AmountUnit.None));
     }
 
     [Fact]
-    public void NoReadingAtOrAboveTheMinimumIsAmountBelowMinimum()
+    public void MillionOnlyWithTheUnit()
     {
-        // 0.0005 thousand is half a dinar (not whole); 0.0005 million is 500, below the minimum.
-        Assert.Equal(new AmountResolution.Invalid(ReasonCodes.AmountBelowMinimum), Resolve(0.0005m, AmountUnit.None));
+        Assert.Equal(new AmountResolution.Dinars(2_000), Resolve(2m, AmountUnit.None));
+        Assert.Equal(new AmountResolution.Dinars(2_000_000), Resolve(2m, AmountUnit.Million));
     }
-
-    [Fact]
-    public void ReadingsFollowTheConfiguredMinimum()
-    {
-        var options = new AgentOptions { MinAmountIqd = 100 };
-        var ask = Assert.IsType<AmountResolution.Ask>(AmountRule.Resolve(ParsedRequest.Transfer("x", 0.5m, AmountUnit.None), options));
-        Assert.Equal([500L, 500_000L], ask.Options);
-    }
-
-    [Fact]
-    public void BareNumberWithNoUsableReadingIsNotUnderstood()
-        => Assert.Equal(new AmountResolution.Invalid(ReasonCodes.NotUnderstood), Resolve(0.0000001m, AmountUnit.None));
 
     [Fact]
     public void ThousandAndMillionUnitsMultiply()
@@ -100,12 +84,4 @@ public class AmountRuleTests
     [Fact]
     public void AmountTooLargeForALongIsNotUnderstood()
         => Assert.Equal(new AmountResolution.Invalid(ReasonCodes.NotUnderstood), Resolve(decimal.MaxValue, AmountUnit.Million));
-
-    [Fact]
-    public void ReadingsFollowTheConfiguredCap()
-    {
-        var options = new AgentOptions { PerTransactionCapIqd = 1_000_000 };
-        var ask = Assert.IsType<AmountResolution.Ask>(AmountRule.Resolve(ParsedRequest.Transfer("x", 2.5m, AmountUnit.None), options));
-        Assert.Equal([2_500L], ask.Options);
-    }
 }

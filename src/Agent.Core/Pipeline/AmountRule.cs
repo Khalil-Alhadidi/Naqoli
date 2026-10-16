@@ -12,37 +12,31 @@ public abstract record AmountResolution
     /// <summary>No amount was given (rule 10): ask, and the user types the answer (<c>which_amount</c>, typed).</summary>
     public sealed record Missing : AmountResolution;
 
-    /// <summary>A bare number below 1,000 (rule 9): ask which reading, with these amounts in dinars as options.</summary>
-    public sealed record Ask(IReadOnlyList<long> Options) : AmountResolution;
-
     /// <summary>The amount in whole dinars. It still goes through the checks (minimum, caps, balance).</summary>
     public sealed record Dinars(long AmountIqd) : AmountResolution;
 
-    /// <summary>
-    /// No usable amount; <see cref="Reason"/> is <see cref="ReasonCodes.NotUnderstood"/>, or
-    /// <see cref="ReasonCodes.AmountBelowMinimum"/> when a bare number's only whole readings are below the minimum.
-    /// </summary>
+    /// <summary>No usable amount; <see cref="Reason"/> is <see cref="ReasonCodes.NotUnderstood"/>.</summary>
     public sealed record Invalid(string Reason) : AmountResolution;
 }
 
 /// <summary>
-/// Matching rule 9 (a bare number below 1,000 is asked about; 1,000 or more is dinars as written) and rule 10 (a missing
-/// amount is asked for). A reading below <see cref="AgentOptions.MinAmountIqd"/> is not offered, and a bare number with
-/// no reading left is <see cref="ReasonCodes.AmountBelowMinimum"/> (Khalil, 14 Oct 2026). Pure. A currency other than dinars (<see cref="ParsedRequest.CurrencyText"/>) is not handled
-/// here: the orchestrator refuses it with <see cref="ReasonCodes.DinarsOnly"/> first.
+/// Matching rule 9 as of 16 Oct 2026 (Khalil): a bare number with no unit below 1,000 is read in thousands (2.5 is 2,500;
+/// 50 is 50,000); a bare number of 1,000 or more is dinars as written; million only when the word for million is written.
+/// A bare number is never asked about. Rule 10: a missing amount is asked for. A reading that is not whole dinars is
+/// <see cref="ReasonCodes.NotUnderstood"/>. The minimum and the caps are not the reader's concern: a reading below
+/// <see cref="AgentOptions.MinAmountIqd"/> goes on to the checks, which refuse it
+/// <see cref="ReasonCodes.AmountBelowMinimum"/>. Pure. A currency other than dinars
+/// (<see cref="ParsedRequest.CurrencyText"/>) is not handled here: the orchestrator refuses it with
+/// <see cref="ReasonCodes.DinarsOnly"/> first.
 /// </summary>
 public static class AmountRule
 {
-    /// <summary>A bare number below this is asked about (rule 9).</summary>
+    /// <summary>A bare number below this is read in thousands (rule 9).</summary>
     public const long BareNumberThreshold = 1_000;
 
-    // Rule 9: the thousand and the million reading of a bare number below the threshold.
-    private static readonly long[] ReadingMultipliers = [1_000, 1_000_000];
-
-    public static AmountResolution Resolve(ParsedRequest request, AgentOptions options)
+    public static AmountResolution Resolve(ParsedRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
-        ArgumentNullException.ThrowIfNull(options);
 
         if (request.AmountValue is not { } value)
             return new AmountResolution.Missing();
@@ -53,30 +47,12 @@ public static class AmountRule
         switch (request.AmountUnit)
         {
             case AmountUnit.None when value < BareNumberThreshold:
-                {
-                    // Rule 9: the thousand and the million reading, each only as whole dinars from the minimum up to the
-                    // per-transaction cap. A reading below the minimum is dropped (Khalil, 14 Oct 2026).
-                    var readings = new List<long>(2);
-                    var belowMinimum = false;
-                    foreach (var multiplier in ReadingMultipliers)
-                    {
-                        if (!TryWholeDinars(value, multiplier, out var amount) || amount > options.PerTransactionCapIqd)
-                            continue;
-                        if (amount < options.MinAmountIqd)
-                            belowMinimum = true;
-                        else
-                            readings.Add(amount);
-                    }
-
-                    if (readings.Count > 0)
-                        return new AmountResolution.Ask(readings);
-                    return belowMinimum ? new AmountResolution.Invalid(ReasonCodes.AmountBelowMinimum) : NotUnderstood();
-                }
+                // Rule 9 (Khalil, 16 Oct 2026): a bare number below 1,000 is thousands.
+                return Whole(value, 1_000);
 
             case AmountUnit.None:
             case AmountUnit.Dinars:
                 return Whole(value, 1);
-
             case AmountUnit.Thousand:
                 return Whole(value, 1_000);
 

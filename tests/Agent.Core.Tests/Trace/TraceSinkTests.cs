@@ -91,7 +91,7 @@ public class TraceSinkTests(AgentHost host)
         await StartAsync();
         var sink = new RecordingSink();
 
-        await HandleAsync(sink, U1, ParsedRequest.Transfer(SeedFacts.Contact("S01").Alias, 50, AmountUnit.None));
+        await HandleAsync(sink, U1, ParsedRequest.Transfer(SeedFacts.Contact("S01").Alias, null, AmountUnit.None));
         await HandleAsync(sink, U1, new ParsedRequest { Intent = RequestIntent.Unclear });
         await HandleAsync(sink, U1, ParsedRequest.Balance());
 

@@ -112,20 +112,20 @@ public sealed class ChatSessionTests(AgentHost host) : IAsyncDisposable
     {
         var circuit = await StartAsync(
             SeedFacts.DemoUserId,
-            new ScriptedSentence("send fifty to hammoudi", ParsedRequest.Transfer(SeedFacts.Contact("S01").Alias, 50, AmountUnit.None)));
+            new ScriptedSentence("send fifty thousand to a shared name", ParsedRequest.Transfer(SeedFacts.Contact("S08").SavedName, 50_000, AmountUnit.Dinars)));
         var session = circuit.Session;
         var raised = 0;
         session.Changed += () => Interlocked.Increment(ref raised);
 
-        await session.SendAsync("send fifty to hammoudi");
+        await session.SendAsync("send fifty thousand to a shared name");
 
         Assert.True(raised > 0);
-        Assert.Equal(circuit.Text["Question_" + QuestionKinds.WhichAmount].Value, LastAgentMessage(session).Text);
+        Assert.Equal(circuit.Text["Question_" + QuestionKinds.WhichContact].Value, LastAgentMessage(session).Text);
         Assert.Equal(LastAgentMessage(session).Id, session.QuestionMessageId);
 
         // A tapped option shows the option's own text.
-        await session.TapOptionAsync("50000");
-        Assert.Contains(session.Messages, m => m.Role == ChatRole.User && m.Text == PhoneFormat.Amount(50_000, circuit.Text));
+        await session.TapOptionAsync("S08");
+        Assert.Contains(session.Messages, m => m.Role == ChatRole.User && m.Text == SeedFacts.Contact("S08").SavedName);
 
         // The orchestrator wrote to this circuit's trace through each action's own scope (TraceLog.Current).
         Assert.Contains(circuit.Trace.Entries, e => e.Step == "card_created");

@@ -636,33 +636,34 @@ public sealed class ConversationTests(AgentHost host) : IAsyncDisposable
             SeedFacts.DemoUserId,
             null,
             null,
-            new ScriptedSentence("send fifty to hammoudi", ParsedRequest.Transfer(SeedFacts.Contact("S01").Alias, 50, AmountUnit.None)));
+            new ScriptedSentence("send fifty thousand to a shared name", ParsedRequest.Transfer(SeedFacts.Contact("S08").SavedName, 50_000, AmountUnit.Dinars)));
         var conversation = session.Conversation;
 
         // No question open: any tap is ignored.
-        await conversation.TapOptionAsync("50000");
+        await conversation.TapOptionAsync("S08");
         Assert.Contains(session.Trace.Entries, e => e.Step == "option_rejected");
 
-        await conversation.SendAsync("send fifty to hammoudi");
+        await conversation.SendAsync("send fifty thousand to a shared name");
         var question = Assert.IsType<AgentReply.Question>(conversation.Question);
-        Assert.Equal(QuestionKinds.WhichAmount, question.Kind);
+        Assert.Equal(QuestionKinds.WhichContact, question.Kind);
         var asked = Assert.Single(conversation.QuestionsAsked);
-        Assert.Equal(QuestionKinds.WhichAmount, asked.Kind);
+        Assert.Equal(QuestionKinds.WhichContact, asked.Kind);
         Assert.Equal(question.Options.Select(o => o.Value), asked.OptionValues);
         Assert.Equal(
-            new ConversationMessage(ConversationRole.Agent, ConversationKind.Question, QuestionKinds.WhichAmount),
+            new ConversationMessage(ConversationRole.Agent, ConversationKind.Question, QuestionKinds.WhichContact),
             LastAgentMessage(conversation));
         var before = conversation.Messages.Count;
 
-        await conversation.TapOptionAsync("50000000");
+        // S01 is a contact of U1, but not one of the options offered.
+        await conversation.TapOptionAsync("S01");
 
         Assert.Equal(before, conversation.Messages.Count);
         Assert.Equal(2, session.Trace.Entries.Count(e => e.Step == "option_rejected"));
         Assert.Null(conversation.Card);
 
-        // The offered option fills the amount and gives the card.
-        await conversation.TapOptionAsync("50000");
-        Assert.Contains(new ConversationMessage(ConversationRole.User, ConversationKind.Option, "50000"), conversation.Messages);
+        // The offered option picks the contact and gives the card.
+        await conversation.TapOptionAsync("S08");
+        Assert.Contains(new ConversationMessage(ConversationRole.User, ConversationKind.Option, "S08"), conversation.Messages);
         Assert.Equal(50_000, Assert.IsType<CardView>(conversation.Card).AmountIqd);
     }
 

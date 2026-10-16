@@ -286,23 +286,23 @@ public class OrchestratorTests(AgentHost host)
     }
 
     [Fact]
-    public async Task SmallNumberAsksReading()
+    public async Task SmallNumberIsReadInThousands()
     {
         await StartAsync();
 
-        var question = Question(
-            await HandleAsync(U1, ParsedRequest.Transfer(HammoudiAlias, 50, AmountUnit.None)), QuestionKinds.WhichAmount, QuestionAnswer.Tap);
-        Assert.Equal([50_000L], question.Options.Select(o => o.AmountIqd!.Value));
+        // Rule 9 (Khalil, 16 Oct 2026): a bare 50 is 50,000, straight to the card; no reading question.
+        var card = Card(await HandleAsync(U1, ParsedRequest.Transfer(HammoudiAlias, 50, AmountUnit.None)));
+        Assert.Equal(50_000, card.AmountIqd);
     }
 
     [Fact]
-    public async Task SmallNumberWithNoReadingAboveTheMinimumIsRefused()
+    public async Task SmallNumberBelowTheMinimumIsRefusedAtTheChecks()
     {
         await StartAsync();
 
-        // 0.0005 thousand is not whole dinars and 0.0005 million is 500, below the minimum (Khalil, 14 Oct 2026).
+        // A bare 0.5 is 500, below the minimum of 1,000: the checks refuse it with the minimum in the reply.
         var refusal = Refusal(
-            await HandleAsync(U1, ParsedRequest.Transfer(HammoudiAlias, 0.0005m, AmountUnit.None)), ReasonCodes.AmountBelowMinimum);
+            await HandleAsync(U1, ParsedRequest.Transfer(HammoudiAlias, 0.5m, AmountUnit.None)), ReasonCodes.AmountBelowMinimum);
         Assert.Equal(1_000, refusal.AmountIqd);
     }
 
