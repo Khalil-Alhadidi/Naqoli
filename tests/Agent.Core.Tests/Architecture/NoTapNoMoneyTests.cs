@@ -4,6 +4,8 @@ using System.Reflection;
 using System.Reflection.Emit;
 using System.Runtime.CompilerServices;
 using Agent.Core.Confirm;
+using Agent.Core.Pending;
+using Agent.Core.Pipeline;
 using Agent.Core.Wallet;
 using AgentWeb::Agent.Web.Services;
 using Agent.Eval.Running;
@@ -218,6 +220,75 @@ public class NoTapNoMoneyTests
         Assert.True(
             callers.Count == 0,
             "Nothing in Agent.Core may invoke a method by reflection. Found: " + string.Join(", ", callers.Order(StringComparer.Ordinal)));
+    }
+
+    /// <summary>
+    /// D19: Try again and Send again only open a new card. Everything <see cref="Orchestrator.ReissueAsync"/> and
+    /// <see cref="AgentConversation.ReissueAsync"/> can reach in <c>Agent.Core</c>, following every call, delegate and
+    /// state machine, never includes <see cref="WalletClient"/>'s execute or the Confirm handler's two entries; and no
+    /// reissue method in the web or the runner calls the conversation's Confirm or settle.
+    /// </summary>
+    [Fact]
+    public void TheReissuePathNeverReachesExecute()
+    {
+        var graph = CallGraph(AgentCore);
+        var starts = new[]
+        {
+            $"{typeof(Orchestrator).FullName}.{nameof(Orchestrator.ReissueAsync)}",
+            $"{typeof(AgentConversation).FullName}.{nameof(AgentConversation.ReissueAsync)}",
+        };
+        Assert.All(starts, start => Assert.True(graph.ContainsKey(start), start + " is not in Agent.Core."));
+
+        var reached = new HashSet<string>(StringComparer.Ordinal);
+        var queue = new Queue<string>(starts);
+        while (queue.TryDequeue(out var name))
+        {
+            if (!reached.Add(name))
+                continue;
+            foreach (var callee in graph.GetValueOrDefault(name) ?? [])
+                queue.Enqueue(callee);
+        }
+
+        var forbidden = new[]
+        {
+            $"{typeof(WalletClient).FullName}.{ExecuteName}",
+            $"{typeof(ConfirmHandler).FullName}.{nameof(ConfirmHandler.ConfirmAsync)}",
+            $"{typeof(ConfirmHandler).FullName}.{nameof(ConfirmHandler.SettleCheckingAsync)}",
+            $"{typeof(AgentConversation).FullName}.{nameof(AgentConversation.ConfirmAsync)}",
+            $"{typeof(AgentConversation).FullName}.{nameof(AgentConversation.SettleAsync)}",
+        };
+        Assert.Contains($"{typeof(PendingStore).FullName}.{nameof(PendingStore.CreateAsync)}", reached);
+        Assert.Empty(forbidden.Intersect(reached, StringComparer.Ordinal));
+
+        var reissueCallers = CallersOf(IsConversationConfirmEntry, AgentWeb)
+            .Concat(CallersOf(IsConversationConfirmEntry, AgentEval))
+            .Where(name => name.EndsWith(".ReissueAsync", StringComparison.Ordinal));
+        Assert.Empty(reissueCallers);
+    }
+
+    /// <summary>
+    /// The calls of every method in <paramref name="assembly"/>, by user-facing name: a state machine's or a lambda's
+    /// IL counts as its declaring method's, and a callee is named by its own declaring type and name.
+    /// </summary>
+    private static Dictionary<string, HashSet<string>> CallGraph(Assembly assembly)
+    {
+        var graph = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
+        foreach (var type in assembly.GetTypes())
+        {
+            foreach (var method in MethodsOf(type))
+            {
+                var name = NameOf(UserFacing(method));
+                if (!graph.TryGetValue(name, out var callees))
+                    graph[name] = callees = new HashSet<string>(StringComparer.Ordinal);
+                foreach (var (code, token) in Instructions(method))
+                {
+                    if (MethodOperandOpCodes.Contains(code.Value) && Resolve(method, token) is { } callee)
+                        callees.Add(NameOf(UserFacing(callee)));
+                }
+            }
+        }
+
+        return graph;
     }
 
     [Fact]

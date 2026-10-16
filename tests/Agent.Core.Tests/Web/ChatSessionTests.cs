@@ -128,4 +128,31 @@ public sealed class ChatSessionTests(AgentHost host) : IAsyncDisposable
         Assert.Contains(circuit.Trace.Entries, e => e.Step == "card_created");
         Assert.Contains(circuit.Trace.Entries, e => e.Step == "message_received");
     }
+
+    [Fact]
+    public async Task TryAgainAndSendAgainAreOfferedByStateAndOpenANewCard()
+    {
+        var circuit = await StartAsync();
+        var session = circuit.Session;
+
+        Assert.Null(session.Reissue);
+        await session.SendAsync(HammoudiSentence);
+        var first = session.Card!;
+        Assert.Null(session.Reissue);
+
+        await session.CancelAsync();
+        Assert.Equal(ReissueKind.TryAgain, session.Reissue);
+
+        await session.ReissueAsync();
+
+        Assert.NotEqual(first.PendingId, session.Card!.PendingId);
+        Assert.Equal(CardStatus.Live, session.CardState);
+        Assert.Null(session.Reissue);
+        Assert.Equal(circuit.Text["Card_Title"].Value, LastAgentMessage(session).Text);
+        Assert.Equal(LastAgentMessage(session).Id, session.CardMessageId);
+        Assert.Contains(circuit.Trace.Entries, e => e.Step == "reissue");
+
+        Assert.IsType<ConfirmOutcome.Done>(await session.ConfirmAsync(null));
+        Assert.Equal(ReissueKind.SendAgain, session.Reissue);
+    }
 }

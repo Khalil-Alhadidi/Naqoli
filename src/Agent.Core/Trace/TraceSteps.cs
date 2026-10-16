@@ -18,6 +18,9 @@ public static class TraceSteps
     /// <summary>The kill switch stopped the request or the settle; the detail is <c>on</c>.</summary>
     public const string KillSwitch = "kill_switch";
 
+    /// <summary>A card rebuilt from its stored record (D19); the detail is <c>try_again</c> or <c>send_again</c>.</summary>
+    public const string Reissue = "reissue";
+
     /// <summary>A known gap handled with a card and a note; the detail is the gap's code (<c>choose_account</c>).</summary>
     public const string KnownGap = "known_gap";
 

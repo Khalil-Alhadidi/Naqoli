@@ -630,4 +630,88 @@ public class OrchestratorTests(AgentHost host)
         // A different amount to the same person carries no warning.
         Assert.Null(Card(await HandleAsync(U1, ParsedRequest.Transfer(HammoudiAlias, 20_000, AmountUnit.Dinars))).Warning);
     }
+
+    private async Task<AgentReply> ReissueAsync(int userId, PendingRecord previous, ReissueKind kind)
+    {
+        await using var scope = host.Services.CreateAsyncScope();
+        return await scope.ServiceProvider.GetRequiredService<Orchestrator>().ReissueAsync(userId, previous, kind, Token);
+    }
+
+    /// <summary>Confirms <paramref name="card"/> through the Confirm handler and returns its record as stored after.</summary>
+    private async Task<PendingRecord> PayAsync(PendingRecord card)
+    {
+        await using var scope = host.Services.CreateAsyncScope();
+        Assert.IsType<ConfirmOutcome.Done>(
+            await scope.ServiceProvider.GetRequiredService<ConfirmHandler>().ConfirmAsync(card.UserId, card.Id, null, Token));
+        var stored = await scope.ServiceProvider.GetRequiredService<PendingStore>().FindAsync(card.Id, card.UserId, Token);
+        return Assert.IsType<PendingRecord>(stored);
+    }
+
+    [Fact]
+    public async Task ReissueOfAPaidBillIsNothingDue()
+    {
+        await StartAsync();
+        var paid = await PayAsync(Card(await HandleAsync(U1, ParsedRequest.Bill("water", null, null, AmountUnit.None))));
+        var before = (await AuditAsync()).Count;
+
+        // D19 re-reads the bill: once paid, its amount due is 0, so there is no second card.
+        Refusal(await ReissueAsync(U1, paid, ReissueKind.SendAgain), ReasonCodes.NothingDue);
+
+        Assert.DoesNotContain((await AuditAsync()).Skip(before), a => a.Event == AuditEvents.Created);
+    }
+
+    [Fact]
+    public async Task ReissueOfAnUnpaidBillTakesTheCurrentAmountDue()
+    {
+        await StartAsync();
+        var first = Card(await HandleAsync(U1, ParsedRequest.Bill("water", null, null, AmountUnit.None)));
+
+        var again = Card(await ReissueAsync(U1, first, ReissueKind.TryAgain));
+
+        Assert.NotEqual(first.Id, again.Id);
+        Assert.NotEqual(first.IdempotencyKey, again.IdempotencyKey);
+        Assert.Equal((first.Type, first.BillCode, first.BillAccountId, first.DisplayName), (again.Type, again.BillCode, again.BillAccountId, again.DisplayName));
+        Assert.Equal((9_250L, 9_750L), (again.AmountIqd, again.TotalIqd));
+        Assert.Null(again.Warning);
+    }
+
+    [Fact]
+    public async Task ReissueOfAPurchaseTakesTheCataloguePrice()
+    {
+        await StartAsync();
+        var first = Card(await HandleAsync(U1, ParsedRequest.Purchase("zain", "internet", 40_000)));
+
+        var again = Card(await ReissueAsync(U1, first, ReissueKind.SendAgain));
+
+        Assert.Equal((first.ProductId, first.ProductCode, first.AmountIqd), (again.ProductId, again.ProductCode, again.AmountIqd));
+        Assert.Equal(CardBuilder.RepeatWarning, again.Warning);
+    }
+
+    [Fact]
+    public async Task ReissueOfARecordOfAnotherUserThrows()
+    {
+        await StartAsync();
+        var card = Card(await HandleAsync(U1, ParsedRequest.Transfer(HammoudiAlias, 50_000, AmountUnit.Dinars)));
+
+        await Assert.ThrowsAsync<ArgumentException>(() => ReissueAsync(U2, card, ReissueKind.TryAgain));
+    }
+
+    [Fact]
+    public async Task TheKillSwitchRefusesAReissue()
+    {
+        await StartAsync();
+        var card = Card(await HandleAsync(U1, ParsedRequest.Transfer(HammoudiAlias, 50_000, AmountUnit.Dinars)));
+        var killSwitch = host.Services.GetRequiredService<KillSwitch>();
+        killSwitch.Set(true);
+        try
+        {
+            var refusal = Refusal(await ReissueAsync(U1, card, ReissueKind.TryAgain), ReasonCodes.NotDoneNothingTaken);
+            Assert.Equal(ReasonCodes.KillSwitchDetail, refusal.Detail);
+            Assert.Single(await AuditAsync(), a => a.Event == AuditEvents.Created);
+        }
+        finally
+        {
+            killSwitch.Set(false);
+        }
+    }
 }

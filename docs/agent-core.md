@@ -141,6 +141,30 @@ flowchart TD
 6. **Purchase.** Read the catalogue, resolve the product, take its catalogue price. Then the checks (without the format check) and the card.
 7. **Checks, then the card.** `Checks.RunAsync` in Khalil's order; on a pass, `CardBuilder.BuildAsync` and `PendingStore.CreateAsync`, and the reply is `CardIssued(record)`, whose `View` is the `CardView` a component gets.
 
+### Try again and Send again (D19)
+
+`Orchestrator.ReissueAsync(userId, previous, kind, cancellationToken)` rebuilds a card from `previous`, the stored record of the card shown, in code and without the model. `previous.UserId` must be `userId` (`ArgumentException` otherwise). It traces `reissue` (`try_again` or `send_again`), then the kill switch (on: `not_done_nothing_taken` with detail `kill_switch`, before any wallet read) and the consent gate as above. The subject (type, phone, account, display and registered names, bill account and code, product and code) is the record's; what the checks need is read again:
+
+- a transfer reads the account by its phone: a closed account is refused `account_closed` by the checks, and a number with no account any more `number_has_no_wallet`;
+- a bill reads the user's bills and takes the current amount due of the same bill account: 0 is `nothing_due`, a missing one `bill_not_found`;
+- a purchase reads the catalogue product by its code and takes its price: a missing one is `product_not_found`.
+
+Then step 7, so a card is a new record with a new ID, key and timer, and nothing moves until its own Confirm. A `SendAgain` card always carries `Warning` `repeat`, whether or not the history rule set it; a `TryAgain` card carries it only when the rule does. The old record is never reopened (architecture section 5).
+
+```mermaid
+flowchart TD
+    T["Try again or Send again tap"] --> S{"Card state"}
+    S -- "Live, Checking, no card" --> R["reissue_rejected: nothing"]
+    S -- "Expired, Cancelled, NotDone" --> A["ReissueKind.TryAgain"]
+    S -- "Done" --> B["ReissueKind.SendAgain"]
+    A --> F["PendingStore.FindAsync(id, user)"]
+    B --> F
+    F --> O["Orchestrator.ReissueAsync: kill switch, consent, fresh reads"]
+    O --> C["Checks, CardBuilder, PendingStore.CreateAsync"]
+    C --> N["New card: new ID, key, timer; repeat line on Send again"]
+    N --> W["Waits for its own Confirm"]
+```
+
 ### Recipient: contact and phone
 
 `ContactResolver.Resolve` (`src/Agent.Core/Resolver/ContactResolver.cs`) is pure. It compares `ArabicText.Key` of the typed name with the key of every saved name and alias (rule 1: normalised, leading al stripped, spaces removed). Normalising also drops Unicode format characters (zero-width joiner and non-joiner, zero-width space, bidi controls, and, since the text is read as runes, format characters outside the basic plane such as language tags), so an invisible character neither splits a key nor reorders a name. The first step that hits wins. A closed account stays a candidate; the checks refuse it later. Hits on one account count once, and the alias is shown when an account was hit by both (rule 7).
@@ -459,6 +483,7 @@ Every action opens its own DI scope (`CreateAsyncScope`) and resolves the agent'
 | `ConfirmAsync(pin)` | `ConfirmHandler.ConfirmAsync(user, Card.PendingId, pin)`; the PIN is passed through and kept nowhere |
 | `SettleAsync()` | Only while the card is Checking: `ConfirmHandler.SettleCheckingAsync`, the same body under the same key (rule 6) |
 | `CancelAsync()` | `PendingStore.CancelAsync` while the card is live |
+| `ReissueAsync()` | D19, the card's Try again or Send again: only for a card shown as Expired, Cancelled or NotDone (`ReissueKind.TryAgain`) or Done (`ReissueKind.SendAgain`), and only when its stored record is not live, Executing or Checking (else traced `reissue_rejected`). Reads the record, then `Orchestrator.ReissueAsync`; the reply is shown as any reply (a new card, or a refusal that leaves the old card). Never the Confirm handler |
 | `RefreshAsync()` | Reads the record; marks the card expired when it is Pending past `ExpiresAt`, Expired, or gone |
 
 When the Confirm handler throws, the conversation reads the record:
@@ -588,10 +613,10 @@ stateDiagram-v2
 
 | Zone | Written by | Steps (detail) |
 |---|---|---|
-| Code | `Orchestrator` | `parse_received` (the intent), `consent_checked` (`given` or `required`), `recipient_resolved` (`contact`, `alias`, `number`, `option`, `bill` or `purchase`), `amount_resolved` (the amount), `checks_passed` (the quote's total) or `check_failed:<reason>` (the figure), `card_created` (type, total, `pin` when one is needed), `question:<kind>` (how many options), `refusal:<code>` (the wallet code for `not_done_nothing_taken`, else the figure), `balance_shown` (no figure), `known_gap` (`choose_account`) |
+| Code | `Orchestrator` | `parse_received` (the intent), `consent_checked` (`given` or `required`), `recipient_resolved` (`contact`, `alias`, `number`, `option`, `bill` or `purchase`), `amount_resolved` (the amount), `checks_passed` (the quote's total) or `check_failed:<reason>` (the figure), `card_created` (type, total, `pin` when one is needed), `question:<kind>` (how many options), `refusal:<code>` (the wallet code for `not_done_nothing_taken`, else the figure), `balance_shown` (no figure), `known_gap` (`choose_account`), `reissue` (`try_again` or `send_again`) |
 | Write | `ConfirmHandler` | `begin_execute` (type and total), `recheck_ok` or `recheck_failed:<reason>` (the wallet code, if any), `execute_sent`, `outcome:<done, not_done, checking, expired, already_handled, not_found, pin_required, pin_wrong, pin_malformed, cancelled or exception>` (the record's state, the reason, or the attempts left), `settle_sent`, `settle_outcome:<the same names>` |
 
-The User and Model zones are written by the `Conversation` (below; `message_received`, `confirm_tapped`, `check_again_tapped`, `cancel_tapped`, `parse:<parser name>` with the intent, `parse:unavailable`) and the Claude parser (`more_than_one_request`, Model zone, with the count). The `Conversation` also writes, in the Code zone, `model_invalid_reply` (the field the validator refused), `answer_merged` (the typed question's kind), `option_rejected`, `learning_logged` (the reason) and `error` (an exception's type). A detail holds codes, states and amounts only: never a PIN, an idempotency key, a purchase code, a phone, a name, a balance or any text the user typed (the unsupported reason stays out of the trace). `TraceSinkTests.NoPinKeyCodeOrPhoneInAnyStep` runs a PIN payment and a purchase through a recording sink and checks every step and detail.
+The User and Model zones are written by the `Conversation` (below; `message_received`, `confirm_tapped`, `check_again_tapped`, `cancel_tapped`, `reissue_tapped`, `parse:<parser name>` with the intent, `parse:unavailable`) and the Claude parser (`more_than_one_request`, Model zone, with the count). The `Conversation` also writes, in the Code zone, `model_invalid_reply` (the field the validator refused), `answer_merged` (the typed question's kind), `option_rejected`, `reissue_rejected` (the card's or the record's state), `learning_logged` (the reason) and `error` (an exception's type). A detail holds codes, states and amounts only: never a PIN, an idempotency key, a purchase code, a phone, a name, a balance or any text the user typed (the unsupported reason stays out of the trace). `TraceSinkTests.NoPinKeyCodeOrPhoneInAnyStep` runs a PIN payment and a purchase through a recording sink and checks every step and detail.
 
 ```mermaid
 sequenceDiagram
@@ -668,6 +693,7 @@ The conversation calls it after every reply that yields an entry, with the maske
 - `NothingInAgentWebCallsTheConfirmHandler` and `OnlyTheSessionsConfirmAndSettleCallTheConversationsFromTheWeb` scan `Agent.Web`: nothing there calls the handler, and only `ChatSession.ConfirmAsync` and `ChatSession.SettleAsync` call the conversation's two. `NothingInAgentWebInvokesByReflection` checks that assembly for reflection calls. `Agent.Eval` joins the scan with the runner's case driver (milestone 5, Task 2).
 - `OnlyTheWalletClientNamesTheTransactionsRoutes` decodes every `ldstr` (`Module.ResolveString`): the literal `"transactions"` is loaded only by `WalletClient.ExecuteAsync`, `"transactions/by-key/"` only by `WalletClient.FindByKeyAsync`, and no other literal contains `transactions` (ordinal, so a leading slash or a full URL is caught too; the table name `PendingTransactions` is not). So no second HTTP path to the execute route can hide in the assembly.
 - `NothingInAgentCoreInvokesByReflection` checks that no method calls `MethodBase.Invoke`, `Type.GetMethod`, `Type.GetMethods`, `Type.InvokeMember`, `Delegate.DynamicInvoke` or any overload of `MethodInfo.CreateDelegate`; `TheReflectionScanKnowsEveryInvokeRoute` checks the predicate catches every public overload of each.
+- `TheReissuePathNeverReachesExecute` (D19) builds the call graph of `Agent.Core` with the same scan and follows it from `Orchestrator.ReissueAsync` and `Conversation.ReissueAsync`: what they reach includes `PendingStore.CreateAsync` and never `WalletClient.ExecuteAsync`, the Confirm handler's two entries or the conversation's Confirm and settle; no `ReissueAsync` in `Agent.Web` or `Agent.Eval` calls the conversation's Confirm or settle.
 - `ExecuteIsInternal` checks that `ExecuteAsync` is `internal`, not public, and that `Agent.Core.Tests` is the only friend assembly.
 
 ## Settings

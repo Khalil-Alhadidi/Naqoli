@@ -65,6 +65,17 @@
                        Disabled="@(!CanAct)" OnClick="ConfirmAsync">@Text["Card_Confirm"]</MudButton>
             <MudButton data-testid="card-cancel" Variant="Variant.Text"
                        Disabled="@(!CanAct)" OnClick="CancelAsync">@Text["Card_Cancel"]</MudButton>
+            @* D19: a new card from the stored request; never while the card is live or its payment is checking. *@
+            @if (!IsLive && Session.Reissue == ReissueKind.TryAgain)
+            {
+                <MudButton data-testid="card-try-again" Variant="Variant.Outlined" Color="Color.Primary"
+                           Disabled="@(!CanReissue)" OnClick="ReissueAsync">@Text["Card_TryAgain"]</MudButton>
+            }
+            else if (!IsLive && Session.Reissue == ReissueKind.SendAgain)
+            {
+                <MudButton data-testid="card-send-again" Variant="Variant.Outlined" Color="Color.Primary"
+                           Disabled="@(!CanReissue)" OnClick="ReissueAsync">@Text["Card_SendAgain"]</MudButton>
+            }
         </MudCardActions>
     </MudCard>
 }
@@ -80,6 +91,8 @@
     private bool IsLive => Session.CardState == CardStatus.Live && remaining > 0;
 
     private bool CanAct => IsLive && !Session.Busy && !acting;
+
+    private bool CanReissue => !Session.Busy && !acting;
 
     private double Progress => total <= 0 ? 0 : 100.0 * remaining / total;
 
@@ -137,6 +150,20 @@
         try
         {
             await Session.CancelAsync();
+        }
+        finally
+        {
+            acting = false;
+        }
+    }
+
+    private async Task ReissueAsync()
+    {
+        // Disabled at once, so a double tap opens one new card.
+        acting = true;
+        try
+        {
+            await Session.ReissueAsync();
         }
         finally
         {

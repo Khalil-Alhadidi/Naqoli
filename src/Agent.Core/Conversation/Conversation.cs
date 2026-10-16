@@ -507,6 +507,67 @@ public sealed class Conversation : IDisposable
     }
 
     /// <summary>
+    /// The card's "Try again" or "Send again" button (D19): rebuilds the card shown from its stored record through
+    /// <see cref="Orchestrator.ReissueAsync"/>, without the model, and shows the reply as any reply (a new card, or a
+    /// refusal that leaves the old card as it is). Try again is for a card that expired, was cancelled or definitely
+    /// failed; Send again for a done one. With no card, a live card or a payment still checking it does nothing (traced
+    /// as <c>reissue_rejected</c>). It never reaches the Confirm handler: the new card waits for its own Confirm.
+    /// </summary>
+    public async Task ReissueAsync()
+    {
+        if (!await EnterAsync())
+            return;
+        try
+        {
+            SetBusy(true);
+            var token = stopping;
+            trace.Record(TraceZone.User, "reissue_tapped", null);
+            if (Card is not { } card || ReissueKindOf(CardState) is not { } kind)
+            {
+                trace.Record(TraceZone.Code, ReissueRejectedStep, CardState?.ToString());
+                return;
+            }
+
+            PendingRecord? record;
+            await using (var scope = scopes.CreateAsyncScope())
+                record = await scope.ServiceProvider.GetRequiredService<PendingStore>().FindAsync(card.PendingId, userId, token);
+
+            // The stored record has the last word: one that is still open (live, executing or checking) is not rebuilt.
+            if (record is null
+                || record.State is PendingState.Executing or PendingState.Checking
+                || (record.State == PendingState.Pending && record.ExpiresAt > clock.GetUtcNow()))
+            {
+                trace.Record(TraceZone.Code, ReissueRejectedStep, record?.State.ToString());
+                return;
+            }
+
+            Question = null;
+            QuestionMessageIndex = null;
+            typedSlot = null;
+
+            AgentReply reply;
+            await using (var scope = scopes.CreateAsyncScope())
+                reply = await scope.ServiceProvider.GetRequiredService<Orchestrator>().ReissueAsync(userId, record, kind, token);
+
+            LastReply = reply;
+            LastLearningEntry = null;
+            ShowReply(reply);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            Failed(ex);
+        }
+        catch (OperationCanceledException) when (stopping.IsCancellationRequested)
+        {
+            // The conversation ended; the agent has recorded what it could (see Dispose).
+        }
+        finally
+        {
+            Release();
+        }
+    }
+
+    /// <summary>
     /// Called when the card's countdown reaches zero (or the runner waits out the timer): reads the record again and
     /// marks the card expired when its timer has ended, so Confirm is no longer offered.
     /// </summary>
@@ -577,6 +638,21 @@ public sealed class Conversation : IDisposable
     }
 
     private bool IsCardLive => Card is not null && CardState == CardStatus.Live;
+
+    /// <summary>The trace step of a reissue tap that rebuilt nothing; the detail is the card's or the record's state.</summary>
+    private const string ReissueRejectedStep = "reissue_rejected";
+
+    /// <summary>
+    /// D19: what a card in <paramref name="state"/> offers. Expired, Cancelled and NotDone (nothing moved) offer
+    /// <see cref="ReissueKind.TryAgain"/>; Done offers <see cref="ReissueKind.SendAgain"/>; a live card, a payment still
+    /// checking and no card offer neither (null).
+    /// </summary>
+    public static ReissueKind? ReissueKindOf(CardStatus? state) => state switch
+    {
+        CardStatus.Expired or CardStatus.Cancelled or CardStatus.NotDone => ReissueKind.TryAgain,
+        CardStatus.Done => ReissueKind.SendAgain,
+        _ => null,
+    };
 
     /// <summary>The trace step of a message that left a waiting card in place; the detail says why.</summary>
     private const string CardKeptStep = "card_kept";

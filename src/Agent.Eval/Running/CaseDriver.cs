@@ -137,9 +137,9 @@ public sealed class CaseDriver
                 var cardBefore = conversation.Card?.PendingId;
                 var statusesBefore = watcher.Sequence.Count;
 
-                if (step.Tap is "try_again" or "save_alias")
+                if (step.Tap is "save_alias")
                 {
-                    // D19 ("try again") and 9a (save an alias) are not built yet.
+                    // 9a (save an alias) is not built yet.
                     unsupported = kind;
                     break;
                 }
@@ -295,6 +295,11 @@ public sealed class CaseDriver
 
             case "cancel":
                 await conversation.CancelAsync();
+                break;
+
+            case "try_again":
+                // D19: the card's Try again (or Send again) button; a new card that waits for its own Confirm.
+                await conversation.ReissueAsync();
                 break;
 
             default:

@@ -42,6 +42,10 @@ public sealed class Orchestrator
     private const string ConsentGiven = "given";
     private const string ConsentRequired = "required";
 
+    // Trace details of a reissue (D19).
+    private const string ReissueTryAgain = "try_again";
+    private const string ReissueSendAgain = "send_again";
+
     private readonly WalletClient wallet;
     private readonly Checks checks;
     private readonly CardBuilder cards;
@@ -202,6 +206,95 @@ public sealed class Orchestrator
     }
 
     /// <summary>
+    /// D19, "Try again" and "Send again": rebuilds a card from <paramref name="previous"/>, the stored record of the card
+    /// shown, in code and without the model. The subject (type, phone, account, names, bill, product) is the record's;
+    /// what the checks need is read again: a transfer's account by its phone (closed: <c>account_closed</c>; gone:
+    /// <c>number_has_no_wallet</c>), a bill's current amount due (0: <c>nothing_due</c>; missing: <c>bill_not_found</c>),
+    /// a product's catalogue price (missing: <c>product_not_found</c>). Then the same consent gate, ordered checks and
+    /// issue as <see cref="HandleAsync(int, ParsedRequest, SlotAnswers, CancellationToken)"/>, so a card is a new record
+    /// with a new ID, key and timer, and nothing moves until Confirm. A <see cref="ReissueKind.SendAgain"/> card always
+    /// carries <see cref="CardBuilder.RepeatWarning"/>. The kill switch refuses it before any wallet read.
+    /// </summary>
+    /// <exception cref="ArgumentException"><paramref name="previous"/> is not <paramref name="userId"/>'s.</exception>
+    public async Task<AgentReply> ReissueAsync(int userId, PendingRecord previous, ReissueKind kind, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(previous);
+        if (previous.UserId != userId)
+            throw new ArgumentException("The pending record belongs to another user.", nameof(previous));
+
+        trace.Record(TraceZone.Code, TraceSteps.Reissue, kind == ReissueKind.SendAgain ? ReissueSendAgain : ReissueTryAgain);
+
+        if (killSwitch.IsOn)
+        {
+            trace.Record(TraceZone.Code, TraceSteps.KillSwitch, "on");
+            return await RefuseAsync(userId, ReasonCodes.NotDoneNothingTaken, ReasonCodes.KillSwitchDetail, null, cancellationToken);
+        }
+
+        var userRead = await wallet.GetUserAsync(userId, cancellationToken);
+        if (userRead is not WalletResult<WalletUser>.Ok { Value: var user })
+            return await RefuseUnreadAsync(userId, userRead, cancellationToken);
+        if (!user.ConsentGiven)
+            return await ConsentAsync(userId, cancellationToken);
+        trace.Record(TraceZone.Code, TraceSteps.ConsentChecked, ConsentGiven);
+
+        var subject = new CardSubject(
+            previous.Type,
+            previous.ToPhone,
+            previous.ToAccountId,
+            previous.DisplayName,
+            previous.RegisteredName,
+            previous.BillAccountId,
+            previous.BillCode,
+            previous.ProductId,
+            previous.ProductCode);
+        var repeat = kind == ReissueKind.SendAgain;
+
+        switch (previous.Type)
+        {
+            case TransferType when previous.ToPhone is { } phone:
+                switch (await wallet.GetAccountByPhoneAsync(phone, cancellationToken))
+                {
+                    case WalletResult<WalletAccount>.Ok { Value: var account }:
+                        trace.Record(TraceZone.Code, TraceSteps.AmountResolved, previous.AmountIqd.ToString(CultureInfo.InvariantCulture));
+                        var transfer = new CheckInput(
+                            userId, TransferType, previous.AmountIqd, phone, previous.ToAccountId, account.Status, null, null, SkipFormat: false);
+                        return await CheckAndIssueAsync(userId, transfer, subject, repeat, cancellationToken);
+                    case WalletResult<WalletAccount>.Refused { Problem: { Status: 404 } or { Code: UnknownAccountCode } }:
+                        return await RefuseAsync(userId, ReasonCodes.NumberHasNoWallet, null, null, cancellationToken);
+                    case var unread:
+                        return await RefuseUnreadAsync(userId, unread, cancellationToken);
+                }
+
+            case BillType:
+                var billsRead = await wallet.GetBillsAsync(userId, cancellationToken);
+                if (billsRead is not WalletResult<IReadOnlyList<WalletBill>>.Ok { Value: var bills })
+                    return await RefuseUnreadAsync(userId, billsRead, cancellationToken);
+                var bill = bills.FirstOrDefault(b => b.BillAccountId == previous.BillAccountId);
+                if (bill is null)
+                    return await RefuseAsync(userId, ReasonCodes.BillNotFound, null, null, cancellationToken);
+                if (bill.AmountDueIqd <= 0)
+                    return await RefuseAsync(userId, ReasonCodes.NothingDue, null, null, cancellationToken);
+                trace.Record(TraceZone.Code, TraceSteps.AmountResolved, bill.AmountDueIqd.ToString(CultureInfo.InvariantCulture));
+                var billInput = new CheckInput(userId, BillType, bill.AmountDueIqd, null, null, null, bill.BillAccountId, null, SkipFormat: true);
+                return await CheckAndIssueAsync(userId, billInput, subject, repeat, cancellationToken);
+
+            case PurchaseType:
+                var productsRead = await wallet.GetProductsAsync(null, null, null, cancellationToken);
+                if (productsRead is not WalletResult<IReadOnlyList<WalletProduct>>.Ok { Value: var catalogue })
+                    return await RefuseUnreadAsync(userId, productsRead, cancellationToken);
+                var product = catalogue.FirstOrDefault(p => string.Equals(p.Code, previous.ProductCode, StringComparison.Ordinal));
+                if (product is null)
+                    return await RefuseAsync(userId, ReasonCodes.ProductNotFound, null, null, cancellationToken);
+                trace.Record(TraceZone.Code, TraceSteps.AmountResolved, product.PriceIqd.ToString(CultureInfo.InvariantCulture));
+                var purchase = new CheckInput(userId, PurchaseType, product.PriceIqd, null, null, null, null, product.ProductId, SkipFormat: true);
+                return await CheckAndIssueAsync(userId, purchase, subject with { ProductId = product.ProductId }, repeat, cancellationToken);
+
+            default:
+                throw new InvalidOperationException("The pending record has no card to rebuild.");
+        }
+    }
+
+    /// <summary>
     /// The known gap <c>choose_account</c> (GAP-04) with a recipient and an amount: handled as a transfer from the usual
     /// account, its card carrying <see cref="ReasonCodes.AccountChoiceUnavailable"/>. Without either, it is unsupported.
     /// </summary>
@@ -321,7 +414,7 @@ public sealed class Orchestrator
 
         var input = new CheckInput(
             userId, TransferType, amount, subject.ToPhone, subject.ToAccountId, accountStatus, null, null, SkipFormat: false);
-        return await CheckAndIssueAsync(userId, input, subject, cancellationToken);
+        return await CheckAndIssueAsync(userId, input, subject, repeatWarning: false, cancellationToken);
     }
 
     /// <summary>
@@ -401,7 +494,7 @@ public sealed class Orchestrator
         trace.Record(TraceZone.Code, TraceSteps.AmountResolved, bill.AmountDueIqd.ToString(CultureInfo.InvariantCulture));
         var subject = new CardSubject(BillType, null, null, bill.Label ?? bill.BillerName, null, bill.BillAccountId, bill.Code, null, null);
         var input = new CheckInput(userId, BillType, bill.AmountDueIqd, null, null, null, bill.BillAccountId, null, SkipFormat: true);
-        return await CheckAndIssueAsync(userId, input, subject, cancellationToken);
+        return await CheckAndIssueAsync(userId, input, subject, repeatWarning: false, cancellationToken);
     }
 
     /// <summary>
@@ -447,12 +540,16 @@ public sealed class Orchestrator
         trace.Record(TraceZone.Code, TraceSteps.AmountResolved, product.PriceIqd.ToString(CultureInfo.InvariantCulture));
         var subject = new CardSubject(PurchaseType, null, null, product.ProviderNameAr, null, null, null, product.ProductId, product.Code);
         var input = new CheckInput(userId, PurchaseType, product.PriceIqd, null, null, null, null, product.ProductId, SkipFormat: true);
-        return await CheckAndIssueAsync(userId, input, subject, cancellationToken);
+        return await CheckAndIssueAsync(userId, input, subject, repeatWarning: false, cancellationToken);
     }
 
-    /// <summary>Runs the ordered checks; on a pass builds the card and opens its pending record (step 7).</summary>
+    /// <summary>
+    /// Runs the ordered checks; on a pass builds the card and opens its pending record (step 7). With
+    /// <paramref name="repeatWarning"/> (a Send again card, D19) the card carries <see cref="CardBuilder.RepeatWarning"/>
+    /// whether or not the history rule set it.
+    /// </summary>
     private async Task<AgentReply> CheckAndIssueAsync(
-        int userId, CheckInput input, CardSubject subject, CancellationToken cancellationToken)
+        int userId, CheckInput input, CardSubject subject, bool repeatWarning, CancellationToken cancellationToken)
     {
         WalletQuote quote;
         switch (await checks.RunAsync(input, cancellationToken))
@@ -471,6 +568,8 @@ public sealed class Orchestrator
         var built = await cards.BuildAsync(userId, quote, subject, clock.GetUtcNow(), cancellationToken);
         if (built is not WalletResult<CardDraft>.Ok { Value: var draft })
             return await RefuseUnreadAsync(userId, built, cancellationToken);
+        if (repeatWarning)
+            draft = draft with { Warning = CardBuilder.RepeatWarning };
 
         var record = await store.CreateAsync(draft, cancellationToken);
         trace.Record(

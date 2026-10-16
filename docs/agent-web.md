@@ -113,6 +113,7 @@ Each action below is the conversation's action of the same name ([agent-core.md]
 | `ConfirmAsync(pin)` | The card's Confirm button only | `ConfirmHandler.ConfirmAsync(DemoUserId, Card.PendingId, pin)` |
 | `SettleAsync()` | The "check again" button (`check-again`) of a Checking outcome only | `ConfirmHandler.SettleCheckingAsync(DemoUserId, Card.PendingId)`: the same body under the same key (rule 6) |
 | `CancelAsync()` | The card's Cancel button | `PendingStore.CancelAsync` |
+| `ReissueAsync()` | The card's Try again (`card-try-again`) or Send again (`card-send-again`) button | `Orchestrator.ReissueAsync` (D19): a new card from the stored record; never the Confirm handler |
 | `RefreshAsync()` | The card's countdown at zero | Reads the record; marks the card expired when it is Pending past `ExpiresAt`, Expired, or gone |
 
 Rule 1: nothing in `Agent.Web` calls the Confirm handler, and only `ChatSession.ConfirmAsync` and `ChatSession.SettleAsync` call `Conversation.ConfirmAsync` and `Conversation.SettleAsync`, which are the handler's only callers in `Agent.Core`. `NoTapNoMoneyTests.NothingInAgentWebCallsTheConfirmHandler` and `OnlyTheSessionsConfirmAndSettleCallTheConversationsFromTheWeb` check this on the IL, and `NothingInAgentWebInvokesByReflection` checks the web assembly for reflection calls.
@@ -249,6 +250,8 @@ Options validation requires `StaleExecutingAfterSeconds` to be more than three t
 | `Card_Expired` | `TODO-AR: This card has expired. Nothing was sent` |
 | `Card_Cancelled` | `TODO-AR: Cancelled` |
 | `Card_Timer` | `TODO-AR: {0} seconds left` |
+| `Card_TryAgain` | `TODO-AR: Try again` (milestone 7, still a placeholder) |
+| `Card_SendAgain` | `TODO-AR: Send again` (milestone 7, still a placeholder) |
 | `Outcome_done` | `TODO-AR: Done. Reference {0}. Your balance is now {1}` |
 | `Outcome_checking` | `TODO-AR: Checking with the wallet. Nothing is shown as failed` |
 | `Outcome_check_again` | `TODO-AR: Check again` |
@@ -342,6 +345,7 @@ The journeys locate elements only by these attributes.
 | Card root | `card` | `data-state` (`live`, `done`, `notdone`, `checking`, `expired`, `cancelled`) |
 | Card fields | `card-display`, `card-registered`, `card-amount`, `card-fee`, `card-total`, `card-balance-after`, `card-first-time`, `card-warning`, `card-timer` | |
 | Card buttons and PIN | `card-confirm`, `card-cancel`, `card-pin` | |
+| Card reissue buttons (D19) | `card-try-again` (state `expired`, `cancelled` or `notdone`), `card-send-again` (state `done`); neither while live or checking | |
 | Question option | `question-option` | `data-value` |
 | Consent and settle buttons | `consent-button`, `check-again` | |
 | Trace entry | `trace-entry` | `data-zone` (`user`, `code`, `model`, `write`) |

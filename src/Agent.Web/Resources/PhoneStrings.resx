@@ -20,6 +20,8 @@
   <data name="Card_Expired" xml:space="preserve"><value>خلص الوقت. ما انحوّل شي</value></data>
   <data name="Card_Cancelled" xml:space="preserve"><value>العملية ملغية</value></data>
   <data name="Card_Timer" xml:space="preserve"><value>باقي {0} ثانية</value></data>
+  <data name="Card_TryAgain" xml:space="preserve"><value>TODO-AR: Try again</value></data>
+  <data name="Card_SendAgain" xml:space="preserve"><value>TODO-AR: Send again</value></data>
   <data name="Outcome_done" xml:space="preserve"><value>تم. رقم العملية {0}. رصيدك هسه {1}</value></data>
   <data name="Outcome_checking" xml:space="preserve"><value>دا نتأكد من المحفظة، لحظة. لا تعيد الطلب</value></data>
   <data name="Outcome_check_again" xml:space="preserve"><value>تأكد مرة ثانية</value></data>

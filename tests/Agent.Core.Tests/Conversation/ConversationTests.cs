@@ -15,6 +15,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Wallet.MockApi.Data;
+using Wallet.MockApi.Data.Entities;
 using AgentConversation = Agent.Core.Conversation.Conversation;
 
 namespace Agent.Core.Tests.Conversation;
@@ -765,6 +766,200 @@ public sealed class ConversationTests(AgentHost host) : IAsyncDisposable
     }
 
     /// <summary>A trace sink that keeps every step.</summary>
+    /// <summary>The card's timer runs out and the sweep marks its record Expired.</summary>
+    private async Task ExpireTheCardAsync(Session session)
+    {
+        var timer = session.Provider.GetRequiredService<IOptions<AgentOptions>>().Value.CardTimerSeconds;
+        host.Clock.Advance(TimeSpan.FromSeconds(timer + 1));
+        await using (var scope = session.Provider.CreateAsyncScope())
+            await scope.ServiceProvider.GetRequiredService<PendingStore>().ExpireDueAsync(Token);
+        await session.Conversation.RefreshAsync();
+        Assert.Equal(CardStatus.Expired, session.Conversation.CardState);
+    }
+
+    /// <summary>
+    /// Puts the live card's record in Executing and then <paramref name="state"/> through the store, and lets the
+    /// conversation see it: a Confirm on a record that has left Pending is "already handled" and shows its state.
+    /// </summary>
+    private static async Task MoveTheCardAsync(Session session, PendingState state)
+    {
+        var card = session.Conversation.Card!;
+        await using (var scope = session.Provider.CreateAsyncScope())
+        {
+            var store = scope.ServiceProvider.GetRequiredService<PendingStore>();
+            Assert.IsType<TransitionResult.Begun>(await store.TryBeginExecuteAsync(card.PendingId, SeedFacts.DemoUserId, Token));
+            if (state == PendingState.Checking)
+                await store.MarkCheckingAsync(card.PendingId, SeedFacts.DemoUserId, "test", Token);
+            else
+                Assert.IsType<TransitionResult.Completed>(await store.CompleteAsync(card.PendingId, SeedFacts.DemoUserId, state, "test", null, null, null, Token));
+        }
+
+        Assert.Equal(new ConfirmOutcome.AlreadyHandled(state), await session.Conversation.ConfirmAsync(null));
+    }
+
+    [Fact]
+    public async Task TryAgainAfterExpiryOpensANewCardAndMovesNothing()
+    {
+        var session = await StartAsync();
+        var conversation = session.Conversation;
+        await conversation.SendAsync(HammoudiSentence);
+        var first = conversation.Card!;
+        await ExpireTheCardAsync(session);
+
+        await conversation.ReissueAsync();
+
+        // D19: a new record with its own ID, key and timer; the old one stays Expired, and nothing has moved.
+        var second = Assert.IsType<CardView>(conversation.Card);
+        Assert.NotEqual(first.PendingId, second.PendingId);
+        Assert.Equal(CardStatus.Live, conversation.CardState);
+        Assert.Equal((50_000L, 1_000L, 51_000L), (second.AmountIqd, second.FeeIqd, second.TotalIqd));
+        Assert.Equal(first.DisplayName, second.DisplayName);
+        Assert.Null(second.Warning);
+        var timer = session.Provider.GetRequiredService<IOptions<AgentOptions>>().Value.CardTimerSeconds;
+        Assert.Equal(conversation.Now.AddSeconds(timer), second.ExpiresAt);
+        Assert.Equal([first, second], conversation.CardsIssued);
+
+        var old = await RecordAsync(session, first.PendingId);
+        var fresh = await RecordAsync(session, second.PendingId);
+        Assert.Equal(PendingState.Expired, old.State);
+        Assert.Equal(PendingState.Pending, fresh.State);
+        Assert.NotEqual(old.IdempotencyKey, fresh.IdempotencyKey);
+        Assert.Equal(0, await WalletRowsAsync(old.IdempotencyKey));
+        Assert.Equal(0, await WalletRowsAsync(fresh.IdempotencyKey));
+        Assert.Equal(SeedFacts.DemoBalance, await host.Wallet.AccountBalanceAsync(SeedFacts.DemoPhone));
+        Assert.Contains((TraceZone.User, "reissue_tapped", null), session.Trace.Entries);
+        Assert.Contains((TraceZone.Code, TraceSteps.Reissue, "try_again"), session.Trace.Entries);
+        Assert.DoesNotContain(session.Trace.Entries, e => e.Step is TraceSteps.BeginExecute or TraceSteps.ExecuteSent);
+
+        // Nothing moves until Confirm.
+        Assert.IsType<ConfirmOutcome.Done>(await conversation.ConfirmAsync(null));
+        Assert.Equal(1, await WalletRowsAsync(fresh.IdempotencyKey));
+        Assert.Equal(SeedFacts.DemoBalance - 51_000, await host.Wallet.AccountBalanceAsync(SeedFacts.DemoPhone));
+    }
+
+    [Fact]
+    public async Task TryAgainAfterACancelOrANotDoneOpensANewCard()
+    {
+        var session = await StartAsync();
+        var conversation = session.Conversation;
+        await conversation.SendAsync(HammoudiSentence);
+        await conversation.CancelAsync();
+        Assert.Equal(CardStatus.Cancelled, conversation.CardState);
+
+        await conversation.ReissueAsync();
+        Assert.Equal(CardStatus.Live, conversation.CardState);
+        Assert.Equal(2, conversation.CardsIssued.Count);
+
+        await MoveTheCardAsync(session, PendingState.NotDone);
+        Assert.Equal(CardStatus.NotDone, conversation.CardState);
+
+        await conversation.ReissueAsync();
+        Assert.Equal(CardStatus.Live, conversation.CardState);
+        Assert.Equal(3, conversation.CardsIssued.Count);
+        Assert.Equal(2, session.Trace.Entries.Count(e => e == (TraceZone.Code, TraceSteps.Reissue, "try_again")));
+    }
+
+    [Fact]
+    public async Task SendAgainAfterDoneOpensACardWithTheRepeatLine()
+    {
+        var session = await StartAsync();
+        var conversation = session.Conversation;
+        await conversation.SendAsync(HammoudiSentence);
+        var first = conversation.Card!;
+        Assert.IsType<ConfirmOutcome.Done>(await conversation.ConfirmAsync(null));
+        var paid = await RecordAsync(session, first.PendingId);
+
+        // Past the repeat window, so the line comes from Send again itself, not from the history rule.
+        var window = session.Provider.GetRequiredService<IOptions<AgentOptions>>().Value.RepeatWarningWindowMinutes;
+        host.Clock.Advance(TimeSpan.FromMinutes(window + 1));
+
+        await conversation.ReissueAsync();
+
+        var second = Assert.IsType<CardView>(conversation.Card);
+        Assert.NotEqual(first.PendingId, second.PendingId);
+        Assert.Equal(CardStatus.Live, conversation.CardState);
+        Assert.Equal(CardBuilder.RepeatWarning, second.Warning);
+        Assert.Equal(50_000, second.AmountIqd);
+        Assert.Contains((TraceZone.Code, TraceSteps.Reissue, "send_again"), session.Trace.Entries);
+
+        // The wallet still has the one transaction of the first card, and nothing under the new key.
+        Assert.Equal(1, await WalletRowsAsync(paid.IdempotencyKey));
+        Assert.Equal(0, await WalletRowsAsync((await RecordAsync(session, second.PendingId)).IdempotencyKey));
+        Assert.Equal(PendingState.Done, (await RecordAsync(session, first.PendingId)).State);
+        Assert.Equal(SeedFacts.DemoBalance - 51_000, await host.Wallet.AccountBalanceAsync(SeedFacts.DemoPhone));
+    }
+
+    [Fact]
+    public async Task ReissueIsRefusedWhileCheckingOrLive()
+    {
+        var session = await StartAsync();
+        var conversation = session.Conversation;
+
+        // No card yet.
+        await conversation.ReissueAsync();
+        Assert.Null(conversation.Card);
+
+        await conversation.SendAsync(HammoudiSentence);
+        var live = conversation.Card!;
+
+        // A live card is not offered again.
+        await conversation.ReissueAsync();
+        Assert.Same(live, conversation.Card);
+        Assert.Equal(CardStatus.Live, conversation.CardState);
+
+        // Nor is one whose payment is checking.
+        await MoveTheCardAsync(session, PendingState.Checking);
+        Assert.Equal(CardStatus.Checking, conversation.CardState);
+        var messages = conversation.Messages.Count;
+
+        await conversation.ReissueAsync();
+
+        Assert.Same(live, conversation.Card);
+        Assert.Equal(CardStatus.Checking, conversation.CardState);
+        Assert.Equal([live], conversation.CardsIssued);
+        Assert.Equal(messages, conversation.Messages.Count);
+        Assert.Equal(3, session.Trace.Entries.Count(e => e.Step == "reissue_rejected"));
+        Assert.DoesNotContain(session.Trace.Entries, e => e.Step == TraceSteps.Reissue);
+    }
+
+    [Fact]
+    public async Task TryAgainRunsFreshChecks()
+    {
+        var cap = new AgentOptions().PerTransactionCapIqd;
+        var session = await StartAsync(configure: o => o.PerTransactionCapIqd = cap);
+        var conversation = session.Conversation;
+        await conversation.SendAsync(HammoudiSentence);
+        var first = conversation.Card!;
+        await ExpireTheCardAsync(session);
+
+        // A cap lowered in the settings between the two cards refuses the second.
+        cap = 20_000;
+        await conversation.ReissueAsync();
+
+        var overCap = Assert.IsType<AgentReply.Refusal>(conversation.LastReply);
+        Assert.Equal(ReasonCodes.OverPerTransactionCap, overCap.Code);
+        Assert.Equal(20_000, overCap.AmountIqd);
+        Assert.Same(first, conversation.Card);
+        Assert.Equal(CardStatus.Expired, conversation.CardState);
+        Assert.Equal([first], conversation.CardsIssued);
+
+        // So does the recipient's account, closed meanwhile.
+        cap = new AgentOptions().PerTransactionCapIqd;
+        await using (var scope = host.Wallet.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<WalletDbContext>();
+            Assert.Equal(1, await db.Accounts
+                .Where(a => a.Phone == SeedFacts.HammoudiPhone)
+                .ExecuteUpdateAsync(s => s.SetProperty(a => a.Status, AccountStatus.Closed), Token));
+        }
+
+        await conversation.ReissueAsync();
+
+        Assert.Equal(ReasonCodes.AccountClosed, Assert.IsType<AgentReply.Refusal>(conversation.LastReply).Code);
+        Assert.Equal([first], conversation.CardsIssued);
+        Assert.Equal(SeedFacts.DemoBalance, await host.Wallet.AccountBalanceAsync(SeedFacts.DemoPhone));
+    }
+
     private sealed class RecordingSink : ITraceSink
     {
         private readonly ConcurrentQueue<(TraceZone Zone, string Step, string? Detail)> entries = new();

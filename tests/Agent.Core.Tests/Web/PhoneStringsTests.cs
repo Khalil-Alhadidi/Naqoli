@@ -19,11 +19,21 @@ public class PhoneStringsTests
             .ToDictionary(d => (string)d.Attribute("name")!, d => d.Element("value")!.Value, StringComparer.Ordinal);
     }
 
+    /// <summary>
+    /// Keys added after Khalil wrote the phone's wording, still English placeholders until he writes them (milestone 7,
+    /// D19). Remove a key here when its Arabic is in; no other key may be a placeholder.
+    /// </summary>
+    private static readonly string[] AwaitingKhalil = ["Card_SendAgain", "Card_TryAgain"];
+
     [Fact]
-    public void NoValueIsAPlaceholder()
+    public void NoValueIsAPlaceholderExceptTheKeysAwaitingKhalil()
     {
-        var placeholders = Values().Where(v => v.Value.StartsWith(Placeholder, StringComparison.Ordinal)).Select(v => v.Key).ToArray();
-        Assert.Empty(placeholders);
+        var placeholders = Values()
+            .Where(v => v.Value.StartsWith(Placeholder, StringComparison.Ordinal))
+            .Select(v => v.Key)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+        Assert.Equal(AwaitingKhalil, placeholders);
     }
 
     [Fact]

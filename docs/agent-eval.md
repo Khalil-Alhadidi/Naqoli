@@ -53,6 +53,7 @@ The host is `Host.CreateApplicationBuilder` with `AddAgentEval`: the `Eval` opti
 | `{"tap": "option", "value": X}` | `Conversation.TapOptionAsync(X)`; a number is passed as its digits |
 | `{"tap": "confirm"}` | `Conversation.ConfirmAsync(pin)`: `"pin": "correct"` sends the user's seed PIN (read from `data/seed/users.json`, never printed), `"wrong"` sends `0000` (or `1111` when `0000` is the real PIN), no `pin` sends none. `"twice": true` sends two Confirms at once. The step counts as one Confirm tap either way |
 | `{"tap": "cancel"}` | `Conversation.CancelAsync()` |
+| `{"tap": "try_again"}` | `Conversation.ReissueAsync()` (D19): the card shown is rebuilt from its stored record, Try again after an expired, cancelled or not-done card, Send again after a done one, with a new pending ID, key and timer and fresh checks; a live card or a payment still checking is left as it is. It never reaches the Confirm handler; the new card waits for its own `confirm` step. No dev case uses it yet |
 | `{"wait": "expire"}`, `{"wait": "expire_if_card"}` | Only while a card is live: the clock moves to one second past the card's `ExpiresAt`, `PendingStore.ExpireDueAsync` runs (the sweep), and the conversation reads the record again. With no live card nothing happens |
 
 After every step, while the card is Checking, the driver taps "check again" (`Conversation.SettleAsync`) up to `SettleAttempts` times, `SettleDelayMs` apart. It then records the step: the card's state, the outcome code, the reply codes, the money the agent's payments have taken since the case began, the executions, the PIN attempts left, whether a card was issued or reissued, whether the PIN appears in any message, trace step or audit row, and the card states seen during the step.
@@ -74,8 +75,7 @@ These are reported, never faked, so the figures stay honest:
 
 | What | Why | What the runner does |
 |---|---|---|
-| `{"tap": "try_again"}` | D19, "try again" after an expired card, is built in a later milestone | The case stops with `unsupported_step` as its first, failing verdict |
-| `{"tap": "save_alias"}` | 9a, saving an alias, is not built | Same |
+| `{"tap": "save_alias"}` | 9a, saving an alias, is not built | The case stops with `unsupported_step` as its first, failing verdict |
 | `then_reply`, `no_card_N` (compound requests) | The second and later parts of a compound message are not graded part by part yet | Recorded, not graded |
 | `alias_offer`, `final.alias_saved` | 9a | Recorded, not graded |
 | `not_prepared` of a reply | 9c | Recorded, not graded |

@@ -234,16 +234,32 @@ public sealed class CaseDriverTests(AgentHost host) : IAsyncDisposable
     }
 
     [Fact]
-    public async Task TryAgainIsMarkedUnsupported()
+    public async Task SaveAliasIsMarkedUnsupported()
     {
         var runner = Start();
 
         var seen = await runner.Driver.PlayAsync(
-            Case("U1", null, Say(HammoudiSentence), new CaseStep(Tap: "try_again"), Confirm()), Token);
+            Case("U1", null, Say(HammoudiSentence), new CaseStep(Tap: "save_alias"), Confirm()), Token);
 
-        Assert.Equal("tap try_again", seen.UnsupportedStep);
+        Assert.Equal("tap save_alias", seen.UnsupportedStep);
         Assert.Single(seen.Steps);
         Assert.Empty(seen.WalletDiff.NewTransactions);
+    }
+
+    [Fact]
+    public async Task TryAgainAfterTheTimerOpensANewCardThatConfirmPays()
+    {
+        var runner = Start();
+
+        var seen = await runner.Driver.PlayAsync(
+            Case("U1", null, Say(HammoudiSentence), new CaseStep(Wait: "expire"), new CaseStep(Tap: "try_again"), Confirm()), Token);
+
+        Assert.Null(seen.UnsupportedStep);
+        Assert.Null(seen.StepError);
+        Assert.Equal(("live", 0L), (seen.Steps[2].CardState, seen.Steps[2].MovedIqd));
+        Assert.True(seen.Steps[2].CardIssued);
+        Assert.Equal(("done", 1, 51_000L), (seen.Steps[3].CardState, seen.Steps[3].Executions, seen.Steps[3].MovedIqd));
+        Assert.Single(seen.WalletDiff.NewTransactions);
     }
 
     [Fact]

@@ -135,6 +135,22 @@ public sealed class ChatSession : IDisposable
         return await conversation.SettleAsync();
     }
 
+    /// <summary>
+    /// What the card shown offers (D19): <see cref="ReissueKind.TryAgain"/>, <see cref="ReissueKind.SendAgain"/>, or
+    /// null for a live card, a payment still checking, or no card.
+    /// </summary>
+    public ReissueKind? Reissue => Conversation.ReissueKindOf(conversation.CardState);
+
+    /// <summary>
+    /// The card's "Try again" or "Send again" button (see <see cref="Conversation.ReissueAsync"/>): a new card from the
+    /// stored record, which waits for its own Confirm. It never reaches the Confirm handler.
+    /// </summary>
+    public async Task ReissueAsync()
+    {
+        TraceLog.Current.Value = trace;
+        await conversation.ReissueAsync();
+    }
+
     /// <summary>The card's Cancel button.</summary>
     public async Task CancelAsync()
     {
