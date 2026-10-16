@@ -2,6 +2,8 @@
 
 What `src/Agent.Eval` does as built in milestone 5. It loads a request set, plays each case through the same conversation logic as the phone (`Conversation` in `Agent.Core`, see [agent-core.md](agent-core.md)), grades what happened against the case's answer key, and writes a report. The case format and the meaning of each answer-key field are in [data/README.md](../data/README.md); the matching rules the keys follow are in [matching-rules.md](matching-rules.md). The design is D12, D13, D14 and D22 of [architecture.md](architecture.md).
 
+The development set (`data/requests.dev.jsonl`) has 75 cases: Khalil's 72 and, since 16 Oct 2026, ADD-01 to ADD-03 for the milestone 7 journeys (wording pending Khalil). The first scripted run reported further down predates them.
+
 `Agent.Eval` references `Agent.Core` only. It talks to the mock wallet over HTTP: the agent's own `WalletClient` for everything the agent does, and a side door (`WalletAdmin`) for the reset, the fault switch, the orders count and the external debit. It never moves money itself.
 
 ## How a run goes
