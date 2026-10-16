@@ -210,7 +210,49 @@ Also closed in this milestone: review I3 of milestone 3 (the validator and un-ma
 - A changed limit in settings takes effect without a restart.
 - The PIN never appears in the chat, the audit log or the learning log.
 
-**Status, 15 Oct 2026 (part 1):** the five fixes from `docs/reports/diagnosis-2026-10-15.md` that fall under this milestone are in, one commit each: a tap answers by the chosen entity's id and a typed partial answer merges into the pending request (D3, D6); a message made only of yes or no entries, up to `MaxYesNoWords` (4, a setting), is a yes or a no, and a multi-word entry matches only as a whole phrase; a near spelling is checked before a partial match (`docs/matching-rules.md`, added 15/10/2026); `other_balance` replies `only_own_balance` and `other_language` replies `not_understood`; `choose_account` with a recipient and an amount gets the card, the `account_choice_unavailable` note and the `choose_account` learning row. Reruns on the development set with prompt version 1 unchanged (`docs/reports/dev-claude-<candidate>-m7a-2026-10-15-19xx`): Haiku 51/72 (was 43), Sonnet 58/72 (was 46), Opus 58/72 (was 46); 0 executions without a tap and 0 masking failures on every run. Sonnet and Opus now fail only the items deferred to milestones 8, 9b and 9c, GAP-07 (prompt), and AMB-06 (the model read the typed amount as unclear on this run; Haiku read it right). The rest of this milestone (typed numbers on the card, refusal templates, the balance reply with consent, D6 on screen, Try again and Send again, caps and the PIN field from settings, the kill switch, the settings and log components, the journeys) follows.
+**Status, 15 Oct 2026 (part 1):** the five fixes from `docs/reports/diagnosis-2026-10-15.md` that fall under this milestone are in, one commit each: a tap answers by the chosen entity's id and a typed partial answer merges into the pending request (D3, D6); a message made only of yes or no entries, up to `MaxYesNoWords` (4, a setting), is a yes or a no, and a multi-word entry matches only as a whole phrase; a near spelling is checked before a partial match (`docs/matching-rules.md`, added 15/10/2026); `other_balance` replies `only_own_balance` and `other_language` replies `not_understood`; `choose_account` with a recipient and an amount gets the card, the `account_choice_unavailable` note and the `choose_account` learning row. Reruns on the development set with prompt version 1 unchanged (`docs/reports/dev-claude-<candidate>-m7a-2026-10-15-19xx`): Haiku 51/72 (was 43), Sonnet 58/72 (was 46), Opus 58/72 (was 46); 0 executions without a tap and 0 masking failures on every run. Sonnet and Opus now fail only the items deferred to milestones 8, 9b and 9c, GAP-07 (prompt), and AMB-06 (the model read the typed amount as unclear on this run; Haiku read it right).
+
+**Spec: Khalil's four rulings of 15 Oct 2026 (late)**, which part 2 encodes:
+
+1. **The kill switch** is an agent-side stop in the settings component. It is held in memory and is off at every start. While it is on:
+   - no card is issued;
+   - Confirm and check again are refused, and a live card ends NotDone;
+   - the balance question still answers.
+
+   Each flip writes an audit row.
+2. **The oracle's parses** live in a sidecar, `data/requests.dev.parses.jsonl`, drafted by Claude for Khalil's review.
+3. **Three dev cases** are added with `TODO-AR` wording.
+4. **The wallet's limits** are on a read-only route (`GET /settings`), which the settings component shows.
+
+**Cases added, 16 Oct 2026:** ADD-01 (a typed phone number, first time), ADD-02 (an unknown name) and ADD-03 (an account number, D21). They are English `TODO-AR` wording with `pending_wording_recheck` true, for Khalil to rewrite. All three pass on the oracle (`docs/reports/dev-scripted-m7-add-2026-10-16-0729`). The development set now has 75 cases.
+
+**Status, 16 Oct 2026 (part 2):** the rest of the milestone is in, one commit per task:
+
+- **The scripted parser is an oracle over the development set.** It scores 60 of 72 (`docs/reports/dev-scripted-oracle-2026-10-15-2052`), and the 12 failures are the items deferred to milestones 8, 9b and 9c.
+- **Live settings (D8).** Agent settings are read through `IOptionsSnapshot` and saved live in the settings component.
+- **`GET /settings`.** The wallet route is shown read only.
+- **The kill switch.**
+- **D6.** An unclear message leaves the live card, and a typed account number is masked and refused without a card (D21).
+- **Try again and Send again (D19).**
+- **The log component.**
+- **Journeys.** One screen journey per behaviour, 19 journeys in about a minute.
+
+For Khalil:
+- the wording of `Card_TryAgain` and `Card_SendAgain`;
+- the wording of ADD-01 to ADD-03;
+- a review of the sidecar's parses;
+- the wording of `Refusal_invalid_number`, which does not yet ask for a phone number or a saved name (D21).
+
+<sonnet m7 rerun: the controller fills the figures>
+
+| Done when | Shown by |
+|---|---|
+| The transfer cases in the development set meet the targets from slide 2 | On the oracle, all 34 transfer cases pass (`docs/reports/dev-scripted-oracle-2026-10-15-2052`, per type). On the models, with prompt version 2 (three runs each, `docs/reports/dev-claude-<candidate>-v2-r1..r3-2026-10-15-*`), the transfer cases pass 34, 34 and 34 of 34 on Opus, 32, 33 and 33 on Sonnet, and 32, 31 and 33 on Haiku. Over all cases, the medians of the three runs are Haiku 55, Sonnet 59 and Opus 60 of 72 (`dev-claude-haiku-v2-repeat3-2026-10-15-1944`, `dev-claude-sonnet-v2-repeat3-2026-10-15-1951`, `dev-claude-opus-v2-repeat3-2026-10-15-2000`). Every run has 0 executions without a tap and 0 masking failures. The comparison with slide 2's targets is made on the milestone 7 rerun below and in milestone 12's results report |
+| The balance cases in the development set pass, and the outbound-text check finds no balance on any case | The 4 balance cases (CLN-31, CLN-32, MAL-13 and RED-10) pass on the oracle (same report, per type). With prompt version 2 they pass 4 of 4 on every Opus and Sonnet run, and 3 of 4 on every Haiku run. The runner's masking check (parser text holding a phone, an account number or a balance) finds 0 cases on all nine runs. `OutboundPayloadTests.NothingFromTheWalletReachesTheModel` shows no balance in the model's payload. The journey `BalanceAnswersAfterConsentAndTheLogKeepsNoFigure` shows no figure in the trace or the audit row |
+| Before consent, a balance question shows the consent screen and no figure | The journey `ConsentScreenComesBeforeTheBalance` (U5: the consent message and button, no balance in any digit form, then the balance after the tap, and the wallet records consent). Also `OrchestratorTests.BalanceQuestionNeedsConsent` and `ConversationTests.TheConsentScreenIsShownAndRecorded` |
+| Each behaviour above has a screen journey, with the scripted parser | Name matching: `HammoudiHappyPath`, `UnknownContactIsRefused`. Typed phone number (D16): `TypedNumberShowsTheRegisteredNameAndFirstTime`. Account number (D21): `AccountNumberIsRefusedAndMasked`. Refusals: `InsufficientBalanceIsRefused`, `OverCapIsRefusedWithTheCap`. Balance (D22): `BalanceAnswersAfterConsentAndTheLogKeepsNoFigure`. D6: `TypedYesPointsToConfirm`, `TypedNoCancelsTheCard`, `NewRequestCancelsTheCardAndStartsFresh`, `UnclearTextLeavesTheCard`. D19: `TryAgainAfterExpiry`, `SendAgainAfterDone`. Caps and the PIN field from settings (D8): `AChangedCapTakesEffectWithoutARestart`, `PinFieldShowsForALargeAmountAndThePinIsNeverLogged`. Consent: `ConsentScreenComesBeforeTheBalance`. Kill switch: `KillSwitchStopsEverything`. Settings and log components: the same journeys (`menu-settings`, `menu-log`). The timer and the double tap: `TimerKillsTheButton`, `DoubleTapExecutesOnce`. All 19 run in `tests/Agent.Web.Journeys` on the oracle, never a live model (`docs/agent-web.md`, "The journeys") |
+| A changed limit in settings takes effect without a restart | The journey `AChangedCapTakesEffectWithoutARestart` (a cap of 40,000 saved, CLN-01 refused with 40,000; after reset, a card). Also `ChecksTests.ACapChangedLiveAppliesToTheNextCheck`, `RuntimeSettingsTests` (an invalid value is refused and the old one stays; reset restores the file value), and the journeys' own `UseSetting` 4-second timer (`TimerKillsTheButton`, `TryAgainAfterExpiry`) |
+| The PIN never appears in the chat, the audit log or the learning log | The journey `PinFieldShowsForALargeAmountAndThePinIsNeverLogged` (RED-09 on U3: a wrong PIN, then the right one; neither, in either digit form, is in any chat message, trace entry, audit row or learning row). Also `ConversationTests.TheTraceKeepsNoPinKeyOrCodeAfterAPinPaymentAndAPurchase`, `AuditLogTests.WriteHasNoParameterForAPinABalanceOrAPurchaseCode`, and the runner's `pin_in_chat_or_logs` check on RED-09 |
 
 ## Milestone 8: Bills and faults on screen
 

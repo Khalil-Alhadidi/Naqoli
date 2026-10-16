@@ -53,9 +53,25 @@ The test hosts set `SweepIntervalSeconds` to 0 and use `NullTraceSink`, or a rec
 
 `IParser.ParseAsync(text, context, cancellationToken)` (`src/Agent.Core/Parsing/IParser.cs`) is the parse call of rule 2: one call per message, read only, returning a `ParsedRequest`. `ParseContext(PendingNote, Map)` is all it may know besides the user's words (D5, rule 5): the one-line note of what is pending, built by code from the type and codes only, or null when nothing is pending; and the `MaskMap` of this message, which the structure validator needs to accept a token (null when the caller did not mask). The text it receives is already masked.
 
-The scripted implementation is `ScriptedParser` (`src/Agent.Core/Parsing/ScriptedParser.cs`). It reads `scripted-sentences.json`, an embedded resource next to it, as a list of `{ "sentence": ..., "request": { ...ParsedRequest... } }` (web JSON defaults, enums as strings; a `note` field is ignored). A typed text matches a sentence when both are equal, ordinal, after `ArabicText.Normalize` (Arabic-Indic and Eastern Arabic-Indic digits to ASCII, whitespace trimmed and collapsed, and the rest of rule 1); anything else is `Unclear`. It holds no per-user state, so one instance serves the whole app; `AddAgentCore` registers no parser, and `ParserFactory.AddAgentParser` registers it as a singleton when `Agent:Parser` is `scripted` (the default). From milestone 6 each sentence is masked at load as the typed text is, so a sentence may hold a real-looking number.
+The scripted implementation is `ScriptedParser` (`src/Agent.Core/Parsing/ScriptedParser.cs`). From milestone 7 it is an oracle over the development set: `ScriptedParser.Load(path)` reads two files.
 
-The file is Khalil's to write. Today it holds two English placeholders marked `TODO-AR`: `send fifty thousand to my brother Hammoudi`, which parses to a transfer to S01's alias (copied character for character from `data/seed/contacts.json`) of 50 thousand, and `balance`, the balance question. A typed yes or no is not a sentence: D6 is the conversation's business, and it points to the Confirm button.
+- **The set at `Agent:DevSetPath`.** The default is `data/requests.dev.jsonl`, relative to the repository root unless rooted (`ParserFactory.DevSetPath`). Only `id` and the `say` steps are read.
+- **The sidecar `data/requests.dev.parses.jsonl` next to it.** It has one line per say step: `{"id", "step" (0-based among the case's steps), "say", "parse"}`. `parse` is the structure the model returns (`ParsedRequestsDto`), with a typed number written as typed.
+
+A typed text that equals a say step gives that step's first request, and anything else is `Unclear`. The two are compared after masking (`Masker`) and `ArabicText.Normalize`, ordinal and whole. The checks:
+
+- **File name.** `Load` accepts only a file named exactly `requests.dev.jsonl` (`ArgumentException`, nothing opened). So the held-out set can never be loaded (rule 7). `ScriptedParserTests.OnlyTheDevSetFileNameIsAccepted` tests this with throwaway files, never with the real path.
+- **Consistency at load.** Each say is masked, and every number in its parse becomes its token. `ParsedRequestValidator` then checks the parse against the message's map. The load is refused (`InvalidDataException`) when:
+  - a sidecar line points at a step that does not say;
+  - a line's text differs from the set's;
+  - a say step has no line;
+  - a parse breaks the structure;
+  - the same message has two parses.
+
+  The message names the case and the step, never the text (`ScriptedParserTests`).
+- **Lifetime.** It holds no per-user state, so one instance serves the whole app. `AddAgentCore` registers no parser, and `ParserFactory.AddAgentParser` registers the oracle as a singleton when `Agent:Parser` is `scripted` (the default). It is loaded on first use.
+
+The parses were drafted by Claude from Khalil's answer keys for his review (his ruling of 15 Oct 2026). On the oracle the development set scores 60 of 72 (`docs/reports/dev-scripted-oracle-2026-10-15-2052`); the 12 failures are the items deferred to milestones 8, 9b and 9c. A typed yes or no is not a sentence: D6 is the conversation's business.
 
 Two more pieces belong to the seam (milestone 5):
 
@@ -64,9 +80,9 @@ Two more pieces belong to the seam (milestone 5):
 
 ```mermaid
 flowchart LR
-    typed["Typed text"] --> norm["ArabicText.Normalize: digits to ASCII, whitespace collapsed"]
-    norm --> lookup{"Equal, ordinal, to a normalised scripted sentence?"}
-    lookup -- yes --> req["Its ParsedRequest"]
+    typed["Typed text (already masked)"] --> norm["ArabicText.Normalize: digits to ASCII, whitespace collapsed"]
+    norm --> lookup{"Equal, ordinal, to a masked, normalised dev-set say step?"}
+    lookup -- yes --> req["That step's parse from requests.dev.parses.jsonl"]
     lookup -- no --> unclear["ParsedRequest Intent Unclear"]
     req --> orch["Orchestrator.HandleAsync"]
     unclear --> orch
@@ -150,6 +166,30 @@ flowchart TD
 - a purchase reads the catalogue product by its code and takes its price: a missing one is `product_not_found`.
 
 Then step 7, so a card is a new record with a new ID, key and timer, and nothing moves until its own Confirm. A `SendAgain` card always carries `Warning` `repeat`, whether or not the history rule set it; a `TryAgain` card carries it only when the rule does. The old record is never reopened (architecture section 5).
+
+```mermaid
+sequenceDiagram
+    participant P as Phone (card-try-again or card-send-again)
+    participant S as ChatSession
+    participant V as Conversation.ReissueAsync
+    participant R as PendingStore (new scope)
+    participant O as Orchestrator.ReissueAsync (new scope)
+    participant W as Wallet (reads only)
+    participant K as Checks and CardBuilder
+    P->>S: ReissueAsync()
+    S->>V: ReissueAsync()
+    V->>V: kind from CardState (Live, Checking or no card: reissue_rejected)
+    V->>R: FindAsync(card.PendingId, user)
+    R-->>V: the stored record (Executing, Checking or still live: reissue_rejected)
+    V->>O: ReissueAsync(user, record, kind)
+    O->>O: kill switch, consent gate
+    O->>W: account by phone, or bills, or catalogue
+    O->>K: Checks.RunAsync, then CardBuilder.BuildAsync (repeat line forced on Send again)
+    K-->>O: CardDraft
+    O->>R: CreateAsync(draft): new ID, key and timer
+    O-->>V: CardIssued, or a refusal
+    V-->>S: Changed, the new card is live and waits for its own Confirm
+```
 
 ```mermaid
 flowchart TD
@@ -359,6 +399,32 @@ sequenceDiagram
 
 - **For Khalil:** section 5 of the architecture has no Executing to Pending edge. The code needs it, because a wrong PIN keeps the card (and a cancelled Confirm before the execute sent nothing). With it, a record can leave Pending more than once, but only one Executing at a time and always under the same key. Section 5 also says Checking settles by "status found by key"; the code settles by resending the same body under the same key (below), and uses by-key for display only. Suggest adding the edge and that wording to section 5.
 
+## The kill switch
+
+The kill switch is Khalil's ruling of 15 Oct 2026. `KillSwitch` (`src/Agent.Core/Pipeline/KillSwitch.cs`) is a singleton registered by `AddAgentCore`, held in memory and off at every start. The console's settings component flips it, and each flip writes a `kill_switch` audit row (reason `on` or `off`) under the console's `DemoUserId`. While it is on, three gates stop money and cards, and the balance question still answers:
+
+- **Before a card.** `Orchestrator.HandleAsync` refuses a transfer, a bill or a purchase (including the known gap that goes on as a transfer) before any wallet read or question. The refusal is `not_done_nothing_taken` with detail `kill_switch`, traced `kill_switch on`. `ReissueAsync` (D19) refuses the same way (`OrchestratorTests.TheKillSwitchRefusesARequestThatWouldGetACard`, `TheKillSwitchRefusesAReissue`).
+- **Before an execute.** `ConfirmHandler.ConfirmAsync` moves the record Pending to Executing as usual, so it leaves Pending once. It then ends the record NotDone (`kill_switch`) the way a failed recheck does, without calling the wallet (`ConfirmHandlerTests.TheKillSwitchEndsALiveCardNotDoneWithoutAnExecute`).
+- **Before a settle.** `ConfirmHandler.SettleCheckingAsync` sends nothing, and a Checking record stays Checking until the switch is off and the user checks again (`TheKillSwitchLeavesACheckingRecordCheckingWithoutAResend`).
+
+The journey `KillSwitchStopsEverything` shows all of this on screen.
+
+```mermaid
+flowchart TD
+    req["A request, a Confirm or a check again"] --> kind{"Which?"}
+    kind -- "balance question" --> bal["Answers as usual (D22)"]
+    kind -- "transfer, bill, purchase, Try again, Send again" --> g1{"Kill switch on?"}
+    g1 -- yes --> r1["Refusal not_done_nothing_taken (kill_switch); no wallet read, no card"]
+    g1 -- no --> card["Consent, resolve, checks, card"]
+    kind -- "Confirm tap" --> begin["TryBeginExecuteAsync: Pending to Executing (once)"]
+    begin --> g2{"Kill switch on?"}
+    g2 -- yes --> r2["NotDone (kill_switch); no execute call"]
+    g2 -- no --> exec["Recheck, then execute under the key"]
+    kind -- "check again on a Checking card" --> g3{"Kill switch on?"}
+    g3 -- yes --> r3["Stays Checking; nothing resent"]
+    g3 -- no --> settle["Resend the same body under the same key"]
+```
+
 ## Confirm and Checking
 
 `ConfirmHandler` (`src/Agent.Core/Confirm/ConfirmHandler.cs`) is the only place money moves.
@@ -524,7 +590,8 @@ When a card is live:
 
 - **A yes** never confirms. The reply is `points_to_confirm`, the card stays open, and nothing reaches the wallet.
 - **A no** cancels the card (`cancelled`).
-- **Any other text** (a word that is not part of a whole entry, or more than `MaxYesNoWords` words) cancels the card the same way and goes on as a new request.
+- **Unclear text** (any other text that the parse call reads as unclear, including a structure the validator refused, or an unavailable parser) leaves the card until its timer ends. The reply is `not_understood` (or `model_unavailable`), traced `card_kept` with the reason. A request to change the waiting card (`Unsupported` with `change_waiting_card`) also leaves it, and its reply tells the user to cancel and ask again (`ConversationTests.AnUnclearMessageLeavesTheCardUntilItsTimerEnds`, `AnUnclearMessageLeavesTheCardAndConfirmStillMovesTheMoney`, `AChangeRequestLeavesTheCard`, `AnUnavailableParserLeavesALiveCard`).
+- **A new request** (anything else the parse call understood) cancels the card the same way and goes on as a new request (`ANewRequestCancelsTheCardAndStartsFresh`).
 
 ### Answers to a question
 
@@ -644,8 +711,11 @@ sequenceDiagram
 | `refused` | `Orchestrator`, through `AuditLog.WriteRefusalAsync`; the reason is the reason code, or the parsed unsupported reason. `Detail` holds the wallet's code (or `wallet_` and the reason) only when the reason is `not_done_nothing_taken`, and is null otherwise |
 | `consent_shown` | `Orchestrator` |
 | `balance_shown` | `Orchestrator`; no figure |
+| `kill_switch` | The console's settings component; the reason is `on` or `off` |
 
 Never stored: a PIN, a balance figure, a purchase code (full or partial), the typed recipient text, a refusal's figure, or a refusal's detail other than the wallet code kept with `not_done_nothing_taken`. `AuditLog.WriteAsync` and `WriteRefusalAsync` have no parameter for a PIN, a balance or a code, and `AuditLogTests.WriteHasNoParameterForAPinABalanceOrAPurchaseCode` checks both; `AuditLogTests.RefusalKeepsTheDetailOnlyWhenNothingWasTaken` checks the detail rule. `AmountIqd` is the payment's amount, never a balance.
+
+`AuditLog.ReadLatestAsync(take, cancellationToken)` (milestone 7) is the one read. It returns the newest `take` rows (at least 1), ordered by `At` and then by `Id`, newest first, untracked. The console's log component shows them, `LogPageSize` at a time (`AuditLogReadTests.ReadLatestIsNewestFirstAndTheBalanceRowHasNoFigure`).
 
 ## The learning-log rule
 
@@ -721,9 +791,13 @@ The conversation calls it after every reply that yields an entry, with the maske
 | `MinSubstringWordLength` | 3; 1 to 20 | `ContactResolver`, rule 4: a shorter typed word must equal a whole word |
 | `MaxYesNoWords` | 4; 1 to 20 | `Conversation`, D6: a yes or a no has at most this many words |
 | `LogPageSize` | 100; 1 to 1,000 | The console's log component: how many audit rows, newest first, it shows (`AuditLog.ReadLatestAsync`) |
+| `Parser` | `scripted` | `ParserFactory.AddAgentParser`: `scripted` (the oracle) or `claude` |
+| `DevSetPath` | `data/requests.dev.jsonl` | The oracle: the development set, relative to the repository root unless rooted; its file name must be `requests.dev.jsonl` (rule 7) |
 | `YesWords`, `NoWords` | empty | `Conversation`, D6. Phone text, so not set in `Agent.Core`: the console post-configures them from `Word_yes` and `Word_no` in its resource file, and the test host sets `yes` and `no` |
 
-The settings component (milestone 7) shows them; milestone 4 shows them read only. The client key goes in user secrets or the environment, never in a committed file.
+The settings component shows them ([agent-web.md](agent-web.md), "The settings component"). It edits the limits, timers and counts: `MinAmountIqd` to `MaxYesNoWords` above, and `LogPageSize`. The rest stays read only. The client key goes in user secrets or the environment, never in a committed file.
+
+**Options at run time (D8, milestone 7).** Every scoped service that reads `AgentOptions` reads `IOptionsSnapshot<AgentOptions>`, which is computed again per scope. Every conversation action and every eval step opens its own scope, so a value saved in the settings component applies to the next action without a restart. The singletons (`PendingSweeper`, the `WalletClient` configuration) keep `IOptions`. The one exception is the conversation, which reads the D6 words and `MaxYesNoWords` once, when it is built. So a saved `MaxYesNoWords` applies from the next conversation (a newly opened page), not in one already open. A saved value is validated as the options are at start (`[Range]` and the cross-field rules), and a refused one never takes effect (`RuntimeSettingsTests`, `ChecksTests.ACapChangedLiveAppliesToTheNextCheck`).
 
 ## The test host and running the tests
 
@@ -770,4 +844,6 @@ Still open:
 | The daily cap and the recheck read one page of `HistoryPageSize` (200) history rows; rows beyond it are not counted | Fail closed on a full page, or read further pages; the seed has at most two rows a day |
 | `UnsupportedReason` is stored and returned verbatim | Milestone 6 validates the parsed structure against the allowed list |
 | Checking rows are not counted toward the daily cap (only `done` rows) | Decide whether an open Checking record blocks new cards |
+| A saved `MaxYesNoWords` (or new D6 words) reaches a conversation only when it is built, so an open page keeps the old value | Read them per message through the scope's options, if Khalil wants it live in an open page |
+| A reissued `choose_account` card (GAP-04) does not carry the `account_choice_unavailable` note | Deferred, minor |
 | `Attempts` counts Confirm taps that began an execute, not settle resends | Display only |

@@ -1,11 +1,13 @@
 # Agent.Web: the console and the phone
 
-This document describes what `src/Agent.Web` does as built in milestone 4. In milestone 5 the session's logic moved into `Agent.Core` as `Conversation` (see [agent-core.md](agent-core.md), "The conversation"), so the test runner drives the same logic; `ChatSession` is now the phone's adapter over it. It covers:
+This document describes what `src/Agent.Web` does as built in milestones 4 and 7. In milestone 5 the session's logic moved into `Agent.Core` as `Conversation` (see [agent-core.md](agent-core.md), "The conversation"), so the test runner drives the same logic; `ChatSession` is now the phone's adapter over it. It covers:
 
 - page layout B (D17);
 - the phone and its session;
 - the live trace;
 - the phone strings for Khalil;
+- the oracle parser;
+- the settings component, the kill switch and the log component (milestone 7);
 - the screen journeys;
 - known gaps.
 
@@ -19,7 +21,7 @@ The agent's logic is in [agent-core.md](agent-core.md). `Agent.Web` references `
 flowchart LR
     subgraph ltr["Console: English, left to right (data-testid console, dir ltr)"]
         menu["Side menu (MudDrawer)<br/>Wallet data, Settings, Log, Learning data"]
-        middle["Middle component<br/>WalletDataPanel (default), SettingsPlaceholder,<br/>LogPanel (milestone 7), Placeholder Learning data (milestone 10)"]
+        middle["Middle component<br/>WalletDataPanel (default), SettingsPanel,<br/>LogPanel (milestone 7), Placeholder Learning data (milestone 10)"]
         trace["LiveTrace<br/>always visible, newest first"]
     end
     subgraph rtl["Phone: Iraqi Arabic, right to left (data-testid phone-frame, dir rtl, lang ar)"]
@@ -46,6 +48,8 @@ The side menu sits in the layout outside the `console` element, and it is Englis
 | `ChatSession` | scoped (one per circuit) | The phone's adapter over a `Conversation`: localised messages, the circuit's trace, `Changed` |
 | `AgentOptions` post-configuration | options | `YesWords` and `NoWords` (D6) from the resource values `Word_yes` and `Word_no`, so `Agent.Core` holds no phone text |
 | `ConsoleNavigation` | scoped | The side menu's selection |
+| `RuntimeSettings` | singleton | Saves an agent setting live (D8) through `RuntimeSettingsProvider`, the last configuration source (`Program.cs`); see "The settings component" |
+| `KillSwitch` | singleton (from `AddAgentCore`) | The kill switch; see "The kill switch" |
 
 ## The session flow
 
@@ -156,7 +160,8 @@ A yes (or a no) is a message of at most `MaxYesNoWords` words, after punctuation
 
 - **The yes word** never confirms. The reply is `Refusal_points_to_confirm`, the card stays open, and nothing reaches the wallet.
 - **The no word** cancels the card (`PendingStore.CancelAsync`, message `Refusal_card_cancelled`).
-- **Any other text** cancels the card the same way and goes on as a new request.
+- **Unclear text** (the parse call reads it as unclear, or its structure was refused) leaves the card until its timer ends, with the reply `Refusal_not_understood`. So does a request to change the waiting card (`change_waiting_card`, whose reply tells the user to cancel and ask again). Both are traced `card_kept`.
+- **A new request** cancels the card the same way (`Refusal_card_cancelled`) and goes on as a new request.
 
 A question that waits for a typed answer (`which_amount` or `which_contact` with no options) is answered into the pending request (D3; [agent-core.md](agent-core.md), "Answers to a question"):
 
@@ -188,6 +193,12 @@ A tap is accepted only for a value that the open question offered. Anything else
   - a click from this card is in flight (a flag set before the first await).
 
   The buttons stay on screen, disabled.
+- **Try again and Send again (D19).** When the card is no longer live, the panel offers one more button:
+  - `card-try-again` (`Card_TryAgain`) for an Expired, Cancelled or NotDone card;
+  - `card-send-again` (`Card_SendAgain`) for a Done card;
+  - neither while the card is live or its payment is Checking (`ChatSession.Reissue`).
+
+  The button is disabled while the session is busy or a click is in flight. A tap calls `ChatSession.ReissueAsync`, which rebuilds the card from its stored record with fresh checks (agent-core.md, "Try again and Send again"). The new card has its own panel, keyed by its pending ID, its own timer, and waits for its own Confirm. A Send again card carries `Card_Warning_repeat`.
 - **PIN field** (`PinField`). It is `type="password"`, `inputmode="numeric"`, `autocomplete="off"`. It shows when the card needs a PIN or after a PIN outcome. The value lives only in the card component's field and the `ConfirmAsync` call, and is cleared at every call.
 
 ### Figures in the phone
@@ -231,105 +242,144 @@ Options validation requires `StaleExecutingAfterSeconds` to be more than three t
 
 ## The phone strings, for Khalil
 
-`src/Agent.Web/Resources/PhoneStrings.resx` (neutral culture, read through `IStringLocalizer<PhoneStrings>`) holds every text the phone shows. Every value is an English placeholder marked `TODO-AR`, for Khalil to replace with Iraqi Arabic. `{0}` and `{1}` are filled by code, with figures in Arabic-Indic digits. The yes and no words compare after `ArabicText.Normalize`.
+`src/Agent.Web/Resources/PhoneStrings.resx` (neutral culture, read through `IStringLocalizer<PhoneStrings>`) holds every text the phone shows (rule 4). Khalil wrote the values in Iraqi Arabic on 15 Oct 2026 (commit a32ac1d); nothing else writes or changes them. `{0}` and `{1}` are filled by code, with figures in Arabic-Indic digits. `Word_yes` and `Word_no` are comma-separated lists (`PhoneWords.Split`), compared after `ArabicText.Normalize`. The table gives each key's meaning in English, not its Arabic value.
 
-| Key | Placeholder |
-|---|---|
-| `Card_Title` | `TODO-AR: Confirm this payment` |
-| `Card_To` | `TODO-AR: To` |
-| `Card_Registered` | `TODO-AR: Registered name` |
-| `Card_Amount` | `TODO-AR: Amount` |
-| `Card_Fee` | `TODO-AR: Fee` |
-| `Card_Total` | `TODO-AR: Total` |
-| `Card_BalanceAfter` | `TODO-AR: Balance after` |
-| `Card_FirstTime` | `TODO-AR: First time you send to this number` |
-| `Card_Warning_repeat` | `TODO-AR: You sent the same amount to this person a few minutes ago` |
-| `Card_Confirm` | `TODO-AR: Confirm` |
-| `Card_Cancel` | `TODO-AR: Cancel` |
-| `Card_Pin` | `TODO-AR: PIN` |
-| `Card_Expired` | `TODO-AR: This card has expired. Nothing was sent` |
-| `Card_Cancelled` | `TODO-AR: Cancelled` |
-| `Card_Timer` | `TODO-AR: {0} seconds left` |
-| `Card_TryAgain` | `TODO-AR: Try again` (milestone 7, still a placeholder) |
-| `Card_SendAgain` | `TODO-AR: Send again` (milestone 7, still a placeholder) |
-| `Outcome_done` | `TODO-AR: Done. Reference {0}. Your balance is now {1}` |
-| `Outcome_checking` | `TODO-AR: Checking with the wallet. Nothing is shown as failed` |
-| `Outcome_check_again` | `TODO-AR: Check again` |
-| `Outcome_not_done` | `TODO-AR: Not done: {0}` |
-| `Outcome_pin_required` | `TODO-AR: Enter your PIN, then confirm` |
-| `Outcome_pin_wrong` | `TODO-AR: Wrong PIN. {0} attempts left` |
-| `Outcome_pin_malformed` | `TODO-AR: The PIN is 4 to 6 digits` |
-| `Outcome_already_handled` | `TODO-AR: This card was already handled` |
-| `Reply_balance` | `TODO-AR: Your balance is {0}` |
-| `Reply_consent` | `TODO-AR: Before I can help, please allow me to act on your wallet` |
-| `Reply_consent_button` | `TODO-AR: I agree` |
-| `Question_which_contact` | `TODO-AR: Which person do you mean?` |
-| `Question_did_you_mean` | `TODO-AR: Did you mean` |
-| `Question_which_product` | `TODO-AR: Which product?` |
-| `Question_which_bill` | `TODO-AR: Which bill?` |
-| `Question_which_amount` | `TODO-AR: How much?` |
-| `Question_bill_or_store` | `TODO-AR: Pay the bill, or buy a card from the store?` |
-| `Question_which_operator` | `TODO-AR: Which operator?` |
-| `Option_store_internet` | `TODO-AR: A card from the store` |
-| `Refusal_insufficient_balance` | `TODO-AR: Your balance is not enough. You are {0} short` |
-| `Refusal_recipient_not_found` | `TODO-AR: I could not find this person in your contacts` |
-| `Refusal_number_has_no_wallet` | `TODO-AR: This number has no wallet` |
-| `Refusal_invalid_number` | `TODO-AR: This is not a complete phone number` |
-| `Refusal_over_per_transaction_cap` | `TODO-AR: One payment can be at most {0}` |
-| `Refusal_over_daily_cap` | `TODO-AR: That passes your daily limit. {0} left today` |
-| `Refusal_account_closed` | `TODO-AR: This account is closed` |
-| `Refusal_consent_required` | `TODO-AR: Consent is needed first` |
-| `Refusal_nothing_due` | `TODO-AR: Nothing is due on this bill` |
-| `Refusal_bill_not_found` | `TODO-AR: I could not find this bill` |
-| `Refusal_biller_unavailable` | `TODO-AR: This biller is not available now` |
-| `Refusal_product_not_found` | `TODO-AR: I could not find this product` |
-| `Refusal_not_supported` | `TODO-AR: I cannot do this` |
-| `Refusal_not_understood` | `TODO-AR: I did not understand. Please say it again` |
-| `Refusal_only_own_balance` | `TODO-AR: I can only show your own balance` |
-| `Refusal_model_unavailable` | `TODO-AR: I cannot read messages right now. Please try again later` |
-| `Refusal_dinars_only` | `TODO-AR: I work in Iraqi dinars only` |
-| `Refusal_bills_paid_in_full` | `TODO-AR: Bills are paid in full: {0}` |
-| `Refusal_balance` | `TODO-AR: Your balance is {0}` |
-| `Refusal_points_to_confirm` | `TODO-AR: Please use the Confirm button on the card` |
-| `Refusal_card_cancelled` | `TODO-AR: The card was cancelled` |
-| `Refusal_cannot_change_card` | `TODO-AR: A card cannot be changed. Cancel it and ask again` |
-| `Refusal_account_choice_unavailable` | `TODO-AR: Choosing the account is not available` |
-| `Refusal_code_entered_by_user` | `TODO-AR: The code is entered by you` |
-| `Refusal_max_three_requests` | `TODO-AR: At most three requests in one message` |
-| `Refusal_not_done_nothing_taken` | `TODO-AR: Not done. Nothing was taken from your balance` |
-| `Refusal_amount_below_minimum` | `TODO-AR: The smallest amount is {0}` |
-| `Refusal_pin_locked` | `TODO-AR: Your PIN is locked` |
-| `Refusal_caller_cancelled` | `TODO-AR: Stopped before sending. Nothing was taken` |
-| `Word_yes` | `TODO-AR: yes` |
-| `Word_no` | `TODO-AR: no` |
-| `Unsupported_withdrawal` | `TODO-AR: I cannot do cash withdrawals` |
-| `Unsupported_other_balance` | `TODO-AR: I can only show your own balance` |
-| `Unsupported_other_currency` | `TODO-AR: I work in Iraqi dinars only` |
-| `Unsupported_refers_back` | `TODO-AR: Please say the full request again` |
-| `Unsupported_same_as_last_time` | `TODO-AR: Please say the full request again` |
-| `Unsupported_choose_account` | `TODO-AR: Choosing the account is not available` |
-| `Unsupported_part_of_bill` | `TODO-AR: Bills are paid in full` |
-| `Unsupported_credit_to_own_number` | `TODO-AR: I cannot send credit to your own number` |
-| `Unsupported_change_waiting_card` | `TODO-AR: A card cannot be changed. Cancel it and ask again` |
-| `Unsupported_other_language` | `TODO-AR: Please write in Iraqi Arabic` |
-| `Purchase_code` | `TODO-AR: Your code: {0}` |
-| `Type_transfer` | `TODO-AR: Transfer` |
-| `Type_bill` | `TODO-AR: Bill` |
-| `Type_purchase` | `TODO-AR: Purchase` |
-| `Currency_iqd` | `TODO-AR: IQD` |
-| `Phone_Placeholder` | `TODO-AR: Write your request` |
-| `Phone_Send` | `TODO-AR: Send` |
+Two keys are still placeholders, added in milestone 7 for Try again and Send again: `Card_TryAgain` and `Card_SendAgain`. `PhoneStringsTests.NoValueIsAPlaceholderExceptTheKeysAwaitingKhalil` allows exactly those two. A key leaves that list when Khalil writes it.
 
-### The scripted sentences
+For Khalil: `Refusal_invalid_number` says the number is incomplete. It does not yet ask for a phone number or a saved name, which D21 and milestone 7 ask for. The code is not changed; the wording is his.
 
-`src/Agent.Core/Parsing/scripted-sentences.json` (an embedded resource) holds the sentences the scripted parser knows. Each entry has a `note`, the `sentence` and the `request`. There are two placeholders, both marked `TODO-AR` in their note:
+| Key | Meaning | Note |
+|---|---|---|
+| `Card_Title` | Confirm this payment | |
+| `Card_To` | To | |
+| `Card_Registered` | Registered name | |
+| `Card_Amount` | Amount | |
+| `Card_Fee` | Fee | |
+| `Card_Total` | Total | |
+| `Card_BalanceAfter` | Balance after | |
+| `Card_FirstTime` | First time you send to this number | |
+| `Card_Warning_repeat` | You sent the same amount to this person a few minutes ago | |
+| `Card_Confirm` | Confirm | |
+| `Card_Cancel` | Cancel | |
+| `Card_Pin` | PIN | |
+| `Card_Expired` | This card has expired. Nothing was sent | |
+| `Card_Cancelled` | Cancelled | |
+| `Card_Timer` | {0} seconds left | |
+| `Card_TryAgain` | Try again | Placeholder `TODO-AR: Try again` (milestone 7, D19) |
+| `Card_SendAgain` | Send again | Placeholder `TODO-AR: Send again` (milestone 7, D19) |
+| `Outcome_done` | Done. Reference {0}. Your balance is now {1} | |
+| `Outcome_checking` | Checking with the wallet. Nothing is shown as failed | |
+| `Outcome_check_again` | Check again | |
+| `Outcome_not_done` | Not done: {0} | |
+| `Outcome_pin_required` | Enter your PIN, then confirm | |
+| `Outcome_pin_wrong` | Wrong PIN. {0} attempts left | |
+| `Outcome_pin_malformed` | The PIN is 4 to 6 digits | |
+| `Outcome_already_handled` | This card was already handled | |
+| `Reply_balance` | Your balance is {0} | |
+| `Reply_consent` | Before I can help, please allow me to act on your wallet | |
+| `Reply_consent_button` | I agree | |
+| `Question_which_contact` | Which person do you mean? | |
+| `Question_did_you_mean` | Did you mean | |
+| `Question_which_product` | Which product? | |
+| `Question_which_bill` | Which bill? | |
+| `Question_which_amount` | How much? | |
+| `Question_bill_or_store` | Pay the bill, or buy a card from the store? | |
+| `Question_which_operator` | Which operator? | |
+| `Option_store_internet` | A card from the store | |
+| `Refusal_insufficient_balance` | Your balance is not enough. You are {0} short | |
+| `Refusal_recipient_not_found` | I could not find this person in your contacts | |
+| `Refusal_number_has_no_wallet` | This number has no wallet | |
+| `Refusal_invalid_number` | This is not a complete phone number | Khalil's Arabic; it does not yet ask for a phone number or a saved name (D21) |
+| `Refusal_over_per_transaction_cap` | One payment can be at most {0} | |
+| `Refusal_over_daily_cap` | That passes your daily limit. {0} left today | |
+| `Refusal_account_closed` | This account is closed | |
+| `Refusal_consent_required` | Consent is needed first | |
+| `Refusal_nothing_due` | Nothing is due on this bill | |
+| `Refusal_bill_not_found` | I could not find this bill | |
+| `Refusal_biller_unavailable` | This biller is not available now | |
+| `Refusal_product_not_found` | I could not find this product | |
+| `Refusal_not_supported` | I cannot do this | |
+| `Refusal_not_understood` | I did not understand. Please say it again | |
+| `Refusal_only_own_balance` | I can only show your own balance | |
+| `Refusal_model_unavailable` | I cannot read messages right now. Please try again later | |
+| `Refusal_dinars_only` | I work in Iraqi dinars only | |
+| `Refusal_bills_paid_in_full` | Bills are paid in full: {0} | |
+| `Refusal_balance` | Your balance is {0} | |
+| `Refusal_points_to_confirm` | Please use the Confirm button on the card | |
+| `Refusal_card_cancelled` | The card was cancelled | |
+| `Refusal_cannot_change_card` | A card cannot be changed. Cancel it and ask again | |
+| `Refusal_account_choice_unavailable` | Choosing the account is not available | |
+| `Refusal_code_entered_by_user` | The code is entered by you | |
+| `Refusal_max_three_requests` | At most three requests in one message | |
+| `Refusal_not_done_nothing_taken` | Not done. Nothing was taken from your balance | |
+| `Refusal_amount_below_minimum` | The smallest amount is {0} | |
+| `Refusal_pin_locked` | Your PIN is locked | |
+| `Refusal_caller_cancelled` | Stopped before sending. Nothing was taken | |
+| `Word_yes` | yes | |
+| `Word_no` | no | |
+| `Unsupported_withdrawal` | I cannot do cash withdrawals | |
+| `Unsupported_other_balance` | I can only show your own balance | |
+| `Unsupported_other_currency` | I work in Iraqi dinars only | |
+| `Unsupported_refers_back` | Please say the full request again | |
+| `Unsupported_same_as_last_time` | Please say the full request again | |
+| `Unsupported_choose_account` | Choosing the account is not available | |
+| `Unsupported_part_of_bill` | Bills are paid in full | |
+| `Unsupported_credit_to_own_number` | I cannot send credit to your own number | |
+| `Unsupported_change_waiting_card` | A card cannot be changed. Cancel it and ask again | |
+| `Unsupported_other_language` | Please write in Iraqi Arabic | |
+| `Purchase_code` | Your code: {0} | |
+| `Type_transfer` | Transfer | |
+| `Type_bill` | Bill | |
+| `Type_purchase` | Purchase | |
+| `Currency_iqd` | IQD | |
+| `Phone_Placeholder` | Write your request | |
+| `Phone_Send` | Send | |
 
-| Sentence (placeholder) | Request |
-|---|---|
-| `send fifty thousand to my brother Hammoudi` | `Transfer`, `recipientText` = S01's alias (copied from `data/seed/contacts.json`), `amountValue` 50, `amountUnit` `Thousand` |
-| `balance` | `Balance` |
+## The oracle
 
-Khalil replaces the two sentences; the requests stay. A sentence may hold a phone number written as the user would type it: the parser masks each sentence at load as the conversation masks the typed text. The journeys type the transfer sentence through `ScriptedParser.EmbeddedSentences()`, so they keep working after the change.
+The console's default parser (`Agent:Parser` `scripted`) and the journeys' parser is `ScriptedParser`, an oracle over the development set ([agent-core.md](agent-core.md), "The parser seam"). It reads two files:
+
+- **`Agent:DevSetPath`.** The default is `data/requests.dev.jsonl`, relative to the repository root unless rooted. Only `id` and the `say` steps are read.
+- **`data/requests.dev.parses.jsonl`.** This is the sidecar next to it. It holds one line per say step (`id`, `step`, `say`, `parse`), and `parse` is the structure a model returns.
+
+An exact dev-set message gives that case's parse, and anything else is unclear. The rules:
+
+- **File name.** Only a file named exactly `requests.dev.jsonl` is accepted, and nothing is opened otherwise (rule 7: the held-out set is never loaded).
+- **Load checks.** Every say step has a sidecar line with the same text. A line for a step that does not say, a parse the validator refuses, or one message with two parses refuses the load. The error names the case and the step, never the text (`ScriptedParserTests`).
+- **Masking.** A typed number in a parse is written as typed and becomes its token at load, as the typed text is masked.
+
+The parses were drafted by Claude from Khalil's answer keys for his review (his ruling of 15 Oct 2026). The journeys type a case's message by id through `DevSet.Say(id, step)`, so they follow his wording when he changes it.
+
+## The settings component
+
+`SettingsPanel` (`Components/Console/SettingsPanel.razor`, the side menu's Settings) has a kill switch (below) and four tables, all English and left to right:
+
+- **Agent, editable (D8).** One row (`setting-row`, `data-name`) per agent limit, timer or count: `MinAmountIqd`, `PerTransactionCapIqd`, `PerDayCapIqd`, `CardTimerSeconds`, `MaxRequestsPerMessage`, `MaxProductsInOneQuestion`, `RepeatWarningWindowMinutes`, `HistoryDays`, `MinSubstringWordLength`, `MaxYesNoWords`, `LogPageSize`. Each shows its value in force (`setting-value`), an input (`setting-input`), Save (`setting-save`), and Reset (`setting-reset`) once a value has been saved. A refused value shows the validation message (`setting-error`), and the value in force does not change.
+- **Agent, read only.** `Parser`, `DevSetPath`, `DemoUserId`, `WalletBaseUrl`, `WalletTimeoutSeconds`, `SettleWindowSeconds`, `HistoryPageSize`, `SweepIntervalSeconds`, `StaleExecutingAfterSeconds`. No key is ever shown (wallet or Anthropic).
+- **Wallet, read only.** The wallet's own limits from `GET /settings` (`Wallet:PinRequiredAboveIqd`, `Wallet:MaxPinAttempts`, the transfer, bill and purchase fees and the rest; [wallet-api.md](wallet-api.md)), read once when the panel opens. A wallet that does not answer gives one `setting-error` row (`data-name="Wallet"`) with the reason.
+- **Model, read only.** The candidate in use and each candidate's model, output limit, effort, temperature, timeout and prices.
+
+A saved value lives in memory only, in `RuntimeSettingsProvider`. That is a configuration provider that `Program.cs` adds last, so a saved value wins over the files, the user secrets and the environment. A saved value is gone when the console restarts. It applies to the next action without a restart: every action and every eval step opens its own scope, and every scoped service reads `IOptionsSnapshot<AgentOptions>`, which is computed again per scope. The singletons (the sweeper, the wallet client's configuration) keep `IOptions`. A value the `[Range]` or the binder refuses is put back at once. `RuntimeSettingsTests` covers this: `AnInvalidValueIsRefusedAndTheOldOneStays`, `AnInvalidFirstValueLeavesNoOverride` and `ResetRestoresTheFileValue`. `ChecksTests.ACapChangedLiveAppliesToTheNextCheck` and the journey `AChangedCapTakesEffectWithoutARestart` show the saved cap applying to the next request.
+
+```mermaid
+flowchart LR
+    panel["SettingsPanel: setting-input, setting-save"] --> set["RuntimeSettings.TrySet(Agent:Key, value)"]
+    set --> write["RuntimeSettingsProvider.Write: OnReload"]
+    write --> monitor["IOptionsMonitor recomputes and validates ([Range], binder)"]
+    monitor -- valid --> next["Next action's scope: IOptionsSnapshot of AgentOptions has the new value"]
+    monitor -- refused --> back["Previous value written back; setting-error shows the message"]
+```
+
+## The kill switch
+
+The kill switch is Khalil's ruling of 15 Oct 2026. It is a `MudSwitch` at the top of the settings component (`kill-switch`, with `data-on` `true` or `false`), bound to the singleton `KillSwitch` of `Agent.Core`. It is held in memory and is off at every start. Each flip writes a `kill_switch` audit row (reason `on` or `off`) under `DemoUserId`. While it is on:
+
+- no card is issued;
+- Confirm is refused, and the live card ends NotDone with nothing taken;
+- "check again" sends nothing, and a Checking card stays Checking;
+- the balance question still answers.
+
+The gates are described in [agent-core.md](agent-core.md), "The kill switch". Another console that is already open shows a flip on its next render; the switch itself is read on every request.
 
 ## The log component
 
@@ -370,6 +420,7 @@ The journeys locate elements only by these attributes.
 | Log row, log refresh button | `log-row`, `log-refresh` | `log-row`: `data-event`, `data-reason` (empty when null), `data-pending` (the first 8 characters of the pending ID, empty when null) |
 | Settings value, input, Save, Reset, error (editable agent rows) | `setting-value`, `setting-input`, `setting-save`, `setting-reset`, `setting-error` | `data-name` (the setting's name, as on its row) |
 | Menu items | `menu-wallet`, `menu-settings`, `menu-log`, `menu-learning` | |
+| Kill switch | `kill-switch` | `data-on` (`true`, `false`) |
 
 ## The journeys
 
@@ -385,6 +436,8 @@ The journeys locate elements only by these attributes.
   All use `Agent:WalletClientKey` `journeys-client-key-0001` and `SweepIntervalSeconds` 1.
 - Before each journey it resets the wallet (`POST /admin/reset`), empties the agent tables (audit, pending, learning), turns every console's kill switch off and clears every saved setting.
 - Each journey opens a new browser context and page, and waits for `data-interactive="true"` before typing.
+- Each journey types development-set messages by case id (`DevSet.Say(id, step)`), so the oracle returns that case's parse. It builds every expected text through the console's `IStringLocalizer<PhoneStrings>` and `PhoneFormat`, never as a literal. The PIN journey reads U3's PIN from `data/seed/users.json` (`SeedPins`) and never prints it.
+- The files: `Journeys.cs` holds the three journeys of milestone 4. `RequestJourneys.cs`, `CardJourneys.cs` and `ConsoleJourneys.cs` hold the milestone 7 journeys, on the shared base `JourneyBase`.
 
 | Journey | Asserts |
 |---|---|
@@ -419,7 +472,11 @@ The journeys locate elements only by these attributes.
 |---|---|
 | The card shows the amount in figures only, not in words | Needs Khalil's Iraqi number words |
 | Learning data is a placeholder | Milestone 10 (the settings and log components came in milestone 7) |
-| Option taps send the request again with the slot filled, so an ambiguous display text asks again | The orchestrator's answer entry point, milestone 7 |
+| `Refusal_invalid_number` does not yet ask for a phone number or a saved name (D21) | Khalil's wording |
+| `Card_TryAgain` and `Card_SendAgain` are English placeholders | Khalil's wording |
+| Another open console shows a kill-switch flip only on its next render | The switch is read on every request, so nothing moves meanwhile |
+| A reissued card of the known gap `choose_account` does not carry the `account_choice_unavailable` note | Deferred, minor |
+| A saved `MaxYesNoWords` applies from the next opened page, not in one already open | agent-core.md, "Known limits" |
 | Text typed before the circuit is interactive is lost | The `data-interactive` marker tells the journeys; a person types again |
 | A Checking record whose circuit is gone has no "check again" button in a new circuit | The Checking screen in milestone 8; the record stays Checking and is never shown as failed |
 | The live trace keeps every entry for the life of the circuit | A cap would be a new setting |

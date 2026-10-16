@@ -235,4 +235,30 @@ Re-run after the ruling (14 Oct 2026, `dotnet run --project src/Agent.Eval -- de
 - Red team: 0 executions without a tap (at the pass mark). Masking failures: 0. Unsupported steps: 0 (no dev case uses `try_again` or `save_alias`). Executions in the whole run: 0.
 - Time per case: median 469 ms, p90 608 ms. Cost: 0 USD. The run took under a minute.
 
-The scores are 0 because the scripted parser's sentences (`src/Agent.Core/Parsing/scripted-sentences.json`) are English placeholders until Khalil writes them, so every dev sentence is `not_understood`: no card, no question, and a `not_understood` learning entry. The point of this run is that the runner plays every case to the end and the grader names what is wrong. The model parsers of milestone 6 are measured on the same set.
+The scores are 0 because the scripted parser of that day read two English placeholder sentences from an embedded file (`scripted-sentences.json`, removed in milestone 7 when the parser became the oracle, below), so every dev sentence is `not_understood`: no card, no question, and a `not_understood` learning entry. The point of this run is that the runner plays every case to the end and the grader names what is wrong. The model parsers of milestone 6 are measured on the same set.
+
+## The oracle run (15 Oct 2026)
+
+From milestone 7 the scripted parser is an oracle over the development set. It reads `data/requests.dev.jsonl` and the sidecar `data/requests.dev.parses.jsonl`, and an exact dev-set message gets that case's parse ([agent-core.md](agent-core.md), "The parser seam"). `dotnet run --project src/Agent.Eval -- dev --label oracle` measures the code behind the parse with a parse that is always right. Reports: [dev-scripted-oracle-2026-10-15-2052.md](reports/dev-scripted-oracle-2026-10-15-2052.md) and [.json](reports/dev-scripted-oracle-2026-10-15-2052.json). Case file SHA-256 `bb4cc487...0809` (the 72 cases).
+
+| Group | Cases | Passed | Wilson 95% |
+|---|---|---|---|
+| All cases | 72 | 60 | 73.1–90.2 % |
+| Transfer | 34 | 34 | 89.8–100.0 % |
+| Balance | 4 | 4 | 51.0–100.0 % |
+| Bill | 15 | 12 | 54.8–93.0 % |
+| Purchase | 12 | 8 | 39.1–86.2 % |
+| Compound (five types) | 6 | 1 | |
+
+- **The 12 failures** are the items deferred to later milestones:
+  - CLN-09, CLN-09-v1, CLN-25, AMB-23, NOGO-12 and MAL-09: bills and store, milestones 8 and 9b;
+  - CMP-01, CMP-03, CMP-05, CMP-07 and CMP-09: compound requests, milestone 9c;
+  - GAP-06: a known gap.
+- **Pass marks.** Red team: 0 executions without a tap. Masking failures: 0.
+- **Time and cost.** Median 295 ms per case, p90 506 ms. Cost 0 USD.
+
+The score is the ceiling for the model parsers. With prompt version 2 the medians of three runs were Haiku 55, Sonnet 59 and Opus 60 of 72 (`docs/reports/dev-claude-<candidate>-v2-repeat3-2026-10-15-*`).
+
+## The three added cases (16 Oct 2026)
+
+ADD-01 (a typed phone number, first time), ADD-02 (an unknown name) and ADD-03 (an account number, D21) were added for the milestone 7 journeys. Their wording is an English `TODO-AR` placeholder with `pending_wording_recheck` true, for Khalil to rewrite. `dotnet run --project src/Agent.Eval -- dev --only ADD-01,ADD-02,ADD-03 --label m7-add` passes all three on the oracle ([dev-scripted-m7-add-2026-10-16-0729.md](reports/dev-scripted-m7-add-2026-10-16-0729.md)). The set now has 75 cases, so a full run's case file hash differs from the runs above.
