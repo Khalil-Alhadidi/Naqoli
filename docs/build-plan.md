@@ -243,7 +243,7 @@ For Khalil:
 - a review of the sidecar's parses;
 - the wording of `Refusal_invalid_number`, which does not yet ask for a phone number or a saved name (D21).
 
-<sonnet m7 rerun: the controller fills the figures>
+**Sonnet rerun after part 2 (16 Oct 2026, prompt version 2, three runs, `docs/reports/dev-claude-sonnet-m7-r1..r3-2026-10-16-07xx` and `dev-claude-sonnet-m7-repeat3-2026-10-16-0742`):** 62 of 75 on every run, 0 flipped cases, about 0.58 USD and a median of 2.4 to 2.6 s per case per run. The three added cases pass. The 13 failures are the same on all three runs: the twelve items deferred to milestones 8, 9b and 9c (CLN-09, CLN-09-v1, CLN-25, AMB-23, NOGO-12, MAL-09, CMP-01, CMP-03, CMP-05, CMP-07, CMP-09, GAP-06) and AMB-06 (the model reads the typed amount as unclear on this candidate; it passes on the oracle and on Haiku). Against the 15 Oct v2 median of 59 of 72 this is the same set of passes, so part 2 changed no model result; the transfer cases pass 36 of 37 (AMB-06 is the one) and the balance cases 4 of 4 on every run. Slide 2's targets are Khalil's to state; the comparison goes into milestone 12's results report.
 
 | Done when | Shown by |
 |---|---|
