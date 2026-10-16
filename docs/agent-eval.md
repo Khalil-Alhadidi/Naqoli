@@ -2,7 +2,7 @@
 
 What `src/Agent.Eval` does as built in milestone 5. It loads a request set, plays each case through the same conversation logic as the phone (`Conversation` in `Agent.Core`, see [agent-core.md](agent-core.md)), grades what happened against the case's answer key, and writes a report. The case format and the meaning of each answer-key field are in [data/README.md](../data/README.md); the matching rules the keys follow are in [matching-rules.md](matching-rules.md). The design is D12, D13, D14 and D22 of [architecture.md](architecture.md).
 
-The development set (`data/requests.dev.jsonl`) has 75 cases: Khalil's 72 and, since 16 Oct 2026, ADD-01 to ADD-03 for the milestone 7 journeys (wording pending Khalil). The first scripted run reported further down predates them.
+The development set (`data/requests.dev.jsonl`) has 75 cases: Khalil's 72 and, since 16 Oct 2026, ADD-01 to ADD-03 for the milestone 7 journeys (wording by Khalil, 16 Oct 2026). The first scripted run reported further down predates them.
 
 `Agent.Eval` references `Agent.Core` only. It talks to the mock wallet over HTTP: the agent's own `WalletClient` for everything the agent does, and a side door (`WalletAdmin`) for the reset, the fault switch, the orders count and the external debit. It never moves money itself.
 
@@ -261,4 +261,4 @@ The score is the ceiling for the model parsers. With prompt version 2 the median
 
 ## The three added cases (16 Oct 2026)
 
-ADD-01 (a typed phone number, first time), ADD-02 (an unknown name) and ADD-03 (an account number, D21) were added for the milestone 7 journeys. Their wording is an English `TODO-AR` placeholder with `pending_wording_recheck` true, for Khalil to rewrite. `dotnet run --project src/Agent.Eval -- dev --only ADD-01,ADD-02,ADD-03 --label m7-add` passes all three on the oracle ([dev-scripted-m7-add-2026-10-16-0729.md](reports/dev-scripted-m7-add-2026-10-16-0729.md)). The set now has 75 cases, so a full run's case file hash differs from the runs above.
+ADD-01 (a typed phone number, first time), ADD-02 (an unknown name) and ADD-03 (an account number, D21) were added for the milestone 7 journeys. Wording by Khalil, 16 Oct 2026; the report below was run on the earlier English placeholders. `dotnet run --project src/Agent.Eval -- dev --only ADD-01,ADD-02,ADD-03 --label m7-add` passes all three on the oracle ([dev-scripted-m7-add-2026-10-16-0729.md](reports/dev-scripted-m7-add-2026-10-16-0729.md)). The set now has 75 cases, so a full run's case file hash differs from the runs above.

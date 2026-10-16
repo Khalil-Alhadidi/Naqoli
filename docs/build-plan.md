@@ -224,7 +224,7 @@ Also closed in this milestone: review I3 of milestone 3 (the validator and un-ma
 3. **Three dev cases** are added with `TODO-AR` wording.
 4. **The wallet's limits** are on a read-only route (`GET /settings`), which the settings component shows.
 
-**Cases added, 16 Oct 2026:** ADD-01 (a typed phone number, first time), ADD-02 (an unknown name) and ADD-03 (an account number, D21). They are English `TODO-AR` wording with `pending_wording_recheck` true, for Khalil to rewrite. All three pass on the oracle (`docs/reports/dev-scripted-m7-add-2026-10-16-0729`). The development set now has 75 cases.
+**Cases added, 16 Oct 2026:** ADD-01 (a typed phone number, first time), ADD-02 (an unknown name) and ADD-03 (an account number, D21). Wording by Khalil, 16 Oct 2026. All three pass on the oracle (`docs/reports/dev-scripted-m7-add-2026-10-16-0729`). The development set now has 75 cases.
 
 **Status, 16 Oct 2026 (part 2):** the rest of the milestone is in, one commit per task:
 
@@ -239,7 +239,6 @@ Also closed in this milestone: review I3 of milestone 3 (the validator and un-ma
 
 For Khalil:
 - the wording of `Card_TryAgain` and `Card_SendAgain`;
-- the wording of ADD-01 to ADD-03;
 - a review of the sidecar's parses;
 - the wording of `Refusal_invalid_number`, which does not yet ask for a phone number or a saved name (D21).
 
