@@ -158,7 +158,8 @@ public sealed class PaymentValidator(WalletDbContext db, FeeCalculator fees, IOp
                 draft.AmountIqd,
                 fee,
                 total,
-                total > options.Value.PinRequiredAboveIqd,
+                // D8 (Khalil, 16 Oct 2026): the threshold applies to the amount without the fee.
+                draft.AmountIqd > options.Value.PinRequiredAboveIqd,
                 draft.ToAccountId,
                 draft.RecipientPhone,
                 draft.RecipientName,

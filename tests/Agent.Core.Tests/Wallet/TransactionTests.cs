@@ -320,6 +320,45 @@ public class TransactionTests(WalletApiFixture fixture)
     }
 
     [Fact]
+    public async Task ExactlyOneMillionNeedsNoPin()
+    {
+        Assert.SkipUnless(fixture.DatabaseAvailable, fixture.SkipReason);
+        await fixture.ResetAsync();
+
+        // D8 (Khalil, 16 Oct 2026): the threshold applies to the amount without the fee. 1,000,000 plus the fee is a
+        // total of 1,001,000, but the amount is not above 1,000,000, so no PIN.
+        var quoteResponse = await fixture.Client.PostAsJsonAsync("/quotes", Transfer(TraderUserId, 1_000_000, toAccountId: DemoAccountId), Token);
+        Assert.Equal(HttpStatusCode.OK, quoteResponse.StatusCode);
+        var quote = await quoteResponse.Content.ReadFromJsonAsync<QuoteResponse>(Token);
+        Assert.NotNull(quote);
+        Assert.False(quote.PinRequired);
+        Assert.Equal(1_001_000, quote.TotalIqd);
+
+        var executed = await PostAsync("t-pin-boundary", Transfer(TraderUserId, 1_000_000, toAccountId: DemoAccountId));
+        Assert.Equal(HttpStatusCode.Created, executed.StatusCode);
+        Assert.Equal(TraderBalance - 1_001_000, await BalanceAsync(TraderUserId));
+        Assert.Equal(DemoBalance + 1_000_000, await BalanceAsync(DemoUserId));
+    }
+
+    [Fact]
+    public async Task OneDinarAboveOneMillionNeedsAPin()
+    {
+        Assert.SkipUnless(fixture.DatabaseAvailable, fixture.SkipReason);
+        await fixture.ResetAsync();
+
+        var quoteResponse = await fixture.Client.PostAsJsonAsync("/quotes", Transfer(TraderUserId, 1_000_001, toAccountId: DemoAccountId), Token);
+        Assert.Equal(HttpStatusCode.OK, quoteResponse.StatusCode);
+        var quote = await quoteResponse.Content.ReadFromJsonAsync<QuoteResponse>(Token);
+        Assert.NotNull(quote);
+        Assert.True(quote.PinRequired);
+
+        var withoutPin = await PostAsync("t-pin-above", Transfer(TraderUserId, 1_000_001, toAccountId: DemoAccountId));
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, withoutPin.StatusCode);
+        Assert.Equal("pin_required", (await withoutPin.ReadProblemAsync(Token)).Code());
+        Assert.Equal(TraderBalance, await BalanceAsync(TraderUserId));
+    }
+
+    [Fact]
     public async Task ThreeWrongPinsLockTheUser()
     {
         Assert.SkipUnless(fixture.DatabaseAvailable, fixture.SkipReason);

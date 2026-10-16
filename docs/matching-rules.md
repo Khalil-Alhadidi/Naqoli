@@ -40,7 +40,7 @@ If a rule changes, the answer keys that depend on it change with it, and only in
 | Bill fee | 500 IQD | Agreed (Khalil, 14/10) |  |
 | Purchase fee | 0 | Agreed (Khalil, 14/10) | The price comes from the catalogue |
 | Smallest amount | 1,000 IQD, whole dinars | Agreed (Khalil, 14/10) | Below this is refused; a bare '50' is asked about |
-| PIN needed | Amount above 1,000,000 IQD | Agreed (D8) | Exactly 1,000,000 needs no PIN. Three attempts |
+| PIN needed | Amount above 1,000,000 IQD | Agreed (D8) | Exactly 1,000,000 needs no PIN. Three attempts. The amount without the fee: the wallet compared the total until 16/10/2026 (found by the rules-coverage review, fixed the same day) |
 | Most per transaction | 5,000,000 IQD | Agreed (D8, placeholder) |  |
 | Most per day | 10,000,000 IQD | Agreed (D8, placeholder) |  |
 | What the caps count | The amount without the fee; transfers, bills and purchases together | Agreed (Khalil, 14/10) |  |

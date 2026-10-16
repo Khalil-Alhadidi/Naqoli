@@ -188,7 +188,7 @@ History, products, quotes and transactions all use the same lower-case names.
 | `transferFeeIqd` | long | `Wallet:TransferFeeIqd` (1,000 by default) |
 | `billFeeIqd` | long | `Wallet:BillFeeIqd` (500) |
 | `purchaseFeeIqd` | long | `Wallet:PurchaseFeeIqd` (0) |
-| `pinRequiredAboveIqd` | long | `Wallet:PinRequiredAboveIqd` (1,000,000): a total above it needs the PIN (D8) |
+| `pinRequiredAboveIqd` | long | `Wallet:PinRequiredAboveIqd` (1,000,000): an amount above it (without the fee) needs the PIN (D8); exactly 1,000,000 needs none |
 | `maxPinAttempts` | int | `Wallet:MaxPinAttempts` (3) |
 
 Tests: `ReadEndpointsTests.SettingsReturnTheConfiguredLimits`; the agent's client: `WalletClientTests.TheWalletSettingsAreMappedAndUnavailableOnAConnectionFailure`.
@@ -240,7 +240,7 @@ Returns 200 `QuoteResponse`. No money moves and nothing is written.
 | `balanceBeforeIqd` | long | Payer's balance now |
 | `balanceAfterIqd` | long | Before minus total. Negative when funds are short |
 | `sufficient` | bool | Balance covers the total |
-| `pinRequired` | bool | Total above `Wallet:PinRequiredAboveIqd` |
+| `pinRequired` | bool | Amount (without the fee) above `Wallet:PinRequiredAboveIqd` |
 | `recipientPhone`, `recipientName` | string or null | Transfers only; the registered name, null when the wallet holds none |
 | `billAccountId` | int or null | Bills only |
 | `productId` | int or null | Purchases only |
@@ -384,7 +384,7 @@ Every code is the `code` extension of a ProblemDetails. Source: `PaymentErrors` 
 | `bills_paid_in_full` | 422 | quote, execute | An amount other than the amount due was sent for a bill (D9) | `amountDueIqd` |
 | `unknown_product` | 422 | quote, execute | Product missing or unknown | |
 | `insufficient_funds` | 422 | execute, `POST /admin/debit` | The balance does not cover the total at the moment of the debit. Stored against the key on execute; nothing written on the admin debit | |
-| `pin_required` | 422 | execute | Total above the PIN threshold and no PIN sent | |
+| `pin_required` | 422 | execute | Amount (without the fee) above the PIN threshold and no PIN sent | |
 | `pin_malformed` | 422 | execute | The PIN sent is not 4 to 6 ASCII digits. No attempt counted | |
 | `pin_invalid` | 422 | execute | Wrong PIN | `attemptsLeft` |
 | `pin_locked` | 423 | execute | The user's PIN is locked | |
@@ -435,7 +435,7 @@ flowchart TB
 
 ## PIN rules (D8)
 
-- A PIN is required when the total is above `Wallet:PinRequiredAboveIqd` (1,000,000). The quote reports this as `pinRequired`.
+- A PIN is required when the amount (without the fee) is above `Wallet:PinRequiredAboveIqd` (1,000,000); exactly 1,000,000 needs none (Khalil, 16 Oct 2026). The quote reports this as `pinRequired`.
 - The PIN is checked on execute only, and only when one is sent or one is required. A PIN sent on a small payment is still verified.
 - Each seeded user has their own PIN, taken from `data/seed/users.json` and stored only as a salted PBKDF2 hash.
 - A PIN sent must be 4 to 6 ASCII digits (`^[0-9]{4,6}\z`); anything else, Arabic-Indic digits included, is 422 `pin_malformed`. The agent turns Arabic-Indic digits into ASCII before it sends a PIN. The format is checked before an attempt is reserved, so a malformed PIN counts no attempt and changes no user row (`TransactionTests.MalformedPinIs422AndCostsNoAttempt`).
