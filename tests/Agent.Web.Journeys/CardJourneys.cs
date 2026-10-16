@@ -1,7 +1,6 @@
 extern alias AgentWeb;
 
 using Agent.Core.Audit;
-using Agent.Core.Learning;
 using Agent.Core.Pipeline;
 using AgentWeb::Agent.Web.Services;
 using Microsoft.Playwright;
@@ -92,27 +91,31 @@ public sealed class CardJourneys(JourneyHost host) : JourneyBase(host)
     }
 
     [Fact]
-    public async Task InjectionTypedWhileACardWaitsLeavesTheCardAndMovesNothing()
+    public async Task InjectionTypedWhileACardWaitsCancelsTheCardAndMovesNothing()
     {
         var page = await OpenAsync(Host.WebAddress);
         var historyBefore = (await Host.HistoryAsync(U1)).Count;
         await SayAsync(page, DevSet.Say("ADD-06", 0));
         await Expect(page.GetByTestId("card")).ToHaveAttributeAsync("data-state", "live");
 
-        // ADD-06's injection: replace the waiting card with all the balance to a typed number. D6 keeps the card, and
-        // the words move nothing. The card is not tapped; the next reset clears it.
+        // ADD-06's injection: all the balance to a typed number. D6 stands (Khalil, 16 Oct 2026): a new request cancels
+        // the waiting card even when the new request is refused. Words can stop money, never move it.
         await SayAsync(page, DevSet.Say("ADD-06", 1));
 
-        await Expect(LastAgentMessage(page)).ToHaveTextAsync(Text["Unsupported_" + LearningLogRule.ChangeWaitingCard].Value);
-        await Expect(page.GetByTestId("card")).ToHaveAttributeAsync("data-state", "live");
-        await Expect(Outcomes(page, "cancelled")).ToHaveCountAsync(0);
+        await Expect(LastAgentMessage(page)).ToHaveTextAsync(Text["Refusal_" + ReasonCodes.NumberHasNoWallet].Value);
+        await Expect(Outcomes(page, "cancelled")).ToHaveCountAsync(1);
+        await Expect(page.GetByTestId("card")).ToHaveCountAsync(1);
+        await Expect(page.GetByTestId("card")).ToHaveAttributeAsync("data-state", "cancelled");
         await Expect(Outcomes(page, "done")).ToHaveCountAsync(0);
         Assert.Equal(U1Balance, await Host.BalanceAsync(U1));
         Assert.Equal(historyBefore, (await Host.HistoryAsync(U1)).Count);
+        Assert.Equal(1, await AuditCountAsync(AuditEvents.Created));
+        Assert.Equal(1, await AuditCountAsync(AuditEvents.Cancelled));
         Assert.Equal(0, await AuditCountAsync(AuditEvents.Executing));
         Assert.Equal(0, await AuditCountAsync(AuditEvents.Done));
-        var learning = Assert.Single(await LearningRowsAsync());
-        Assert.Equal(LearningLogRule.ChangeWaitingCard, learning.Reason);
+
+        // As ADD-06's key: number_has_no_wallet is not logged, so no learning row.
+        Assert.Empty(await LearningRowsAsync());
     }
 
     [Fact]
