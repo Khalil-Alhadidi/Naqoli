@@ -269,7 +269,7 @@ Options validation requires `StaleExecutingAfterSeconds` to be more than three t
 
 `src/Agent.Web/Resources/PhoneStrings.resx` (neutral culture, read through `IStringLocalizer<PhoneStrings>`) holds every text the phone shows (rule 4). Khalil wrote the values in Iraqi Arabic on 15 Oct 2026 (commit a32ac1d); nothing else writes or changes them. `{0}` and `{1}` are filled by code, with figures in Arabic-Indic digits. `Word_yes` and `Word_no` are comma-separated lists (`PhoneWords.Split`), compared after `ArabicText.Normalize`. The table gives each key's meaning in English, not its Arabic value.
 
-One key is a placeholder: `Card_Checking` (milestone 8), an English `TODO-AR` value until Khalil writes it. `Card_TryAgain` and `Card_SendAgain` (milestone 7, D19), and the D21 wording of `Refusal_invalid_number` (it now asks for the full mobile number or a saved name), were written by Khalil on 16 Oct 2026. `PhoneStringsTests.NoValueIsAPlaceholderExceptTheKeysAwaitingKhalil` keeps the allow-list, now `Card_Checking`: a new key is added there with a `TODO-AR` value until he writes it.
+No key is a placeholder. `Card_Checking` (milestone 8), `Card_TryAgain` and `Card_SendAgain` (milestone 7, D19), and the D21 wording of `Refusal_invalid_number` (it now asks for the full mobile number or a saved name) were written by Khalil on 16 Oct 2026. `PhoneStringsTests.NoValueIsAPlaceholderExceptTheKeysAwaitingKhalil` keeps the allow-list, empty again: a new key is added there with a `TODO-AR` value until he writes it.
 
 | Key | Meaning | Note |
 |---|---|---|
@@ -288,7 +288,7 @@ One key is a placeholder: `Card_Checking` (milestone 8), an English `TODO-AR` va
 | `Card_Expired` | This card has expired. Nothing was sent | |
 | `Card_Cancelled` | Cancelled | |
 | `Card_Timer` | {0} seconds left | |
-| `Card_Checking` | Checking with the wallet whether the payment went through. Nothing is paid twice | Milestone 8, the card's Checking state line. `TODO-AR`: Khalil to write |
+| `Card_Checking` | We are checking with the wallet… | Milestone 8, the card's Checking state line; Khalil's Arabic, 16 Oct 2026 |
 | `Card_TryAgain` | Try again | Milestone 7, D19; Khalil's Arabic, 16 Oct 2026 |
 | `Card_SendAgain` | Send again | Milestone 7, D19; Khalil's Arabic, 16 Oct 2026 |
 | `Outcome_done` | Done. Reference {0}. Your balance is now {1} | |
@@ -554,6 +554,5 @@ The journeys locate elements only by these attributes.
 | A Checking record whose circuit is gone has no "check again" button in a new circuit | Still open after milestone 8: the Checking card and its automatic settle live in the card's own circuit. The record stays Checking and is never shown as failed |
 | The live trace keeps every entry for the life of the circuit | A cap would be a new setting |
 | The wallet data component does not reload after an external debit from the fault panel (it reloads after a payment) | Reopen the component; the phone's card recheck reads the wallet itself |
-| `Card_Checking` is an English `TODO-AR` placeholder | Khalil writes the Arabic; it is the one key in the `AwaitingKhalil` allow-list |
 | The live trace's height does not allow for the fault panel above it, so the trace column can be taller than the window | The page scrolls and the panel stays at the top; a layout change if it matters in the demo |
 | The model fault is per console process, the wallet's fault switch is shared by every console | Shown as read back on each panel; the demo runs one console |
