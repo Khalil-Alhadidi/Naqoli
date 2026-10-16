@@ -71,7 +71,7 @@
   <data name="Refusal_pin_locked" xml:space="preserve"><value>الرقم السري انقفل</value></data>
   <data name="Refusal_caller_cancelled" xml:space="preserve"><value>وقف قبل الإرسال. ما انسحب شي</value></data>
   <data name="Word_yes" xml:space="preserve"><value>اي، ايه، اي نعم، يلة، يله، نعم، تمام، اوكي، اوك، توكل، حوّل، ماشي، زين، خلص، ok، yes، ee، اكيد، تأكيد، موافق</value></data>
-  <data name="Word_no" xml:space="preserve"><value>لا، لأ، لا لا، الغي، الغيها، كنسل، بطل، خلي، no، cancel، الغاء العملية، إيقاف، ابطال، كلا، هء</value></data>
+  <data name="Word_no" xml:space="preserve"><value>لا، لأ، لا لا، الغي، الغيها، كنسل، بطل، خلي، no، cancel، الغاء العملية، إيقاف، ابطال، كلا، هء، غير موافق، غيرموافق، ما اقبل، ما اريد</value></data>
   <data name="Unsupported_withdrawal" xml:space="preserve"><value>ما أكدر أسحب كاش</value></data>
   <data name="Unsupported_other_balance" xml:space="preserve"><value>أكدر أكولك رصيدك إنت بس</value></data>
   <data name="Unsupported_other_currency" xml:space="preserve"><value>أشتغل بالدينار العراقي بس</value></data>
