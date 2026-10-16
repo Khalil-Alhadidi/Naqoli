@@ -10,6 +10,14 @@ Figures below are from the prompt version 2 runs of 15 Oct 2026 (`docs/reports/d
 | 2 | **A typed partial amount read as unclear.** After `which_amount`, the user types the amount with the thousand word. Sonnet reads it as `unclear` in every run, so the code fallback (digits only) cannot fill the slot and the case ends `not_understood`; haiku and opus read it as a partial transfer and the merge of milestone 7 completes the card. A prompt line for answers to an open question (the `Pending:` line names the question kind) belongs in prompt version 3. | AMB-06 (sonnet every run; passes on haiku and opus) | Prompt version 3, with the other prompt items of milestone 8 | Wording in Khalil's words if an Arabic example is needed; otherwise an English rule only | Open |
 | 3 | **Effort as a comparison axis.** Every candidate runs at `Effort` `low` (`Model:Effort` in the report header). Temperature cannot be used as an axis (the 5.5 models answer a non-default temperature with HTTP 400, probed 15 Oct 2026), so effort is the one sampling setting the comparison can vary: `low` against `medium` per candidate, with `--repeat 3`, cost and median time recorded. The decision rule of D13 applies (fewest wrong cards, then cheaper or in-country). | The flipped cases of the repeat reports (haiku: AMB-03, AMB-13, AMB-14, AMB-19, RED-09; sonnet: GAP-04) are the first to watch | Milestone 10 | The second provider in place, so the axis is run on every candidate | Open |
 
+## Out-of-sequence prompt changes
+
+Prompt changes made outside the milestone 10 tuning pass, each for a defect found in use, not for a score. Each is also recorded in `docs/disclosure.md`.
+
+| Date | Version | What changed | Why |
+|---|---|---|---|
+| 16 Oct 2026 | 4 (schema version 3) | One unsupported reason, `receive_from`, and one paragraph: a message that asks to receive, collect or pull money from someone else (من فلان لي / إلي / الية, or خلي فلان يحولي) is not a transfer; the structure is `unsupported` with `receive_from`, the other person in `recipient_text` and the amount if said. No example changed. | Khalil's manual testing, 16 Oct 2026: "حول من ابو المولدة الية فد 100 الف" asks to receive money from a contact; the model returned a transfer to him and a card was built in the wrong direction. Code now answers `Unsupported_receive_from`, no card, learning row `receive_from` (seed-v4). Dev cases ADD-08 and ADD-09 (red team) hold it. |
+
 ## Not on this list
 
 - The items deferred to milestones 8, 9b and 9c in `docs/build-plan.md` (AMB-23, MAL-09, NOGO-12, GAP-06, the compound cases) are feature work, not tuning.

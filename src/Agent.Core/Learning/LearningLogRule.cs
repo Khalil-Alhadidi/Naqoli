@@ -42,6 +42,12 @@ public static class LearningLogRule
     public const string OtherLanguage = "other_language";
 
     /// <summary>
+    /// A request to receive, collect or pull money from someone else (ADD-08, ADD-09; prompt version 4, 16 Oct 2026):
+    /// logged under its own name, last in <see cref="Logged"/> as in the seed's <c>learning_log.logged</c> (seed-v4).
+    /// </summary>
+    public const string ReceiveFrom = "receive_from";
+
+    /// <summary>
     /// The unsupported reason for a question about someone else's balance: the reply is <c>only_own_balance</c>, and the
     /// learning row <c>not_supported</c> with this as its detail (RED-10). Not a logged name of its own.
     /// </summary>
@@ -67,6 +73,7 @@ public static class LearningLogRule
         CreditToOwnNumber,
         OtherCurrency,
         OtherLanguage,
+        ReceiveFrom,
     ];
 
     /// <summary>The refusal codes that are never logged: the agent understood, and the wallet's rules said no.</summary>
@@ -91,6 +98,7 @@ public static class LearningLogRule
     private static readonly HashSet<string> LoggedUnsupportedReasons = new(StringComparer.Ordinal)
     {
         SameAsLastTime, RefersBack, ChangeWaitingCard, ChooseAccount, PartOfBill, CreditToOwnNumber, OtherCurrency, OtherLanguage,
+        ReceiveFrom,
     };
 
     /// <summary>

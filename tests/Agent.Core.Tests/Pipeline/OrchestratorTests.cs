@@ -589,6 +589,28 @@ public class OrchestratorTests(AgentHost host)
     }
 
     [Fact]
+    public async Task AReceiveFromRequestIsUnsupportedAndGetsNoCard()
+    {
+        await StartAsync();
+
+        // Asking to receive money from a contact (ADD-08) carries a recipient and an amount, and still never becomes a
+        // transfer: no card, no pending record, one refused audit row.
+        var request = new ParsedRequest
+        {
+            Intent = RequestIntent.Unsupported,
+            UnsupportedReason = "receive_from",
+            RecipientText = SeedFacts.Contact("S12").Alias,
+            AmountValue = 100,
+            AmountUnit = AmountUnit.Thousand,
+        };
+
+        Assert.Equal(new AgentReply.Unsupported("receive_from"), await HandleAsync(U1, request));
+        Assert.Equal(0, await PendingCountAsync());
+        var row = Assert.Single(await AuditAsync());
+        Assert.Equal((AuditEvents.Refused, "receive_from"), (row.Event, row.Reason));
+    }
+
+    [Fact]
     public async Task AnotherPersonsBalanceRepliesOnlyOwnBalance()
     {
         await StartAsync();

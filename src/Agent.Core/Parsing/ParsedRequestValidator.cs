@@ -24,7 +24,10 @@ public static class ParsedRequestValidator
     /// <summary>The longest text a field may hold (the database's text columns hold as much).</summary>
     public const int MaxTextLength = 100;
 
-    /// <summary>The ten documented unsupported reasons (<c>docs/agent-core.md</c>, <c>ParsedRequest</c>).</summary>
+    /// <summary>
+    /// The eleven documented unsupported reasons (<c>docs/agent-core.md</c>, <c>ParsedRequest</c>); the model's schema
+    /// takes its enum from this list. Schema version 3 (16 Oct 2026) adds <c>receive_from</c>, last.
+    /// </summary>
     public static IReadOnlyList<string> UnsupportedReasons { get; } =
     [
         "withdrawal",
@@ -37,6 +40,7 @@ public static class ParsedRequestValidator
         "credit_to_own_number",
         "change_waiting_card",
         "other_language",
+        "receive_from",
     ];
 
     private static readonly Dictionary<string, RequestIntent> Intents = new(StringComparer.Ordinal)

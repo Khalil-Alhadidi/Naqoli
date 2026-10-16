@@ -74,6 +74,17 @@ public class LearningLogRuleTests
         Assert.Contains(reason, LearningLogRule.Logged);
     }
 
+    [Fact]
+    public void AReceiveFromRequestIsLoggedAsReceiveFrom()
+    {
+        // ADD-08 and ADD-09: asking to receive money from someone else is logged under its own name (seed-v4).
+        var entry = LearningLogRule.EntryFor(new AgentReply.Unsupported("receive_from"), Unsupported("receive_from"));
+
+        Assert.Equal(new LearningEntry(LearningLogRule.ReceiveFrom, null), entry);
+        Assert.Equal("receive_from", LearningLogRule.ReceiveFrom);
+        Assert.Equal(LearningLogRule.ReceiveFrom, LearningLogRule.Logged[^1]);
+    }
+
     [Theory]
     [InlineData("withdrawal")]
     [InlineData("other_balance")]

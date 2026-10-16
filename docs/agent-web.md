@@ -352,6 +352,7 @@ No key is a placeholder. `Card_TryAgain` and `Card_SendAgain` (milestone 7, D19)
 | `Unsupported_credit_to_own_number` | I cannot send credit to your own number | |
 | `Unsupported_change_waiting_card` | A card cannot be changed. Cancel it and ask again | |
 | `Unsupported_other_language` | Please write in Iraqi Arabic | |
+| `Unsupported_receive_from` | I cannot take money from another person's account. They have to send it to you | Khalil's Arabic, 16 Oct 2026 (ADD-08, ADD-09) |
 | `Purchase_code` | Your code: {0} | |
 | `Type_transfer` | Transfer | |
 | `Type_bill` | Bill | |

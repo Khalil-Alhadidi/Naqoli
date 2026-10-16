@@ -39,6 +39,8 @@ To re-freeze after an intended change (a new export from Khalil):
 
 `seed-v3` (16 Oct 2026) adds one value, `model_refusal`, to `settings.json`'s `learning_log.logged`, right after `model_invalid_reply`, at Khalil's instruction. No other file, no answer key and no figure changes, so no answer key needed re-checking.
 
+`seed-v4` (16 Oct 2026) adds one value, `receive_from`, to `settings.json`'s `learning_log.logged`, at the end of the list after `other_language`, at Khalil's instruction. No other file, no answer key and no figure changes, so no answer key needed re-checking.
+
 ## How the wallet loads them
 
 - `src/Wallet.MockApi/Wallet.MockApi.csproj` links `data/seed/*.json` into the build output as `seed/*.json`, so `migrate`, `seed-hash`, the running API and the tests read the same bytes as the repository.

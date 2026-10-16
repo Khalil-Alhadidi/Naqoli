@@ -166,6 +166,7 @@ public class ParsedRequestValidatorTests
     [InlineData("credit_to_own_number")]
     [InlineData("change_waiting_card")]
     [InlineData("other_language")]
+    [InlineData("receive_from")]
     public void EveryDocumentedUnsupportedReasonIsRead(string reason)
     {
         var result = ParsedRequestValidator.Validate(

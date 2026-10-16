@@ -84,6 +84,7 @@
   <data name="Unsupported_credit_to_own_number" xml:space="preserve"><value>ما أكدر أرسل رصيد لرقمك إنت</value></data>
   <data name="Unsupported_change_waiting_card" xml:space="preserve"><value>ما رهمت. الغيها واطلب من جديد</value></data>
   <data name="Unsupported_other_language" xml:space="preserve"><value>اكتبلي باللهجة العراقية</value></data>
+  <data name="Unsupported_receive_from" xml:space="preserve"><value>ما أكدر أجيب فلوس من حساب شخص ثاني. لازم هو يحوّلك.</value></data>
   <data name="Purchase_code" xml:space="preserve"><value>الكود مالتك: {0}</value></data>
   <data name="Type_transfer" xml:space="preserve"><value>تحويل</value></data>
   <data name="Type_bill" xml:space="preserve"><value>فاتورة</value></data>

@@ -41,7 +41,7 @@ public sealed record ParsedRequest
     /// <summary>
     /// For <see cref="RequestIntent.Unsupported"/>: <c>withdrawal</c>, <c>other_balance</c>, <c>other_currency</c>,
     /// <c>refers_back</c>, <c>same_as_last_time</c>, <c>choose_account</c>, <c>part_of_bill</c>,
-    /// <c>credit_to_own_number</c>, <c>change_waiting_card</c>, <c>other_language</c>; otherwise null.
+    /// <c>credit_to_own_number</c>, <c>change_waiting_card</c>, <c>other_language</c>, <c>receive_from</c>; otherwise null.
     /// </summary>
     public string? UnsupportedReason { get; init; }
 

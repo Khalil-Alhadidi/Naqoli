@@ -71,7 +71,8 @@
       "part_of_bill",
       "credit_to_own_number",
       "other_currency",
-      "other_language"
+      "other_language",
+      "receive_from"
     ],
     "not_logged": [
       "insufficient_balance",
