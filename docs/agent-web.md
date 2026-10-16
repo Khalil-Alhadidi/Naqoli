@@ -244,9 +244,7 @@ Options validation requires `StaleExecutingAfterSeconds` to be more than three t
 
 `src/Agent.Web/Resources/PhoneStrings.resx` (neutral culture, read through `IStringLocalizer<PhoneStrings>`) holds every text the phone shows (rule 4). Khalil wrote the values in Iraqi Arabic on 15 Oct 2026 (commit a32ac1d); nothing else writes or changes them. `{0}` and `{1}` are filled by code, with figures in Arabic-Indic digits. `Word_yes` and `Word_no` are comma-separated lists (`PhoneWords.Split`), compared after `ArabicText.Normalize`. The table gives each key's meaning in English, not its Arabic value.
 
-Two keys are still placeholders, added in milestone 7 for Try again and Send again: `Card_TryAgain` and `Card_SendAgain`. `PhoneStringsTests.NoValueIsAPlaceholderExceptTheKeysAwaitingKhalil` allows exactly those two. A key leaves that list when Khalil writes it.
-
-For Khalil: `Refusal_invalid_number` says the number is incomplete. It does not yet ask for a phone number or a saved name, which D21 and milestone 7 ask for. The code is not changed; the wording is his.
+No key is a placeholder. The last two, `Card_TryAgain` and `Card_SendAgain` (milestone 7, D19), and the D21 wording of `Refusal_invalid_number` (it now asks for the full mobile number or a saved name) were written by Khalil on 16 Oct 2026. `PhoneStringsTests.NoValueIsAPlaceholderExceptTheKeysAwaitingKhalil` keeps the allow-list, now empty: a new key is added there with a `TODO-AR` value until he writes it.
 
 | Key | Meaning | Note |
 |---|---|---|
@@ -265,8 +263,8 @@ For Khalil: `Refusal_invalid_number` says the number is incomplete. It does not 
 | `Card_Expired` | This card has expired. Nothing was sent | |
 | `Card_Cancelled` | Cancelled | |
 | `Card_Timer` | {0} seconds left | |
-| `Card_TryAgain` | Try again | Placeholder `TODO-AR: Try again` (milestone 7, D19) |
-| `Card_SendAgain` | Send again | Placeholder `TODO-AR: Send again` (milestone 7, D19) |
+| `Card_TryAgain` | Try again | Milestone 7, D19; Khalil's Arabic, 16 Oct 2026 |
+| `Card_SendAgain` | Send again | Milestone 7, D19; Khalil's Arabic, 16 Oct 2026 |
 | `Outcome_done` | Done. Reference {0}. Your balance is now {1} | |
 | `Outcome_checking` | Checking with the wallet. Nothing is shown as failed | |
 | `Outcome_check_again` | Check again | |
@@ -289,7 +287,7 @@ For Khalil: `Refusal_invalid_number` says the number is incomplete. It does not 
 | `Refusal_insufficient_balance` | Your balance is not enough. You are {0} short | |
 | `Refusal_recipient_not_found` | I could not find this person in your contacts | |
 | `Refusal_number_has_no_wallet` | This number has no wallet | |
-| `Refusal_invalid_number` | This is not a complete phone number | Khalil's Arabic; it does not yet ask for a phone number or a saved name (D21) |
+| `Refusal_invalid_number` | The number is not complete. Type the full mobile number, or a name saved in your contacts | D21; Khalil's Arabic, reworded 16 Oct 2026 |
 | `Refusal_over_per_transaction_cap` | One payment can be at most {0} | |
 | `Refusal_over_daily_cap` | That passes your daily limit. {0} left today | |
 | `Refusal_account_closed` | This account is closed | |
@@ -474,8 +472,6 @@ The journeys locate elements only by these attributes.
 |---|---|
 | The card shows the amount in figures only, not in words | Needs Khalil's Iraqi number words |
 | Learning data is a placeholder | Milestone 10 (the settings and log components came in milestone 7) |
-| `Refusal_invalid_number` does not yet ask for a phone number or a saved name (D21) | Khalil's wording |
-| `Card_TryAgain` and `Card_SendAgain` are English placeholders | Khalil's wording |
 | A reissued card of the known gap `choose_account` does not carry the `account_choice_unavailable` note | Deferred, minor |
 | Text typed before the circuit is interactive is lost | The `data-interactive` marker tells the journeys; a person types again |
 | A Checking record whose circuit is gone has no "check again" button in a new circuit | The Checking screen in milestone 8; the record stays Checking and is never shown as failed |

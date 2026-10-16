@@ -20,8 +20,8 @@
   <data name="Card_Expired" xml:space="preserve"><value>خلص الوقت. ما انحوّل شي</value></data>
   <data name="Card_Cancelled" xml:space="preserve"><value>العملية ملغية</value></data>
   <data name="Card_Timer" xml:space="preserve"><value>باقي {0} ثانية</value></data>
-  <data name="Card_TryAgain" xml:space="preserve"><value>TODO-AR: Try again</value></data>
-  <data name="Card_SendAgain" xml:space="preserve"><value>TODO-AR: Send again</value></data>
+  <data name="Card_TryAgain" xml:space="preserve"><value>جرب مرة ثانية</value></data>
+  <data name="Card_SendAgain" xml:space="preserve"><value>دز مرة ثانية</value></data>
   <data name="Outcome_done" xml:space="preserve"><value>تم. رقم العملية {0}. رصيدك هسه {1}</value></data>
   <data name="Outcome_checking" xml:space="preserve"><value>دا نتأكد من المحفظة، لحظة. لا تعيد الطلب</value></data>
   <data name="Outcome_check_again" xml:space="preserve"><value>تأكد مرة ثانية</value></data>
@@ -44,7 +44,7 @@
   <data name="Refusal_insufficient_balance" xml:space="preserve"><value>رصيدك ما يكفي، تحتاج بعد {0}</value></data>
   <data name="Refusal_recipient_not_found" xml:space="preserve"><value>ما لكيت هذا الشخص بجهات الاتصال مالتك</value></data>
   <data name="Refusal_number_has_no_wallet" xml:space="preserve"><value>هذا الرقم ما عنده محفظة</value></data>
-  <data name="Refusal_invalid_number" xml:space="preserve"><value>الرقم مو كامل</value></data>
+  <data name="Refusal_invalid_number" xml:space="preserve"><value>الرقم مو كامل. اكتب رقم الموبايل كامل، لو اسم محفوظ عندك</value></data>
   <data name="Refusal_over_per_transaction_cap" xml:space="preserve"><value>أعلى مبلغ بعملية وحدة هو {0}</value></data>
   <data name="Refusal_over_daily_cap" xml:space="preserve"><value>هذا يتجاوز الحد اليومي. باقيلك اليوم {0}</value></data>
   <data name="Refusal_account_closed" xml:space="preserve"><value>هذا الحساب مغلق</value></data>
