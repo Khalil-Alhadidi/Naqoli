@@ -155,7 +155,7 @@
   9. `WalletErrorEndsTheCardNotDone`: on U3, mode `error`, once; FLT-03; Confirm; the outcome `not_done` with the `Refusal_not_done_nothing_taken` text inside `Outcome_not_done`; `card-try-again` shows; no history row; balance unchanged.
   10. `ModelUnreachableShowsTheHandoverMessage`: on U1, model fault `unreachable`, once; CLN-01: `Refusal_model_unavailable`, no card; CLN-01 again: a live card (the fault cleared); nothing moved.
   11. `ModelInvalidReplyIsNotUnderstood`: model fault `invalid_reply`, once; CLN-01: `Refusal_not_understood`, no card, a learning row `model_invalid_reply` with detail `injected`.
-  12. `ExternalDebitWhileTheCardWaitsIsCaughtByTheRecheck`: on U2, FLT-08: a live card for 15,000; the panel debits 5,000 (`fault-debit-result` shows done); Confirm: `not_done` with `Refusal_insufficient_balance` and 2,500; balance 13,500; the wallet panel's history shows a row of the external type; no agent payment row.
+  12. `ExternalDebitWhileTheCardWaitsIsCaughtByTheRecheck`: on U2, FLT-08: a live card for 15,000; the panel debits 5,000 (`fault-debit-result` shows done); Confirm: `not_done` with `Refusal_insufficient_balance` and 2,500; balance 13,500; `Host.HistoryAsync(U2)` holds one row of type `externalDebit` and no agent payment row (the wallet data panel does not reload after a panel debit, a known gap recorded in Task 4).
 - Run time: the two timeout journeys add about 30 s. Note the total in `docs/agent-web.md`.
 
 **Steps**
