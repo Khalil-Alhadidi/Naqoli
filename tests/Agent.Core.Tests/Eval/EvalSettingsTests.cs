@@ -54,6 +54,7 @@ public class EvalSettingsTests
             WalletBaseUrl = new Uri("http://localhost:5276"),
             WalletClientKey = "a-client-key-of-16+",
             YesWords = ["yes", "ok"],
+            ProviderSpellings = new(StringComparer.Ordinal) { ["internet"] = ["one", "two", "three"] },
         };
 
         var settings = EvalCommand.Settings(new EvalOptions { WalletAdminKey = "an-admin-key" }, agent);
@@ -61,6 +62,7 @@ public class EvalSettingsTests
         Assert.Equal("set", settings["Eval:WalletAdminKey"]);
         Assert.Equal("set", settings["Agent:WalletClientKey"]);
         Assert.Equal("2 word(s)", settings["Agent:YesWords"]);
+        Assert.Equal("internet 3 spelling(s)", settings["Agent:ProviderSpellings"]);
         Assert.Equal("12000", settings["Eval:FaultDelayMs"]);
         Assert.Equal("http://localhost:5276", settings["Agent:WalletBaseUrl"]);
         Assert.DoesNotContain(settings.Values, v => v.Contains("key", StringComparison.Ordinal));

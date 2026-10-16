@@ -91,7 +91,7 @@ public static class BillResolver
 
             // Rule 13: the internet bill, or a card from the store; a provider name of the bill in the user's words
             // means the bill (the bill-or-store rule, Khalil, 16 Oct 2026).
-            return isInternet && !NamesProvider(request.BillerText, bill)
+            return isInternet && !NamesProvider(request.BillerText, bill, options)
                 ? new BillResolution.AskBillOrStore(bill, InternetCards(products))
                 : new BillResolution.Card(bill);
         }
@@ -115,19 +115,19 @@ public static class BillResolver
     }
 
     /// <summary>
-    /// True when a word of <paramref name="billerText"/> is a provider name of <paramref name="bill"/>
-    /// (<see cref="ProviderNames.Of"/>): equal after <see cref="ArabicText.Key"/> (rule 1: a leading <c>al</c> dropped),
-    /// ignoring case for the English name. False for a null or blank text.
+    /// True when <paramref name="billerText"/> names a provider of <paramref name="bill"/>: the wallet's names
+    /// (<see cref="ProviderNames.Of"/>) and the spellings configured for the bill's biller
+    /// (<see cref="AgentOptions.ProviderSpellings"/>, Khalil, 16 Oct 2026), compared as contact names are (rule 1,
+    /// <see cref="ArabicText.Key"/>: a leading <c>al</c> dropped, spaces inside a name ignored) over every run of one to
+    /// three words, ignoring case for English. False for a null or blank text.
     /// </summary>
-    public static bool NamesProvider(string? billerText, WalletBill bill)
+    public static bool NamesProvider(string? billerText, WalletBill bill, AgentOptions options)
     {
         ArgumentNullException.ThrowIfNull(bill);
-        if (string.IsNullOrWhiteSpace(billerText))
-            return false;
+        ArgumentNullException.ThrowIfNull(options);
 
-        var names = ProviderNames.Of(bill).Select(ArabicText.Key).Where(k => k.Length > 0).ToList();
-        return names.Count > 0
-            && ArabicText.Words(billerText).Any(word => names.Contains(ArabicText.Key(word), StringComparer.OrdinalIgnoreCase));
+        var spellings = options.ProviderSpellings.TryGetValue(bill.BillerCode, out var configured) ? configured : [];
+        return ProviderNames.AnyNamed(billerText, [.. ProviderNames.Of(bill), .. spellings]);
     }
 
     private static List<WalletProduct> InternetCards(IReadOnlyList<WalletProduct> products)

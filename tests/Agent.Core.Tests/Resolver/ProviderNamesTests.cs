@@ -37,4 +37,22 @@ public class ProviderNamesTests
 
         Assert.Empty(ProviderNames.Of(bill with { BillerName = "Internet ( )", BillerNameEn = "Internet (Earthlink" }));
     }
+
+    [Theory]
+    [InlineData("earth link", true)]
+    [InlineData("pay the earth link subscription", true)]
+    [InlineData("EARTHLINK", true)]
+    [InlineData("earth", false)]
+    [InlineData("earthlinks", false)]
+    [InlineData("pay the bill", false)]
+    [InlineData("", false)]
+    public void AnyRunOfOneToThreeWordsIsComparedWithSpacesIgnored(string text, bool named)
+    {
+        // Khalil, 16 Oct 2026: provider names compare as contact names do (rule 1), spaces inside a name ignored.
+        Assert.Equal(named, ProviderNames.AnyNamed(text, ["Earthlink"]));
+    }
+
+    [Fact]
+    public void ARunLongerThanThreeWordsIsNotTried()
+        => Assert.False(ProviderNames.AnyNamed("e a r th", ["earth"]));
 }

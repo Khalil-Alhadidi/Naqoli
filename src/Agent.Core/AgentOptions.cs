@@ -134,6 +134,14 @@ public sealed class AgentOptions
     public string[] NoWords { get; set; } = [];
 
     /// <summary>
+    /// The bill resolver's provider spellings, by biller code (Khalil, 16 Oct 2026): besides the first word of the
+    /// wallet's biller name, the spellings users type (taken from the development set and the matching rules),
+    /// compared as contact names are. Configuration, not code: <c>Agent.Core</c> holds no Arabic. Empty by default;
+    /// shown read only in the settings component.
+    /// </summary>
+    public Dictionary<string, List<string>> ProviderSpellings { get; set; } = new(StringComparer.Ordinal);
+
+    /// <summary>
     /// The parse call: <c>scripted</c> (the default; no model) or <c>claude</c> (the <c>Model</c> section's candidate,
     /// with a key in user secrets). Read by <see cref="Parsing.ParserFactory.AddAgentParser"/>.
     /// </summary>

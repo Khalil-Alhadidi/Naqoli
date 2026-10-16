@@ -303,6 +303,9 @@ public static class EvalCommand
             {
                 _ when property.Name.Contains("Key", StringComparison.Ordinal) => value.ValueKind == JsonValueKind.Null ? "not set" : "set",
                 JsonValueKind.Array => value.GetArrayLength().ToString(CultureInfo.InvariantCulture) + " word(s)",
+                JsonValueKind.Object => string.Join(
+                    ", ",
+                    value.EnumerateObject().Select(p => p.Name + " " + p.Value.GetArrayLength().ToString(CultureInfo.InvariantCulture) + " spelling(s)")),
                 JsonValueKind.String => value.GetString() ?? string.Empty,
                 JsonValueKind.Null => "null",
                 _ => value.GetRawText(),
