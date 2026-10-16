@@ -294,7 +294,13 @@ The two misses are the items already deferred: AMB-23 asks the operator where th
 - A timeout shows "checking", never "failed", and resolves to done or not done by key.
 - `docs/failure-modes.md` describes all six failure modes from slide 2, each with how it is handled and which test shows it.
 
-**Deferred here from the 15 Oct diagnosis (`docs/reports/diagnosis-2026-10-15.md`):** CLN-09, CLN-09-v1 and CLN-25 (the user named the subscription, so the bill goes straight to the card; the structure has no field that says so, which means prompt version 2 with a schema field and a resolver branch) and GAP-07 (the slang words for banknotes are not dinar amounts; one prompt line in Khalil's words, also prompt version 2). Prompt version 2 is the first prompt revision and belongs to this milestone, after the bill flow is on screen.
+**Deferred here from the 15 Oct diagnosis (`docs/reports/diagnosis-2026-10-15.md`):** CLN-09, CLN-09-v1 and CLN-25 (the user named the subscription, so the bill goes straight to the card; the structure has no field that says so). The change is prompt version 3 with schema version 2, below. GAP-07 (the slang words for banknotes) was deferred here on 15 Oct and then passed with prompt version 2 the same day, so it is no longer on this milestone (corrected 16 Oct 2026).
+
+**Spec: the bill-or-store rule (Khalil, 16 Oct 2026):**
+
+- **Schema version 2:** a bill request carries `biller_text`, the user's own words for the biller, verbatim. Prompt version 3 asks for it. Nothing else in the structure changes.
+- **`BillResolver`:** if `biller_text` contains a known provider name, the bill goes straight to the card; otherwise rule 13 stands and bill-or-store is asked. Recorded in `docs/matching-rules.md` (added 16/10/2026).
+- **CLN-25's key** changes to bill-or-store, tap, card, and the sidecar parse follows. The change, the reason and the date are noted in `docs/disclosure.md`.
 
 ## Milestone 9: Extras, in reverse cut order
 
@@ -309,7 +315,7 @@ Three separate pieces. Build them in this order. Each one can be dropped without
 
 - Delivers: the purchase flow against the catalogue, the code shown with a copy button, and My orders.
 - Done when: the purchase cases in the development set pass, the code never reaches the model, and logs keep only the last digits of a code.
-- Deferred here from the 15 Oct diagnosis: AMB-23 (a bare value with no operator: rule 11 asks the operator, rule 12 lists the products; Khalil decides which governs), MAL-09 (Latin spellings of operator names), NOGO-12 (the wording of the learning-log detail) and GAP-06 (`credit_to_own_number` with the operator, type and value kept filled, which needs prompt version 2 and the known-gap path of milestone 7 extended to purchases).
+- Deferred here from the 15 Oct diagnosis: AMB-23 (a bare value with no operator; decided by Khalil on 16 Oct 2026: rule 12 governs, the question lists the matching products), MAL-09 (Latin spellings of operator names), NOGO-12 (the wording of the learning-log detail) and GAP-06 (`credit_to_own_number` with the operator, type and value kept filled, which needs prompt version 2 and the known-gap path of milestone 7 extended to purchases).
 
 **9c. Compound requests (D7)**
 
@@ -319,6 +325,8 @@ Three separate pieces. Build them in this order. Each one can be dropped without
 
 **If a piece is cut:** the agent gives a safe reply and no card for those requests, the piece is listed under known gaps, and its held-out cases are reported as unsupported. They are not removed from the held-out set.
 
+**Later, after the three pieces (added 16 Oct 2026):** an alias on a biller account ("my اشتراك" pointing to one biller account), as an extension of 9a. It uses the alias directory of 9a and the bill flow of milestone 8, and is not needed by any development-set case.
+
 ## Milestone 10: Model choice and freeze
 
 **Delivers**
@@ -326,6 +334,7 @@ Three separate pieces. Build them in this order. Each one can be dropped without
 - The candidates compared on the development set with the final prompt, under the rule in D13: fewest wrong cards wins, and a close call goes to the cheaper or in-country model.
 - The candidates (Khalil, 15 Oct 2026): Claude (paid; Haiku, Sonnet and Opus through the Anthropic API, in since milestone 6), Gemini Flash-Lite (free) and a Qwen model on Groq (free). The second provider is wired through `Microsoft.Extensions.AI` before this milestone starts, so the comparison has at least one free candidate; its model id goes into `docs/disclosure.md` in the commit that configures it.
 - The learning data component in the console, with its count in the menu.
+- The results component: a console panel showing the latest report's targets table (the open item, settled 16 Oct 2026).
 
 **Done when**
 
@@ -364,6 +373,17 @@ Three separate pieces. Build them in this order. Each one can be dropped without
 
 Only after milestone 12, and only if the core meets its targets. Speech becomes text before step 1 of the pipeline, and nothing after that changes. It is reported at its measured level.
 
+## Organisers' deliverables
+
+What the organisers ask for during the build period, beside the code (recorded 16 Oct 2026):
+
+| Deliverable | Due | Status |
+|---|---|---|
+| Design brief | 22 Oct 2026 | Open |
+| The shop conversations (two or three short conversations with counter staff or their customers, written up; the item of Khalil's track below) | Before the design brief, 22 Oct 2026 | Open |
+| MVP one-page update | 8 Nov 2026 | Open |
+| Session booking | 8 Nov 2026 | Open |
+
 ## Khalil's track, alongside the code
 
 | Item | Why it matters | Needed by |
@@ -371,7 +391,7 @@ Only after milestone 12, and only if the core meets its targets. Speech becomes 
 | Rewrite the 124 requests in Iraqi dialect | Only Khalil can do the wording, and it is the slowest item | Milestone 5 |
 | Export the Rules and Matching sheets as `docs/matching-rules.md` | The resolver is built from them, and the workbook itself stays out of the coding sessions because it holds the held-out cases | Milestone 3 |
 | Write the phone strings in the resource file (D20) | Everything the agent says is a template written by an Iraqi | Milestone 4 for the first few, milestone 7 for the rest |
-| Two or three short conversations with counter staff or their customers, written up | "Evidence you spoke to someone" is part of a 20% criterion | Milestone 12 |
+| Two or three short conversations with counter staff or their customers, written up | "Evidence you spoke to someone" is part of a 20% criterion | Before the design brief of 22 Oct 2026 (Organisers' deliverables, above) |
 | Name the three model candidates and get access to each | Done 15 Oct 2026: Claude (paid, Anthropic API key in user secrets), Gemini Flash-Lite and a Qwen model on Groq (both free). The free providers are added before milestone 10 | Milestone 6 (Claude), milestone 10 (the rest) |
 
 ## Open items
@@ -380,7 +400,7 @@ Only after milestone 12, and only if the core meets its targets. Speech becomes 
 |---|---|
 | Build-period dates | Settled 15 Oct 2026: 15 October to 8 November 2026 (MVP), finals after |
 | Whether code written before the build period is allowed | Settled 15 Oct 2026: allowed, and disclosed (milestones 1 to 6) |
-| Where the demo runs: Khalil's laptop or a hosted copy | Waits for the organisers' guidelines |
-| Results component in the page | Waits for the organisers' guidelines |
+| Where the demo runs: Khalil's laptop or a hosted copy | Settled 16 Oct 2026: Khalil's laptop, to be confirmed with the organisers |
+| Results component in the page | Settled 16 Oct 2026: a console panel showing the latest report's targets table, built in milestone 10 |
 | Test framework and other library choices not named in the architecture | Settled at milestone 1: xUnit; Microsoft.Extensions.Logging with no third-party sink |
 | What the audit log keeps for a balance reply | Settled 15 Oct 2026: that the balance was shown and when, not the figure |

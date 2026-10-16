@@ -65,3 +65,8 @@ If a rule changes, the answer keys that depend on it change with it, and only in
 ## Added 15/10/2026
 
 - Near (rule 6) is checked before partial (rule 4); exact still beats both. Decided by Khalil on 15/10/2026 for CLN-03-v1.
+
+## Added 16/10/2026
+
+- Bill or store, when the user names the provider (Khalil, 16/10/2026, for CLN-09, CLN-09-v1 and CLN-25): the parse structure gains `biller_text`, the user's own words for the biller, copied verbatim (schema version 2, prompt version 3). If `biller_text` contains a known provider name, the bill goes straight to the card. Otherwise rule 13 stands: 'pay the internet' or 'pay the internet subscription' from a user with an internet bill asks bill-or-store. 'Pay the Earthlink subscription' (CLN-09) and 'pay the internet subscription of Earthlink' (CLN-09-v1) go to the card; 'pay the internet subscription' (CLN-25) asks, and CLN-25's answer key changes to bill-or-store, tap, card. The known provider names are read from the wallet's biller list: the part of the biller's name in parentheses, Arabic or English (`اشتراك الانترنت (ايرثلنك)`, `Internet (Earthlink subscription)` give ايرثلنك and Earthlink); a biller whose name has no parentheses has no provider name (Claude's reading of "known provider name", for Khalil to confirm). The comparison is by whole word after rule 1's normalising. `biller_text` is never shown on the card: the card's name comes from the wallet's bill (its label or biller name).
+- Purchases, a bare value with no operator (AMB-23, Khalil, 16/10/2026): rule 12 governs. The question lists every product of that value and type across the operators, up to 8; rule 11's operator question is asked only when the list would exceed 8.
