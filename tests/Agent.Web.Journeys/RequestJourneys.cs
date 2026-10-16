@@ -1,5 +1,6 @@
 extern alias AgentWeb;
 
+using Agent.Core.Audit;
 using AgentWeb::Agent.Web.Services;
 using Microsoft.Playwright;
 using static Microsoft.Playwright.Assertions;
@@ -7,8 +8,8 @@ using static Microsoft.Playwright.Assertions;
 namespace Agent.Web.Journeys;
 
 /// <summary>
-/// Milestone 7, the request types on screen: a typed number, an account number, an unknown name, a short balance and a
-/// cap. Each types a development-set case by id; the console's scripted parser is the oracle over the same set.
+/// Milestone 7, the request types on screen: a typed number, an account number, an unknown name, a short balance, a
+/// cap, and a name two contacts share (D3: the options, then the tap that gives the card). Each types a development-set case by id; the console's scripted parser is the oracle over the same set.
 /// </summary>
 [Collection(JourneyCollection.Name)]
 public sealed class RequestJourneys(JourneyHost host) : JourneyBase(host)
@@ -38,6 +39,47 @@ public sealed class RequestJourneys(JourneyHost host) : JourneyBase(host)
         Assert.Equal(historyBefore + 1, history.Count);
         Assert.Equal(TypedNumber, history[0].CounterpartyPhone);
         Assert.Equal(U1Balance - 21_000, await Host.BalanceAsync(U1));
+    }
+
+    [Fact]
+    public async Task AmbiguousNameOffersOptionsAndTheTapGivesTheCard()
+    {
+        var page = await OpenAsync(Host.WebAddress);
+        var historyBefore = (await Host.HistoryAsync(U1)).Count;
+
+        await SayAsync(page, DevSet.Say("AMB-02", 0));
+
+        // D3: one question with exactly the two contacts as options, and no card.
+        var question = page.Locator("[data-testid=chat-message][data-kind=question]");
+        await Expect(question).ToHaveCountAsync(1);
+        // The options are shown under the question message (QuestionPanel), not inside it.
+        var options = page.GetByTestId("question-option");
+        await Expect(options).ToHaveCountAsync(2);
+        var values = new List<string?>();
+        foreach (var option in await options.AllAsync())
+            values.Add(await option.GetAttributeAsync("data-value"));
+        Assert.Equal(["S10", "S11"], values.Order(StringComparer.Ordinal));
+        await Expect(page.GetByTestId("card")).ToHaveCountAsync(0);
+
+        await page.Locator("[data-testid=question-option][data-value=S10]").ClickAsync();
+
+        // The card names S10 as the wallet holds it; nothing has moved yet.
+        var contact = (await Host.ContactsAsync(U1)).Contacts.Single(c => c.Code == "S10");
+        await Expect(page.GetByTestId("card")).ToHaveAttributeAsync("data-state", "live");
+        await Expect(page.GetByTestId("card-display")).ToHaveTextAsync(contact.SavedName);
+        await Expect(page.GetByTestId("card-registered")).ToHaveTextAsync(contact.RegisteredName!);
+        await Expect(page.GetByTestId("card-amount")).ToHaveTextAsync(PhoneFormat.Amount(50_000, Text));
+        Assert.Equal(U1Balance, await Host.BalanceAsync(U1));
+        Assert.Equal(historyBefore, (await Host.HistoryAsync(U1)).Count);
+
+        await page.GetByTestId("card-confirm").ClickAsync();
+
+        await Expect(Outcomes(page, "done")).ToHaveCountAsync(1);
+        var history = await Host.HistoryAsync(U1);
+        Assert.Equal(historyBefore + 1, history.Count);
+        Assert.Equal(contact.Phone, history[0].CounterpartyPhone);
+        Assert.Equal(699_000, await Host.BalanceAsync(U1));
+        Assert.Equal(1, await AuditCountAsync(AuditEvents.Done));
     }
 
     [Fact]
