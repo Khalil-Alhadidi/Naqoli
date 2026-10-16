@@ -13,8 +13,15 @@ public sealed record FlippedCase(string Id, string Category, IReadOnlyList<bool>
 /// <summary>One run of a repeat series: its passes, its cost and its median case time.</summary>
 public sealed record RepeatRun(int Run, int Passed, int Cases, decimal CostUsd, double MedianTimeMs);
 
-/// <summary>A repeat series (<c>--repeat N</c>) summed up: the groups (all cases, then each category), the flipped cases and the runs.</summary>
-public sealed record RepeatSummary(IReadOnlyList<RepeatGroup> Groups, IReadOnlyList<FlippedCase> Flipped, IReadOnlyList<RepeatRun> Runs);
+/// <summary>
+/// A repeat series (<c>--repeat N</c>) summed up: the groups (all cases, then each category), the flipped cases, the runs,
+/// and each target's min, median and max across the runs.
+/// </summary>
+public sealed record RepeatSummary(
+    IReadOnlyList<RepeatGroup> Groups,
+    IReadOnlyList<FlippedCase> Flipped,
+    IReadOnlyList<RepeatRun> Runs,
+    IReadOnlyList<RepeatTarget> Targets);
 
 public static partial class ReportWriter
 {
@@ -74,7 +81,7 @@ public static partial class ReportWriter
                 Median(run.Results.Select(c => (double)c.TimeMs))))
             .ToList();
 
-        return new RepeatSummary(groups, flipped, perRun);
+        return new RepeatSummary(groups, flipped, perRun, RepeatTargets(runs));
     }
 
     /// <summary>
@@ -110,6 +117,7 @@ public static partial class ReportWriter
             summary.Groups,
             summary.Flipped,
             summary.Runs,
+            summary.Targets,
             Reports = runPaths.Select(p => new { Markdown = Path.GetFileName(p.MarkdownPath), Json = Path.GetFileName(p.JsonPath) }).ToList(),
         };
         File.WriteAllText(jsonPath, JsonSerializer.Serialize(document, Json), Utf8NoBom);
@@ -160,6 +168,11 @@ public static partial class ReportWriter
             Line("| " + g.Name + " | " + Number(g.Cases) + " | " + Number(g.MinPassed) + " | " + OneDecimal(g.MedianPassed) + " | " + Number(g.MaxPassed) + " |");
         Line();
 
+        Line("## Targets");
+        Line();
+        RepeatTargetsTable(md, summary.Targets);
+        Line();
+
         Line("## Flipped cases");
         Line();
         Line("Cases that passed in some runs and failed in others: " + Number(summary.Flipped.Count) + ".");
@@ -191,7 +204,7 @@ public static partial class ReportWriter
         return md.ToString();
     }
 
-    /// <summary>The console summary of a repeat series: each group's min, median and max, the flipped cases, and each run.</summary>
+    /// <summary>The console summary of a repeat series: each group's min, median and max, the flipped cases, each run, and the targets.</summary>
     public static string RepeatConsoleSummary(RepeatSummary summary)
     {
         ArgumentNullException.ThrowIfNull(summary);
@@ -208,6 +221,10 @@ public static partial class ReportWriter
             Line("  Run " + Number(r.Run) + ": " + Number(r.Passed) + "/" + Number(r.Cases) + " passed, "
                 + r.CostUsd.ToString("0.0000", CultureInfo.InvariantCulture) + " USD, median " + OneDecimal(r.MedianTimeMs) + " ms");
         }
+
+        Line("Targets (min / median / max, verdict on the median):");
+        foreach (var t in summary.Targets)
+            Line("  " + RepeatTargetLine(t));
 
         return text.ToString();
     }

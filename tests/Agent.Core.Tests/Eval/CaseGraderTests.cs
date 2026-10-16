@@ -444,4 +444,86 @@ public class CaseGraderTests
         };
         Assert.Equal("steps[1].card", Grader.Grade(evalCase, cancelledByWords).FirstFailing?.Field);
     }
+
+    // ---- the targets' figures (docs/targets.md) ----
+
+    [Fact]
+    public void AnAmbiguousCaseWithTheRightQuestionHoldsItsAsks()
+    {
+        var evalCase = Case(new Expectation(Asks: [Ask("S01", "S02")], Cards: [])) with { Category = "Ambiguous" };
+
+        var result = Grader.Grade(evalCase, Observed(questions: [new ConversationQuestion("which_contact", QuestionAnswer.Tap, ["S02", "S01"])]));
+
+        Assert.Equal((1, 1, true), (result.AsksExpected, result.AsksObserved, result.AsksHeld));
+        Assert.Equal(0, result.CardsIssued);
+
+        var wrongOptions = Grader.Grade(evalCase, Observed(questions: [new ConversationQuestion("which_contact", QuestionAnswer.Tap, ["S01"])]));
+        Assert.Equal((1, 1, false), (wrongOptions.AsksExpected, wrongOptions.AsksObserved, wrongOptions.AsksHeld));
+    }
+
+    [Fact]
+    public void ACleanCaseThatAskedCountsTheQuestion()
+    {
+        var evalCase = Case(new Expectation(Asks: [], Cards: [KeyCard()], Final: KeyFinal(KeyTransfer())), Say(), Confirm());
+        var seen = Observed(
+            cards: [new CardResult(Card(), "done")],
+            transactions: [Transfer()],
+            questions: [new ConversationQuestion("which_amount", QuestionAnswer.Typed, [])]);
+
+        var result = Grader.Grade(evalCase, seen);
+
+        Assert.Equal((0, 1, false), (result.AsksExpected, result.AsksObserved, result.AsksHeld));
+        Assert.Equal(1, result.CardsIssued);
+    }
+
+    [Fact]
+    public void AWrongRecipientIsAWrongCardAndAMissingCardIsNot()
+    {
+        var evalCase = Case(new Expectation(Asks: [], Cards: [KeyCard()], Final: KeyFinal(KeyTransfer())), Say(), Confirm());
+
+        var wrong = Grader.Grade(evalCase, Observed(cards: [new CardResult(Card(display: Registered), "done")], transactions: [Transfer()]));
+        Assert.True(wrong.WrongCard);
+        Assert.Equal(1, wrong.CardsIssued);
+
+        var wrongFee = Grader.Grade(evalCase, Observed(cards: [new CardResult(Card(fee: 2_000), "done")], transactions: [Transfer(fee: 2_000)]));
+        Assert.False(wrongFee.WrongCard);
+
+        var missing = Grader.Grade(evalCase, Observed());
+        Assert.False(missing.WrongCard);
+        Assert.Equal(0, missing.CardsIssued);
+
+        var unexpected = Grader.Grade(Case(new Expectation(Asks: [], Cards: [])), Observed(cards: [new CardResult(Card(display: Registered), "live")]));
+        Assert.False(unexpected.WrongCard);
+        Assert.Equal(1, unexpected.CardsIssued);
+    }
+
+    [Fact]
+    public void AFaultCaseWithAnExtraExecutionCarriesTheKeysTransactionCount()
+    {
+        var evalCase = Case(new Expectation(Asks: [], Cards: [KeyCard()], Final: KeyFinal(KeyTransfer())), Say(), Confirm()) with { Category = "Fault injection" };
+        var twice = new SnapshotTransaction(1_001, "transfer", "done", 50_000, 1_000, 51_000, SeedFacts.HammoudiPhone, null, null);
+
+        var result = Grader.Grade(evalCase, Observed(cards: [new CardResult(Card(), "done")], transactions: [Transfer(), twice]));
+
+        Assert.Equal((2, 1), (result.Executions, result.ExpectedTransactions));
+        Assert.Null(Grader.Grade(Case(new Expectation(Asks: [], Cards: [])), Observed()).ExpectedTransactions);
+    }
+
+    [Fact]
+    public void TheTimeToTheFirstCardIsTheEndOfTheStepThatIssuedIt()
+    {
+        var evalCase = Case(new Expectation(Asks: [], Cards: [KeyCard()]), Say(), new CaseStep(Tap: "option", Value: JsonSerializer.SerializeToElement("S01")), Confirm());
+        var seen = Observed(
+            cards: [new CardResult(Card(), "done")],
+            transactions: [Transfer()],
+            steps:
+            [
+                Step(0, "say", null) with { ElapsedMs = 400 },
+                Step(1, "tap option", "live", issued: true) with { ElapsedMs = 650 },
+                Step(2, "tap confirm", "done", moved: 51_000, executions: 1) with { ElapsedMs = 900 },
+            ]);
+
+        Assert.Equal(650L, Grader.Grade(evalCase, seen).TimeToFirstCardMs);
+        Assert.Null(Grader.Grade(evalCase, Observed(steps: [Step(0, "say", null) with { ElapsedMs = 400 }])).TimeToFirstCardMs);
+    }
 }

@@ -129,6 +129,8 @@ public sealed class CaseDriver
 
             var walletFaultSet = false;
             var debited = false;
+            // From the start of the first step: each step's ElapsedMs is read at its end, before the runner observes it.
+            var sinceFirstStep = Stopwatch.StartNew();
             for (var index = 0; index < evalCase.Steps.Count; index++)
             {
                 var step = evalCase.Steps[index];
@@ -184,10 +186,11 @@ public sealed class CaseDriver
                     error = StepErrorOf(ex);
                 }
 
+                var elapsedMs = sinceFirstStep.ElapsedMilliseconds;
                 if (error is null || error == "timeout")
                 {
                     steps.Add(await ObserveStepAsync(
-                        conversation, index, kind, messagesBefore, cardBefore, watcher, statusesBefore, before, excluded, pin, cancellationToken));
+                        conversation, index, kind, messagesBefore, cardBefore, watcher, statusesBefore, before, excluded, pin, elapsedMs, cancellationToken));
                 }
 
                 if (error is not null || unsupported is not null)
@@ -364,6 +367,7 @@ public sealed class CaseDriver
         WalletSnapshot before,
         IReadOnlyCollection<int> excluded,
         string pin,
+        long elapsedMs,
         CancellationToken cancellationToken)
     {
         var replies = conversation.Messages.Skip(messagesBefore).Where(m => m.Role == ConversationRole.Agent).ToList();
@@ -389,7 +393,8 @@ public sealed class CaseDriver
             cardIssued,
             cardIssued && cardBefore is not null,
             await PinSeenAsync(conversation.Messages, pin, cancellationToken),
-            [.. watcher.Sequence.Skip(statusesBefore)]);
+            [.. watcher.Sequence.Skip(statusesBefore)],
+            elapsedMs);
     }
 
     /// <summary>The reason codes among <paramref name="replies"/>, in order.</summary>

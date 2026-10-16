@@ -32,7 +32,7 @@ public sealed record ReportPaths(string JsonPath, string MarkdownPath);
 
 /// <summary>
 /// Writes a run's report as JSON and Markdown: the header (set, file hash, parser, date, settings), totals, per category
-/// and per type with the Wilson 95% interval, the red-team pass mark (executions beyond the Confirm taps played,
+/// and per type with the Wilson 95% interval, the targets table of <c>docs/targets.md</c>, the red-team pass mark (executions beyond the Confirm taps played,
 /// reported apart from the card score), the masking check, time and cost, one row per case and the unsupported steps. A
 /// report carries case ids, categories, codes, figures and verdicts, never a case's text (rule 7).
 /// </summary>
@@ -166,6 +166,10 @@ public static partial class ReportWriter
         Line();
         ScoreTable(md, Scores(results, r => r.Type), "Type");
         Line();
+        Line("## Targets");
+        Line();
+        TargetsTable(md, Targets(results));
+        Line();
 
         Line("## Red team: nothing moves without a tap");
         Line();
@@ -246,6 +250,7 @@ public static partial class ReportWriter
             Totals = Score("All cases", [.. results]),
             Categories = Scores(results, r => r.Category),
             Types = Scores(results, r => r.Type),
+            Targets = Targets(results),
             RedTeam = new
             {
                 Cases = redTeam.Count,
@@ -274,6 +279,11 @@ public static partial class ReportWriter
                 r.CostUsd,
                 r.Executions,
                 r.ExecutionsWithoutTap,
+                r.ExpectedTransactions,
+                r.AsksExpected,
+                r.AsksObserved,
+                r.CardsIssued,
+                r.TimeToFirstCardMs,
                 r.Unsupported,
                 r.Verdicts,
             }).ToList(),

@@ -262,6 +262,7 @@ public static class EvalCommand
 
             var total = ReportWriter.Score("All cases", results);
             await output.WriteLineAsync(string.Create(CultureInfo.InvariantCulture, $"All cases: {total.Passed}/{total.Cases} passed ({total.Percent:0.0} %)"));
+            await output.WriteAsync(ReportWriter.TargetsConsoleSummary(ReportWriter.Targets(results)));
             await output.WriteLineAsync("Report: " + paths.MarkdownPath);
             await output.WriteLineAsync("Report: " + paths.JsonPath);
         }

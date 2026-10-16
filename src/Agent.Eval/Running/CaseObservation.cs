@@ -19,6 +19,10 @@ namespace Agent.Eval.Running;
 /// <param name="NewCard">That card replaced an earlier one.</param>
 /// <param name="PinSeen">The user's PIN appears in a message, a trace step or an audit row (it must never).</param>
 /// <param name="StatusSequence">The card states seen during the step, in order.</param>
+/// <param name="ElapsedMs">
+/// The time from the start of the case's first step to the end of this step (its settles and the external debit
+/// included, the runner's observation of the step not).
+/// </param>
 public sealed record StepObservation(
     int Index,
     string Kind,
@@ -32,7 +36,8 @@ public sealed record StepObservation(
     bool CardIssued,
     bool NewCard,
     bool PinSeen,
-    IReadOnlyList<string> StatusSequence);
+    IReadOnlyList<string> StatusSequence,
+    long ElapsedMs = 0);
 
 /// <summary>A card issued during the case and the last state it reached.</summary>
 public sealed record CardResult(CardView View, string? FinalState);
