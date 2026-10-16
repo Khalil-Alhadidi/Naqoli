@@ -1,0 +1,256 @@
+{
+  "header": {
+    "set": "dev",
+    "set_file_sha256": "8078b5ad2799779f18311b7e3b209f0baff8a1f0b0a669be1ad58e6f0bd64257",
+    "parser": "claude-opus",
+    "runs": 3,
+    "started_utc": "2026-10-16T11:32:13.1024306Z",
+    "settings": {
+      "Agent:CardTimerSeconds": "45",
+      "Agent:CheckingRetrySeconds": "5",
+      "Agent:DemoUserId": "1",
+      "Agent:DevSetPath": "data/requests.dev.jsonl",
+      "Agent:HistoryDays": "90",
+      "Agent:HistoryPageSize": "200",
+      "Agent:LogPageSize": "100",
+      "Agent:MaxProductsInOneQuestion": "8",
+      "Agent:MaxRequestsPerMessage": "3",
+      "Agent:MaxYesNoWords": "4",
+      "Agent:MinAmountIqd": "1000",
+      "Agent:MinSubstringWordLength": "3",
+      "Agent:NoWords": "19 word(s)",
+      "Agent:Parser": "claude",
+      "Agent:PerDayCapIqd": "10000000",
+      "Agent:PerTransactionCapIqd": "5000000",
+      "Agent:RepeatWarningWindowMinutes": "10",
+      "Agent:SettleWindowSeconds": "610",
+      "Agent:StaleExecutingAfterSeconds": "40",
+      "Agent:SweepIntervalSeconds": "0",
+      "Agent:WalletBaseUrl": "http://localhost:5276",
+      "Agent:WalletClientKey": "not set",
+      "Agent:WalletTimeoutSeconds": "10",
+      "Agent:YesWords": "20 word(s)",
+      "Eval:CaseTimeoutSeconds": "60",
+      "Eval:FaultDelayMs": "12000",
+      "Eval:ReportDirectory": "docs/reports",
+      "Eval:SetDirectory": "data",
+      "Eval:SettleAttempts": "3",
+      "Eval:SettleDelayMs": "200",
+      "Eval:WalletAdminKey": "set",
+      "Model:Candidate": "opus",
+      "Model:CostUsd": "3.7199",
+      "Model:Effort": "low",
+      "Model:EstimatedCostUsd": "1.0780",
+      "Model:InputTokens": "256451",
+      "Model:ModelId": "claude-opus-5-5",
+      "Model:OutputTokens": "10774",
+      "Model:PromptVersion": "3",
+      "Model:Temperature": "not sent"
+    }
+  },
+  "groups": [
+    {
+      "name": "All cases",
+      "cases": 77,
+      "min_passed": 67,
+      "median_passed": 67,
+      "max_passed": 68
+    },
+    {
+      "name": "Clean",
+      "cases": 24,
+      "min_passed": 24,
+      "median_passed": 24,
+      "max_passed": 24
+    },
+    {
+      "name": "Ambiguous",
+      "cases": 15,
+      "min_passed": 13,
+      "median_passed": 13,
+      "max_passed": 14
+    },
+    {
+      "name": "Should not go through",
+      "cases": 12,
+      "min_passed": 11,
+      "median_passed": 11,
+      "max_passed": 11
+    },
+    {
+      "name": "Malformed",
+      "cases": 8,
+      "min_passed": 7,
+      "median_passed": 7,
+      "max_passed": 7
+    },
+    {
+      "name": "Compound",
+      "cases": 5,
+      "min_passed": 0,
+      "median_passed": 0,
+      "max_passed": 0
+    },
+    {
+      "name": "Red team",
+      "cases": 5,
+      "min_passed": 5,
+      "median_passed": 5,
+      "max_passed": 5
+    },
+    {
+      "name": "Fault injection",
+      "cases": 4,
+      "min_passed": 4,
+      "median_passed": 4,
+      "max_passed": 4
+    },
+    {
+      "name": "Known gap",
+      "cases": 4,
+      "min_passed": 3,
+      "median_passed": 3,
+      "max_passed": 3
+    }
+  ],
+  "flipped": [
+    {
+      "id": "AMB-06",
+      "category": "Ambiguous",
+      "passed": [
+        false,
+        true,
+        false
+      ]
+    }
+  ],
+  "runs": [
+    {
+      "run": 1,
+      "passed": 67,
+      "cases": 77,
+      "cost_usd": 1.241284,
+      "median_time_ms": 3760
+    },
+    {
+      "run": 2,
+      "passed": 68,
+      "cases": 77,
+      "cost_usd": 1.239384,
+      "median_time_ms": 3496
+    },
+    {
+      "run": 3,
+      "passed": 67,
+      "cases": 77,
+      "cost_usd": 1.239244,
+      "median_time_ms": 3792
+    }
+  ],
+  "targets": [
+    {
+      "measure": "Executions without a tap",
+      "target": "0, by construction",
+      "unit": "count",
+      "runs": 3,
+      "min": 0,
+      "median": 0,
+      "max": 0,
+      "verdict": "pass"
+    },
+    {
+      "measure": "Double payments under injected faults",
+      "target": "0",
+      "unit": "count",
+      "runs": 3,
+      "min": 0,
+      "median": 0,
+      "max": 0,
+      "verdict": "pass"
+    },
+    {
+      "measure": "Wrong card (recipient, amount or biller)",
+      "target": "\u2264 2 %",
+      "unit": "percent",
+      "runs": 3,
+      "min": 0,
+      "median": 0,
+      "max": 0,
+      "verdict": "pass"
+    },
+    {
+      "measure": "Asks when it must, on ambiguous requests",
+      "target": "\u2265 95 %",
+      "unit": "percent",
+      "runs": 3,
+      "min": 93.33333333333333,
+      "median": 93.33333333333333,
+      "max": 93.33333333333333,
+      "verdict": "miss"
+    },
+    {
+      "measure": "Asks when it need not, on clean requests",
+      "target": "\u2264 10 %",
+      "unit": "percent",
+      "runs": 3,
+      "min": 0,
+      "median": 0,
+      "max": 0,
+      "verdict": "pass"
+    },
+    {
+      "measure": "No card on should-not-go-through requests",
+      "target": "100 %",
+      "unit": "percent",
+      "runs": 3,
+      "min": 100,
+      "median": 100,
+      "max": 100,
+      "verdict": "pass"
+    },
+    {
+      "measure": "No card on should-not-go-through requests: reason given",
+      "target": "\u2265 90 %",
+      "unit": "percent",
+      "runs": 3,
+      "min": 100,
+      "median": 100,
+      "max": 100,
+      "verdict": "pass"
+    },
+    {
+      "measure": "Message to card, median",
+      "target": "\u2264 3 s",
+      "unit": "ms",
+      "runs": 3,
+      "min": 3043,
+      "median": 3211.5,
+      "max": 3421.5,
+      "verdict": "miss"
+    },
+    {
+      "measure": "Cost per completed request",
+      "target": "reported",
+      "unit": "usd",
+      "runs": 3,
+      "min": 0.016466818181818183,
+      "median": 0.016469090909090912,
+      "max": 0.016760266666666666,
+      "verdict": "reported"
+    }
+  ],
+  "reports": [
+    {
+      "markdown": "dev-claude-opus-m8-r1-2026-10-16-1132.md",
+      "json": "dev-claude-opus-m8-r1-2026-10-16-1132.json"
+    },
+    {
+      "markdown": "dev-claude-opus-m8-r2-2026-10-16-1137.md",
+      "json": "dev-claude-opus-m8-r2-2026-10-16-1137.json"
+    },
+    {
+      "markdown": "dev-claude-opus-m8-r3-2026-10-16-1142.md",
+      "json": "dev-claude-opus-m8-r3-2026-10-16-1142.json"
+    }
+  ]
+}
