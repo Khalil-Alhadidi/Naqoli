@@ -47,6 +47,11 @@ public static class ServiceCollectionExtensions
         services.AddOptions<ConsoleOptions>()
             .Bind(configuration.GetSection(ConsoleOptions.SectionName))
             .ValidateDataAnnotations()
+            // Review R2 of milestone 8 (Khalil, 16 Oct 2026): outside Development the placeholder would only fail at the
+            // first click (403), so it fails at start instead. The message names the setting, never a value.
+            .Validate<IServiceProvider>(
+                (o, sp) => sp.GetService<IHostEnvironment>()?.IsDevelopment() == true || ConsoleOptions.IsUsableOutsideDevelopment(o.WalletAdminKey),
+                ConsoleOptions.KeyRequiredMessage)
             .ValidateOnStart();
         services.AddHttpClient<WalletFaults>((sp, http) => WalletFaults.Configure(
             http,

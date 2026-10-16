@@ -40,6 +40,10 @@ public sealed class FaultPanelServicesTests(AgentHost host) : IAsyncDisposable
         var provider = host.BuildProvider((services, configuration) =>
         {
             services.AddAgentWebServices(configuration);
+
+            // The test provider has no host environment, so it counts as outside Development: a real-looking key
+            // (review R2). The in-process wallet has no admin key, so any non-empty value is let in.
+            services.Configure<ConsoleOptions>(o => o.WalletAdminKey = "fault-panel-tests-admin-key");
             services.AddHttpClient<WalletFaults>().ConfigurePrimaryHttpMessageHandler(() => host.Wallet.CreateHandler());
             if (scripted)
             {

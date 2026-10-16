@@ -92,6 +92,8 @@ Applied on 16 Oct 2026 in 79c9703 (`fix: milestone 8 security review (M1 to M6, 
 - **R4.** `docs/agent-web.md`, the card section: the automatic settle has no ceiling; each settle is bounded by the wallet timeouts and idempotent; a cap or back-off is a later setting.
 - **R5.** `docs/wallet-api.md`, `POST /admin/debit`: `unknown_user` and `insufficient_funds` are distinct answers, as the balance read behind the client key already is.
 
-Left as recommendations: **R1** (the inner parser built by `ActivatorUtilities` is not disposal-tracked; no parser is disposable today), **R2** (a fail-fast on `Console:WalletAdminKey` outside Development: a decision for Khalil), **R6** (the side door's client reads `IOptions`, as `WalletClient` does), **R7** (provider names take the first word in the parentheses; right for the frozen seed).
+**R2**, applied after the tag at Khalil's request (16 Oct 2026, `fix(web): a missing or placeholder console admin key fails at start outside Development`): outside Development `Console:WalletAdminKey` must be set, not `dev`, and at least 16 characters, or the console refuses to start; the message names the setting, never a value (`ConsoleOptionsTests`).
+
+Left as recommendations: **R1** (the inner parser built by `ActivatorUtilities` is not disposal-tracked; no parser is disposable today), **R2** (applied later, above), **R6** (the side door's client reads `IOptions`, as `WalletClient` does), **R7** (provider names take the first word in the parentheses; right for the frozen seed).
 
 Counts after the wave: `dotnet test` 1065 total, 1057 passed, 0 failed, 8 skipped (6 live model, 2 symbolic link); the journeys 32 of 32; build 0 warnings.
