@@ -22,7 +22,8 @@ namespace Agent.Core.Parsing;
 /// note and the masked text only (rule 5). It asks for the strict structure (<see cref="ParsedRequestsDto"/>) through
 /// <see cref="ChatOptions.ResponseFormat"/>, reads the reply strictly and hands it to <see cref="ParsedRequestValidator"/>
 /// with the message's mask map. It never throws for a bad reply (that is <see cref="RequestIntent.Unclear"/> with a
-/// <see cref="ParsedRequest.Problem"/>); a call that fails or outlasts the candidate's timeout throws
+/// <see cref="ParsedRequest.Problem"/>: the validator's field name, or one of the parser's own problems,
+/// <see cref="JsonProblem"/>, <see cref="TruncatedProblem"/> and <see cref="RefusalProblem"/>); a call that fails or outlasts the candidate's timeout throws
 /// <see cref="ParserUnavailableException"/>. Logs hold the model id, the time, the tokens and the cost, never the text.
 /// </summary>
 /// <remarks>
@@ -39,6 +40,12 @@ public sealed partial class ClaudeParser : IParser, IParserUsage
 
     /// <summary>The <see cref="ParsedRequest.Problem"/> of a reply cut off at the candidate's output limit.</summary>
     public const string TruncatedProblem = "truncated";
+
+    /// <summary>
+    /// The <see cref="ParsedRequest.Problem"/> of a reply the model refused to give: the API's stop reason
+    /// <c>refusal</c>, which the adapter reports as <see cref="ChatFinishReason.ContentFilter"/>.
+    /// </summary>
+    public const string RefusalProblem = "refusal";
 
     /// <summary>The Model-zone trace step when the reply listed more than one request (detail: how many).</summary>
     public const string MoreThanOneRequestStep = "more_than_one_request";
@@ -181,6 +188,13 @@ public sealed partial class ClaudeParser : IParser, IParserUsage
         if (response.FinishReason == ChatFinishReason.Length)
             return new ParsedRequest { Intent = RequestIntent.Unclear, Problem = TruncatedProblem };
 
+        // The model refused the message (stop reason refusal, reported by the adapter as ContentFilter): no structure.
+        if (response.FinishReason == ChatFinishReason.ContentFilter)
+        {
+            LogRefused(candidate.ModelId, (long)duration.TotalMilliseconds);
+            return new ParsedRequest { Intent = RequestIntent.Unclear, Problem = RefusalProblem };
+        }
+
         if (!TryRead(response.Text, out var reply))
             return new ParsedRequest { Intent = RequestIntent.Unclear, Problem = JsonProblem };
 
@@ -314,4 +328,7 @@ public sealed partial class ClaudeParser : IParser, IParserUsage
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Parse call to {ModelId} unavailable ({Reason}) after {DurationMs} ms")]
     private partial void LogUnavailable(string modelId, string reason, long durationMs);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Parse call to {ModelId} refused the message after {DurationMs} ms")]
+    private partial void LogRefused(string modelId, long durationMs);
 }

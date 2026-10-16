@@ -93,6 +93,9 @@ public class ClaudeParserTests
         Assert.NotNull(options.RawRepresentationFactory);
         // Not configured: no temperature is sent (Claude 5.5 models reject a non-default one).
         Assert.Null(options.Temperature);
+        // Rule 2: the model is read only, so the call offers no tool and no tool mode.
+        Assert.Null(options.Tools);
+        Assert.Null(options.ToolMode);
         var format = Assert.IsType<ChatResponseFormatJson>(options.ResponseFormat);
         Assert.Equal("parse", format.SchemaName);
         Assert.NotNull(format.Schema);
@@ -285,6 +288,24 @@ public class ClaudeParserTests
 
         Assert.Equal((RequestIntent.Unclear, ClaudeParser.TruncatedProblem), (parsed.Intent, parsed.Problem));
         Assert.Equal(1_500, parser.LastUsage?.OutputTokens);
+    }
+
+    [Fact]
+    public async Task ARefusalStopReasonIsUnclearAsRefusal()
+    {
+        var (parser, client, _) = Start();
+        client.Reply = (_, _, _) =>
+        {
+            // The adapter maps the API's stop reason refusal to ContentFilter.
+            var response = FakeChatClient.Json("", 900, 3);
+            response.FinishReason = ChatFinishReason.ContentFilter;
+            return Task.FromResult(response);
+        };
+
+        var parsed = await parser.ParseAsync("x", new ParseContext(null, MaskMap.Empty), Token);
+
+        Assert.Equal((RequestIntent.Unclear, ClaudeParser.RefusalProblem), (parsed.Intent, parsed.Problem));
+        Assert.Equal((900, 3), (parser.LastUsage?.InputTokens, parser.LastUsage?.OutputTokens));
     }
 
     [Fact]

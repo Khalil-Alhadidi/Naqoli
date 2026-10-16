@@ -51,6 +51,8 @@ public sealed record ParsedRequest
     /// <summary>
     /// Set by <c>ParsedRequestValidator</c> when the parse call's structure broke a rule: the name of the field, with
     /// <see cref="Intent"/> <see cref="RequestIntent.Unclear"/>. The conversation logs it as <c>model_invalid_reply</c>.
+    /// The model parser sets its own problems the same way (<c>json</c>, <c>truncated</c>, <c>refusal</c>); a
+    /// <c>refusal</c> is logged as <c>model_refusal</c> with no detail.
     /// Null from the scripted parser and for every valid structure.
     /// </summary>
     public string? Problem { get; init; }

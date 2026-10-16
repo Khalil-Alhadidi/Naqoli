@@ -79,12 +79,13 @@ The JSON schema sent with the call is exported from `ParsedRequestsDto` by `Json
 - `amount_value` finite, not below 0 (and below 1e28, so the conversion to decimal cannot overflow); `product_value` above 0.
 - `recipient_text` exactly one token of this message's map, or words with no run of 7 or more digits, nothing `PhoneNumbers.LooksLikeNumber` would take for a phone number (the same test the orchestrator uses), and no token the map does not hold. A number the user never typed cannot become a recipient.
 
-The parser adds two problems of its own: `json` (the reply is not the strict JSON) and `truncated` (the reply hit the output limit).
+The parser adds three problems of its own: `json` (the reply is not the strict JSON), `truncated` (the reply hit the output limit) and `refusal` (the API's refusal stop reason, which the adapter reports as `ChatFinishReason.ContentFilter`; the parser logs a Warning line with the model id and the time, never the text).
 
 ```mermaid
 stateDiagram-v2
     [*] --> Reply
     Reply --> Truncated: finish reason Length
+    Reply --> Refused: finish reason ContentFilter
     Reply --> NotJson: not the strict JSON
     Reply --> Checked: ParsedRequestsDto read
     Checked --> Invalid: a set, a length, a figure or the recipient broken
@@ -93,6 +94,7 @@ stateDiagram-v2
     NotJson --> Unclear: Problem json
     Invalid --> Unclear: Problem = the field
     Unclear --> NotUnderstood: reply not_understood, learning row model_invalid_reply
+    Refused --> NotUnderstood: reply not_understood, learning row model_refusal
     Valid --> Orchestrator: the request, a token un-masked by the conversation
     NotUnderstood --> [*]
     Orchestrator --> [*]
@@ -163,6 +165,7 @@ The table is `LearningEntries` (migration `LearningLog`): `Id`, `At`, `UserId`, 
 | `model_invalid_reply` (runner fault: `Unclear` with `Problem` `injected`), or a reply the validator refuses | The `not_understood` question | Learning row `model_invalid_reply`, detail the field (`injected`, `intent`, `recipient_text` ...); trace `model_invalid_reply` |
 | A reply that is not the strict JSON | The `not_understood` question | Learning row `model_invalid_reply`, detail `json` |
 | A reply cut off at `MaxOutputTokens` | The `not_understood` question | Learning row `model_invalid_reply`, detail `truncated`. Raise `MaxOutputTokens` or lower `Effort` |
+| The model refuses the message (stop reason `refusal`) | The `not_understood` question; no card, nothing moves | Learning row `model_refusal`, no detail; trace `model_refusal`; the parser's Warning line |
 | More than one request | The first is handled | Trace `more_than_one_request` (Model zone) with the count |
 
 Each row of [failure-modes.md](failure-modes.md) names its test.

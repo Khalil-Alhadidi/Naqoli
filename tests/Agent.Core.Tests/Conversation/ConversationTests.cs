@@ -574,6 +574,25 @@ public sealed class ConversationTests(AgentHost host) : IAsyncDisposable
     }
 
     [Fact]
+    public async Task AModelRefusalLeavesALiveCard()
+    {
+        var parser = new RefusalAfterFirstParser(
+            new ScriptedParser([new ScriptedSentence(HammoudiSentence, ParsedRequest.Transfer(SeedFacts.Contact("S01").Alias, 50, AmountUnit.Thousand))]));
+        var session = await StartAsync(SeedFacts.DemoUserId, parser);
+        var conversation = session.Conversation;
+        await conversation.SendAsync(HammoudiSentence);
+        var card = conversation.Card!;
+
+        await conversation.SendAsync(HammoudiSentence);
+
+        Assert.Equal(CardStatus.Live, conversation.CardState);
+        Assert.Same(card, conversation.Card);
+        Assert.Equal(ReasonCodes.NotUnderstood, Assert.IsType<AgentReply.Refusal>(conversation.LastReply).Code);
+        Assert.Contains(session.Trace.Entries, e => e.Zone == TraceZone.Code && e.Step == "card_kept");
+        Assert.Equal(PendingState.Pending, (await RecordAsync(session, card.PendingId)).State);
+    }
+
+    [Fact]
     public async Task TwoConfirmsAtOnceMoveTheMoneyOnce()
     {
         var session = await StartAsync();
@@ -1028,6 +1047,19 @@ public sealed class ConversationTests(AgentHost host) : IAsyncDisposable
             => Interlocked.Increment(ref calls) == 1
                 ? first.ParseAsync(text, context, cancellationToken)
                 : throw new ParserUnavailableException();
+    }
+
+    /// <summary>A parser that answers the first message and reports a model refusal for every later one.</summary>
+    private sealed class RefusalAfterFirstParser(IParser first) : IParser
+    {
+        private int calls;
+
+        public string Name => "refusal-after-first";
+
+        public Task<ParsedRequest> ParseAsync(string text, ParseContext context, CancellationToken cancellationToken)
+            => Interlocked.Increment(ref calls) == 1
+                ? first.ParseAsync(text, context, cancellationToken)
+                : Task.FromResult(new ParsedRequest { Intent = RequestIntent.Unclear, Problem = ClaudeParser.RefusalProblem });
     }
 
     /// <summary>A parser whose model is down.</summary>

@@ -173,7 +173,8 @@ public sealed class Conversation : IDisposable
 
     /// <summary>
     /// The learning-log entry of <see cref="LastReply"/>, as the conversation wrote it (<c>model_invalid_reply</c> for a
-    /// structure the validator refused, else <see cref="LearningLogRule.EntryFor"/>), or null when nothing was logged.
+    /// structure the validator refused, <c>model_refusal</c> for a message the model refused to parse, else
+    /// <see cref="LearningLogRule.EntryFor"/>), or null when nothing was logged.
     /// The runner grades this entry.
     /// </summary>
     public LearningEntry? LastLearningEntry { get; private set; }
@@ -255,8 +256,14 @@ public sealed class Conversation : IDisposable
             parsed = Unmask(parsed, masked.Map);
 
             // A structure the validator refused: the reply is not_understood, and the log says why (by field name).
+            // A message the model refused to parse is its own path: the same reply, logged as model_refusal, no detail.
             LearningEntry? invalidReply = null;
-            if (parsed is { Intent: RequestIntent.Unclear, Problem: { } problem })
+            if (parsed is { Intent: RequestIntent.Unclear, Problem: ClaudeParser.RefusalProblem })
+            {
+                trace.Record(TraceZone.Code, LearningLogRule.ModelRefusal, null);
+                invalidReply = new LearningEntry(LearningLogRule.ModelRefusal, null);
+            }
+            else if (parsed is { Intent: RequestIntent.Unclear, Problem: { } problem })
             {
                 trace.Record(TraceZone.Code, LearningLogRule.ModelInvalidReply, problem);
                 invalidReply = new LearningEntry(LearningLogRule.ModelInvalidReply, problem);
@@ -686,8 +693,9 @@ public sealed class Conversation : IDisposable
 
     /// <summary>
     /// Makes (<paramref name="request"/>, <paramref name="tapped"/>) the pending request, answers it and shows the reply,
-    /// then writes its learning-log entry: <paramref name="invalidReply"/> when the parse call's structure was refused,
-    /// else what <see cref="LearningLogRule.EntryFor"/> returns.
+    /// then writes its learning-log entry: <paramref name="invalidReply"/> when the parse call's structure was refused
+    /// (<c>model_invalid_reply</c>) or the model refused the message (<c>model_refusal</c>), else what
+    /// <see cref="LearningLogRule.EntryFor"/> returns.
     /// </summary>
     private async Task HandleCoreAsync(
         ParsedRequest request, SlotAnswers tapped, CancellationToken token, LearningEntry? invalidReply = null)

@@ -1,4 +1,5 @@
 using Agent.Core.Learning;
+using Agent.Core.Parsing;
 using Agent.Core.Pipeline;
 using Agent.Core.Requests;
 using Agent.Core.Tests.Agent;
@@ -182,6 +183,28 @@ public sealed class ConversationMaskingTests(AgentHost host)
         var row = Assert.Single(await session.LearningRowsAsync());
         Assert.Equal(
             (U1, LearningLogRule.ModelInvalidReply, "recipient_text", "send 50000 to <NUM_1>", false),
+            (row.UserId, row.Reason, row.Detail, row.MaskedText, row.Reviewed));
+    }
+
+    [Fact]
+    public async Task AModelRefusalIsNotUnderstoodTracedAndLoggedAsModelRefusal()
+    {
+        var parser = new CapturingParser(new Dictionary<string, ParsedRequest>
+        {
+            ["send 50000 to <NUM_1>"] = new() { Intent = RequestIntent.Unclear, Problem = ClaudeParser.RefusalProblem },
+        });
+        await using var session = await StartAsync(parser);
+
+        await session.Conversation.SendAsync("send 50000 to " + SeedFacts.HammoudiPhone);
+
+        Assert.Null(session.Conversation.Card);
+        Assert.Equal(ReasonCodes.NotUnderstood, Assert.IsType<AgentReply.Refusal>(session.Conversation.LastReply).Code);
+        Assert.Contains((TraceZone.Code, LearningLogRule.ModelRefusal, (string?)null), session.Trace.Entries);
+        Assert.DoesNotContain(session.Trace.Entries, e => e.Step == LearningLogRule.ModelInvalidReply);
+        Assert.Equal(new LearningEntry(LearningLogRule.ModelRefusal, null), session.Conversation.LastLearningEntry);
+        var row = Assert.Single(await session.LearningRowsAsync());
+        Assert.Equal(
+            (U1, "model_refusal", (string?)null, "send 50000 to <NUM_1>", false),
             (row.UserId, row.Reason, row.Detail, row.MaskedText, row.Reviewed));
     }
 

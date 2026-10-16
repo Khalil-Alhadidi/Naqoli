@@ -25,6 +25,13 @@ public static class LearningLogRule
     /// <summary>A model reply that failed validation; returned by the model parser (milestone 6).</summary>
     public const string ModelInvalidReply = "model_invalid_reply";
 
+    /// <summary>
+    /// A message the model refused to parse (its stop reason <c>refusal</c>); written by the conversation when the parser
+    /// reports <see cref="Parsing.ClaudeParser.RefusalProblem"/>, with no detail. It is not in <see cref="Logged"/>: that
+    /// list is pinned to the seed's <c>learning_log.logged</c> (Khalil's workbook), which does not yet name it.
+    /// </summary>
+    public const string ModelRefusal = "model_refusal";
+
     public const string SameAsLastTime = "same_as_last_time";
     public const string RefersBack = "refers_back";
     public const string ChangeWaitingCard = "change_waiting_card";
@@ -105,8 +112,8 @@ public static class LearningLogRule
     /// gives <c>other_language</c>.</item>
     /// <item>An <see cref="AgentReply.Unsupported"/> gives its reason when that is a logged name, and otherwise
     /// <c>not_supported</c> with the reason as detail (<c>withdrawal</c>).</item>
-    /// <item>Everything else, including the <see cref="NotLogged"/> codes, gives null. <c>more_than_three_requests</c> and
-    /// <c>model_invalid_reply</c> are not replies; the callers that know them build their entries.</item>
+    /// <item>Everything else, including the <see cref="NotLogged"/> codes, gives null. <c>more_than_three_requests</c>,
+    /// <c>model_invalid_reply</c> and <c>model_refusal</c> are not replies; the callers that know them build their entries.</item>
     /// </list>
     /// </remarks>
     public static LearningEntry? EntryFor(AgentReply reply, ParsedRequest request)
