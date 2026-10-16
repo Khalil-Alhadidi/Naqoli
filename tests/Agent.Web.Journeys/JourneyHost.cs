@@ -3,6 +3,7 @@ extern alias AgentWeb;
 using System.Net;
 using System.Net.Http.Json;
 using Agent.Core.Data;
+using Agent.Core.Pipeline;
 using Agent.Core.Wallet;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Hosting.Server;
@@ -15,6 +16,7 @@ using Microsoft.Playwright;
 using Wallet.MockApi;
 using Wallet.MockApi.Data;
 using Wallet.MockApi.Data.Seed;
+using AgentWeb::Agent.Web.Services;
 using WalletProgram = Program;
 using WebProgram = AgentWeb::Program;
 
@@ -23,8 +25,9 @@ namespace Agent.Web.Journeys;
 /// <summary>
 /// Hosts the mock wallet and the web console in process on Kestrel (dynamic ports), each on its own test database,
 /// and one headless Chromium for the journeys. Two console hosts share the agent database: one with the default card
-/// timer and one with <see cref="ShortCardTimerSeconds"/> for the timer journey. The journeys use the scripted parser,
-/// never a live model. Skips when SQL Server or Chromium is missing.
+/// timer and one with <see cref="ShortCardTimerSeconds"/> for the timer journey (both for U1), and one console each for
+/// <see cref="OtherUserIds"/> (<see cref="UserWebAddress"/>). The journeys use the scripted parser, never a live model.
+/// Skips when SQL Server or Chromium is missing.
 /// </summary>
 public sealed class JourneyHost : IAsyncLifetime
 {
@@ -45,7 +48,12 @@ public sealed class JourneyHost : IAsyncLifetime
 
     public const string InstallCommand = "pwsh tests/Agent.Web.Journeys/bin/Debug/net10.0/playwright.ps1 install chromium";
 
+    /// <summary>The users that get a console of their own besides U1: U2 (tight balance), U3 (trader, PIN), U5 (no consent).</summary>
+    public static readonly int[] OtherUserIds = [2, 3, 5];
+
     private const int ProbeTimeoutSeconds = 3;
+
+    private readonly Dictionary<int, (WebApplicationFactory<WebProgram> Factory, Uri Address)> userWebs = [];
 
     private WebApplicationFactory<WalletProgram>? wallet;
     private WebApplicationFactory<WebProgram>? web;
@@ -71,6 +79,16 @@ public sealed class JourneyHost : IAsyncLifetime
     public Uri ShortTimerWebAddress { get; private set; } = null!;
 
     public IServiceProvider WebServices => web?.Services ?? throw new InvalidOperationException("The console is not running.");
+
+    /// <summary>The console whose demo user is <paramref name="userId"/> (2, 3 or 5), default card timer.</summary>
+    public Uri UserWebAddress(int userId)
+        => userWebs.TryGetValue(userId, out var console)
+            ? console.Address
+            : throw new ArgumentOutOfRangeException(nameof(userId), userId, "No console for this user.");
+
+    /// <summary>Every console's services: U1's two, then the other users'.</summary>
+    private IEnumerable<IServiceProvider> AllWebServices
+        => new[] { web, shortTimerWeb }.Concat(userWebs.Values.Select(u => u.Factory)).OfType<WebApplicationFactory<WebProgram>>().Select(f => f.Services);
 
     public async ValueTask InitializeAsync()
     {
@@ -110,10 +128,15 @@ public sealed class JourneyHost : IAsyncLifetime
             await db.Database.MigrateAsync();
         }
 
-        web = StartWeb(cardTimerSeconds: null, out var webAddress);
+        web = StartWeb(cardTimerSeconds: null, demoUserId: null, out var webAddress);
         WebAddress = webAddress;
-        shortTimerWeb = StartWeb(ShortCardTimerSeconds, out var shortAddress);
+        shortTimerWeb = StartWeb(ShortCardTimerSeconds, demoUserId: null, out var shortAddress);
         ShortTimerWebAddress = shortAddress;
+        foreach (var userId in OtherUserIds)
+        {
+            var factory = StartWeb(cardTimerSeconds: null, userId, out var address);
+            userWebs[userId] = (factory, address);
+        }
     }
 
     /// <summary>Returns the wallet to the seed and empties the agent's tables, before each journey.</summary>
@@ -126,7 +149,25 @@ public sealed class JourneyHost : IAsyncLifetime
         var db = scope.ServiceProvider.GetRequiredService<AgentDbContext>();
         await db.AuditEntries.ExecuteDeleteAsync();
         await db.PendingTransactions.ExecuteDeleteAsync();
+        await db.LearningEntries.ExecuteDeleteAsync();
+
+        // A journey that stopped half way must not leave the kill switch on or a saved setting behind for the next one.
+        foreach (var services in AllWebServices)
+        {
+            services.GetRequiredService<KillSwitch>().Set(false);
+            var runtime = services.GetRequiredService<RuntimeSettings>();
+            foreach (var key in runtime.Overrides.Keys.ToList())
+                runtime.Reset(key);
+        }
     }
+
+    /// <summary>The wallet's account behind <paramref name="phone"/>.</summary>
+    public async Task<WalletAccount> AccountByPhoneAsync(string phone)
+        => (await Wallet.GetFromJsonAsync<WalletAccount>("/accounts/by-phone/" + Uri.EscapeDataString(phone)))!;
+
+    /// <summary>The wallet user <paramref name="userId"/>, with whether consent is given.</summary>
+    public async Task<WalletUser> UserAsync(int userId)
+        => (await Wallet.GetFromJsonAsync<WalletUser>($"/users/{userId}"))!;
 
     /// <summary>The demo user's balance, from the wallet.</summary>
     public async Task<long> BalanceAsync(int userId)
@@ -145,6 +186,8 @@ public sealed class JourneyHost : IAsyncLifetime
         if (Browser is not null)
             await Browser.DisposeAsync();
         playwright?.Dispose();
+        foreach (var (factory, _) in userWebs.Values)
+            await factory.DisposeAsync();
         if (shortTimerWeb is not null)
             await shortTimerWeb.DisposeAsync();
         if (web is not null)
@@ -187,7 +230,7 @@ public sealed class JourneyHost : IAsyncLifetime
         Wallet.DefaultRequestHeaders.Add(AdminKeyFilter.HeaderName, AdminKey);
     }
 
-    private WebApplicationFactory<WebProgram> StartWeb(int? cardTimerSeconds, out Uri address)
+    private WebApplicationFactory<WebProgram> StartWeb(int? cardTimerSeconds, int? demoUserId, out Uri address)
     {
         var walletAddress = Wallet.BaseAddress!.ToString();
         var factory = new WebApplicationFactory<WebProgram>().WithWebHostBuilder(host =>
@@ -200,6 +243,8 @@ public sealed class JourneyHost : IAsyncLifetime
             host.UseSetting("Agent:Parser", "scripted");
             if (cardTimerSeconds is { } seconds)
                 host.UseSetting("Agent:CardTimerSeconds", seconds.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            if (demoUserId is { } user)
+                host.UseSetting("Agent:DemoUserId", user.ToString(System.Globalization.CultureInfo.InvariantCulture));
         });
         factory.UseKestrel(options => options.Listen(IPAddress.Loopback, 0));
         factory.StartServer();
