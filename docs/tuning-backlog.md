@@ -2,7 +2,7 @@
 
 What waits for the model-choice and tuning pass of milestone 10 (`docs/build-plan.md`). Each item names the development-set cases it would move, where the fix sits, and what it depends on. Nothing here is tuned before its milestone; the held-out set is never consulted (rule 7).
 
-Figures below are from the prompt version 2 runs of 15 Oct 2026 (`docs/reports/dev-claude-<candidate>-v2-repeat3-2026-10-15-*`), three runs per candidate: medians haiku 55/72, sonnet 59/72, opus 60/72.
+Figures below are from the prompt version 2 runs of 15 Oct 2026 (`docs/reports/dev-claude-<candidate>-v2-repeat3-2026-10-15-*`), three runs per candidate: medians haiku 55/72, sonnet 59/72, opus 60/72. After milestone 8 (prompt version 3, 77 cases, 16 Oct 2026; the clean reruns `dev-claude-haiku-m8b-repeat3-*`, `dev-claude-sonnet-m8b-repeat3-*` and `dev-claude-opus-m8-repeat3-*`): medians haiku 62/77, sonnet 67/77, opus 67/77; every candidate fails the nine deferred items, and the rest is below.
 
 | # | Item | Cases | Where it sits | Depends on | Status |
 |---|---|---|---|---|---|
@@ -13,4 +13,5 @@ Figures below are from the prompt version 2 runs of 15 Oct 2026 (`docs/reports/d
 ## Not on this list
 
 - The items deferred to milestones 8, 9b and 9c in `docs/build-plan.md` (AMB-23, MAL-09, NOGO-12, GAP-06, the compound cases) are feature work, not tuning.
-- Haiku's remaining misses on every run (RED-10, MAL-06, CLN-23-v1) are parse quality at the cheapest candidate; they are measured again in the milestone 10 comparison rather than tuned for.
+- Haiku's remaining misses on every clean run of 16 Oct 2026 (CLN-09-v1 and CLN-23-v1, a question where the key sends the bill straight to the card; AMB-03, AMB-19, RED-10) are parse quality at the cheapest candidate; they are measured again in the milestone 10 comparison rather than tuned for. MAL-06 passes on every candidate with prompt version 3.
+- Item 2 (AMB-06) on prompt version 3: it flips on Sonnet (passes 1 of 3 clean runs) and on Opus (1 of 3), and passes on Haiku; still prompt version 4, milestone 10.
