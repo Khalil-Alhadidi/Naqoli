@@ -37,6 +37,8 @@ To re-freeze after an intended change (a new export from Khalil):
 
 `seed-v1` stays in the history as the tag of the first seed, the C# literals of milestone 2, before the export. The seed from these files is tagged `seed-v2` after the milestone 2b review. The answer keys from milestone 5 depend on it, so any later change to the seed means re-checking every answer key.
 
+`seed-v3` (16 Oct 2026) adds one value, `model_refusal`, to `settings.json`'s `learning_log.logged`, right after `model_invalid_reply`, at Khalil's instruction. No other file, no answer key and no figure changes, so no answer key needed re-checking.
+
 ## How the wallet loads them
 
 - `src/Wallet.MockApi/Wallet.MockApi.csproj` links `data/seed/*.json` into the build output as `seed/*.json`, so `migrate`, `seed-hash`, the running API and the tests read the same bytes as the repository.

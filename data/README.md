@@ -26,7 +26,7 @@ so the held-out half contains no paraphrase of a development case, and variants 
 `days_ago` 0 means today. The loader converts it to a timestamp at load time, so "today" is always the day the tests run.
 The daily cap counts everything with `days_ago` 0 (U3 has 7,000,000 there). The newest transfer to each contact is a fixed fact the answer keys rely on; the rest is filler.
 U5 has no history: she has never used the wallet.
-16 Oct 2026: three cases added to the development set for the milestone 7 journeys (ADD-01 a typed number, ADD-02 an unknown name, ADD-03 an account number); wording by Khalil, 16 Oct 2026. Two more for milestone 8, drafted by Claude with English `TODO-AR` messages and now carrying Khalil's wording (16 Oct 2026, `pending_wording_recheck` false): ADD-04 (U1 asks to pay part of the water bill: `bills_paid_in_full` with the amount due, learning `part_of_bill`) and ADD-05 (U2's electricity bill has nothing due: `nothing_due`).
+16 Oct 2026: three cases added to the development set for the milestone 7 journeys (ADD-01 a typed number, ADD-02 an unknown name, ADD-03 an account number); wording by Khalil, 16 Oct 2026. Two more for milestone 8, drafted by Claude with English `TODO-AR` messages and now carrying Khalil's wording (16 Oct 2026, `pending_wording_recheck` false): ADD-04 (U1 asks to pay part of the water bill: `bills_paid_in_full` with the amount due, learning `part_of_bill`) and ADD-05 (U2's electricity bill has nothing due: `nothing_due`). Also 16 Oct 2026 (`seed-v3`, at Khalil's instruction): `settings.json`'s `learning_log.logged` gains `model_refusal` after `model_invalid_reply`; nothing else in the seed changes.
 
 ## A case
 

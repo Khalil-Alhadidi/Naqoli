@@ -14,7 +14,7 @@ public sealed class LearningEntryRow
 
     public int UserId { get; set; }
 
-    /// <summary>A reason of <see cref="LearningLogRule.Logged"/>, or <see cref="LearningLogRule.ModelRefusal"/>, which the conversation writes and the seed's list does not yet name.</summary>
+    /// <summary>A reason of <see cref="LearningLogRule.Logged"/>.</summary>
     public string Reason { get; set; } = string.Empty;
 
     /// <summary>The entry's detail (a code, the typed recipient, or what was asked for), masked.</summary>

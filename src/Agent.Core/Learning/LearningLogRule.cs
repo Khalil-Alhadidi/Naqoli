@@ -27,8 +27,8 @@ public static class LearningLogRule
 
     /// <summary>
     /// A message the model refused to parse (its stop reason <c>refusal</c>); written by the conversation when the parser
-    /// reports <see cref="Parsing.ClaudeParser.RefusalProblem"/>, with no detail. It is not in <see cref="Logged"/>: that
-    /// list is pinned to the seed's <c>learning_log.logged</c> (Khalil's workbook), which does not yet name it.
+    /// reports <see cref="Parsing.ClaudeParser.RefusalProblem"/>, with no detail. In <see cref="Logged"/> after
+    /// <see cref="ModelInvalidReply"/>, as in the seed's <c>learning_log.logged</c> (seed-v3, 16 Oct 2026).
     /// </summary>
     public const string ModelRefusal = "model_refusal";
 
@@ -58,6 +58,7 @@ public static class LearningLogRule
         ProductNotFound,
         MoreThanThreeRequests,
         ModelInvalidReply,
+        ModelRefusal,
         SameAsLastTime,
         RefersBack,
         ChangeWaitingCard,

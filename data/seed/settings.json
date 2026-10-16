@@ -63,6 +63,7 @@
       "product_not_found",
       "more_than_three_requests",
       "model_invalid_reply",
+      "model_refusal",
       "same_as_last_time",
       "refers_back",
       "change_waiting_card",

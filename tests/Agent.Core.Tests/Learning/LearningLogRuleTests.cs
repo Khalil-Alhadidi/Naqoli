@@ -195,6 +195,7 @@ public class LearningLogRuleTests
     {
         Assert.Contains(LearningLogRule.MoreThanThreeRequests, LearningLogRule.Logged);
         Assert.Contains(LearningLogRule.ModelInvalidReply, LearningLogRule.Logged);
+        Assert.Contains(LearningLogRule.ModelRefusal, LearningLogRule.Logged);
     }
 
     private static ParsedRequest Unsupported(string? reason) => new() { Intent = RequestIntent.Unsupported, UnsupportedReason = reason };

@@ -755,7 +755,7 @@ Never stored: a PIN, a balance figure, a purchase code (full or partial), the ty
 | `Unsupported` with any other reason (`withdrawal`) | `not_supported`, with the reason as detail |
 | A `not_logged` refusal (`insufficient_balance`, the two caps, `nothing_due`, `account_closed`, `number_has_no_wallet`, `consent_required`), any other refusal, a question, a balance, the consent screen, a card | null |
 
-`more_than_three_requests` and `model_invalid_reply` are in the logged list but are not replies. The caller that splits a message (milestone 9c) builds the first; the conversation builds the second when the parsed request carries a `Problem` (see The learning log). `model_refusal` is built by the conversation too, when the `Problem` is `refusal`, and is not in the seed's list (`LearningLogRule.Logged` stays pinned to `settings.json`).
+`more_than_three_requests`, `model_invalid_reply` and `model_refusal` are in the logged list but are not replies. The caller that splits a message (milestone 9c) builds the first; the conversation builds the second when the parsed request carries a `Problem` (see The learning log), and the third when the `Problem` is `refusal`. `model_refusal` joined the seed's list after `model_invalid_reply` in `seed-v3` (16 Oct 2026, at Khalil's instruction), so `LearningLogRule.Logged` names it and stays pinned to `settings.json`.
 
 ```mermaid
 flowchart TD
