@@ -22,7 +22,7 @@ flowchart LR
     subgraph ltr["Console: English, left to right (data-testid console, dir ltr)"]
         menu["Side menu (MudDrawer)<br/>Wallet data, Settings, Log, Learning data"]
         middle["Middle component<br/>WalletDataPanel (default), SettingsPanel,<br/>LogPanel (milestone 7), Placeholder Learning data (milestone 10)"]
-        trace["LiveTrace<br/>always visible, newest first"]
+        trace["FaultPanel above LiveTrace<br/>always visible, the trace newest first"]
     end
     subgraph rtl["Phone: Iraqi Arabic, right to left (data-testid phone-frame, dir rtl, lang ar)"]
         phone["PhoneFrame 390 x 780<br/>ChatPanel, CardPanel, QuestionPanel, PinField, input"]
@@ -50,6 +50,10 @@ The side menu sits in the layout outside the `console` element, and it is Englis
 | `ConsoleNavigation` | scoped | The side menu's selection |
 | `RuntimeSettings` | singleton | Saves an agent setting live (D8) through `RuntimeSettingsProvider`, the last configuration source (`Program.cs`); see "The settings component" |
 | `KillSwitch` | singleton (from `AddAgentCore`) | The kill switch; see "The kill switch" |
+| `FaultingParser` (`AddFaultingParser`) | as the parser it wraps | Replaces the last `IParser` registration with one of the same lifetime that builds the original (its instance, factory or type) and wraps it; see "The fault panel" |
+| `ModelFaultSwitch` | singleton | The console's model fault: none, `unreachable` or `invalid_reply`, once or every call; `Changed` for the panels |
+| `ConsoleOptions` | options, validated at start | Section `Console`: `WalletAdminKey` (required, default `dev`), the `X-Wallet-Admin-Key` the fault panel sends; shown as `set`, never the value |
+| `WalletFaults` | typed `HttpClient` (transient) | The fault panel's side door: `GET` and `POST admin/faults`, `POST admin/debit` only; the wallet's base address, the client key (as `WalletClient` decides it) and the admin key |
 
 ## The session flow
 
@@ -353,7 +357,7 @@ The parses were drafted by Claude from Khalil's answer keys for his review (his 
 `SettingsPanel` (`Components/Console/SettingsPanel.razor`, the side menu's Settings) has a kill switch (below) and four tables, all English and left to right:
 
 - **Agent, editable (D8).** One row (`setting-row`, `data-name`) per agent limit, timer or count: `MinAmountIqd`, `PerTransactionCapIqd`, `PerDayCapIqd`, `CardTimerSeconds`, `MaxProductsInOneQuestion`, `RepeatWarningWindowMinutes`, `HistoryDays`, `MinSubstringWordLength`, `MaxYesNoWords`, `LogPageSize`: exactly `RuntimeSettings.EditableNames`, which the runtime store itself enforces (any other key, `Agent:WalletClientKey` or `Agent:DevSetPath` among them, is refused with an `ArgumentException`). Each shows its value in force (`setting-value`), an input (`setting-input`), Save (`setting-save`), and Reset (`setting-reset`) once a value has been saved. A refused value shows the validation message (`setting-error`), and the value in force does not change.
-- **Agent, read only.** `Parser`, `DevSetPath`, `DemoUserId`, `MaxRequestsPerMessage` (nothing reads it until compound requests, milestone 9c), `WalletBaseUrl`, `WalletTimeoutSeconds`, `SettleWindowSeconds`, `HistoryPageSize`, `SweepIntervalSeconds`, `StaleExecutingAfterSeconds`. No key is ever shown (wallet or Anthropic).
+- **Agent, read only.** `Parser`, `DevSetPath`, `DemoUserId`, `MaxRequestsPerMessage` (nothing reads it until compound requests, milestone 9c), `WalletBaseUrl`, `WalletTimeoutSeconds`, `SettleWindowSeconds`, `HistoryPageSize`, `SweepIntervalSeconds`, `StaleExecutingAfterSeconds`, and `Console:WalletAdminKey` as `set` or `not set`. No key is ever shown (wallet or Anthropic). One line above the tables (`settings-fault-pointer`) says the fault switch is in the Faults panel beside the live trace.
 - **Wallet, read only.** The wallet's own limits from `GET /settings` (`Wallet:PinRequiredAboveIqd`, `Wallet:MaxPinAttempts`, the transfer, bill and purchase fees and the rest; [wallet-api.md](wallet-api.md)), read once when the panel opens. A wallet that does not answer gives one `setting-error` row (`data-name="Wallet"`) with the reason.
 - **Model, read only.** The candidate in use and each candidate's model, output limit, effort, temperature, timeout and prices.
 
@@ -380,6 +384,38 @@ The kill switch is Khalil's ruling of 15 Oct 2026. It is a `MudSwitch` at the to
 - the balance question still answers.
 
 The gates are described in [agent-core.md](agent-core.md), "The kill switch". `KillSwitch` raises `Changed` on every flip, and every open settings component re-renders on it, so each console shows the true state. The switch itself is read on every request.
+
+## The fault panel
+
+`FaultPanel` (`Components/Console/FaultPanel.razor`, milestone 8, ruling 4) sits in the trace column above the live trace, so it is at hand whatever the side menu shows. It is English and left to right, and it has three groups and a clear button:
+
+- **Wallet.** A mode (`none`, `error`, `slow`, `timeoutBeforeExecute`, `timeoutAfterExecute`), a delay in milliseconds (the wallet's own `delayMs` as read when the panel opens), and once (on by default). Apply sets the wallet's fault switch through `POST admin/faults` and then reads it back with `GET admin/faults`; the state line shows what the wallet reports (`none`, or the mode, the delay and `once` or `every call`). The wallet's switch is process-wide, so every console shares it.
+- **Model.** A mode (`none`, `unreachable`, `invalid_reply`) and once (on by default). Apply sets the singleton `ModelFaultSwitch`; the state line shows the switch, and every open panel re-renders on its `Changed`. `FaultingParser` takes the fault on the next parse call. `unreachable` throws `ParserUnavailableException`, so the phone shows `model_unavailable`. `invalid_reply` returns an unclear request with problem `injected`, so the conversation takes its `model_invalid_reply` path. The parser underneath never sees the faulted call. A once fault clears as it is taken. A waiting card stays (D6): nothing was understood.
+- **External debit.** An amount in IQD. Take calls `POST admin/debit` for the console's `DemoUserId`; the result line shows `done <reference> balance <n>`, or the wallet's code.
+- **Clear all** (`fault-clear`) sets both switches to none and reads the wallet's back.
+
+A wallet that refuses (403 `admin_key_required`: the console's `Console:WalletAdminKey` does not match the wallet's key) or does not answer shows `fault-error` with the wallet's code, the HTTP status or `unreachable` / `timeout`, never a key. `WalletFaults` names only `admin/faults` and `admin/debit`, so the panel can never execute a payment (rule 1). Each call goes through a fresh scope's client (the `WalletDataPanel` pattern). Tests: `FaultingParserTests` (the decorator and the switch), `FaultPanelServicesTests` (the registered parser is a `FaultingParser` over the scripted parser; an armed `unreachable` fault replies `model_unavailable` once and the next message gets its card; the side door sets, reads back and clears the wallet's switch, and takes a debit).
+
+```mermaid
+flowchart LR
+    subgraph panel["FaultPanel (trace column)"]
+        w["Wallet: mode, delay, once, Apply"]
+        m["Model: mode, once, Apply"]
+        d["External debit: amount, Take"]
+        c["Clear all"]
+    end
+    w --> wf["WalletFaults"]
+    d --> wf
+    c --> wf
+    c --> ms
+    wf -- "POST admin/faults, then GET admin/faults (state read back)" --> wallet["Mock wallet fault switch:<br/>applies to the next POST /transactions"]
+    wf -- "POST admin/debit" --> debit["Mock wallet: externalDebit row,<br/>balance down by the amount"]
+    m --> ms["ModelFaultSwitch (singleton)"]
+    ms -- "Take() on each parse call" --> fp["FaultingParser over the parser Agent:Parser names"]
+    fp -- unreachable --> mu["ParserUnavailableException: model_unavailable"]
+    fp -- invalid_reply --> mi["Unclear, problem injected: model_invalid_reply"]
+    fp -- none --> inner["The parser underneath"]
+```
 
 ## The log component
 
@@ -421,6 +457,11 @@ The journeys locate elements only by these attributes.
 | Settings value, input, Save, Reset, error (editable agent rows) | `setting-value`, `setting-input`, `setting-save`, `setting-reset`, `setting-error` | `data-name` (the setting's name, as on its row) |
 | Menu items | `menu-wallet`, `menu-settings`, `menu-log`, `menu-learning` | |
 | Kill switch | `kill-switch` | `data-on` (`true`, `false`) |
+| Fault panel root, its error line, Clear all | `fault-panel`, `fault-error`, `fault-clear` | |
+| Wallet fault: mode select, delay input, once checkbox, Apply, state | `fault-wallet-mode`, `fault-wallet-delay`, `fault-wallet-once`, `fault-wallet-apply`, `fault-wallet-state` | the state is the text `none` or `<mode> <delayMs> once` / `every call` |
+| Model fault: mode select, once checkbox, Apply, state | `fault-model-mode`, `fault-model-once`, `fault-model-apply`, `fault-model-state` | mode values `none`, `unreachable`, `invalid_reply` |
+| External debit: amount, Take, result | `fault-debit-amount`, `fault-debit-apply`, `fault-debit-result` | the result is `done <reference> balance <n>` or the wallet's code |
+| The settings line that points at the fault panel | `settings-fault-pointer` | |
 
 ## The journeys
 
@@ -477,3 +518,4 @@ The journeys locate elements only by these attributes.
 | Text typed before the circuit is interactive is lost | The `data-interactive` marker tells the journeys; a person types again |
 | A Checking record whose circuit is gone has no "check again" button in a new circuit | The Checking screen in milestone 8; the record stays Checking and is never shown as failed |
 | The live trace keeps every entry for the life of the circuit | A cap would be a new setting |
+| The wallet data component does not reload after an external debit from the fault panel (it reloads after a payment) | Reopen the component; the phone's card recheck reads the wallet itself |

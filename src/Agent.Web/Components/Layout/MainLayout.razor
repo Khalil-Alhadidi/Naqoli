@@ -26,7 +26,8 @@
                         Class="@ActiveClass(ConsolePanel.LearningData)" OnClick="@(() => Navigation.Select(ConsolePanel.LearningData))">Learning data</MudNavLink>
         </MudNavMenu>
     </MudDrawer>
-    <MudMainContent Class="pa-3">
+    @* px and pb only: pa-3 would override the top padding that keeps the content below the fixed app bar. *@
+    <MudMainContent Class="px-3 pb-3">
         @Body
     </MudMainContent>
 </MudLayout>

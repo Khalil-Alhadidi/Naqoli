@@ -59,6 +59,35 @@ h1:focus {
     background-color: var(--mud-palette-action-default-hover);
 }
 
+/* The fault panel (milestone 8): above the live trace, always at hand. */
+.console-trace-column {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.console-faults-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.fault-group {
+    margin-top: 8px;
+}
+
+.fault-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+}
+
+.fault-unit {
+    color: #757575;
+    font-size: 12px;
+}
+
 .console-trace {
     max-height: calc(100vh - 100px);
     display: flex;

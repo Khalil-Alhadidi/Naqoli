@@ -1,0 +1,224 @@
+@implements IDisposable
+@using System.Globalization
+@inject IServiceScopeFactory Scopes
+@inject ModelFaultSwitch ModelFaults
+@inject IOptions<AgentOptions> Options
+
+@* The fault switch, always at hand (milestone 8, ruling 4): above the live trace, whatever the side menu shows. The
+   wallet's state is always read back from the wallet, the model's from the switch; nothing is assumed. The panel
+   reaches the wallet only through WalletFaults (admin/faults and admin/debit), never a payment route. No key is shown. *@
+<MudPaper Class="pa-3 console-faults" Elevation="1" data-testid="fault-panel">
+    <div class="console-faults-head">
+        <MudText Typo="Typo.h6">Faults</MudText>
+        <MudButton data-testid="fault-clear" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Error"
+                   Disabled="busy" OnClick="ClearAsync">Clear all</MudButton>
+    </div>
+
+    <div class="fault-group">
+        <MudText Typo="Typo.subtitle2">Wallet</MudText>
+        <div class="fault-row">
+            <select data-testid="fault-wallet-mode" aria-label="Wallet fault mode" value="@walletMode"
+                    @onchange="e => walletMode = e.Value?.ToString() ?? WalletNone">
+                @foreach (var mode in WalletModes)
+                {
+                    <option value="@mode">@mode</option>
+                }
+            </select>
+            <input data-testid="fault-wallet-delay" aria-label="Delay in milliseconds" type="text" inputmode="numeric" size="7"
+                   value="@walletDelay" @oninput="e => walletDelay = e.Value?.ToString() ?? string.Empty" />
+            <span class="fault-unit">ms</span>
+            <label><input data-testid="fault-wallet-once" type="checkbox" checked="@walletOnce"
+                          @onchange="e => walletOnce = e.Value is true" /> once</label>
+            <MudButton data-testid="fault-wallet-apply" Size="Size.Small" Variant="Variant.Outlined" Disabled="busy"
+                       OnClick="ApplyWalletAsync">Apply</MudButton>
+        </div>
+        <MudText Typo="Typo.caption">State: <span data-testid="fault-wallet-state">@WalletStateText</span></MudText>
+    </div>
+
+    <div class="fault-group">
+        <MudText Typo="Typo.subtitle2">Model</MudText>
+        <div class="fault-row">
+            <select data-testid="fault-model-mode" aria-label="Model fault mode" value="@modelMode"
+                    @onchange="e => modelMode = e.Value?.ToString() ?? ModelFaultSwitch.NameOf(ModelFaultMode.None)">
+                @foreach (var mode in ModelModes)
+                {
+                    <option value="@ModelFaultSwitch.NameOf(mode)">@ModelFaultSwitch.NameOf(mode)</option>
+                }
+            </select>
+            <label><input data-testid="fault-model-once" type="checkbox" checked="@modelOnce"
+                          @onchange="e => modelOnce = e.Value is true" /> once</label>
+            <MudButton data-testid="fault-model-apply" Size="Size.Small" Variant="Variant.Outlined" Disabled="busy"
+                       OnClick="ApplyModel">Apply</MudButton>
+        </div>
+        <MudText Typo="Typo.caption">State: <span data-testid="fault-model-state">@ModelStateText</span></MudText>
+    </div>
+
+    <div class="fault-group">
+        <MudText Typo="Typo.subtitle2">External debit, user @Options.Value.DemoUserId</MudText>
+        <div class="fault-row">
+            <input data-testid="fault-debit-amount" aria-label="Amount in IQD" type="text" inputmode="numeric" size="9"
+                   value="@debitAmount" @oninput="e => debitAmount = e.Value?.ToString() ?? string.Empty" />
+            <span class="fault-unit">IQD</span>
+            <MudButton data-testid="fault-debit-apply" Size="Size.Small" Variant="Variant.Outlined" Disabled="busy"
+                       OnClick="DebitAsync">Take</MudButton>
+        </div>
+        @if (debitResult is not null)
+        {
+            <MudText Typo="Typo.caption">Result: <span data-testid="fault-debit-result">@debitResult</span></MudText>
+        }
+    </div>
+
+    @if (error is not null)
+    {
+        <MudText data-testid="fault-error" Typo="Typo.caption" Color="Color.Error">@error</MudText>
+    }
+</MudPaper>
+
+@code {
+    private const string WalletNone = "none";
+
+    /// <summary>The delay shown before the wallet reports its own (12 seconds).</summary>
+    private const int FallbackDelayMs = 12_000;
+
+    private static readonly string[] WalletModes = [WalletNone, "error", "slow", "timeoutBeforeExecute", "timeoutAfterExecute"];
+
+    private static readonly ModelFaultMode[] ModelModes = [ModelFaultMode.None, ModelFaultMode.Unreachable, ModelFaultMode.InvalidReply];
+
+    private string walletMode = WalletNone;
+    private string walletDelay = FallbackDelayMs.ToString(CultureInfo.InvariantCulture);
+    private bool walletOnce = true;
+    private WalletFaultState? walletState;
+    private string modelMode = ModelFaultSwitch.NameOf(ModelFaultMode.None);
+    private bool modelOnce = true;
+    private string debitAmount = "5000";
+    private string? debitResult;
+    private string? error;
+    private bool busy;
+
+    private string WalletStateText => walletState switch
+    {
+        null => "unknown",
+        { Mode: WalletNone } => WalletNone,
+        var s => string.Create(CultureInfo.InvariantCulture, $"{s.Mode} {s.DelayMs} {(s.Once ? "once" : "every call")}"),
+    };
+
+    private string ModelStateText => ModelFaults.Mode == ModelFaultMode.None
+        ? ModelFaultSwitch.NameOf(ModelFaultMode.None)
+        : ModelFaultSwitch.NameOf(ModelFaults.Mode) + " " + (ModelFaults.Once ? "once" : "every call");
+
+    protected override async Task OnInitializedAsync()
+    {
+        ModelFaults.Changed += OnModelChanged;
+        var read = await CallAsync(faults => faults.GetAsync());
+        if (read is WalletFaultResult.Ok ok)
+            walletDelay = ok.State.DelayMs.ToString(CultureInfo.InvariantCulture);
+    }
+
+    public void Dispose() => ModelFaults.Changed -= OnModelChanged;
+
+    private void OnModelChanged() => _ = InvokeAsync(StateHasChanged);
+
+    private async Task ApplyWalletAsync()
+    {
+        int? delay = null;
+        if (walletMode is "slow" or "timeoutBeforeExecute" or "timeoutAfterExecute")
+        {
+            if (!int.TryParse(walletDelay, NumberStyles.None, CultureInfo.InvariantCulture, out var parsed))
+            {
+                error = "The delay must be whole milliseconds.";
+                return;
+            }
+
+            delay = parsed;
+        }
+
+        await RunAsync(async () =>
+        {
+            await CallAsync(faults => walletMode == WalletNone ? faults.ClearAsync() : faults.SetAsync(walletMode, delay, walletOnce));
+            // Read back after every apply: the state shown is the wallet's.
+            await CallAsync(faults => faults.GetAsync());
+        });
+    }
+
+    private void ApplyModel()
+    {
+        error = null;
+        if (!ModelFaultSwitch.TryParse(modelMode, out var mode))
+        {
+            error = "Unknown model fault.";
+            return;
+        }
+
+        ModelFaults.Set(mode, modelOnce);
+    }
+
+    private async Task DebitAsync()
+    {
+        if (!long.TryParse(debitAmount, NumberStyles.None, CultureInfo.InvariantCulture, out var amount))
+        {
+            error = "The amount must be whole dinars.";
+            return;
+        }
+
+        await RunAsync(async () =>
+        {
+            await using var scope = Scopes.CreateAsyncScope();
+            var faults = scope.ServiceProvider.GetRequiredService<WalletFaults>();
+            switch (await faults.DebitAsync(Options.Value.DemoUserId, amount))
+            {
+                case WalletDebitResult.Done done:
+                    debitResult = string.Create(CultureInfo.InvariantCulture, $"done {done.Reference} balance {done.BalanceAfterIqd}");
+                    break;
+                case WalletDebitResult.Failed failed:
+                    debitResult = failed.Problem;
+                    error = "The wallet refused the debit: " + failed.Problem;
+                    break;
+            }
+        });
+    }
+
+    private async Task ClearAsync()
+    {
+        ModelFaults.Clear();
+        modelMode = ModelFaultSwitch.NameOf(ModelFaultMode.None);
+        walletMode = WalletNone;
+        await RunAsync(async () =>
+        {
+            await CallAsync(faults => faults.ClearAsync());
+            await CallAsync(faults => faults.GetAsync());
+        });
+    }
+
+    private async Task RunAsync(Func<Task> action)
+    {
+        busy = true;
+        error = null;
+        try
+        {
+            await action();
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    /// <summary>One fault-switch call through a fresh scope's client; the state read back is kept, a failure shown.</summary>
+    private async Task<WalletFaultResult> CallAsync(Func<WalletFaults, Task<WalletFaultResult>> call)
+    {
+        await using var scope = Scopes.CreateAsyncScope();
+        var result = await call(scope.ServiceProvider.GetRequiredService<WalletFaults>());
+        switch (result)
+        {
+            case WalletFaultResult.Ok ok:
+                walletState = ok.State;
+                break;
+            case WalletFaultResult.Failed failed:
+                walletState = null;
+                error = "The wallet's fault switch did not answer: " + failed.Problem;
+                break;
+        }
+
+        return result;
+    }
+}

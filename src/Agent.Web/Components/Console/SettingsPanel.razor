@@ -7,6 +7,7 @@
 @inject IOptions<ModelOptions> Model
 @inject RuntimeSettings Runtime
 @inject KillSwitch Kill
+@inject IOptions<ConsoleOptions> ConsoleSettings
 @using Agent.Core.Audit
 
 @* D8: the agent's limits are edited here and apply to the next action, without a restart. A saved value lives in memory
@@ -14,6 +15,7 @@
 <MudPaper Class="pa-3" Elevation="1">
     <MudText Typo="Typo.h6">Settings</MudText>
     <MudText Typo="Typo.body2" Class="mb-2">A saved value applies to the next action and is forgotten when the console restarts.</MudText>
+    <MudText Typo="Typo.body2" Class="mb-2" data-testid="settings-fault-pointer">The fault switch (wallet faults, a model fault, an external debit) is in the Faults panel beside the live trace.</MudText>
 
     <MudText Typo="Typo.subtitle1" Class="mt-2">Agent</MudText>
     @* Khalil, 15 Oct 2026: while on, no card is issued, Confirm and check-again are refused; off at every start. *@
@@ -54,6 +56,11 @@
             {
                 <tr data-testid="setting-row" data-name="@name"><td>@name</td><td colspan="2">@value</td></tr>
             }
+            @* The key itself is never shown: set or not set. *@
+            <tr data-testid="setting-row" data-name="Console:WalletAdminKey">
+                <td>Console:WalletAdminKey</td>
+                <td colspan="2">@(string.IsNullOrEmpty(ConsoleSettings.Value.WalletAdminKey) ? "not set" : "set")</td>
+            </tr>
         </tbody>
     </MudSimpleTable>
 

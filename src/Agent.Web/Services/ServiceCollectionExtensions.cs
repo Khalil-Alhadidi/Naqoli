@@ -2,7 +2,9 @@ using Agent.Core;
 using Agent.Core.Parsing;
 using Agent.Core.Trace;
 using Agent.Web.Resources;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Localization;
+using Microsoft.Extensions.Options;
 
 namespace Agent.Web.Services;
 
@@ -17,7 +19,9 @@ public static class ServiceCollectionExtensions
     /// (<see cref="AgentOptions.YesWords"/>, <see cref="AgentOptions.NoWords"/>) are set from the resource file
     /// (<c>Word_yes</c>, <c>Word_no</c>), so <c>Agent.Core</c> holds no phone text (rule 4). When
     /// <paramref name="configuration"/> has a <see cref="RuntimeSettingsSource"/> (Program adds it), the singleton
-    /// <see cref="RuntimeSettings"/> saves agent settings live (D8).
+    /// <see cref="RuntimeSettings"/> saves agent settings live (D8). The parser is wrapped in <see cref="FaultingParser"/>
+    /// (<see cref="AddFaultingParser"/>), and the fault panel gets <see cref="ConsoleOptions"/> (validated at start) and
+    /// the typed <see cref="WalletFaults"/> client.
     /// </summary>
     public static IServiceCollection AddAgentWebServices(this IServiceCollection services, IConfiguration configuration)
     {
@@ -39,9 +43,64 @@ public static class ServiceCollectionExtensions
             options.NoWords = PhoneWords.Split(text["Word_no"].Value);
         });
         services.AddAgentParser(configuration);
+        services.AddFaultingParser();
+        services.AddOptions<ConsoleOptions>()
+            .Bind(configuration.GetSection(ConsoleOptions.SectionName))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+        services.AddHttpClient<WalletFaults>((sp, http) => WalletFaults.Configure(
+            http,
+            sp.GetRequiredService<IOptions<AgentOptions>>().Value,
+            sp.GetRequiredService<IOptions<ConsoleOptions>>().Value,
+            sp.GetService<IHostEnvironment>()));
         services.AddRuntimeSettings(configuration);
         services.AddScoped<ChatSession>();
         services.AddScoped<ConsoleNavigation>();
         return services;
+    }
+
+    /// <summary>
+    /// Wraps the last registered <see cref="IParser"/> in <see cref="FaultingParser"/> (the console's model fault,
+    /// milestone 8), keeping its lifetime: the original descriptor's instance, factory or implementation type builds the
+    /// parser underneath. Adds the singleton <see cref="ModelFaultSwitch"/> once. Called by
+    /// <see cref="AddAgentWebServices"/> after <see cref="ParserFactory.AddAgentParser"/>; a host that registers its own
+    /// parser afterwards calls it again to wrap that one.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">No <see cref="IParser"/> is registered.</exception>
+    public static IServiceCollection AddFaultingParser(this IServiceCollection services)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+
+        services.TryAddSingleton<ModelFaultSwitch>();
+        var index = -1;
+        for (var i = services.Count - 1; i >= 0; i--)
+        {
+            if (services[i].ServiceType == typeof(IParser) && !services[i].IsKeyedService)
+            {
+                index = i;
+                break;
+            }
+        }
+
+        if (index < 0)
+            throw new InvalidOperationException("No IParser is registered to wrap.");
+
+        var original = services[index];
+        services[index] = ServiceDescriptor.Describe(
+            typeof(IParser),
+            sp => new FaultingParser(Inner(sp, original), sp.GetRequiredService<ModelFaultSwitch>()),
+            original.Lifetime);
+        return services;
+    }
+
+    private static IParser Inner(IServiceProvider services, ServiceDescriptor original)
+    {
+        if (original.ImplementationInstance is IParser instance)
+            return instance;
+        if (original.ImplementationFactory is { } factory)
+            return (IParser)factory(services);
+        if (original.ImplementationType is { } type)
+            return (IParser)ActivatorUtilities.CreateInstance(services, type);
+        throw new InvalidOperationException("The IParser registration has no instance, factory or type.");
     }
 }
