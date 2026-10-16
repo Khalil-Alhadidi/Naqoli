@@ -144,7 +144,8 @@ public sealed record ExpectedRefusal(
     string? Biller = null,
     IReadOnlyList<string>? Available = null,
     string? What = null,
-    bool? NumberInReply = null);
+    bool? NumberInReply = null,
+    long? AmountDue = null);
 
 /// <summary>The wallet after the case.</summary>
 public sealed record ExpectedFinal(

@@ -185,9 +185,12 @@ public sealed class CaseLoaderTests : IDisposable
     {
         var cases = CaseLoader.Load(Path.Combine(SeedHashTests.RepositoryRoot(), "data", "requests.dev.jsonl"));
 
-        Assert.Equal(75, cases.Count);
+        Assert.Equal(77, cases.Count);
         Assert.All(cases, c => Assert.Equal("dev", c.Set));
         Assert.All(cases, c => Assert.NotNull(c.Expect.Final));
+
+        // ADD-04 (16 Oct 2026): the refusal's amount_due is read from the key.
+        Assert.Equal(9_250, cases.Single(c => c.Id == "ADD-04").Expect.Refusal?.AmountDue);
     }
 
     [Fact]

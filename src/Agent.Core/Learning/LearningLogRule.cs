@@ -95,6 +95,8 @@ public static class LearningLogRule
     /// type and value asked for.</item>
     /// <item>A <c>dinars_only</c> refusal (the request named another currency, or was parsed as unsupported
     /// <c>other_currency</c>, GAP-07) gives <c>other_currency</c>.</item>
+    /// <item>A <c>bills_paid_in_full</c> refusal with detail <c>part_of_bill</c> (ruling 2 of milestone 8) gives
+    /// <c>part_of_bill</c>; without that detail (D9, a named amount that is not the amount due) it is not logged.</item>
     /// <item>A card issued with the note <c>account_choice_unavailable</c> (the known gap, GAP-04) gives
     /// <c>choose_account</c>.</item>
     /// <item>An <c>only_own_balance</c> refusal (a question about someone else's balance, RED-10) gives
@@ -119,6 +121,9 @@ public static class LearningLogRule
 
             case AgentReply.CardIssued { Note: ReasonCodes.AccountChoiceUnavailable }:
                 return new LearningEntry(ChooseAccount, null);
+
+            case AgentReply.Refusal { Code: ReasonCodes.BillsPaidInFull, Detail: PartOfBill }:
+                return new LearningEntry(PartOfBill, null);
 
             case AgentReply.Refusal { Code: ReasonCodes.OnlyOwnBalance }:
                 return new LearningEntry(NotSupported, OtherBalance);

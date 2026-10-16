@@ -161,6 +161,13 @@ public sealed class Orchestrator
                 cardNote = ReasonCodes.AccountChoiceUnavailable;
                 request = request with { Intent = RequestIntent.Transfer, UnsupportedReason = null };
             }
+            else if (IsPartOfBill(request))
+            {
+                // Part of a bill (ruling 2 of milestone 8): read as a bill request, the reason kept, so the bill is
+                // resolved as any bill is and then refused with its full amount due (D9). It never reaches a card.
+                trace.Record(TraceZone.Code, TraceSteps.KnownGap, LearningLogRule.PartOfBill);
+                request = request with { Intent = RequestIntent.Bill };
+            }
             else
             {
                 var reason = request.UnsupportedReason ?? ReasonCodes.NotSupported;
@@ -303,6 +310,9 @@ public sealed class Orchestrator
     /// The known gap <c>choose_account</c> (GAP-04) with a recipient and an amount: handled as a transfer from the usual
     /// account, its card carrying <see cref="ReasonCodes.AccountChoiceUnavailable"/>. Without either, it is unsupported.
     /// </summary>
+    private static bool IsPartOfBill(ParsedRequest request)
+        => string.Equals(request.UnsupportedReason, LearningLogRule.PartOfBill, StringComparison.Ordinal);
+
     private static bool IsChooseAccountTransfer(ParsedRequest request)
         => string.Equals(request.UnsupportedReason, LearningLogRule.ChooseAccount, StringComparison.Ordinal)
             && !string.IsNullOrWhiteSpace(request.RecipientText)
@@ -443,6 +453,8 @@ public sealed class Orchestrator
                 : await RefuseAsync(userId, ReasonCodes.NothingDue, null, null, cancellationToken);
         }
 
+        var partial = IsPartOfBill(request);
+
         IReadOnlyList<WalletProduct> products = [];
         if (string.Equals(request.BillerCode, BillResolver.InternetBiller, StringComparison.Ordinal))
         {
@@ -460,12 +472,18 @@ public sealed class Orchestrator
                 break;
             case BillResolution.Options choice:
                 return await AskAsync(userId, QuestionKinds.WhichBill, choice.Bills.Select(BillOption).ToList(), cancellationToken);
+            case BillResolution.AskBillOrStore billOrStore when partial:
+                // Part of the internet bill: the user means the bill, not a card from the store.
+                bill = billOrStore.Bill;
+                break;
             case BillResolution.AskBillOrStore billOrStore:
                 return await AskAsync(
                     userId,
                     QuestionKinds.BillOrStore,
                     [BillOption(billOrStore.Bill), new Option(Option.StoreInternet, null, null, null, null, null)],
                     cancellationToken);
+            case BillResolution.StoreInternet when partial:
+                return await RefuseAsync(userId, ReasonCodes.BillNotFound, null, null, cancellationToken);
             case BillResolution.StoreInternet store:
                 return await AskAsync(userId, QuestionKinds.WhichProduct, ProductOptions(store.InternetCards), cancellationToken);
             case BillResolution.NothingDue:
@@ -479,9 +497,16 @@ public sealed class Orchestrator
         return await BillCardAsync(userId, request, bill, cancellationToken);
     }
 
-    /// <summary>The named-amount check (D9), then the checks and the card for <paramref name="bill"/>.</summary>
+    /// <summary>
+    /// The named-amount check (D9), then the checks and the card for <paramref name="bill"/>. A request to pay part of a
+    /// bill is refused <c>bills_paid_in_full</c> with the amount due and detail <c>part_of_bill</c> before any check or
+    /// quote, whatever amount it named.
+    /// </summary>
     private async Task<AgentReply> BillCardAsync(int userId, ParsedRequest request, WalletBill bill, CancellationToken cancellationToken)
     {
+        if (IsPartOfBill(request))
+            return await RefuseAsync(userId, ReasonCodes.BillsPaidInFull, LearningLogRule.PartOfBill, bill.AmountDueIqd, cancellationToken);
+
         // D9: a bill is paid in full. An amount the user named must be the amount due, else no card.
         if (request.AmountValue is not null)
         {

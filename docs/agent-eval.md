@@ -2,7 +2,7 @@
 
 What `src/Agent.Eval` does as built in milestone 5. It loads a request set, plays each case through the same conversation logic as the phone (`Conversation` in `Agent.Core`, see [agent-core.md](agent-core.md)), grades what happened against the case's answer key, and writes a report. The case format and the meaning of each answer-key field are in [data/README.md](../data/README.md); the matching rules the keys follow are in [matching-rules.md](matching-rules.md). The design is D12, D13, D14 and D22 of [architecture.md](architecture.md).
 
-The development set (`data/requests.dev.jsonl`) has 75 cases: Khalil's 72 and, since 16 Oct 2026, ADD-01 to ADD-03 for the milestone 7 journeys (wording by Khalil, 16 Oct 2026). The first scripted run reported further down predates them.
+The development set (`data/requests.dev.jsonl`) has 77 cases: Khalil's 72; since 16 Oct 2026, ADD-01 to ADD-03 for the milestone 7 journeys (wording by Khalil, 16 Oct 2026); and ADD-04 and ADD-05 for milestone 8 (drafted for Khalil, `TODO-AR`). The first scripted run reported further down predates them.
 
 `Agent.Eval` references `Agent.Core` only. It talks to the mock wallet over HTTP: the agent's own `WalletClient` for everything the agent does, and a side door (`WalletAdmin`) for the reset, the fault switch, the orders count and the external debit. It never moves money itself.
 
@@ -100,7 +100,7 @@ flowchart TD
     either -- no --> cards["cards in order: missing or unexpected card,<br/>every field, outcome"]
     cards --> learning["learning_log: none expected and none derived,<br/>or reason and detail equal"]
     branches --> refusal
-    learning --> refusal["refusal: reason, no card,<br/>limit or left_today figure"]
+    learning --> refusal["refusal: reason, no card,<br/>limit, left_today or amount_due figure"]
     refusal --> replies["replies: each expected code (and figure)<br/>in order among the agent's replies"]
     replies --> final["consent_screen, final: balance,<br/>done transactions, codes issued, bills now"]
     final --> steps["step expectations: card, card_outcome, reply,<br/>moved, executions, PIN attempts, PIN seen, statuses"]
@@ -116,7 +116,7 @@ The rules, field by field:
 - **cards**: in order. A key card with no observed card is `card missing`; an observed card with no key card is `card unexpected`. Every card: `kind`, `amount`, `fee`, `total`, `balance_after`, `pin_required`, `first_time`, `outcome`. Transfers also `to_number`, `display`, `registered_name`, `warning` (null or `repeat`); bills `bill`; purchases `product`. A bill's `biller` and `label` are recorded, not graded.
 - **outcome**: `done`, `cancelled` and `expired` are the card's state of the same name; `failed` and `not_done` are NotDone; `closed` is NotDone with the reason `account_closed` or `pin_locked`.
 - **replies**: each expected reply code appears among the agent's replies in order, with its figure when the key gives one (a balance reply's amount, for example). A reply code is a refusal or note code, `balance`, a not-done outcome's reason, or `card_cancelled`.
-- **refusal**: a reply with that reason (for `not_supported`, any unsupported reply), and no card. `limit` and `left_today` must equal the reply's figure; `biller`, `available`, `what` and `number_in_reply` are recorded.
+- **refusal**: a reply with that reason (for `not_supported`, any unsupported reply), and no card. `limit`, `left_today` and `amount_due` (from 16 Oct 2026: a bill's full amount due on `bills_paid_in_full`) must equal the reply's figure; `biller`, `available`, `what` and `number_in_reply` are recorded.
 - **consent_screen**: whether the consent screen was shown.
 - **final**: the balance after the case; the new done transactions in order (type, amount, fee, number, bill and product codes when given); the purchase codes issued; each listed bill's amount due now. A missing tap therefore shows as no new transaction and a balance that did not move, never as a phantom execution.
 - **learning_log**: see the checks below.
@@ -266,3 +266,7 @@ The score is the ceiling for the model parsers. With prompt version 2 the median
 ## The three added cases (16 Oct 2026)
 
 ADD-01 (a typed phone number, first time), ADD-02 (an unknown name) and ADD-03 (an account number, D21) were added for the milestone 7 journeys. Wording by Khalil, 16 Oct 2026; the report below was run on the earlier English placeholders. `dotnet run --project src/Agent.Eval -- dev --only ADD-01,ADD-02,ADD-03 --label m7-add` passes all three on the oracle ([dev-scripted-m7-add-2026-10-16-0729.md](reports/dev-scripted-m7-add-2026-10-16-0729.md)). The set now has 75 cases, so a full run's case file hash differs from the runs above.
+
+## The two cases added for milestone 8 (16 Oct 2026)
+
+ADD-04 (U1, `Should not go through`, `Bill`: pay five thousand of the water bill) and ADD-05 (U2, `Should not go through`, `Bill`: pay the electricity, which has nothing due) cover two bill behaviours the set lacked. Both are drafted by Claude for Khalil: English `TODO-AR` messages, `pending_wording_recheck` true, as the milestone 7 cases were before Khalil's wording. ADD-04 expects `bills_paid_in_full` with `amount_due` 9,250 (BS3, from the wallet), no card, U1's seed state and the learning entry `part_of_bill` (D9, the matching rule "Part of a bill", ruling 2 of the milestone 8 plan). ADD-05 expects `nothing_due`, no card, U2's seed state and no learning entry. The set now has 77 cases.

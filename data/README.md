@@ -26,7 +26,7 @@ so the held-out half contains no paraphrase of a development case, and variants 
 `days_ago` 0 means today. The loader converts it to a timestamp at load time, so "today" is always the day the tests run.
 The daily cap counts everything with `days_ago` 0 (U3 has 7,000,000 there). The newest transfer to each contact is a fixed fact the answer keys rely on; the rest is filler.
 U5 has no history: she has never used the wallet.
-16 Oct 2026: three cases added to the development set for the milestone 7 journeys (ADD-01 a typed number, ADD-02 an unknown name, ADD-03 an account number); wording by Khalil, 16 Oct 2026.
+16 Oct 2026: three cases added to the development set for the milestone 7 journeys (ADD-01 a typed number, ADD-02 an unknown name, ADD-03 an account number); wording by Khalil, 16 Oct 2026. Two more for milestone 8, drafted by Claude for Khalil with English `TODO-AR` messages and `pending_wording_recheck` true: ADD-04 (U1 asks to pay part of the water bill: `bills_paid_in_full` with the amount due, learning `part_of_bill`) and ADD-05 (U2's electricity bill has nothing due: `nothing_due`).
 
 ## A case
 
@@ -56,7 +56,7 @@ A step may carry `expect`, checked right after that step: `card` (unchanged, can
 - `asks`: the questions expected, in order. Each has `kind` and either `options` (a set; order is not graded) or `answer: typed`.
 - `cards`: the cards expected, in order, each with every graded field: kind, to / bill / product, display name, registered name, amount, fee, total, balance_after, pin_required, first_time, warning, and the outcome the steps produce.
 - `replies`: replies that carry information and are expected in order (a balance reply with the amount; the refusal of a second part).
-- `refusal`: the reason code when the request gets no card at all. `consent_screen` is true when the consent screen replaces everything.
+- `refusal`: the reason code when the request gets no card at all, with the figure the reply carries when the key names one: `limit` (a cap), `left_today` (what is left of the daily cap) or `amount_due` (a bill's full amount due from the biller, for `bills_paid_in_full`; added 16 Oct 2026). `consent_screen` is true when the consent screen replaces everything.
 - `final`: the wallet after the case: balance, the list of new transactions, bills that changed, codes issued, alias saved.
 - `learning_log`: the entry expected in the learning log, or null.
 - `either` (GAP-08 only): two acceptable outcomes; anything else is a wrong card.

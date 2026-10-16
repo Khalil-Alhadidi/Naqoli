@@ -860,7 +860,11 @@ public sealed class Conversation : IDisposable
                     if (option.Value == Option.StoreInternet)
                         return (ParsedRequest.Purchase(null, BillResolver.InternetProductType, null), SlotAnswers.None);
 
-                    var bill = last.Intent == RequestIntent.Bill ? last : ParsedRequest.Bill(null, null, null, AmountUnit.None);
+                    // A request to pay part of a bill stays as it is, so the tapped bill gets the same refusal (ruling 2).
+                    var bill = last.Intent == RequestIntent.Bill
+                        || string.Equals(last.UnsupportedReason, LearningLogRule.PartOfBill, StringComparison.Ordinal)
+                        ? last
+                        : ParsedRequest.Bill(null, null, null, AmountUnit.None);
                     return (bill, answers with { BillCode = option.Value });
                 }
 

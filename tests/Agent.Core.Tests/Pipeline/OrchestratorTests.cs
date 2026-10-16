@@ -2,11 +2,13 @@ using System.Text.Json;
 using Agent.Core.Audit;
 using Agent.Core.Confirm;
 using Agent.Core.Data;
+using Agent.Core.Learning;
 using Agent.Core.Pending;
 using Agent.Core.Pipeline;
 using Agent.Core.Requests;
 using Agent.Core.Resolver;
 using Agent.Core.Tests.Agent;
+using Agent.Core.Tests.Resolver;
 using Agent.Core.Tests.Wallet;
 using Agent.Core.Wallet;
 using Microsoft.EntityFrameworkCore;
@@ -384,6 +386,82 @@ public class OrchestratorTests(AgentHost host)
         var refusal = Refusal(
             await HandleAsync(U1, ParsedRequest.Bill("water", null, 5_000, AmountUnit.Dinars)), ReasonCodes.BillsPaidInFull);
         Assert.Equal(9_250, refusal.AmountIqd);
+    }
+
+    /// <summary>A request to pay part of a bill, as the parse call reads it (ruling 2 of milestone 8).</summary>
+    private static ParsedRequest PartOf(string billerCode) => new()
+    {
+        Intent = RequestIntent.Unsupported,
+        UnsupportedReason = LearningLogRule.PartOfBill,
+        BillerCode = billerCode,
+        AmountValue = 5,
+        AmountUnit = AmountUnit.Thousand,
+    };
+
+    private static long AmountDueOf(string billCode)
+        => SeedWallet.BillsOf(SeedFacts.Seed.Bills.Single(b => b.Id == billCode).User).Single(b => b.Code == billCode).AmountDueIqd;
+
+    private async Task<int> PendingCountAsync()
+    {
+        await using var scope = host.Services.CreateAsyncScope();
+        return await scope.ServiceProvider.GetRequiredService<AgentDbContext>().PendingTransactions.CountAsync(Token);
+    }
+
+    [Fact]
+    public async Task PartOfABillIsRefusedWithTheAmountDueAndNoCard()
+    {
+        await StartAsync();
+
+        var refusal = Refusal(await HandleAsync(U1, PartOf("water")), ReasonCodes.BillsPaidInFull);
+
+        Assert.Equal((LearningLogRule.PartOfBill, AmountDueOf("BS3")), (refusal.Detail, refusal.AmountIqd));
+        Assert.Equal(0, await PendingCountAsync());
+        var row = Assert.Single(await AuditAsync());
+        Assert.Equal((AuditEvents.Refused, ReasonCodes.BillsPaidInFull), (row.Event, row.Reason));
+    }
+
+    [Fact]
+    public async Task PartOfTheInternetBillIsTheBillNotTheStore()
+    {
+        await StartAsync();
+
+        var refusal = Refusal(await HandleAsync(U1, PartOf("internet")), ReasonCodes.BillsPaidInFull);
+
+        Assert.Equal((LearningLogRule.PartOfBill, AmountDueOf("BS4")), (refusal.Detail, refusal.AmountIqd));
+        Assert.Equal(0, await PendingCountAsync());
+    }
+
+    [Fact]
+    public async Task PartOfABillWithSeveralBillsAsksWhichBill()
+    {
+        await StartAsync();
+
+        var question = Question(await HandleAsync(U1, PartOf("electricity")), QuestionKinds.WhichBill, QuestionAnswer.Tap);
+        Assert.Equal(["BS1", "BS2"], question.Options.Select(o => o.Value));
+
+        var refusal = Refusal(await HandleAsync(U1, PartOf("electricity"), new SlotAnswers(BillCode: "BS1")), ReasonCodes.BillsPaidInFull);
+        Assert.Equal((LearningLogRule.PartOfBill, AmountDueOf("BS1")), (refusal.Detail, refusal.AmountIqd));
+        Assert.Equal(0, await PendingCountAsync());
+    }
+
+    [Fact]
+    public async Task PartOfABillWithNothingDueIsNothingDue()
+    {
+        await StartAsync();
+        Refusal(await HandleAsync(U2, PartOf("electricity")), ReasonCodes.NothingDue);
+        Assert.Equal(0, await PendingCountAsync());
+    }
+
+    [Fact]
+    public async Task PartOfABillTheUserDoesNotHaveIsNotFound()
+    {
+        await StartAsync();
+        const int u4 = 4;
+
+        Refusal(await HandleAsync(u4, PartOf("water")), ReasonCodes.BillNotFound);
+        // Rule 17's store branch is not a bill: part of it is no bill either (U2 has no internet bill).
+        Refusal(await HandleAsync(U2, PartOf("internet")), ReasonCodes.BillNotFound);
+        Assert.Equal(0, await PendingCountAsync());
     }
 
     [Fact]

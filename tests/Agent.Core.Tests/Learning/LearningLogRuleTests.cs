@@ -165,6 +165,24 @@ public class LearningLogRuleTests
     }
 
     [Fact]
+    public void APartOfBillRefusalIsLoggedAsPartOfBill()
+    {
+        // Ruling 2 of milestone 8: part of a bill is refused bills_paid_in_full with the amount due and detail part_of_bill.
+        var entry = LearningLogRule.EntryFor(
+            new AgentReply.Refusal(ReasonCodes.BillsPaidInFull, LearningLogRule.PartOfBill, 9_250), Unsupported(LearningLogRule.PartOfBill));
+
+        Assert.Equal(new LearningEntry(LearningLogRule.PartOfBill, null), entry);
+    }
+
+    [Fact]
+    public void ANamedAmountRefusalIsNotLogged()
+    {
+        // D9: a named amount that is not the amount due; the agent understood, so nothing is logged.
+        Assert.Null(LearningLogRule.EntryFor(
+            new AgentReply.Refusal(ReasonCodes.BillsPaidInFull, null, 9_250), ParsedRequest.Bill("water", null, 5, AmountUnit.Thousand)));
+    }
+
+    [Fact]
     public void RepliesThatAreNotRefusalsAreNotLogged()
     {
         Assert.Null(LearningLogRule.EntryFor(new AgentReply.BalanceReply(750_000), ParsedRequest.Balance()));

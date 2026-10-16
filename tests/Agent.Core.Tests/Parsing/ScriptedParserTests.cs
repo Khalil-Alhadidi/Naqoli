@@ -132,7 +132,8 @@ public sealed class ScriptedParserTests : IDisposable
     [Fact]
     public void EveryBillOfTheSidecarNamesItsBillerInTheUsersOwnWords()
     {
-        // Schema version 2 (16 Oct 2026): a bill's biller_text is copied verbatim from the message; any other request has none.
+        // Schema version 2 (16 Oct 2026): a bill's biller_text is copied verbatim from the message, as is that of a request
+        // to pay part of a bill (read as a bill, ruling 2 of milestone 8); any other request has none.
         var sidecar = Path.Combine(RepositoryRoot.Find(), "data", ScriptedParser.SidecarFileName);
         var bills = 0;
         foreach (var line in File.ReadLines(sidecar).Where(l => l.Length > 0))
@@ -144,7 +145,8 @@ public sealed class ScriptedParserTests : IDisposable
             foreach (var request in root.GetProperty("parse").GetProperty("requests").EnumerateArray())
             {
                 Assert.True(request.TryGetProperty("biller_text", out var billerText), where);
-                if (request.GetProperty("intent").GetString() == "bill")
+                if (request.GetProperty("intent").GetString() == "bill"
+                    || request.GetProperty("unsupported_reason").GetString() == "part_of_bill")
                 {
                     bills++;
                     Assert.True(billerText.ValueKind == JsonValueKind.String, where);

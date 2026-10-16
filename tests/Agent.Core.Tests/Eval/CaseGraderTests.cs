@@ -331,6 +331,23 @@ public class CaseGraderTests
     }
 
     [Fact]
+    public void ARefusalAmountDueIsGraded()
+    {
+        var evalCase = Case(new Expectation(
+            Asks: [], Cards: [], Refusal: new ExpectedRefusal(ReasonCodes.BillsPaidInFull, AmountDue: 9_250), Final: KeyFinal()));
+
+        var right = Grader.Grade(evalCase, Observed(replies: [Agent(ConversationKind.Refusal, ReasonCodes.BillsPaidInFull, 9_250)]));
+        Assert.True(right.Passed, right.FirstFailing?.Field);
+        Assert.Contains(right.Verdicts, v => v is { Field: "refusal.amount_due", Ok: true });
+
+        var wrong = Grader.Grade(evalCase, Observed(replies: [Agent(ConversationKind.Refusal, ReasonCodes.BillsPaidInFull, 5_000)]));
+        Assert.Equal("refusal.amount_due", wrong.FirstFailing?.Field);
+
+        var none = Grader.Grade(evalCase, Observed(replies: [Agent(ConversationKind.Refusal, ReasonCodes.BillsPaidInFull)]));
+        Assert.Equal("refusal.amount_due", none.FirstFailing?.Field);
+    }
+
+    [Fact]
     public void AnUnsupportedReplyIsTheNotSupportedRefusal()
     {
         var evalCase = Case(new Expectation(Asks: [], Cards: [], Refusal: new ExpectedRefusal("not_supported", What: "withdrawal")));

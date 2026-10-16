@@ -24,6 +24,7 @@ public sealed class ConversationAnswerTests(AgentHost host)
     private const string InternetSentence = "pay the internet";
     private const string ChooseAccountSentence = "send thirty thousand to hammoudi from my savings";
     private const string ChooseAccountSharedSentence = "send thirty thousand to hussein from my savings";
+    private const string PartOfElectricitySentence = "pay five thousand of the electricity";
 
     private static ParsedRequest ChooseAccount(string recipient) => new()
     {
@@ -50,6 +51,14 @@ public sealed class ConversationAnswerTests(AgentHost host)
         new(InternetSentence, ParsedRequest.Bill("internet", null, null, AmountUnit.None)),
         new(ChooseAccountSentence, ChooseAccount(HammoudiAlias)),
         new(ChooseAccountSharedSentence, ChooseAccount(SeedFacts.Contact("S08").SavedName)),
+        new(PartOfElectricitySentence, new ParsedRequest
+        {
+            Intent = RequestIntent.Unsupported,
+            UnsupportedReason = "part_of_bill",
+            BillerCode = "electricity",
+            AmountValue = 5,
+            AmountUnit = AmountUnit.Thousand,
+        }),
     ]);
 
     private async Task<ConversationHarness> StartAsync(int userId = SeedFacts.DemoUserId)
@@ -223,5 +232,23 @@ public sealed class ConversationAnswerTests(AgentHost host)
         Assert.Equal(("purchase", "AC-NET-10", 10_000L), (card.Type, card.ProductCode, card.AmountIqd));
         Assert.Single(conversation.QuestionsAsked);
         Assert.Equal(RequestIntent.Purchase, conversation.LastRequest?.Intent);
+    }
+
+    [Fact]
+    public async Task ATapOnWhichBillAfterAPartOfBillRequestGivesTheRefusalNotACard()
+    {
+        await using var harness = await StartAsync();
+        var conversation = harness.Conversation;
+
+        await conversation.SendAsync(PartOfElectricitySentence);
+        Assert.Equal(QuestionKinds.WhichBill, Assert.IsType<AgentReply.Question>(conversation.Question).Kind);
+
+        await conversation.TapOptionAsync("BS2");
+
+        Assert.Null(conversation.Card);
+        var refusal = conversation.Messages.Last();
+        var bs2 = Resolver.SeedWallet.BillsOf("U1").Single(b => b.Code == "BS2");
+        Assert.Equal((ConversationKind.Refusal, ReasonCodes.BillsPaidInFull, (long?)bs2.AmountDueIqd), (refusal.Kind, refusal.Code, refusal.AmountIqd));
+        Assert.Single(conversation.QuestionsAsked);
     }
 }

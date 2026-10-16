@@ -307,6 +307,8 @@ public sealed class CaseGrader
             verdicts.Add(Equal("refusal.limit", Figure(limit), Figure(match?.AmountIqd)));
         if (refusal.LeftToday is { } left)
             verdicts.Add(Equal("refusal.left_today", Figure(left), Figure(match?.AmountIqd)));
+        if (refusal.AmountDue is { } amountDue)
+            verdicts.Add(Equal("refusal.amount_due", Figure(amountDue), Figure(match?.AmountIqd)));
         if (refusal.Biller is { } biller)
             verdicts.Add(new FieldVerdict("refusal.biller", biller, "not graded", true, Graded: false));
         if (refusal.Available is { } available)
