@@ -61,6 +61,19 @@ public sealed class RequestJourneys(JourneyHost host) : JourneyBase(host)
         Assert.Equal(["S10", "S11"], values.Order(StringComparer.Ordinal));
         await Expect(page.GetByTestId("card")).ToHaveCountAsync(0);
 
+        // Each option's small line labels the last amount sent to that contact as the wallet holds it, or says there
+        // was no previous transfer.
+        var wallet = await Host.ContactsAsync(U1);
+        foreach (var code in values)
+        {
+            var listed = wallet.Contacts.Single(c => c.Code == code);
+            var expected = listed.LastSentAmountIqd is { } last
+                ? WithAmount("Option_LastSent", last)
+                : Text["Option_NoPreviousTransfer"].Value;
+            await Expect(page.Locator($"[data-testid=question-option][data-value={code}]").GetByTestId("option-last-sent"))
+                .ToHaveTextAsync(expected);
+        }
+
         await page.Locator("[data-testid=question-option][data-value=S10]").ClickAsync();
 
         // The card names S10 as the wallet holds it; nothing has moved yet.

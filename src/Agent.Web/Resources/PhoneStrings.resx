@@ -41,6 +41,8 @@
   <data name="Question_bill_or_store" xml:space="preserve"><value>تدفع فاتورة الإنترنيت، لو تشتري كارت إنترنيت من المتجر؟</value></data>
   <data name="Question_which_operator" xml:space="preserve"><value>أي شركة؟</value></data>
   <data name="Option_store_internet" xml:space="preserve"><value>كارت من المتجر</value></data>
+  <data name="Option_LastSent" xml:space="preserve"><value>آخر تحويل {0}</value></data>
+  <data name="Option_NoPreviousTransfer" xml:space="preserve"><value>ما حوّلتله من قبل</value></data>
   <data name="Refusal_insufficient_balance" xml:space="preserve"><value>رصيدك ما يكفي، تحتاج بعد {0}</value></data>
   <data name="Refusal_recipient_not_found" xml:space="preserve"><value>ما لكيت هذا الشخص بجهات الاتصال مالتك</value></data>
   <data name="Refusal_number_has_no_wallet" xml:space="preserve"><value>هذا الرقم ما عنده محفظة</value></data>

@@ -13,9 +13,9 @@
                     {
                         <small><bdi>@option.RegisteredName</bdi></small>
                     }
-                    @if (option.LastSentAmountIqd is { } last)
+                    @if (IsContactQuestion(question.Kind))
                     {
-                        <small>@PhoneFormat.Amount(last, Text)</small>
+                        <small data-testid="option-last-sent">@LastSent(option)</small>
                     }
                 </span>
             </MudButton>
@@ -24,6 +24,15 @@
 }
 
 @code {
+    // The options of a contact question label the last amount sent to that contact, or say there was none.
+    private static bool IsContactQuestion(string kind)
+        => kind is QuestionKinds.WhichContact or QuestionKinds.DidYouMean;
+
+    private string LastSent(Option option)
+        => option.LastSentAmountIqd is { } last
+            ? Text["Option_LastSent", PhoneFormat.Amount(last, Text)]
+            : Text["Option_NoPreviousTransfer"];
+
     private string Label(Option option)
     {
         if (option.Value == Option.StoreInternet)
