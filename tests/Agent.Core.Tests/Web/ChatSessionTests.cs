@@ -158,4 +158,26 @@ public sealed class ChatSessionTests(AgentHost host) : IAsyncDisposable
         Assert.IsType<ConfirmOutcome.Done>(await session.ConfirmAsync(null));
         Assert.Equal(ReissueKind.SendAgain, session.Reissue);
     }
+
+    private const string SharedNameSentence = "send fifty thousand to a shared name";
+
+    private static ScriptedSentence SharedName()
+        => new(SharedNameSentence, ParsedRequest.Transfer(SeedFacts.Contact("S08").SavedName, 50_000, AmountUnit.Dinars));
+
+    [Fact]
+    public async Task ANotUnderstoodAnswerRepeatsTheQuestionsTextInTheRepeatTemplate()
+    {
+        var circuit = await StartAsync(SeedFacts.DemoUserId, SharedName());
+        var session = circuit.Session;
+        await session.SendAsync(SharedNameSentence);
+        var questionId = session.QuestionMessageId;
+
+        await session.SendAsync("something nobody can read");
+
+        var expected = circuit.Text["Refusal_not_understood_repeat", circuit.Text["Question_" + QuestionKinds.WhichContact].Value].Value;
+        Assert.Equal(expected, LastAgentMessage(session).Text);
+        Assert.NotNull(session.Question);
+        Assert.Equal(questionId, session.QuestionMessageId);
+    }
+
 }

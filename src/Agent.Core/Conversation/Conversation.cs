@@ -1,3 +1,4 @@
+using Agent.Core.Audit;
 using Agent.Core.Confirm;
 using Agent.Core.Learning;
 using Agent.Core.Masking;
@@ -294,6 +295,13 @@ public sealed class Conversation : IDisposable
                 }
 
                 await CancelCardAsync(token);
+            }
+
+            // Not understood while a question is open: the question is asked again and stays open.
+            if (Question is { } pending && parsed.Intent == RequestIntent.Unclear)
+            {
+                await RepeatQuestionAsync(pending.Kind, invalidReply, token);
+                return;
             }
 
             var request = parsed;
@@ -837,6 +845,26 @@ public sealed class Conversation : IDisposable
             default:
                 return null;
         }
+    }
+
+    /// <summary>
+    /// A message the parse call read as unclear while a question is open (17 Oct 2026): the question is asked again and
+    /// stays open, with its options. The reply is <c>not_understood</c> carrying the question's kind, with the audit row
+    /// the orchestrator writes for that refusal and the learning-log entry <see cref="HandleCoreAsync"/> would write
+    /// (<paramref name="invalidReply"/> for a refused structure or a refused message). The pending request, its answers
+    /// and the open question are left as they were, so the next message answers the same question.
+    /// </summary>
+    private async Task RepeatQuestionAsync(string kind, LearningEntry? invalidReply, CancellationToken token)
+    {
+        trace.Record(TraceZone.Code, "question_repeated", kind);
+        await using (var scope = scopes.CreateAsyncScope())
+            await scope.ServiceProvider.GetRequiredService<AuditLog>().WriteRefusalAsync(userId, ReasonCodes.NotUnderstood, null, token);
+
+        var reply = new AgentReply.Refusal(ReasonCodes.NotUnderstood, null, null);
+        LastReply = reply;
+        Add(new ConversationMessage(ConversationRole.Agent, ConversationKind.Refusal, ReasonCodes.NotUnderstood, QuestionKind: kind));
+        LastLearningEntry = invalidReply ?? (lastRequest is { } pending ? LearningLogRule.EntryFor(reply, pending) : null);
+        await WriteLearningAsync(LastLearningEntry, token);
     }
 
     /// <summary>

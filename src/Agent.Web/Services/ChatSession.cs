@@ -227,6 +227,11 @@ public sealed class ChatSession : IDisposable
 
             case ConversationKind.Unsupported:
                 var key = "Unsupported_" + message.Code;
+            case ConversationKind.Refusal when message.QuestionKind is { } repeated:
+                // Not understood while a question is open: the question is asked again in the same message.
+                yield return (ChatRole.Agent, Text("Refusal_not_understood_repeat", Text("Question_" + repeated)), ChatMessageKind.Text, null, ChatAction.None);
+                break;
+
                 var body = text[key].ResourceNotFound ? Text("Refusal_" + ReasonCodes.NotSupported) : Text(key);
                 yield return (ChatRole.Agent, body, ChatMessageKind.Text, null, ChatAction.None);
                 break;

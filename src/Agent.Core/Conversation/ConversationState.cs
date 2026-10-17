@@ -75,6 +75,9 @@ public static class OutcomeCodes
 /// <param name="PurchaseCode">The purchase code of a Done purchase (shown on the phone only, never traced).</param>
 /// <param name="AttemptsLeft">The PIN attempts left of a <c>pin_wrong</c> outcome.</param>
 /// <param name="Reason">The reason code of a <c>not_done</c> outcome.</param>
+/// <param name="QuestionKind">
+/// The kind of the open question a <c>not_understood</c> refusal repeats; the question stays open.
+/// </param>
 public sealed record ConversationMessage(
     ConversationRole Role,
     ConversationKind Kind,
@@ -83,7 +86,8 @@ public sealed record ConversationMessage(
     string? Reference = null,
     string? PurchaseCode = null,
     int? AttemptsLeft = null,
-    string? Reason = null);
+    string? Reason = null,
+    string? QuestionKind = null);
 
 /// <summary>A question the conversation asked, for the grader: its kind, how it is answered, and the values offered.</summary>
 public sealed record ConversationQuestion(string Kind, QuestionAnswer Answer, IReadOnlyList<string> OptionValues);

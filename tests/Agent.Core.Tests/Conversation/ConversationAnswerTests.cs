@@ -306,6 +306,80 @@ public sealed class ConversationAnswerTests(AgentHost host)
     }
 
     [Fact]
+    public async Task ANotUnderstoodAnswerRepeatsTheQuestionAndKeepsItOpen()
+    {
+        await using var harness = await StartAsync();
+        var conversation = harness.Conversation;
+        await conversation.SendAsync(SharedNameSentence);
+        var question = Assert.IsType<AgentReply.Question>(conversation.Question);
+        var questionIndex = conversation.QuestionMessageIndex;
+
+        await conversation.SendAsync("something nobody can read");
+
+        Assert.Equal(
+            new ConversationMessage(ConversationRole.Agent, ConversationKind.Refusal, ReasonCodes.NotUnderstood, QuestionKind: QuestionKinds.WhichContact),
+            conversation.Messages[^1]);
+        Assert.Same(question, conversation.Question);
+        Assert.Equal(questionIndex, conversation.QuestionMessageIndex);
+        Assert.Equal(new AgentReply.Refusal(ReasonCodes.NotUnderstood, null, null), conversation.LastReply);
+        Assert.Contains(harness.Trace.Entries, e => e.Step == "question_repeated" && e.Detail == QuestionKinds.WhichContact);
+
+        // The options still answer the same question.
+        await conversation.TapOptionAsync("S09");
+
+        Assert.Equal(SeedFacts.Contact("S09").Number, Assert.IsType<CardView>(conversation.Card).ToPhone);
+        Assert.Single(conversation.QuestionsAsked);
+        var refused = Assert.Single(await harness.AuditRowsAsync(), r => r.Event == global::Agent.Core.Audit.AuditEvents.Refused);
+        Assert.Equal(ReasonCodes.NotUnderstood, refused.Reason);
+        var learning = Assert.Single(await harness.LearningRowsAsync());
+        Assert.Equal(ReasonCodes.NotUnderstood, learning.Reason);
+    }
+
+    [Fact]
+    public async Task ANotUnderstoodTypedAmountRepeatsTheQuestionAndTheNextAmountCompletesIt()
+    {
+        await using var harness = await StartAsync();
+        var conversation = harness.Conversation;
+        await conversation.SendAsync(NoAmountSentence);
+        var question = Assert.IsType<AgentReply.Question>(conversation.Question);
+
+        await conversation.SendAsync("something nobody can read");
+
+        Assert.Equal(QuestionKinds.WhichAmount, conversation.Messages[^1].QuestionKind);
+        Assert.Same(question, conversation.Question);
+        Assert.Null(conversation.Card);
+
+        await conversation.SendAsync("50");
+
+        var card = Assert.IsType<CardView>(conversation.Card);
+        Assert.Equal(SeedFacts.HammoudiPhone, card.ToPhone);
+        Assert.Equal(50_000, card.AmountIqd);
+        Assert.Single(conversation.QuestionsAsked);
+    }
+
+    [Fact]
+    public async Task ANotUnderstoodAnswerFromAnInvalidModelReplyRepeatsTheQuestion()
+    {
+        const string Answer = "an answer the validator refuses";
+        var parser = new CapturingParser(new Dictionary<string, ParsedRequest>(StringComparer.Ordinal)
+        {
+            [SharedNameSentence] = ParsedRequest.Transfer(SeedFacts.Contact("S08").SavedName, 40, AmountUnit.Thousand),
+            [Answer] = new() { Intent = RequestIntent.Unclear, Problem = "injected" },
+        });
+        await using var harness = await StartAsync(parser);
+        var conversation = harness.Conversation;
+        await conversation.SendAsync(SharedNameSentence);
+
+        await conversation.SendAsync(Answer);
+
+        Assert.Equal(QuestionKinds.WhichContact, conversation.Messages[^1].QuestionKind);
+        Assert.NotNull(conversation.Question);
+        Assert.Equal(new global::Agent.Core.Learning.LearningEntry("model_invalid_reply", "injected"), conversation.LastLearningEntry);
+        var learning = Assert.Single(await harness.LearningRowsAsync());
+        Assert.Equal(("model_invalid_reply", "injected"), (learning.Reason, learning.Detail));
+    }
+
+    [Fact]
     public async Task AnEndearmentIsDroppedAndTheTransferGoesStraightToTheCard()
     {
         // ADD-19 end to end, with the console's endearments: no question, the card to S14.

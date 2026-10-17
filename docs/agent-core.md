@@ -667,7 +667,7 @@ flowchart TD
 
 ### Messages as codes
 
-A `ConversationMessage(Role, Kind, Code, AmountIqd, Reference, PurchaseCode, AttemptsLeft, Reason)` carries codes and figures only. A user message carries no text: the screen and the runner keep what was typed.
+A `ConversationMessage(Role, Kind, Code, AmountIqd, Reference, PurchaseCode, AttemptsLeft, Reason, QuestionKind)` carries codes and figures only. `QuestionKind` is set only on a `not_understood` refusal that repeats the open question (the question stays open). A user message carries no text: the screen and the runner keep what was typed.
 
 | Kind | Role | Code | Figures |
 |---|---|---|---|
