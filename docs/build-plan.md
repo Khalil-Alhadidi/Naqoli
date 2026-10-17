@@ -375,6 +375,22 @@ Three separate pieces. Build them in this order. Each one can be dropped without
 - Delivers: the offer to save an alias after a completed payment, saving only with approval, the directory to manage them, and options for a near match.
 - Done when: the alias cases in the development set pass, an alias always points to exactly one account, and alias text never reaches the model.
 
+**Status, 17 Oct 2026:** done, one commit per task of the plan (`docs/plans/milestone-9a-aliases.md`, with the controller's nine rulings for Khalil to confirm):
+
+- **The wallet's alias routes (Task 1, 13df336 and 239f7bb).** `POST /users/{id}/aliases` (409 `alias_exists` on a repeat, 422 `alias_text_invalid`) and `DELETE /users/{id}/aliases/{aliasId}`, behind the client key and the wallet gate shared.
+- **The rule and the directory (Task 2, c02c676 and b327c26).** The resolver names the step of each question; `AliasRule.Offers` is rule 18; `AliasDirectory` saves and deletes one alias on one account and refuses a key equal to any saved name or alias before the write. `MaxAliasLength` (100) is a setting.
+- **The offer on the conversation (Task 3, e3e156c).** Offered under the Done outcome of a transfer whose recipient a tap picked from a near, shared-word or title-only question, as the user typed it, and saved only on the tap. The next action closes it. A saved alias never reaches the model.
+- **The runner (Task 4, 70cccb4).** `tap save_alias` is played; `alias_offer` and `final.alias_saved` are graded (ruling 9).
+- **The phone and the console (Task 5, 7aaa3ce).** The Save button under the offer, the phone's directory screen and the console's Aliases panel. Sixteen phone strings are English `TODO-AR` placeholders awaiting Khalil's Arabic: `Offer_save_alias`, `Offer_save_alias_button`, `Reply_alias_saved`, `Reply_alias_deleted`, `Refusal_alias_exists`, `Refusal_alias_invalid`, and the ten `Directory_*` keys.
+- **Journeys (Task 6, 9843bf8).** Seven alias journeys, one per behaviour, 45 in all, green.
+- **Coverage and failure modes (Task 7).** Rule 18 is `yes` in [rules-coverage.md](rules-coverage.md) (44 `yes`, 2 `partial`, 3 `no`); three alias rows in [failure-modes.md](failure-modes.md).
+
+**The development set on the oracle** (`docs/reports/dev-scripted-m9a-2026-10-17-1300`): 86 of 95, the nine deferred items only (AMB-23, NOGO-12, MAL-09, GAP-06, CMP-01, CMP-03, CMP-05, CMP-07, CMP-09). AMB-19 and AMB-19-v1 pass with `alias_offer` and `final.alias_saved` graded.
+
+Sonnet m9a reruns: (filled by the controller)
+
+The biller alias stays the later item below.
+
 **9b. Store purchases (D11)**
 
 - Delivers: the purchase flow against the catalogue, the code shown with a copy button, and My orders.
