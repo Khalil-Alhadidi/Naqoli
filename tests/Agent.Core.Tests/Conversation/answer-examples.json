@@ -1,4 +1,4 @@
 [
   { "example": "filler_after", "source": "khalil", "text": "27 الف دينار بس", "amount_iqd": 27000 },
-  { "example": "filler_before", "source": "khalil", "text": "تمام 50 الف", "amount_iqd": 50000 }
+  { "example": "filler_before", "source": "composed", "text": "تمام 50 الف", "amount_iqd": 50000 }
 ]

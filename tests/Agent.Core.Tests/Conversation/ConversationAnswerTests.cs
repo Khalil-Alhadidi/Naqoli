@@ -476,8 +476,8 @@ public sealed class ConversationAnswerTests(AgentHost host)
     }
 
     /// <summary>
-    /// The typed text of an example of <c>answer-examples.json</c> (Khalil's answers with filler words, 17 Oct 2026) and
-    /// the dinars it stands for.
+    /// The typed text of an example of <c>answer-examples.json</c> (answers with filler words, 17 Oct 2026: the one marked
+    /// <c>khalil</c> is his, the one marked <c>composed</c> is composed from his filler words) and the dinars it stands for.
     /// </summary>
     private static (string Text, long AmountIqd) AnswerExample(string example)
     {
