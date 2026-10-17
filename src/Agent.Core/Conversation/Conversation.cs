@@ -188,11 +188,15 @@ public sealed class Conversation : IDisposable
     /// that is not a yes or a no is first read in code, before any masking or parse call (17 Oct 2026): an answer to
     /// <c>which_amount</c> by <see cref="AmountText.TryRead"/>, an answer to <c>which_contact</c> or <c>did_you_mean</c>
     /// by <see cref="ContactResolver.ResolveAnswer"/> over the user's contacts; a hit fills the slot and the model is
-    /// never called. Only what the code cannot read goes to the parse call. Then, while a question is open, a message the
-    /// parse call reads as unclear repeats the question and leaves it open (<c>not_understood</c> with the question's
-    /// kind); while a typed question is open, a transfer that is itself missing a recipient or an amount merges into the
-    /// pending transfer; anything else (a complete request, another intent) replaces the pending request. A parser that
-    /// is unavailable gives <c>model_unavailable</c>.
+    /// never called; filler words at either end of the answer are dropped first (<see cref="AgentOptions.FillerWords"/>).
+    /// After a transfer refused for an amount reason (<c>insufficient_balance</c>, <c>over_per_transaction_cap</c>,
+    /// <c>over_daily_cap</c>, <c>amount_below_minimum</c>; D6 extension, 17 Oct 2026), the next message only, when it
+    /// reads as an amount, goes into that transfer (trace <c>amount_retry</c>) and the checks run again; anything else
+    /// drops it and is handled as a fresh message. Only what the code cannot read goes to the parse call. Then, while a
+    /// question is open, a message the parse call reads as unclear repeats the question and leaves it open
+    /// (<c>not_understood</c> with the question's kind); while a typed question is open, a transfer that is itself
+    /// missing a recipient or an amount merges into the pending transfer; anything else (a complete request, another
+    /// intent) replaces the pending request. A parser that is unavailable gives <c>model_unavailable</c>.
     /// </summary>
     public async Task SendAsync(string typedText)
     {
@@ -874,15 +878,19 @@ public sealed class Conversation : IDisposable
     /// <c>which_contact</c> and <c>did_you_mean</c>, with or without options: the user's contacts are read from the
     /// wallet and matched by <see cref="ContactResolver.ResolveAnswer"/>; a card or a question puts the form that matched
     /// into the recipient, with no tapped contact (a fresh name is a fresh resolution, which the orchestrator runs again).
-    /// A wallet read that fails, or no match, is null.
+    /// A wallet read that fails, or no match, is null. Both read the reply without the filler words at either end
+    /// (<see cref="WithoutFillerWords"/>); a reply of filler words only is null.
     /// </summary>
     private async Task<(ParsedRequest Request, SlotAnswers Answers)?> AnswerInCodeAsync(
         string kind, ParsedRequest last, string typedText, CancellationToken token)
     {
+        if (WithoutFillerWords(typedText, options.CurrentValue.FillerWords) is not { } answer)
+            return null;
+
         switch (kind)
         {
             case QuestionKinds.WhichAmount:
-                return AmountText.TryRead(typedText, out var value, out var unit)
+                return AmountText.TryRead(answer, out var value, out var unit)
                     ? (last with { AmountValue = value, AmountUnit = unit }, answers)
                     : null;
 
@@ -897,7 +905,7 @@ public sealed class Conversation : IDisposable
 
                     var current = options.CurrentValue;
                     var match = ContactResolver.ResolveAnswer(
-                        typedText, ContactCandidate.From(contacts), current.MinSubstringWordLength, current.Endearments);
+                        answer, ContactCandidate.From(contacts), current.MinSubstringWordLength, current.Endearments);
                     return match.Resolution is Resolution.NotFound
                         ? null
                         : (last with { RecipientText = match.Text }, answers with { ContactOption = null });
@@ -906,6 +914,39 @@ public sealed class Conversation : IDisposable
             default:
                 return null;
         }
+    }
+
+    /// <summary>
+    /// The typed answer without the filler words at either end (Khalil, 17 Oct 2026, <see cref="AgentOptions.FillerWords"/>):
+    /// the reply is cut into its space-separated tokens, a token whose words (<see cref="WordsOf"/>: normalised,
+    /// punctuation dropped) are all filler words is a filler, and the leading run and the trailing run of fillers are
+    /// dropped; a filler in the middle stays (the text then does not read in code, and goes to the model). What is left
+    /// is joined by one space, its tokens as typed (so a comma between digit groups or a dot between digits is still
+    /// seen by <see cref="AmountText.TryRead"/>); with no filler at either end the reply is returned unchanged. Null when
+    /// nothing is left. A reply made only of D6 yes words (some filler words are yes words too) is a yes and never
+    /// reaches this step; a reply with any other word in it is not a yes, so the fillers around it are dropped here.
+    /// </summary>
+    internal static string? WithoutFillerWords(string text, IReadOnlyCollection<string>? fillerWords)
+    {
+        var tokens = text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+        if (tokens.Length == 0)
+            return null;
+        if (fillerWords is null || fillerWords.Count == 0)
+            return text;
+
+        var fillers = fillerWords.SelectMany(WordsOf).ToHashSet(StringComparer.Ordinal);
+        bool IsFiller(string token) => WordsOf(token) is { Length: > 0 } words && words.All(fillers.Contains);
+
+        var first = 0;
+        while (first < tokens.Length && IsFiller(tokens[first]))
+            first++;
+        var last = tokens.Length - 1;
+        while (last >= first && IsFiller(tokens[last]))
+            last--;
+
+        if (first > last)
+            return null;
+        return first == 0 && last == tokens.Length - 1 ? text : string.Join(' ', tokens[first..(last + 1)]);
     }
 
     /// <summary>

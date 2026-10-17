@@ -36,11 +36,16 @@ internal static class DevSetText
     }
 
     /// <summary>The endearments the console is configured with (<c>src/Agent.Web/appsettings.json</c>), never a literal.</summary>
-    public static string[] ConfiguredEndearments()
+    public static string[] ConfiguredEndearments() => ConfiguredWords("Endearments");
+
+    /// <summary>The filler words the console is configured with (<c>src/Agent.Web/appsettings.json</c>), never a literal.</summary>
+    public static string[] ConfiguredFillerWords() => ConfiguredWords("FillerWords");
+
+    private static string[] ConfiguredWords(string setting)
     {
         var path = Path.Combine(SeedHashTests.RepositoryRoot(), "src", "Agent.Web", "appsettings.json");
         using var document = JsonDocument.Parse(File.ReadAllText(path));
-        return [.. document.RootElement.GetProperty("Agent").GetProperty("Endearments").EnumerateArray().Select(e => e.GetString()!)];
+        return [.. document.RootElement.GetProperty("Agent").GetProperty(setting).EnumerateArray().Select(e => e.GetString()!)];
     }
 
     private static JsonDocument Line(string file, Func<JsonElement, bool> match)

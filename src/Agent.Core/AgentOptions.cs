@@ -150,6 +150,16 @@ public sealed class AgentOptions
     public string[] Endearments { get; set; } = [];
 
     /// <summary>
+    /// Filler words at either end of a typed answer (Khalil, 17 Oct 2026): words such as "only", "okay" or "fine" that a
+    /// user adds before or after an answer to an open question. Before the conversation reads the answer in code, the
+    /// leading run and the trailing run of these words are dropped; one in the middle stays (the text then does not read,
+    /// and goes to the model). A reply made only of D6 yes words is a yes and never reaches this step; a reply made only
+    /// of filler words is no answer in code. Configuration, not code: <c>Agent.Core</c> holds no Arabic. Empty by
+    /// default; shown read only (as a count) in the settings component.
+    /// </summary>
+    public string[] FillerWords { get; set; } = [];
+
+    /// <summary>
     /// The parse call: <c>scripted</c> (the default; no model) or <c>claude</c> (the <c>Model</c> section's candidate,
     /// with a key in user secrets). Read by <see cref="Parsing.ParserFactory.AddAgentParser"/>.
     /// </summary>

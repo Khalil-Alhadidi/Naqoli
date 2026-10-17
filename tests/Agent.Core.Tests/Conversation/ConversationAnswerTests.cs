@@ -474,4 +474,76 @@ public sealed class ConversationAnswerTests(AgentHost host)
         Assert.Equal((ConversationKind.Refusal, ReasonCodes.BillsPaidInFull, (long?)bs2.AmountDueIqd), (refusal.Kind, refusal.Code, refusal.AmountIqd));
         Assert.Single(conversation.QuestionsAsked);
     }
+
+    /// <summary>
+    /// The typed text of an example of <c>answer-examples.json</c> (Khalil's answers with filler words, 17 Oct 2026) and
+    /// the dinars it stands for.
+    /// </summary>
+    private static (string Text, long AmountIqd) AnswerExample(string example)
+    {
+        using var document = System.Text.Json.JsonDocument.Parse(
+            File.ReadAllText(Path.Combine(SeedHashTests.RepositoryRoot(), "tests", "Agent.Core.Tests", "Conversation", "answer-examples.json")));
+        var line = document.RootElement.EnumerateArray().Single(e => e.GetProperty("example").GetString() == example);
+        return (line.GetProperty("text").GetString()!, line.GetProperty("amount_iqd").GetInt64());
+    }
+
+    /// <summary>AMB-06's first message: the transfer to S19 with no amount, so <c>which_amount</c> (typed).</summary>
+    private static CapturingParser Amb06Parser()
+        => KnowsOnly((DevSetText.Say("AMB-06", 0), ParsedRequest.Transfer(DevSetText.SidecarRecipient("AMB-06", 0), null, AmountUnit.None)));
+
+    /// <summary>AMB-06, then the answer example: the card for its amount to S19, with no parse call for the answer.</summary>
+    private async Task AFillerWordAtEitherEndOfTheAmountIsIgnored(string example)
+    {
+        var (text, amountIqd) = AnswerExample(example);
+        var parser = Amb06Parser();
+        await using var harness = await StartAsync(parser, o => o.FillerWords = DevSetText.ConfiguredFillerWords());
+        var conversation = harness.Conversation;
+        await conversation.SendAsync(DevSetText.Say("AMB-06", 0));
+
+        await conversation.SendAsync(text);
+
+        Assert.Single(parser.Calls);
+        var card = Assert.IsType<CardView>(conversation.Card);
+        Assert.Equal(SeedFacts.Contact("S19").Number, card.ToPhone);
+        Assert.Equal(amountIqd, card.AmountIqd);
+        Assert.Contains(harness.Trace.Entries, e => e.Step == "answer_parsed" && e.Detail == QuestionKinds.WhichAmount);
+    }
+
+    [Fact]
+    public Task AFillerWordAfterTheAmountIsIgnored() => AFillerWordAtEitherEndOfTheAmountIsIgnored("filler_after");
+
+    [Fact]
+    public Task AFillerWordBeforeTheAmountIsIgnored() => AFillerWordAtEitherEndOfTheAmountIsIgnored("filler_before");
+
+    [Fact]
+    public async Task AnAnswerOfFillerWordsOnlyGoesToTheModel()
+    {
+        var fillers = DevSetText.ConfiguredFillerWords();
+        var parser = Amb06Parser();
+        await using var harness = await StartAsync(parser, o => o.FillerWords = fillers);
+        var conversation = harness.Conversation;
+        await conversation.SendAsync(DevSetText.Say("AMB-06", 0));
+
+        await conversation.SendAsync(fillers[0]);
+
+        Assert.Equal(2, parser.Calls.Count);
+        Assert.Equal(Masker.Mask(fillers[0]).Text, parser.Calls[1].Text);
+        Assert.DoesNotContain(harness.Trace.Entries, e => e.Step == "answer_parsed");
+        Assert.Null(conversation.Card);
+    }
+
+    [Fact]
+    public void AFillerWordInTheMiddleStaysAndTheTextIsKeptAsTyped()
+    {
+        string[] fillers = ["only", "fine"];
+
+        Assert.Equal("50,000 x", global::Agent.Core.Conversation.Conversation.WithoutFillerWords("fine 50,000 x only.", fillers));
+        Assert.Equal("50 only 2", global::Agent.Core.Conversation.Conversation.WithoutFillerWords("50 only 2", fillers));
+        Assert.Equal("  50  ", global::Agent.Core.Conversation.Conversation.WithoutFillerWords("  50  ", fillers));
+        Assert.Null(global::Agent.Core.Conversation.Conversation.WithoutFillerWords("Only, fine", fillers));
+        Assert.Equal("only 50", global::Agent.Core.Conversation.Conversation.WithoutFillerWords("only 50", []));
+    }
+
+    [Fact]
+    public void TheFillerWordsAreEmptyByDefault() => Assert.Empty(new AgentOptions().FillerWords);
 }

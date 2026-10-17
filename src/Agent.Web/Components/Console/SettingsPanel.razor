@@ -227,6 +227,8 @@
             : string.Join(", ", o.ProviderSpellings.OrderBy(p => p.Key, StringComparer.Ordinal).Select(p => p.Key + ": " + Number(p.Value.Count))));
         // Rule 1's endearments (Khalil, 17 Oct 2026) are phone text too, so only their count is shown.
         yield return (nameof(AgentOptions.Endearments), o.Endearments.Length == 0 ? "none" : Number(o.Endearments.Length));
+        // The filler words dropped at either end of a typed answer (Khalil, 17 Oct 2026) are phone text: count only.
+        yield return (nameof(AgentOptions.FillerWords), o.FillerWords.Length == 0 ? "none" : Number(o.FillerWords.Length));
     }
 
     /// <summary>The Model section: the candidate in use and each candidate's model, limits and prices.</summary>
