@@ -119,11 +119,12 @@ public class LearningLogRuleTests
     }
 
     [Fact]
-    public void NotUnderstoodForAnotherLanguageIsLoggedAsOtherLanguage()
+    public void AnUnsupportedOtherLanguageIsLoggedAsOtherLanguage()
     {
-        // GAP-08: the reply the orchestrator gives an other_language request.
+        // GAP-08 and ADD-23: the reply the orchestrator gives an other_language request (its own string, Khalil,
+        // 17 Oct 2026).
         var entry = LearningLogRule.EntryFor(
-            new AgentReply.Refusal(ReasonCodes.NotUnderstood, LearningLogRule.OtherLanguage, null), Unsupported(LearningLogRule.OtherLanguage));
+            new AgentReply.Unsupported(LearningLogRule.OtherLanguage), Unsupported(LearningLogRule.OtherLanguage));
 
         Assert.Equal(new LearningEntry(LearningLogRule.OtherLanguage, null), entry);
 

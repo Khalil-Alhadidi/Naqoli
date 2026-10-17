@@ -666,16 +666,17 @@ public class OrchestratorTests(AgentHost host)
     }
 
     [Fact]
-    public async Task AnotherLanguageRepliesNotUnderstood()
+    public async Task AnotherLanguageRepliesUnsupportedWithItsOwnReason()
     {
         await StartAsync();
 
+        // GAP-08 and ADD-23: other_language takes the general unsupported path, so the phone shows its own string
+        // (Khalil, 17 Oct 2026).
         var reply = await HandleAsync(U1, new ParsedRequest { Intent = RequestIntent.Unsupported, UnsupportedReason = "other_language" });
 
-        Assert.Equal(new AgentReply.Refusal(ReasonCodes.NotUnderstood, "other_language", null), reply);
+        Assert.Equal(new AgentReply.Unsupported("other_language"), reply);
         var row = Assert.Single(await AuditAsync());
-        Assert.Equal(AuditEvents.Refused, row.Event);
-        Assert.Equal(ReasonCodes.NotUnderstood, row.Reason);
+        Assert.Equal((AuditEvents.Refused, "other_language"), (row.Event, row.Reason));
     }
 
     private static ParsedRequest ChooseAccount(string? recipient, decimal? amount) => new()

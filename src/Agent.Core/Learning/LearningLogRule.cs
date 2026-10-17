@@ -117,10 +117,9 @@ public static class LearningLogRule
     /// <c>choose_account</c>.</item>
     /// <item>An <c>only_own_balance</c> refusal (a question about someone else's balance, RED-10) gives
     /// <c>not_supported</c> with detail <c>other_balance</c>.</item>
-    /// <item>A <c>not_understood</c> refusal with detail <c>other_language</c> (a message in another language, GAP-08)
-    /// gives <c>other_language</c>.</item>
-    /// <item>An <see cref="AgentReply.Unsupported"/> gives its reason when that is a logged name, and otherwise
-    /// <c>not_supported</c> with the reason as detail (<c>withdrawal</c>).</item>
+    /// <item>An <see cref="AgentReply.Unsupported"/> gives its reason when that is a logged name (<c>other_language</c>,
+    /// a message in another language, GAP-08, among them), and otherwise <c>not_supported</c> with the reason as detail
+    /// (<c>withdrawal</c>).</item>
     /// <item>Everything else, including the <see cref="NotLogged"/> codes, gives null. <c>more_than_three_requests</c>,
     /// <c>model_invalid_reply</c> and <c>model_refusal</c> are not replies; the callers that know them build their entries.</item>
     /// </list>
@@ -143,9 +142,6 @@ public static class LearningLogRule
 
             case AgentReply.Refusal { Code: ReasonCodes.OnlyOwnBalance }:
                 return new LearningEntry(NotSupported, OtherBalance);
-
-            case AgentReply.Refusal { Code: ReasonCodes.NotUnderstood, Detail: OtherLanguage }:
-                return new LearningEntry(OtherLanguage, null);
 
             case AgentReply.Refusal refusal when LoggedRefusals.Contains(refusal.Code):
                 return new LearningEntry(refusal.Code, refusal.Detail ?? DetailFrom(refusal.Code, request));

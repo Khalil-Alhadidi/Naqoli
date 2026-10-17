@@ -142,14 +142,13 @@ public sealed class Orchestrator
         string? cardNote = null;
         if (request.Intent == RequestIntent.Unsupported)
         {
-            // Three reasons that reply with a refusal code of their own (RED-10, GAP-08, GAP-07); the reason stays as the
-            // detail the learning log reads (LearningLogRule.EntryFor).
+            // Two reasons that reply with a refusal code of their own (RED-10, GAP-07); the reason stays as the detail the
+            // learning log reads (LearningLogRule.EntryFor). other_language (GAP-08) is not one of them: it takes the
+            // general unsupported path below and its own string (Khalil, 17 Oct 2026).
             switch (request.UnsupportedReason)
             {
                 case LearningLogRule.OtherBalance:
                     return await RefuseAsync(userId, ReasonCodes.OnlyOwnBalance, LearningLogRule.OtherBalance, null, cancellationToken);
-                case LearningLogRule.OtherLanguage:
-                    return await RefuseAsync(userId, ReasonCodes.NotUnderstood, LearningLogRule.OtherLanguage, null, cancellationToken);
                 case LearningLogRule.OtherCurrency:
                     return await RefuseAsync(userId, ReasonCodes.DinarsOnly, LearningLogRule.OtherCurrency, null, cancellationToken);
             }

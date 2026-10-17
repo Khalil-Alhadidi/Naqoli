@@ -358,7 +358,7 @@ One key is a placeholder: `Refusal_question_cancelled` (17 Oct 2026, the reply a
 | `Unsupported_part_of_bill` | Bills are paid in full | |
 | `Unsupported_credit_to_own_number` | I cannot send credit to your own number | |
 | `Unsupported_change_waiting_card` | A card cannot be changed. Cancel it and ask again | |
-| `Unsupported_other_language` | Please write in Iraqi Arabic | |
+| `Unsupported_other_language` | Please write in Iraqi Arabic | The reply to `other_language` (GAP-08, ADD-23) from 17 Oct 2026, Khalil's decision; it was `Refusal_not_understood` before |
 | `Unsupported_receive_from` | I cannot take money from another person's account. They have to send it to you | Khalil's Arabic, 16 Oct 2026 (ADD-08, ADD-09) |
 | `Purchase_code` | Your code: {0} | |
 | `Type_transfer` | Transfer | |

@@ -368,7 +368,7 @@ public class CaseGraderTests
             Either:
             [
                 new ExpectedAlternative(Cards: [KeyCard(outcome: "expired")]),
-                new ExpectedAlternative(Cards: [], Reply: new ExpectedAlternativeReply(ReasonCodes.NotUnderstood), LearningLog: new ExpectedLearning("other_language")),
+                new ExpectedAlternative(Cards: [], Reply: new ExpectedAlternativeReply("other_language"), LearningLog: new ExpectedLearning("other_language")),
             ]));
 
         var first = Grader.Grade(evalCase, Observed(cards: [new CardResult(Card(), "expired")]));
@@ -376,7 +376,7 @@ public class CaseGraderTests
         Assert.Contains(first.Verdicts, v => v is { Field: "either", Observed: "branch 0" });
 
         var second = Grader.Grade(evalCase, Observed(
-            replies: [Agent(ConversationKind.Refusal, ReasonCodes.NotUnderstood)], learning: new LearningEntry("other_language", null)));
+            replies: [Agent(ConversationKind.Unsupported, "other_language")], learning: new LearningEntry("other_language", null)));
         Assert.True(second.Passed, second.FirstFailing?.Field);
         Assert.Contains(second.Verdicts, v => v is { Field: "either", Observed: "branch 1" });
 
