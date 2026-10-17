@@ -23,7 +23,26 @@ public class PhoneStringsTests
     /// Keys added after Khalil wrote the phone's wording and still English placeholders until he writes them: empty since
     /// 17 Oct 2026; a new key goes here until its Arabic is in, and no other key may be a placeholder.
     /// </summary>
-    private static readonly string[] AwaitingKhalil = [];
+    /// <summary>The keys of milestone 9a (the alias offer and the phone's directory), awaiting Khalil's Arabic.</summary>
+    private static readonly string[] AwaitingKhalil =
+    [
+        "Directory_Back",
+        "Directory_Delete",
+        "Directory_Empty",
+        "Directory_Open",
+        "Directory_Phone",
+        "Directory_Save",
+        "Directory_Target",
+        "Directory_TargetNone",
+        "Directory_Text",
+        "Directory_Title",
+        "Offer_save_alias",
+        "Offer_save_alias_button",
+        "Refusal_alias_exists",
+        "Refusal_alias_invalid",
+        "Reply_alias_deleted",
+        "Reply_alias_saved",
+    ];
 
     [Fact]
     public void NoValueIsAPlaceholderExceptTheKeysAwaitingKhalil()

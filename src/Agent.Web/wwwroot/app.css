@@ -143,6 +143,56 @@ h1:focus {
     direction: rtl;
 }
 
+/* Milestone 9a: the phone's header row, with the directory button. */
+.phone-header {
+    display: flex;
+    justify-content: flex-start;
+    padding: 4px 8px;
+    border-bottom: 1px solid #e0e0e0;
+    background: #ffffff;
+}
+
+/* The phone's alias directory (milestone 9a): one row per alias, then the add form. */
+.phone-directory {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.phone-directory-title {
+    font-weight: 600;
+}
+
+.phone-directory-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    border: 1px solid #e0e0e0;
+    border-radius: 12px;
+    background: #ffffff;
+}
+
+.phone-directory-empty,
+.phone-directory-result {
+    font-size: 0.9em;
+}
+
+.phone-directory-form {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 8px;
+}
+
+.console-alias-form {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+}
+
 .phone-screen {
     flex: 1 1 auto;
     overflow-y: auto;

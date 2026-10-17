@@ -7,6 +7,9 @@ public enum ConsolePanel
     Settings,
     Log,
     LearningData,
+
+    /// <summary>The demo user's aliases (milestone 9a).</summary>
+    Aliases,
 }
 
 /// <summary>The side menu's selection for one circuit, shared by the layout and the page.</summary>

@@ -1,8 +1,10 @@
 using Agent.Core;
+using Agent.Core.Aliases;
 using Agent.Core.Confirm;
 using Agent.Core.Conversation;
 using Agent.Core.Parsing;
 using Agent.Core.Pipeline;
+using Agent.Core.Wallet;
 using Agent.Web.Resources;
 using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Options;
@@ -25,6 +27,12 @@ public sealed class ChatSession : IDisposable
     /// and the conversation never holds them.
     /// </summary>
     private static readonly AsyncLocal<string?> SendingText = new();
+
+    /// <summary>
+    /// The alias text being saved on this async flow (the offer's text, read before the save closes the offer), so the
+    /// <see cref="ConversationKind.AliasSaved"/> message can say what was saved.
+    /// </summary>
+    private static readonly AsyncLocal<string?> SavingAliasText = new();
 
     private readonly Conversation conversation;
     private readonly IStringLocalizer<PhoneStrings> text;
@@ -97,6 +105,48 @@ public sealed class ChatSession : IDisposable
 
     /// <summary>The time the card's countdown measures against.</summary>
     public DateTimeOffset Now => conversation.Now;
+
+    /// <summary>The open alias offer (rule 18), or null; its text is the user's own words, never model text.</summary>
+    public AliasOffer? AliasOffer => conversation.AliasOffer;
+
+    /// <summary>The message the offer's Save button is shown under.</summary>
+    public int? AliasOfferMessageId => IdOf(conversation.AliasOfferMessageIndex);
+
+    /// <summary>The Save button of the alias offer (see <see cref="Conversation.SaveAliasAsync"/>); never reaches the Confirm handler.</summary>
+    public async Task<AliasResult?> SaveAliasAsync()
+    {
+        TraceLog.Current.Value = trace;
+        SavingAliasText.Value = conversation.AliasOffer?.Text;
+        return await conversation.SaveAliasAsync();
+    }
+
+    /// <summary>The alias directory: the user's contacts and aliases (see <see cref="Conversation.ListAliasesAsync"/>).</summary>
+    public async Task<WalletResult<WalletContacts>> ListAliasesAsync()
+    {
+        TraceLog.Current.Value = trace;
+        return await conversation.ListAliasesAsync();
+    }
+
+    /// <summary>The alias directory: an alias of a contact's account (see <see cref="Conversation.AddAliasAsync"/>).</summary>
+    public async Task<AliasResult?> AddAliasAsync(string text, int targetAccountId)
+    {
+        TraceLog.Current.Value = trace;
+        return await conversation.AddAliasAsync(text, targetAccountId);
+    }
+
+    /// <summary>The alias directory: an alias of the account behind a typed number (see <see cref="Conversation.AddAliasForPhoneAsync"/>).</summary>
+    public async Task<AliasResult?> AddAliasForPhoneAsync(string text, string phone)
+    {
+        TraceLog.Current.Value = trace;
+        return await conversation.AddAliasForPhoneAsync(text, phone);
+    }
+
+    /// <summary>The alias directory: deletes one alias (see <see cref="Conversation.DeleteAliasAsync"/>).</summary>
+    public async Task<AliasResult?> DeleteAliasAsync(int aliasId)
+    {
+        TraceLog.Current.Value = trace;
+        return await conversation.DeleteAliasAsync(aliasId);
+    }
 
     /// <summary>A typed message (see <see cref="Conversation.SendAsync"/>); the words are shown as typed.</summary>
     public async Task SendAsync(string typedText)
@@ -268,9 +318,13 @@ public sealed class ChatSession : IDisposable
                 break;
 
             case ConversationKind.AliasOffer:
+                // Rule 18: the user's own words, as typed, in the template; the Save button sits under it.
+                yield return (ChatRole.Agent, Text("Offer_save_alias", conversation.AliasOffer?.Text ?? string.Empty), ChatMessageKind.Text, null, ChatAction.SaveAlias);
+                break;
+
             case ConversationKind.AliasSaved:
-                // Milestone 9a: the alias offer and its saved note have no chat text yet; the phone's offer comes later.
-                yield break;
+                yield return (ChatRole.Agent, Text("Reply_alias_saved", SavingAliasText.Value ?? string.Empty), ChatMessageKind.Text, null, ChatAction.None);
+                break;
 
             default:
                 throw new InvalidOperationException("Unknown conversation message.");

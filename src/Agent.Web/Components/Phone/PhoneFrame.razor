@@ -3,9 +3,32 @@
 @* The phone (D20): right to left, Arabic, Arabic-Indic digits. Every text comes from the resource file (rule 4). *@
 <MudRTLProvider RightToLeft="true">
     <div class="phone-frame" data-testid="phone-frame" dir="rtl" lang="ar" data-interactive="@(interactive ? "true" : "false")">
-        <div class="phone-screen">
-            <ChatPanel />
+        @* Milestone 9a: the header's button opens the alias directory in place of the chat; Back returns. *@
+        <div class="phone-header">
+            @if (directoryOpen)
+            {
+                <MudButton data-testid="phone-directory-back" Variant="Variant.Text" Size="Size.Small"
+                           OnClick="@(() => directoryOpen = false)">@Text["Directory_Back"]</MudButton>
+            }
+            else
+            {
+                <MudButton data-testid="phone-directory" Variant="Variant.Text" Size="Size.Small"
+                           OnClick="@(() => directoryOpen = true)">@Text["Directory_Open"]</MudButton>
+            }
         </div>
+        <div class="phone-screen">
+            @if (directoryOpen)
+            {
+                <DirectoryPanel />
+            }
+            else
+            {
+                <ChatPanel />
+            }
+        </div>
+        @* The compose row is hidden while the directory is open, so nothing is typed into a chat that is not shown. *@
+        @if (!directoryOpen)
+        {
         <div class="phone-compose">
             <input class="phone-input" data-testid="phone-input" type="text" autocomplete="off"
                    placeholder="@Text["Phone_Placeholder"]"
@@ -15,11 +38,15 @@
                 @Text["Phone_Send"]
             </MudButton>
         </div>
+        }
     </div>
 </MudRTLProvider>
 
 @code {
     private string typed = string.Empty;
+
+    // The alias directory replaces the chat while open (milestone 9a).
+    private bool directoryOpen;
 
     // True once the circuit is live (OnAfterRender never runs while prerendering), so the journeys know input will land.
     private bool interactive;

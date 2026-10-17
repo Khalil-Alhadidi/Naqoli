@@ -123,6 +123,8 @@ Each action below is the conversation's action of the same name ([agent-core.md]
 | `CancelAsync()` | The card's Cancel button | `PendingStore.CancelAsync` |
 | `ReissueAsync()` | The card's Try again (`card-try-again`) or Send again (`card-send-again`) button | `Orchestrator.ReissueAsync` (D19): a new card from the stored record; never the Confirm handler |
 | `RefreshAsync()` | The card's countdown at zero | Reads the record; marks the card expired when it is Pending past `ExpiresAt`, Expired, or gone |
+| `SaveAliasAsync()` | The Save button under the alias offer (`save-alias`) | `AliasDirectory.SaveAsync` with the offer's text and account (rule 18, milestone 9a); never the Confirm handler |
+| `ListAliasesAsync()`, `AddAliasAsync(text, accountId)`, `AddAliasForPhoneAsync(text, phone)`, `DeleteAliasAsync(aliasId)` | The phone's directory and the console's Aliases panel | The alias directory through `AliasDirectory` (milestone 9a); no chat message |
 
 Rule 1: nothing in `Agent.Web` calls the Confirm handler, and only `ChatSession.ConfirmAsync` and `ChatSession.SettleAsync` call `Conversation.ConfirmAsync` and `Conversation.SettleAsync`, which are the handler's only callers in `Agent.Core`. `NoTapNoMoneyTests.NothingInAgentWebCallsTheConfirmHandler` and `OnlyTheSessionsConfirmAndSettleCallTheConversationsFromTheWeb` check this on the IL, and `NothingInAgentWebInvokesByReflection` checks the web assembly for reflection calls.
 
@@ -138,6 +140,9 @@ The conversation turns each reply into a `ConversationMessage` of codes and figu
 | `ConsentScreen` | `Reply_consent`, with the consent button |
 | `CardIssued` | `Card_Title`, with the card under it |
 | `Unsupported(reason)` | `Unsupported_<reason>`, or `Refusal_not_supported` for a reason without a key |
+| The alias offer (`ConversationKind.AliasOffer`, after a Done transfer; milestone 9a) | `Offer_save_alias` with `Conversation.AliasOffer.Text` (the user's own words) as `{0}`, and the Save button (`ChatAction.SaveAlias`, `save-alias`) while it is the open offer (`AliasOfferMessageId`) |
+| The alias saved (`ConversationKind.AliasSaved`) | `Reply_alias_saved` with the saved text as `{0}` |
+| A refused save (`alias_exists`, `alias_invalid`) | `Refusal_alias_exists`, `Refusal_alias_invalid`, through the same `RefusalText` as every code |
 
 `ConfirmOutcome` becomes an outcome message with `data-outcome` (the conversation's outcome code in brackets where it differs):
 
@@ -267,11 +272,43 @@ The outcome names are `done`, `not_done`, `checking`, `expired`, `already_handle
 
 Options validation requires `StaleExecutingAfterSeconds` to be more than three times `WalletTimeoutSeconds` (10), because a Confirm makes three timed wallet calls while its record is Executing. A failed sweep is logged at Warning once per outage (the first failure after a success), at Debug while the outage lasts, and the recovery at Information; the loop goes on. The EF command log is set to Warning in `appsettings.json`, so the healthy sweep stays quiet. Details are in [agent-core.md](agent-core.md), "The pending sweeper".
 
+## Aliases (milestone 9a)
+
+After a Done transfer whose recipient needed a question that rule 18 offers ([agent-core.md](agent-core.md), "The offer (rule 18)"), the chat shows `Offer_save_alias` with the user's own words and a Save button (`save-alias`). The alias is saved only on that tap. The next typed message, tap or reissue closes the offer, and the button goes with it.
+
+The phone's header has a button (`phone-directory`, `Directory_Open`) that shows the alias directory (`DirectoryPanel`) in place of the chat; `phone-directory-back` (`Directory_Back`) returns to the chat. While the directory is open, the compose row (input and Send) is not rendered. The directory lists the user's aliases (`directory-alias`, `data-alias-id`): the alias, and under it the registered name (D16: no stars, no last digits), with a delete button (`directory-delete`). Below the list is the add form:
+
+- a text input (`directory-text`);
+- a `MudSelect` of the user's contacts (`directory-target`; each item `directory-target-option` with `data-code`, value the contact's account id, saved name with the registered name under it; two contacts on one account are both listed);
+- a phone input (`directory-phone`), shown while no contact is picked (`Directory_TargetNone`);
+- Save (`directory-save`), disabled while the text is blank or neither a contact nor a number is given;
+- the result line (`directory-result`, `data-key` the resource key shown): `Reply_alias_saved`, `Reply_alias_deleted`, or the refusal's `Refusal_<code>`.
+
+The agent's `AliasDirectory` does every check. The list reloads when `WalletVersion` changes.
+
+The console's Aliases panel (`menu-aliases`, `AliasesPanel`, English) is the same list as a table (`console-alias`, `data-alias-id`; alias, phone, registered name, `console-alias-delete`). It has the same add form (`console-alias-text`, `console-alias-target` with items `console-alias-target-option`, `console-alias-phone`, `console-alias-save`) and a result line (`console-alias-result`, `data-result` `saved`, `deleted`, the refusal's code, or `unavailable`). Both act through the circuit's `ChatSession` on the demo user.
+
+```mermaid
+flowchart TD
+    chat["Chat"] -- "phone-directory" --> dir["Directory: aliases, registered name under each"]
+    dir -- "phone-directory-back" --> chat
+    dir -- "directory-delete" --> del["ChatSession.DeleteAliasAsync"]
+    dir -- "directory-save" --> pick{"Contact picked?"}
+    pick -- yes --> add["ChatSession.AddAliasAsync(text, account id)"]
+    pick -- no --> addPhone["ChatSession.AddAliasForPhoneAsync(text, phone)"]
+    add --> agent["AliasDirectory: alias_invalid, alias_exists, recipient_not_found, or the wallet write"]
+    addPhone --> agent
+    del --> agent
+    agent --> result["directory-result: Reply_alias_saved, Reply_alias_deleted or Refusal_code"]
+    result --> reload["WalletVersion up: the list reloads"]
+    reload --> dir
+```
+
 ## The phone strings, for Khalil
 
 `src/Agent.Web/Resources/PhoneStrings.resx` (neutral culture, read through `IStringLocalizer<PhoneStrings>`) holds every text the phone shows (rule 4). Khalil wrote the values in Iraqi Arabic on 15 Oct 2026 (commit a32ac1d); nothing else writes or changes them. `{0}` and `{1}` are filled by code, with figures in Arabic-Indic digits. `Word_yes` and `Word_no` are comma-separated lists (`PhoneWords.Split`), compared after `ArabicText.Normalize`. The table gives each key's meaning in English, not its Arabic value.
 
-No key is a placeholder. `Refusal_question_cancelled` (the reply after a question's cancel option) was written by Khalil on 17 Oct 2026, so the allow-list is empty again. `Card_TryAgain` and `Card_SendAgain` (milestone 7, D19), and the D21 wording of `Refusal_invalid_number` (it now asks for the full mobile number or a saved name) were written by Khalil on 16 Oct 2026. `PhoneStringsTests.NoValueIsAPlaceholderExceptTheKeysAwaitingKhalil` keeps the allow-list, now empty: a new key is added there with a `TODO-AR` value until he writes it.
+Sixteen keys of milestone 9a are placeholders awaiting Khalil's Arabic (`TODO-AR`, English; listed in `PhoneStringsTests.AwaitingKhalil`): `Offer_save_alias`, `Offer_save_alias_button`, `Reply_alias_saved`, `Reply_alias_deleted`, `Refusal_alias_exists`, `Refusal_alias_invalid`, `Directory_Open`, `Directory_Back`, `Directory_Title`, `Directory_Empty`, `Directory_Text`, `Directory_Target`, `Directory_TargetNone`, `Directory_Phone`, `Directory_Save` and `Directory_Delete` (in the table below). Before them, no key was a placeholder: `Refusal_question_cancelled` (the reply after a question's cancel option) was written by Khalil on 17 Oct 2026, so the allow-list is empty again. `Card_TryAgain` and `Card_SendAgain` (milestone 7, D19), and the D21 wording of `Refusal_invalid_number` (it now asks for the full mobile number or a saved name) were written by Khalil on 16 Oct 2026. `PhoneStringsTests.NoValueIsAPlaceholderExceptTheKeysAwaitingKhalil` keeps the allow-list, now empty: a new key is added there with a `TODO-AR` value until he writes it.
 
 | Key | Meaning | Note |
 |---|---|---|
@@ -367,6 +404,22 @@ No key is a placeholder. `Refusal_question_cancelled` (the reply after a questio
 | `Currency_iqd` | IQD | |
 | `Phone_Placeholder` | Write your request | |
 | `Phone_Send` | Send | |
+| `Offer_save_alias` | Save {0} as a name for this person next time? | `TODO-AR`. `{0}` is the recipient as the user typed it (rule 18) |
+| `Offer_save_alias_button` | Save the name | `TODO-AR`. The button under the offer |
+| `Reply_alias_saved` | Saved. Next time just say {0} | `TODO-AR`. `{0}` is the saved text |
+| `Reply_alias_deleted` | The name was deleted | `TODO-AR`. The directory's result line |
+| `Refusal_alias_exists` | You already use this name for someone; choose another | `TODO-AR` |
+| `Refusal_alias_invalid` | This name cannot be saved (blank, too long, or a number) | `TODO-AR` |
+| `Directory_Open` | Names (the header button that opens the directory) | `TODO-AR` |
+| `Directory_Back` | Back | `TODO-AR` |
+| `Directory_Title` | Your saved names | `TODO-AR` |
+| `Directory_Empty` | No saved names yet | `TODO-AR` |
+| `Directory_Text` | Name | `TODO-AR`. The text input's placeholder |
+| `Directory_Target` | Contact | `TODO-AR`. The contact select's label |
+| `Directory_TargetNone` | No contact (use the number) | `TODO-AR` |
+| `Directory_Phone` | Mobile number | `TODO-AR` |
+| `Directory_Save` | Save | `TODO-AR` |
+| `Directory_Delete` | Delete | `TODO-AR` |
 | `Words_1` .. `Words_19`, `Words_20` .. `Words_90` (tens), `Words_100` .. `Words_900` (hundreds), `Words_Thousand`, `Words_TwoThousand`, `Words_Thousands`, `Words_Million`, `Words_TwoMillion`, `Words_Millions`, `Words_Construct_3` .. `Words_Construct_10`, `Words_And` | The number words of the amount in words: units, tens, hundreds, the thousand and million forms (one, two, the plural after a construct form), the short counting forms for 3 to 10, and the joiner | Khalil's list, 17 Oct 2026. `Words_Construct_4` to `Words_Construct_9` were derived from his hundreds' stems and are confirmed by Khalil on 17 Oct 2026 |
 
 ## The oracle
@@ -483,13 +536,19 @@ The journeys locate elements only by these attributes.
 | Question's final option (none of these, or cancel) | `question-decline` | `data-value` (`none_of_these`, `cancel_question`) |
 | Contact option's last-sent line | `option-last-sent` (inside a `which_contact` or `did_you_mean` option) | |
 | Consent and settle buttons | `consent-button`, `check-again` (in the chat), `card-check-again` (on the card while Checking) | |
+| Alias offer's Save button (milestone 9a) | `save-alias` (under the open offer only) | |
+| Phone header: open the directory, back to the chat | `phone-directory`, `phone-directory-back` | |
+| Phone directory: screen, row, delete, empty line | `phone-directory-screen`, `directory-alias`, `directory-delete`, `directory-empty` | `directory-alias` and `directory-delete`: `data-alias-id` |
+| Phone directory form: text, contact select and its items, phone, Save, result | `directory-text`, `directory-target`, `directory-target-option`, `directory-phone`, `directory-save`, `directory-result` | items: `data-code`; result: `data-key` (the resource key shown) |
+| Console Aliases panel: root, row, delete | `aliases-panel`, `console-alias`, `console-alias-delete` | `data-alias-id` |
+| Console Aliases form: text, contact select and its items, phone, Save, result | `console-alias-text`, `console-alias-target`, `console-alias-target-option`, `console-alias-phone`, `console-alias-save`, `console-alias-result` | items: `data-code`; result: `data-result` (`saved`, `deleted`, a reason code, `unavailable`) |
 | Trace entry | `trace-entry` | `data-zone` (`user`, `code`, `model`, `write`) |
 | Wallet balance | `wallet-balance` | `data-value` (ASCII) |
 | Wallet history row | `wallet-history-row` | `data-reference` |
 | Settings row | `setting-row` | `data-name` |
 | Log row, log refresh button | `log-row`, `log-refresh` | `log-row`: `data-event`, `data-reason` (empty when null), `data-pending` (the first 8 characters of the pending ID, empty when null) |
 | Settings value, input, Save, Reset, error (editable agent rows) | `setting-value`, `setting-input`, `setting-save`, `setting-reset`, `setting-error` | `data-name` (the setting's name, as on its row) |
-| Menu items | `menu-wallet`, `menu-settings`, `menu-log`, `menu-learning` | |
+| Menu items | `menu-wallet`, `menu-settings`, `menu-log`, `menu-aliases`, `menu-learning` | |
 | Kill switch | `kill-switch` | `data-on` (`true`, `false`) |
 | Fault panel root, its error line, Clear all | `fault-panel`, `fault-error`, `fault-clear` | |
 | Wallet fault: mode select, delay input, once checkbox, Apply, state | `fault-wallet-mode`, `fault-wallet-delay`, `fault-wallet-once`, `fault-wallet-apply`, `fault-wallet-state` | the state is the text `none` or `<mode> <delayMs> once` / `every call` |

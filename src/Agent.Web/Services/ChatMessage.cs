@@ -26,6 +26,9 @@ public enum ChatAction
 
     /// <summary>The "check again" button of a Checking outcome: settles under the same key.</summary>
     CheckAgain,
+
+    /// <summary>The Save button of the alias offer under a Done outcome (rule 18, milestone 9a).</summary>
+    SaveAlias,
 }
 
 /// <summary>

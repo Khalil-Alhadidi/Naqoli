@@ -1,5 +1,6 @@
 extern alias AgentWeb;
 
+using Agent.Core.Aliases;
 using Agent.Core.Confirm;
 using Agent.Core.Conversation;
 using Agent.Core.Parsing;
@@ -73,6 +74,80 @@ public sealed class ChatSessionTests(AgentHost host) : IAsyncDisposable
     }
 
     private static ChatMessage LastAgentMessage(ChatSession session) => session.Messages.Last(m => m.Role == ChatRole.Agent);
+
+    /// <summary>AMB-19's first sentence and its parse from the dev set (the recipient as the user typed it).</summary>
+    private static ScriptedSentence Amb19Sentence()
+        => new(DevSetText.Say("AMB-19"), ParsedRequest.Transfer(DevSetText.SidecarRecipient("AMB-19"), 10, AmountUnit.Thousand));
+
+    /// <summary>AMB-19's first three steps on the phone: the sentence, the tap on S08, the confirm, ending Done with the offer.</summary>
+    private static async Task PayS08Async(ChatSession session)
+    {
+        await session.SendAsync(DevSetText.Say("AMB-19"));
+        await session.TapOptionAsync("S08");
+        Assert.IsType<ConfirmOutcome.Done>(await session.ConfirmAsync(null));
+    }
+
+    [Fact]
+    public async Task TheAliasOfferIsLocalisedWithTheTypedTextAndCarriesTheSaveAction()
+    {
+        var circuit = await StartAsync(SeedFacts.DemoUserId, Amb19Sentence());
+        var session = circuit.Session;
+
+        await PayS08Async(session);
+
+        var offer = Assert.IsType<AliasOffer>(session.AliasOffer);
+        Assert.Equal(DevSetText.AliasOffer("AMB-19", 2), offer.Text);
+        var message = LastAgentMessage(session);
+        Assert.Equal(circuit.Text["Offer_save_alias", offer.Text].Value, message.Text);
+        Assert.Equal(ChatAction.SaveAlias, message.Action);
+        Assert.Equal(message.Id, session.AliasOfferMessageId);
+    }
+
+    [Fact]
+    public async Task AliasSavedIsLocalisedWithTheText()
+    {
+        var circuit = await StartAsync(SeedFacts.DemoUserId, Amb19Sentence());
+        var session = circuit.Session;
+        await PayS08Async(session);
+        var text = session.AliasOffer!.Text;
+        var version = session.WalletVersion;
+
+        Assert.IsType<AliasResult.Saved>(await session.SaveAliasAsync());
+
+        Assert.Equal(circuit.Text["Reply_alias_saved", text].Value, LastAgentMessage(session).Text);
+        Assert.Null(session.AliasOffer);
+        Assert.Null(session.AliasOfferMessageId);
+        Assert.Equal(version + 1, session.WalletVersion);
+    }
+
+    [Fact]
+    public async Task AliasRefusalsUseTheirKeys()
+    {
+        var circuit = await StartAsync(SeedFacts.DemoUserId, Amb19Sentence());
+        var session = circuit.Session;
+        await PayS08Async(session);
+        var offer = session.AliasOffer!;
+
+        // The same text saved first through the directory: the offer's Save is refused alias_exists, under its own key.
+        Assert.IsType<AliasResult.Saved>(await session.AddAliasAsync(offer.Text, offer.AccountId));
+        var refused = Assert.IsType<AliasResult.Refused>(await session.SaveAliasAsync());
+
+        Assert.Equal(ReasonCodes.AliasExists, refused.Code);
+        Assert.Equal(circuit.Text["Refusal_" + ReasonCodes.AliasExists].Value, LastAgentMessage(session).Text);
+
+        // Both refusal codes have their own key, not the fallback.
+        foreach (var code in new[] { ReasonCodes.AliasExists, ReasonCodes.AliasInvalid })
+        {
+            Assert.False(circuit.Text["Refusal_" + code].ResourceNotFound, code);
+            Assert.NotEqual(circuit.Text["Refusal_" + ReasonCodes.NotDoneNothingTaken].Value, circuit.Text["Refusal_" + code].Value);
+        }
+
+        // The directory's own refusal adds no chat message.
+        var messages = session.Messages.Count;
+        var invalid = Assert.IsType<AliasResult.Refused>(await session.AddAliasAsync("   ", offer.AccountId));
+        Assert.Equal(ReasonCodes.AliasInvalid, invalid.Code);
+        Assert.Equal(messages, session.Messages.Count);
+    }
 
     [Fact]
     public async Task TheConversationsCodesBecomeLocalisedMessages()

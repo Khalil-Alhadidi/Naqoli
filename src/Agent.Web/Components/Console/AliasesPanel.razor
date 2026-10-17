@@ -1,0 +1,158 @@
+@implements IDisposable
+@using Agent.Core.Aliases
+@using Agent.Core.Wallet
+@inject ChatSession Session
+@inject IOptions<AgentOptions> Options
+
+@* The console's Aliases panel (milestone 9a, ruling 5), in English: the demo user's aliases as the wallet holds them, a
+   delete per row, and a form to add one for a contact or a typed number. It acts through the circuit's ChatSession and
+   the agent's AliasDirectory, as the phone's directory does; the agent does every check. *@
+<MudPaper Class="pa-3" Elevation="1" data-testid="aliases-panel">
+    <MudText Typo="Typo.h6">Aliases, user @Options.Value.DemoUserId</MudText>
+
+    @if (contacts is WalletResult<WalletContacts>.Ok { Value: var directory })
+    {
+        <MudSimpleTable Dense="true" Hover="true">
+            <thead><tr><th>Alias</th><th>Phone</th><th>Registered name</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var alias in directory.Aliases)
+                {
+                    <tr data-testid="console-alias" data-alias-id="@alias.AliasId">
+                        <td><bdi>@alias.Text</bdi></td>
+                        <td>@alias.Phone</td>
+                        <td><bdi>@alias.RegisteredName</bdi></td>
+                        <td>
+                            <MudButton data-testid="console-alias-delete" data-alias-id="@alias.AliasId" Size="Size.Small"
+                                       Variant="Variant.Text" Color="Color.Error" Disabled="@Session.Busy"
+                                       OnClick="@(() => DeleteAsync(alias.AliasId))">Delete</MudButton>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </MudSimpleTable>
+        @if (directory.Aliases.Count == 0)
+        {
+            <MudText Typo="Typo.body2">No aliases.</MudText>
+        }
+    }
+    else if (contacts is WalletResult<WalletContacts>.Unavailable unavailable)
+    {
+        <MudText Color="Color.Error">wallet unavailable: @unavailable.Reason</MudText>
+    }
+    else if (contacts is WalletResult<WalletContacts>.Refused refused)
+    {
+        <MudText Color="Color.Error">wallet unavailable: @refused.Problem.Code</MudText>
+    }
+
+    <MudText Typo="Typo.subtitle1" Class="mt-3">Add an alias</MudText>
+    <div class="console-alias-form">
+        <input data-testid="console-alias-text" aria-label="Alias text" type="text" autocomplete="off" placeholder="Alias"
+               @bind="aliasText" @bind:event="oninput" />
+        <MudSelect T="int?" data-testid="console-alias-target" Label="Contact" Dense="true"
+                   Value="target" ValueChanged="OnTargetChanged" ToStringFunc="TargetLabel">
+            <MudSelectItem T="int?" Value="@((int?)null)">No contact (use the number)</MudSelectItem>
+            @foreach (var contact in ContactList)
+            {
+                <MudSelectItem T="int?" Value="@contact.TargetAccountId" data-testid="console-alias-target-option" data-code="@contact.Code">
+                    @contact.Code <bdi>@contact.SavedName</bdi> (<bdi>@contact.RegisteredName</bdi>)
+                </MudSelectItem>
+            }
+        </MudSelect>
+        @if (target is null)
+        {
+            <input data-testid="console-alias-phone" aria-label="Phone number" type="text" inputmode="tel" autocomplete="off"
+                   placeholder="07XXXXXXXXX" @bind="phone" @bind:event="oninput" />
+        }
+        <MudButton data-testid="console-alias-save" Size="Size.Small" Variant="Variant.Outlined" Disabled="@(!CanSave)"
+                   OnClick="SaveAsync">Save</MudButton>
+    </div>
+    @if (result is not null)
+    {
+        <MudText Typo="Typo.caption">Result: <span data-testid="console-alias-result" data-result="@result">@result</span></MudText>
+    }
+</MudPaper>
+
+@code {
+    private WalletResult<WalletContacts>? contacts;
+    private int seenVersion;
+    private string aliasText = string.Empty;
+    private string phone = string.Empty;
+    private int? target;
+
+    // A code, never alias text: saved, deleted, the refusal's reason code, or unavailable.
+    private string? result;
+
+    private IEnumerable<WalletContact> ContactList
+        => contacts is WalletResult<WalletContacts>.Ok { Value: var directory } ? directory.Contacts : [];
+
+    private bool CanSave
+        => !Session.Busy && !string.IsNullOrWhiteSpace(aliasText) && (target is not null || !string.IsNullOrWhiteSpace(phone));
+
+    protected override async Task OnInitializedAsync()
+    {
+        seenVersion = Session.WalletVersion;
+        Session.Changed += OnSessionChanged;
+        await LoadAsync();
+    }
+
+    public void Dispose() => Session.Changed -= OnSessionChanged;
+
+    private void OnSessionChanged()
+    {
+        // Reload after a payment or an alias change (the session raises a new WalletVersion).
+        if (Session.WalletVersion == seenVersion)
+        {
+            _ = InvokeAsync(StateHasChanged);
+            return;
+        }
+
+        seenVersion = Session.WalletVersion;
+        _ = InvokeAsync(LoadAsync);
+    }
+
+    private async Task LoadAsync()
+    {
+        contacts = await Session.ListAliasesAsync();
+        StateHasChanged();
+    }
+
+    private void OnTargetChanged(int? value) => target = value;
+
+    private string TargetLabel(int? value)
+        => value is { } accountId
+            ? ContactList.FirstOrDefault(c => c.TargetAccountId == accountId)?.Code ?? string.Empty
+            : "No contact (use the number)";
+
+    private async Task SaveAsync()
+    {
+        if (!CanSave)
+            return;
+
+        var saved = target is { } accountId
+            ? await Session.AddAliasAsync(aliasText, accountId)
+            : await Session.AddAliasForPhoneAsync(aliasText, phone);
+        result = CodeOf(saved);
+        if (saved is AliasResult.Saved)
+        {
+            aliasText = string.Empty;
+            phone = string.Empty;
+            target = null;
+        }
+
+        await LoadAsync();
+    }
+
+    private async Task DeleteAsync(int aliasId)
+    {
+        result = CodeOf(await Session.DeleteAliasAsync(aliasId));
+        await LoadAsync();
+    }
+
+    private static string CodeOf(AliasResult? outcome) => outcome switch
+    {
+        AliasResult.Saved => "saved",
+        AliasResult.Deleted => "deleted",
+        AliasResult.Refused refused => refused.Code,
+        _ => "unavailable",
+    };
+}

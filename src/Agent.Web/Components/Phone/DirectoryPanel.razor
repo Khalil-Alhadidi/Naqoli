@@ -1,0 +1,163 @@
+@inherits SessionComponent
+@using Agent.Core.Aliases
+@using Agent.Core.Wallet
+
+@* The phone's alias directory (milestone 9a, ruling 5): the user's aliases, each with its registered name under it
+   (D16: no stars, no last digits), a delete button, and a form to add one for a contact or a typed number. Every text is
+   a resource key (rule 4). The checks are the agent's (AliasDirectory); the result line shows their outcome. *@
+<div class="phone-directory" data-testid="phone-directory-screen">
+    <div class="phone-directory-title">@Text["Directory_Title"]</div>
+
+    @if (contacts is WalletResult<WalletContacts>.Ok { Value: var directory })
+    {
+        @if (directory.Aliases.Count == 0)
+        {
+            <div class="phone-directory-empty" data-testid="directory-empty">@Text["Directory_Empty"]</div>
+        }
+        @foreach (var alias in directory.Aliases)
+        {
+            <div class="phone-directory-row" data-testid="directory-alias" data-alias-id="@alias.AliasId">
+                <span class="phone-option">
+                    <bdi>@alias.Text</bdi>
+                    @if (alias.RegisteredName is not null)
+                    {
+                        <small><bdi>@alias.RegisteredName</bdi></small>
+                    }
+                </span>
+                <MudButton data-testid="directory-delete" data-alias-id="@alias.AliasId" Variant="Variant.Text" Size="Size.Small"
+                           Color="Color.Error" Disabled="@Session.Busy" OnClick="@(() => DeleteAsync(alias.AliasId))">
+                    @Text["Directory_Delete"]
+                </MudButton>
+            </div>
+        }
+    }
+    else if (contacts is not null)
+    {
+        <div class="phone-directory-empty">@Text["Refusal_" + ReasonCodes.NotDoneNothingTaken]</div>
+    }
+
+    <div class="phone-directory-form">
+        <input class="phone-input" data-testid="directory-text" type="text" autocomplete="off"
+               placeholder="@Text["Directory_Text"]" aria-label="@Text["Directory_Text"]"
+               @bind="aliasText" @bind:event="oninput" />
+        <MudSelect T="int?" data-testid="directory-target" Label="@Text["Directory_Target"].Value" Dense="true"
+                   Value="target" ValueChanged="OnTargetChanged" ToStringFunc="TargetLabel">
+            <MudSelectItem T="int?" Value="@((int?)null)">@Text["Directory_TargetNone"]</MudSelectItem>
+            @foreach (var contact in ContactList)
+            {
+                <MudSelectItem T="int?" Value="@contact.TargetAccountId" data-testid="directory-target-option" data-code="@contact.Code">
+                    <span class="phone-option">
+                        <bdi>@contact.SavedName</bdi>
+                        @if (contact.RegisteredName is not null)
+                        {
+                            <small><bdi>@contact.RegisteredName</bdi></small>
+                        }
+                    </span>
+                </MudSelectItem>
+            }
+        </MudSelect>
+        @if (target is null)
+        {
+            <input class="phone-input" data-testid="directory-phone" type="text" inputmode="tel" autocomplete="off"
+                   placeholder="@Text["Directory_Phone"]" aria-label="@Text["Directory_Phone"]"
+                   @bind="phone" @bind:event="oninput" />
+        }
+        <MudButton data-testid="directory-save" Variant="Variant.Filled" Color="Color.Primary" Disabled="@(!CanSave)"
+                   OnClick="SaveAsync">@Text["Directory_Save"]</MudButton>
+        @if (resultKey is not null)
+        {
+            <div class="phone-directory-result" data-testid="directory-result" data-key="@resultKey"><bdi>@resultText</bdi></div>
+        }
+    </div>
+</div>
+
+@code {
+    private WalletResult<WalletContacts>? contacts;
+    private int seenVersion;
+    private string aliasText = string.Empty;
+    private string phone = string.Empty;
+    private int? target;
+    private string? resultKey;
+    private string? resultText;
+
+    private IEnumerable<WalletContact> ContactList
+        => contacts is WalletResult<WalletContacts>.Ok { Value: var directory } ? directory.Contacts : [];
+
+    // Minimal on the phone: a name and a contact or a number; the agent's directory does the real checks.
+    private bool CanSave
+        => !Session.Busy && !string.IsNullOrWhiteSpace(aliasText) && (target is not null || !string.IsNullOrWhiteSpace(phone));
+
+    protected override async Task OnInitializedAsync()
+    {
+        seenVersion = Session.WalletVersion;
+        Session.Changed += OnWalletMaybeChanged;
+        await LoadAsync();
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+            Session.Changed -= OnWalletMaybeChanged;
+    }
+
+    private void OnWalletMaybeChanged()
+    {
+        // Reload after a payment or an alias change (the session raises a new WalletVersion).
+        if (Session.WalletVersion == seenVersion)
+            return;
+        seenVersion = Session.WalletVersion;
+        _ = InvokeAsync(LoadAsync);
+    }
+
+    private async Task LoadAsync()
+    {
+        contacts = await Session.ListAliasesAsync();
+        StateHasChanged();
+    }
+
+    private void OnTargetChanged(int? value) => target = value;
+
+    private string TargetLabel(int? value)
+    {
+        if (value is not { } accountId)
+            return Text["Directory_TargetNone"];
+        return ContactList.FirstOrDefault(c => c.TargetAccountId == accountId)?.SavedName ?? string.Empty;
+    }
+
+    private async Task SaveAsync()
+    {
+        if (!CanSave)
+            return;
+
+        var text = aliasText;
+        var result = target is { } accountId
+            ? await Session.AddAliasAsync(text, accountId)
+            : await Session.AddAliasForPhoneAsync(text, phone);
+        Show(result, text);
+        if (result is AliasResult.Saved)
+        {
+            aliasText = string.Empty;
+            phone = string.Empty;
+            target = null;
+        }
+
+        await LoadAsync();
+    }
+
+    private async Task DeleteAsync(int aliasId)
+    {
+        Show(await Session.DeleteAliasAsync(aliasId), null);
+        await LoadAsync();
+    }
+
+    private void Show(AliasResult? result, string? text)
+    {
+        (resultKey, resultText) = result switch
+        {
+            AliasResult.Saved saved => ("Reply_alias_saved", Text["Reply_alias_saved", saved.Alias.Text].Value),
+            AliasResult.Deleted => ("Reply_alias_deleted", Text["Reply_alias_deleted"].Value),
+            AliasResult.Refused { Code: var code } when !Text["Refusal_" + code].ResourceNotFound => ("Refusal_" + code, Text["Refusal_" + code].Value),
+            _ => ("Refusal_" + ReasonCodes.NotDoneNothingTaken, Text["Refusal_" + ReasonCodes.NotDoneNothingTaken].Value),
+        };
+    }
+}

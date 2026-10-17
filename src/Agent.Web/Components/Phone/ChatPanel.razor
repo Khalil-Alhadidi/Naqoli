@@ -21,6 +21,14 @@
                                OnClick="CheckAgainAsync">@Text["Outcome_check_again"]</MudButton>
                 </div>
             }
+            @if (message.Action == ChatAction.SaveAlias && message.Id == Session.AliasOfferMessageId && Session.AliasOffer is not null)
+            {
+                @* Rule 18: the alias is saved only on this tap, never by words. *@
+                <div class="phone-message-action">
+                    <MudButton data-testid="save-alias" Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small"
+                               Disabled="@Session.Busy" OnClick="Session.SaveAliasAsync">@Text["Offer_save_alias_button"]</MudButton>
+                </div>
+            }
             @if (message.Action == ChatAction.Consent && message.Id == Session.ActionMessageId)
             {
                 <div class="phone-message-action">
