@@ -387,7 +387,7 @@ Three separate pieces. Build them in this order. Each one can be dropped without
 
 **The development set on the oracle** (`docs/reports/dev-scripted-m9a-2026-10-17-1300`): 86 of 95, the nine deferred items only (AMB-23, NOGO-12, MAL-09, GAP-06, CMP-01, CMP-03, CMP-05, CMP-07, CMP-09). AMB-19 and AMB-19-v1 pass with `alias_offer` and `final.alias_saved` graded.
 
-Sonnet m9a reruns: (filled by the controller)
+**The development set on Sonnet, three runs** (`docs/reports/dev-claude-sonnet-m9a-r1-2026-10-17-1323`, `-r2-2026-10-17-1327`, `-r3-2026-10-17-1331`, aggregate `-repeat3-2026-10-17-1323`): 85, 85, 85 of 95, 0 flipped cases, the same as before the milestone (h-final: 85, 85, 85), so no regression. AMB-19 and AMB-19-v1 pass on the model with their alias fields graded; beyond the nine deferred items the one miss is ADD-23 (Sonnet reads the English request as a transfer; backlog item 6, milestone 10). About 0.76 USD per run; median message to card 1.6 s. Security review: `docs/reviews/milestone-9a-security-review.md` (pass with changes: 0 Critical, 0 Important, 5 Minor fixed in the same milestone, 4 recommendations for Khalil).
 
 The biller alias stays the later item below.
 
