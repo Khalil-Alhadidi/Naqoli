@@ -140,12 +140,12 @@
   <data name="Words_TwoMillion" xml:space="preserve"><value>مليونين</value></data>
   <data name="Words_Millions" xml:space="preserve"><value>ملايين</value></data>
   <data name="Words_Construct_3" xml:space="preserve"><value>ثلث</value></data>
-  <data name="Words_Construct_4" xml:space="preserve"><value>اربع</value><comment>derived from Khalil's hundreds; for his review</comment></data>
-  <data name="Words_Construct_5" xml:space="preserve"><value>خمس</value><comment>derived from Khalil's hundreds; for his review</comment></data>
-  <data name="Words_Construct_6" xml:space="preserve"><value>ست</value><comment>derived from Khalil's hundreds; for his review</comment></data>
-  <data name="Words_Construct_7" xml:space="preserve"><value>سبع</value><comment>derived from Khalil's hundreds; for his review</comment></data>
-  <data name="Words_Construct_8" xml:space="preserve"><value>ثمن</value><comment>derived from Khalil's hundreds; for his review</comment></data>
-  <data name="Words_Construct_9" xml:space="preserve"><value>تسع</value><comment>derived from Khalil's hundreds; for his review</comment></data>
+  <data name="Words_Construct_4" xml:space="preserve"><value>اربع</value></data>
+  <data name="Words_Construct_5" xml:space="preserve"><value>خمس</value></data>
+  <data name="Words_Construct_6" xml:space="preserve"><value>ست</value></data>
+  <data name="Words_Construct_7" xml:space="preserve"><value>سبع</value></data>
+  <data name="Words_Construct_8" xml:space="preserve"><value>ثمن</value></data>
+  <data name="Words_Construct_9" xml:space="preserve"><value>تسع</value></data>
   <data name="Words_Construct_10" xml:space="preserve"><value>عشر</value></data>
   <data name="Words_And" xml:space="preserve"><value>و</value></data>
 </root>
