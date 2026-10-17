@@ -26,6 +26,26 @@ internal static class DevSetText
             : throw new InvalidOperationException(FormattableString.Invariant($"{id} has no say number {step}."));
     }
 
+    /// <summary>
+    /// The <c>expect.alias_offer</c> of step number <paramref name="step"/> (the index in the case's <c>steps</c>, say and
+    /// tap steps alike) of case <paramref name="id"/>: the alias text the step expects offered, or null when the step
+    /// expects none or names none.
+    /// </summary>
+    public static string? AliasOffer(string id, int step)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(step);
+        using var document = Line(ScriptedParser.DevSetFileName, root => root.GetProperty("id").GetString() == id);
+        var steps = document.RootElement.GetProperty("steps");
+        if (step >= steps.GetArrayLength())
+            throw new InvalidOperationException(FormattableString.Invariant($"{id} has no step number {step}."));
+
+        return steps[step].TryGetProperty("expect", out var expect)
+            && expect.TryGetProperty("alias_offer", out var offer)
+            && offer.ValueKind == JsonValueKind.String
+                ? offer.GetString()
+                : null;
+    }
+
     /// <summary>The recipient text of the first request in the sidecar's parse of say step <paramref name="step"/> of <paramref name="id"/>.</summary>
     public static string? SidecarRecipient(string id, int step = 0)
     {

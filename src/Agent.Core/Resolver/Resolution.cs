@@ -1,3 +1,5 @@
+using Agent.Core.Aliases;
+
 namespace Agent.Core.Resolver;
 
 /// <summary>The question a set of name options asks (question kinds <c>which_contact</c> and <c>did_you_mean</c>).</summary>
@@ -22,7 +24,10 @@ public abstract record Resolution
     public sealed record Card(ContactCandidate Chosen) : Resolution;
 
     /// <summary>A question. One candidate per account, in candidate order, each with the text that matched.</summary>
-    public sealed record Options(QuestionKind Kind, IReadOnlyList<ContactCandidate> Candidates) : Resolution;
+    /// <param name="Kind">The question it asks.</param>
+    /// <param name="Candidates">One candidate per account.</param>
+    /// <param name="Step">The matching step that produced it; rule 18 reads it (<see cref="Aliases.AliasRule"/>).</param>
+    public sealed record Options(QuestionKind Kind, IReadOnlyList<ContactCandidate> Candidates, MatchStep Step) : Resolution;
 
     /// <summary>No hit (rule 8): no card.</summary>
     public sealed record NotFound : Resolution;

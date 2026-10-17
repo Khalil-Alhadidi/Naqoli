@@ -1,3 +1,4 @@
+using Agent.Core.Aliases;
 using Agent.Core.Text;
 
 namespace Agent.Core.Resolver;
@@ -62,7 +63,7 @@ public static class ContactResolver
             var accounts = OnePerAccount(exact);
             return accounts.Count == 1
                 ? new Resolution.Card(accounts[0])
-                : new Resolution.Options(QuestionKind.WhichContact, accounts);
+                : new Resolution.Options(QuestionKind.WhichContact, accounts, MatchStep.Exact);
         }
 
         // Rule 1, endearments (Khalil, 17 Oct 2026): nothing matched the full text exactly, so the words of affection
@@ -84,7 +85,7 @@ public static class ContactResolver
         // one is also inside it, and the user is asked rather than sent straight to the card.
         var near = keyed.Where(k => ArabicText.EditDistance(k.Key, typedKey) == 1).Select(k => k.Candidate).ToList();
         if (near.Count > 0)
-            return new Resolution.Options(QuestionKind.DidYouMean, OnePerAccount(near));
+            return new Resolution.Options(QuestionKind.DidYouMean, OnePerAccount(near), MatchStep.Near);
 
         // 3. Partial (rules 4, 5, 7): every typed word is inside the candidate's key; a short typed word must equal
         // one of the candidate's words (both compared after the per-word leading al strip). A word's length is measured
@@ -111,9 +112,14 @@ public static class ContactResolver
                 .Where(c => c.AccountId == accounts[0].AccountId)
                 .All(IsTitleName);
 
-            return accounts.Count == 1 && !titleOnly
-                ? new Resolution.Card(accounts[0])
-                : new Resolution.Options(QuestionKind.WhichContact, accounts);
+            if (accounts.Count == 1)
+            {
+                return titleOnly
+                    ? new Resolution.Options(QuestionKind.WhichContact, accounts, MatchStep.TitleOnly)
+                    : new Resolution.Card(accounts[0]);
+            }
+
+            return new Resolution.Options(QuestionKind.WhichContact, accounts, MatchStep.Partial);
         }
 
         // 4. Shared word (rule 15): a name word (not a title, not a kinship word) shared exactly; never a card.
@@ -125,7 +131,7 @@ public static class ContactResolver
             .Where(c => ArabicText.Words(c.Text).Any(w => nameWords.Contains(ArabicText.StripLeadingAl(w))))
             .ToList();
         if (shared.Count > 0)
-            return new Resolution.Options(QuestionKind.WhichContact, OnePerAccount(shared));
+            return new Resolution.Options(QuestionKind.WhichContact, OnePerAccount(shared), MatchStep.SharedWord);
 
         // 5. None (rule 8).
         return new Resolution.NotFound();

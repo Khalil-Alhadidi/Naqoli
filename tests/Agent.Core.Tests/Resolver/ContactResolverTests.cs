@@ -1,4 +1,4 @@
-using System.Text.Json;
+using Agent.Core.Aliases;
 using Agent.Core.Resolver;
 using Agent.Core.Text;
 using Agent.Core.Tests.Wallet;
@@ -12,24 +12,7 @@ namespace Agent.Core.Tests.Resolver;
 /// </summary>
 public class ContactResolverTests
 {
-    private sealed record MatchingExample(
-        int Rule,
-        string User,
-        string Typed,
-        string Expect,
-        string? AccountOf,
-        string? Kind,
-        string[]? Options,
-        string? Pending);
-
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
-    };
-
-    private static IReadOnlyList<MatchingExample> Examples { get; } = JsonSerializer.Deserialize<List<MatchingExample>>(
-        File.ReadAllText(Path.Combine(SeedHashTests.RepositoryRoot(), "tests", "Agent.Core.Tests", "Resolver", "matching-examples.json")),
-        JsonOptions)!;
+    private static IReadOnlyList<MatchingExample> Examples => MatchingExample.All;
 
     public static TheoryData<int> ExampleIndexes()
     {
@@ -78,6 +61,58 @@ public class ContactResolverTests
                 Assert.Fail($"{label}: unknown expectation {example.Expect}");
                 break;
         }
+    }
+
+    /// <summary>The examples that ask a question by rules 3, 4, 5, 6 and 15, with the step each question comes from.</summary>
+    public static TheoryData<int, MatchStep> QuestionExamples()
+    {
+        var data = new TheoryData<int, MatchStep>();
+        foreach (var (index, step) in QuestionCases())
+            data.Add(index, step);
+        return data;
+    }
+
+    private static List<(int Index, MatchStep Step)> QuestionCases()
+    {
+        var cases = new List<(int Index, MatchStep Step)>();
+        for (var i = 0; i < Examples.Count; i++)
+        {
+            var example = Examples[i];
+            if (example.Expect != "options" || example.Pending is not null)
+                continue;
+
+            MatchStep? step = example.Rule switch
+            {
+                3 => MatchStep.Exact,
+                4 => MatchStep.Partial,
+                5 => MatchStep.TitleOnly,
+                6 => MatchStep.Near,
+                15 => MatchStep.SharedWord,
+                _ => null,
+            };
+            if (step is { } named)
+                cases.Add((i, named));
+        }
+
+        return cases;
+    }
+
+    [Fact]
+    public void EveryQuestionRuleHasAnExample()
+        => Assert.Equal(
+            [MatchStep.Exact, MatchStep.Near, MatchStep.Partial, MatchStep.TitleOnly, MatchStep.SharedWord],
+            QuestionCases().Select(c => c.Step).Distinct().Order());
+
+    [Theory]
+    [MemberData(nameof(QuestionExamples))]
+    public void TheStepOfEachQuestionIsNamed(int index, MatchStep step)
+    {
+        var example = Examples[index];
+
+        var options = Assert.IsType<Resolution.Options>(
+            ContactResolver.Resolve(example.Typed, SeedCandidates.For(example.User)), exactMatch: true);
+
+        Assert.Equal(step, options.Step);
     }
 
     [Fact]
