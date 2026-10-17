@@ -225,6 +225,10 @@ public sealed class JourneyHost : IAsyncLifetime
     public async Task<WalletContacts> ContactsAsync(int userId)
         => (await Wallet.GetFromJsonAsync<WalletContacts>($"/users/{userId}/contacts"))!;
 
+    /// <summary>The user's aliases, in id order, from the wallet (milestone 9a).</summary>
+    public async Task<IReadOnlyList<WalletAlias>> AliasesAsync(int userId)
+        => [.. (await ContactsAsync(userId)).Aliases.OrderBy(a => a.AliasId)];
+
     public async ValueTask DisposeAsync()
     {
         Wallet?.Dispose();

@@ -37,4 +37,33 @@ internal static class DevSet
 
         throw new InvalidOperationException("The development set has no case " + id + ".");
     }
+
+    /// <summary>
+    /// The <c>expect.alias_offer</c> text of step number <paramref name="step"/> (the index in the case's <c>steps</c>,
+    /// say and tap steps alike) of case <paramref name="id"/>, or null when the step names none.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">The set has no such case or step.</exception>
+    public static string? AliasOffer(string id, int step)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(step);
+        var path = Path.Combine(RepositoryRoot.Find(), "data", ScriptedParser.DevSetFileName);
+        foreach (var line in File.ReadLines(path))
+        {
+            if (string.IsNullOrWhiteSpace(line))
+                continue;
+            using var document = JsonDocument.Parse(line);
+            if (document.RootElement.GetProperty("id").GetString() != id)
+                continue;
+            var steps = document.RootElement.GetProperty("steps");
+            if (step >= steps.GetArrayLength())
+                throw new InvalidOperationException(FormattableString.Invariant($"{id} has no step number {step}."));
+            return steps[step].TryGetProperty("expect", out var expect)
+                && expect.TryGetProperty("alias_offer", out var offer)
+                && offer.ValueKind == JsonValueKind.String
+                    ? offer.GetString()
+                    : null;
+        }
+
+        throw new InvalidOperationException("The development set has no case " + id + ".");
+    }
 }
