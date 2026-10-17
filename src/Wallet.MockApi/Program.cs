@@ -97,6 +97,7 @@ var api = app.MapGroup(string.Empty)
     .AddEndpointFilter<ClientKeyFilter>()
     .ProducesProblem(StatusCodes.Status403Forbidden);
 api.MapReadEndpoints();
+api.MapAliasEndpoints();
 api.MapTransactionEndpoints();
 api.MapAdminEndpoints();
 

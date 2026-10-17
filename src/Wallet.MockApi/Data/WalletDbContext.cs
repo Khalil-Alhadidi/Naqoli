@@ -7,7 +7,10 @@ public class WalletDbContext(DbContextOptions<WalletDbContext> options) : DbCont
 {
     private const int NameLength = 100;
     private const int PhoneLength = 15;
-    private const int AliasLength = 100;
+
+    /// <summary>The length of <c>Aliases.Text</c>; <c>POST /users/{id}/aliases</c> refuses a longer text.</summary>
+    internal const int AliasLength = 100;
+
     private const int LabelLength = 50;
     private const int SeedCodeLength = 8;
     private const int ProductCodeLength = 16;

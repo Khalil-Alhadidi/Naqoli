@@ -4,7 +4,7 @@ using Wallet.MockApi.Services;
 namespace Wallet.MockApi.Endpoints;
 
 /// <summary>
-/// The one way the read, payment and admin endpoints build a ProblemDetails: a fixed English title per code, and the code itself
+/// The one way the read, alias, payment and admin endpoints build a ProblemDetails: a fixed English title per code, and the code itself
 /// as the <c>code</c> extension, plus the figures some codes carry. Nothing from the request is echoed.
 /// </summary>
 internal static class WalletProblems
@@ -55,6 +55,28 @@ internal static class WalletProblems
     /// </summary>
     public static ProblemHttpResult AccountNotFound()
         => From(new PaymentRefusal(StatusCodes.Status404NotFound, UnknownAccount), "Account not found");
+
+    /// <summary>
+    /// The 404 <c>DELETE /users/{id}/aliases/{aliasId}</c> returns when the user has no alias with that id (another
+    /// user's alias included): code <c>unknown_alias</c> and the title <c>Alias not found</c>.
+    /// </summary>
+    public static ProblemHttpResult AliasNotFound()
+        => From(new PaymentRefusal(StatusCodes.Status404NotFound, AliasErrors.UnknownAlias), "Alias not found");
+
+    /// <summary>
+    /// The 409 <c>POST /users/{id}/aliases</c> returns when the user already has an alias with that text: code
+    /// <c>alias_exists</c> and the title <c>Alias already exists</c>.
+    /// </summary>
+    public static ProblemHttpResult AliasExists()
+        => From(new PaymentRefusal(StatusCodes.Status409Conflict, AliasErrors.AliasExists), "Alias already exists");
+
+    /// <summary>
+    /// The 422 <c>POST /users/{id}/aliases</c> returns for a text that is missing, blank after trimming, or longer than
+    /// the column: code <c>alias_text_invalid</c> and the title <c>Alias text invalid</c>.
+    /// </summary>
+    public static ProblemHttpResult AliasTextInvalid()
+        => From(
+            new PaymentRefusal(StatusCodes.Status422UnprocessableEntity, AliasErrors.AliasTextInvalid), "Alias text invalid");
 
     public static ProblemHttpResult From(PaymentRefusal refusal) => From(refusal, title: null);
 

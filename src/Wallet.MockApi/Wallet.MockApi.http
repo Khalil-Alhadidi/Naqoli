@@ -35,6 +35,21 @@ X-Wallet-Client-Key: {{clientKey}}
 GET {{Wallet.MockApi_HostAddress}}/users/1/contacts
 X-Wallet-Client-Key: {{clientKey}}
 
+### Save an alias of user 1 for one account (milestone 9a; 201, then 409 alias_exists with the same text; a reset removes it)
+# targetAccountId is a targetAccountId from the contacts above; the text is stored trimmed, 1 to 100 characters
+POST {{Wallet.MockApi_HostAddress}}/users/1/aliases
+X-Wallet-Client-Key: {{clientKey}}
+Content-Type: application/json
+
+{
+  "text": "sample alias",
+  "targetAccountId": 6
+}
+
+### Delete one alias of user 1 (put an aliasId from the contacts above; 204, then 404 unknown_alias again or for another user's alias)
+DELETE {{Wallet.MockApi_HostAddress}}/users/1/aliases/1
+X-Wallet-Client-Key: {{clientKey}}
+
 ### Bills of user 1
 GET {{Wallet.MockApi_HostAddress}}/users/1/bills
 X-Wallet-Client-Key: {{clientKey}}

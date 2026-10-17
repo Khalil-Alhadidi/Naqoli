@@ -35,6 +35,8 @@ The API serves plain HTTP on loopback and does not redirect to HTTPS. `GET /heal
 | `POST /users/{id}/consent` | Record that the user has given consent (D22). Idempotent | 204, no body | 404 `unknown_user` |
 | `GET /accounts/by-phone/{phone}` | The wallet account behind a phone number (exact match), user or not | 200 `AccountSummary` | 404 `unknown_account` |
 | `GET /users/{id}/contacts?q=` | Contacts and aliases, optionally filtered | 200 `ContactsResponse` | 404 `unknown_user` |
+| `POST /users/{id}/aliases` | Save one alias of one account for the user (D15; milestone 9a). No money moves | 201 `AliasItem`, `Location` `/users/{id}/contacts` | 404 `unknown_user`, 404 `unknown_account`, 409 `alias_exists`, 422 `alias_text_invalid` |
+| `DELETE /users/{id}/aliases/{aliasId}` | Delete one of the user's aliases (milestone 9a) | 204, no body | 404 `unknown_user`, 404 `unknown_alias` |
 | `GET /users/{id}/bills` | Bill accounts with the amount due | 200 `BillItem[]` | 404 `unknown_user` |
 | `GET /users/{id}/balance` | Balance of the default account (D22) | 200 `BalanceResponse` | 404 `unknown_user` |
 | `GET /users/{id}/history?to=&since=&take=` | Transactions the user paid, newest first | 200 `HistoryItem[]` | 404 `unknown_user` |
@@ -192,6 +194,56 @@ History, products, quotes and transactions all use the same lower-case names.
 | `maxPinAttempts` | int | `Wallet:MaxPinAttempts` (3) |
 
 Tests: `ReadEndpointsTests.SettingsReturnTheConfiguredLimits`; the agent's client: `WalletClientTests.TheWalletSettingsAreMappedAndUnavailableOnAConnectionFailure`.
+
+### Aliases (milestone 9a)
+
+The two alias routes are the only wallet routes that write an alias. They move no money and touch no transaction, so they do not take the `WalletGate` (a reset may remove an alias saved a moment before it, as it removes every row the seed does not hold). They sit in the client-key group like every other route: without `X-Wallet-Client-Key` the answer is 403 `client_key_required` before any check below. Aliases are read back with `GET /users/{id}/contacts`, in the `aliases` list, ordered by id, so a new alias comes last. Source: `Endpoints/AliasEndpoints.cs`.
+
+`POST /users/{id}/aliases` takes `AliasRequest`:
+
+| Field | Type | Notes |
+|---|---|---|
+| `text` | string | The alias as the user wrote it. Stored trimmed; after trimming it must be 1 to 100 characters (the `Aliases.Text` column) |
+| `targetAccountId` | int | The one account the alias points to (D15): any wallet account, a user's or not, active or closed |
+
+The checks, in order; the first that fails answers:
+
+1. The user exists, or 404 `unknown_user`.
+2. The text, trimmed, is not empty and not longer than 100 characters, or 422 `alias_text_invalid`. A body without `text` is refused the same way. A body that is not JSON at all is a 400 from ASP.NET Core, without `code` (see Conventions).
+3. The account exists, or 404 `unknown_account`.
+4. The user has no alias with the same text yet, or 409 `alias_exists`. The comparison is the database's, under the column's collation, the same one the unique index on `(OwnerUserId, Text)` uses; that index is the last guard against two saves racing, and its violation is answered with the same 409. The same text for another account is refused too: one text, one account. The wallet compares raw text only; the agent's own check on normalised text (no alias that matches a saved name or another alias) comes before this call.
+
+On success: 201 with the new `AliasItem` (above) and `Location` `/users/{id}/contacts`.
+
+`DELETE /users/{id}/aliases/{aliasId}` deletes the alias if it belongs to the user: 204, no body. A user that does not exist is 404 `unknown_user`. An alias id the user does not own (unknown, already deleted, or another user's) is 404 `unknown_alias`, so a user cannot tell another user's alias from an unknown one. There is no rename: delete and save again.
+
+A save, from the agent to the database:
+
+```mermaid
+sequenceDiagram
+    participant A as Agent
+    participant E as AliasEndpoints
+    participant D as SQL Server
+
+    A->>E: POST /users/{id}/aliases with X-Wallet-Client-Key, body text and targetAccountId
+    Note over A,E: ClientKeyFilter first, 403 client_key_required
+    E->>D: does the user exist
+    E-->>A: 404 unknown_user
+    E->>E: trim the text, 1 to 100 characters
+    E-->>A: 422 alias_text_invalid
+    E->>D: load the target account
+    E-->>A: 404 unknown_account
+    E->>D: an alias of this user with this text
+    E-->>A: 409 alias_exists
+    E->>D: INSERT the alias, one SaveChanges
+    alt unique index on OwnerUserId and Text violated, a racing save
+        E-->>A: 409 alias_exists
+    else inserted
+        E-->>A: 201 AliasItem, Location /users/{id}/contacts
+    end
+```
+
+Tests: `AliasEndpointsTests`.
 
 ### Payment request
 
@@ -365,7 +417,7 @@ A 404 is final only once the original call has definitely ended. It means the ke
 
 ## Error codes
 
-Every code is the `code` extension of a ProblemDetails. Source: `PaymentErrors` and `PaymentValidator` (`Services/PaymentValidator.cs`), `WalletProblems.UnknownAccount` (`Endpoints/WalletProblems.cs`), `FaultErrors` (`Services/FaultSwitch.cs`), `AdminErrors` (`Endpoints/AdminEndpoints.cs`), `ClientErrors` (`ClientKeyFilter.cs`); titles in `Endpoints/WalletProblems.cs`.
+Every code is the `code` extension of a ProblemDetails. Source: `PaymentErrors` and `PaymentValidator` (`Services/PaymentValidator.cs`), `WalletProblems.UnknownAccount` (`Endpoints/WalletProblems.cs`), `AliasErrors` (`Endpoints/AliasEndpoints.cs`), `FaultErrors` (`Services/FaultSwitch.cs`), `AdminErrors` (`Endpoints/AdminEndpoints.cs`), `ClientErrors` (`ClientKeyFilter.cs`); titles in `Endpoints/WalletProblems.cs`.
 
 | Code | Status | Raised by | Meaning | Extensions |
 |---|---|---|---|---|
@@ -375,7 +427,10 @@ Every code is the `code` extension of a ProblemDetails. Source: `PaymentErrors` 
 | `idempotency_key_reused` | 422 | execute | The key was used before for a different request (another user, type, amount, recipient, bill or product). Nothing of the stored row is returned | |
 | `invalid_type` | 422 | quote, execute | `type` is not `transfer`, `bill` or `purchase` | |
 | `unknown_user` | 422 / 404 | quote, execute, `POST /admin/debit` (422); every `/users/...` route, consent included (404) | The payer, the user to debit, or the user asked for, does not exist | |
-| `unknown_account` | 404 | `GET /accounts/by-phone/{phone}` | No wallet account has that number | |
+| `unknown_account` | 404 | `GET /accounts/by-phone/{phone}`, `POST /users/{id}/aliases` | No wallet account has that number, or no account has the alias's `targetAccountId` | |
+| `unknown_alias` | 404 | `DELETE /users/{id}/aliases/{aliasId}` | The user owns no alias with that id (another user's alias included) | |
+| `alias_exists` | 409 | `POST /users/{id}/aliases` | The user already has an alias with that text | |
+| `alias_text_invalid` | 422 | `POST /users/{id}/aliases` | The text is missing, blank after trimming, or longer than 100 characters | |
 | `unknown_recipient` | 422 | quote, execute | Transfer recipient missing or unknown; bill account missing or not the payer's | |
 | `account_closed` | 422 | quote, execute, `POST /admin/debit` | The payer's own account (or the default account to debit), or the transfer's recipient account, is closed. Refused before anything is written | |
 | `same_account` | 422 | quote, execute | Transfer to the payer's own account | |
