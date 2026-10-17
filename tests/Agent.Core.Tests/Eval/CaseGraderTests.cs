@@ -412,6 +412,97 @@ public class CaseGraderTests
         Assert.Equal(("asks.count", "0", "1"), (result.FirstFailing?.Field, result.FirstFailing?.Expected, result.FirstFailing?.Observed));
     }
 
+    // ---- aliases (milestone 9a, ruling 9) ----
+
+    private static CaseStep SaveAlias() => new(Tap: "save_alias");
+
+    private static StepExpect OfferExpected(string? text) => new() { AliasOfferSet = true, AliasOffer = text };
+
+    private static CaseObservation WithAliases(CaseObservation seen, params string[] added)
+    {
+        var before = seen.WalletBefore with { Aliases = [new SnapshotAlias(1, Display)] };
+        var after = seen.WalletAfter with { Aliases = [new SnapshotAlias(1, Display), .. added.Select((t, i) => new SnapshotAlias(100 + i, t))] };
+        return seen with { WalletBefore = before, WalletAfter = after, WalletDiff = WalletSnapshot.Diff(before, after) };
+    }
+
+    private static StepObservation Offered(int index, string? offered)
+        => Step(index, "tap confirm", "done", moved: 51_000, executions: 1) with { AliasOffered = offered };
+
+    [Fact]
+    public void AnOfferedAliasPassesWhenItsTextMatches()
+    {
+        var evalCase = Case(new Expectation(Asks: [], Cards: [KeyCard()], Final: KeyFinal(KeyTransfer())), Say(), Confirm(OfferExpected(Registered)));
+        var seen = Observed(cards: [new CardResult(Card(), "done")], transactions: [Transfer()], steps: [Step(0, "say", "live", issued: true), Offered(1, Registered)]);
+
+        var result = Grader.Grade(evalCase, seen);
+
+        Assert.True(result.Passed, result.FirstFailing?.Field);
+        var verdict = Assert.Single(result.Verdicts, v => v.Field == "steps[1].alias_offer");
+        Assert.True(verdict.Graded);
+        Assert.DoesNotContain(Registered, verdict.Expected + verdict.Observed, StringComparison.Ordinal);
+
+        var other = Grader.Grade(evalCase, seen with { Steps = [seen.Steps[0], Offered(1, Display)] });
+        Assert.False(other.Passed);
+        Assert.Equal("steps[1].alias_offer", other.FirstFailing?.Field);
+    }
+
+    [Fact]
+    public void AnExplicitNullOfferFailsWhenAnOfferWasShown()
+    {
+        var evalCase = Case(new Expectation(Asks: [], Cards: [KeyCard()], Final: KeyFinal(KeyTransfer())), Say(), Confirm(OfferExpected(null)));
+        var none = Observed(cards: [new CardResult(Card(), "done")], transactions: [Transfer()], steps: [Step(0, "say", "live", issued: true), Offered(1, null)]);
+
+        Assert.True(Grader.Grade(evalCase, none).Passed);
+
+        var shown = Grader.Grade(evalCase, none with { Steps = [none.Steps[0], Offered(1, Registered)] });
+        Assert.False(shown.Passed);
+        Assert.Equal("steps[1].alias_offer", shown.FirstFailing?.Field);
+    }
+
+    [Fact]
+    public void AnAbsentOfferKeyGradesNothing()
+    {
+        var evalCase = Case(new Expectation(Asks: [], Cards: [KeyCard()], Final: KeyFinal(KeyTransfer())), Say(), Confirm(new StepExpect(CardOutcome: "done")));
+        var seen = Observed(cards: [new CardResult(Card(), "done")], transactions: [Transfer()], steps: [Step(0, "say", "live", issued: true), Offered(1, Registered)]);
+
+        var result = Grader.Grade(evalCase, seen);
+
+        Assert.True(result.Passed, result.FirstFailing?.Field);
+        Assert.DoesNotContain(result.Verdicts, v => v.Field.EndsWith(".alias_offer", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void FinalAliasSavedNullFailsWhenAnAliasWasAdded()
+    {
+        var evalCase = Case(new Expectation(Asks: [], Cards: [KeyCard()], Final: KeyFinal(KeyTransfer())), Say(), Confirm(), SaveAlias());
+        var seen = Observed(cards: [new CardResult(Card(), "done")], transactions: [Transfer()]);
+
+        var unchanged = Grader.Grade(evalCase, WithAliases(seen));
+        Assert.True(unchanged.Passed, unchanged.FirstFailing?.Field);
+        Assert.True(Assert.Single(unchanged.Verdicts, v => v.Field == "final.alias_saved").Graded);
+
+        var added = Grader.Grade(evalCase, WithAliases(seen, Registered));
+        Assert.False(added.Passed);
+        Assert.Equal("final.alias_saved", added.FirstFailing?.Field);
+    }
+
+    [Fact]
+    public void FinalAliasSavedTextPassesOnTheOneAddedAlias()
+    {
+        var final = KeyFinal(KeyTransfer()) with { AliasSaved = Registered };
+        var evalCase = Case(new Expectation(Asks: [], Cards: [KeyCard()], Final: final), Say(), Confirm(), SaveAlias());
+        var seen = Observed(cards: [new CardResult(Card(), "done")], transactions: [Transfer()]);
+
+        var one = Grader.Grade(evalCase, WithAliases(seen, Registered));
+        Assert.True(one.Passed, one.FirstFailing?.Field);
+        var verdict = Assert.Single(one.Verdicts, v => v.Field == "final.alias_saved");
+        Assert.DoesNotContain(Registered, verdict.Expected + verdict.Observed, StringComparison.Ordinal);
+
+        Assert.Equal("final.alias_saved", Grader.Grade(evalCase, WithAliases(seen)).FirstFailing?.Field);
+        Assert.Equal("final.alias_saved", Grader.Grade(evalCase, WithAliases(seen, Display + " x")).FirstFailing?.Field);
+        Assert.Equal("final.alias_saved", Grader.Grade(evalCase, WithAliases(seen, Registered, Display + " x")).FirstFailing?.Field);
+    }
+
     // ---- stopped cases ----
 
     [Fact]

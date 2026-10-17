@@ -65,6 +65,7 @@ public static class CaseLoader
     private static readonly HashSet<string> FaultMoments = new(StringComparer.Ordinal) { "request", "confirm", "card_waiting" };
 
     private const string NoCardPrefix = "no_card_";
+    private const string AliasOfferKey = "alias_offer";
 
     /// <summary>The options every case file is read with.</summary>
     public static JsonSerializerOptions Json { get; } = new()
@@ -210,8 +211,20 @@ public static class CaseLoader
             return null;
 
         var noCard = new Dictionary<int, bool>();
+        var aliasOfferSet = false;
+        string? aliasOffer = null;
         foreach (var (key, value) in extra)
         {
+            // Read raw, so an explicit null (no offer) differs from an absent key (not graded).
+            if (key == AliasOfferKey)
+            {
+                if (value.ValueKind is not (JsonValueKind.String or JsonValueKind.Null))
+                    return "alias_offer is a text or null.";
+                aliasOfferSet = true;
+                aliasOffer = value.ValueKind == JsonValueKind.String ? value.GetString() : null;
+                continue;
+            }
+
             if (!key.StartsWith(NoCardPrefix, StringComparison.Ordinal)
                 || !int.TryParse(key.AsSpan(NoCardPrefix.Length), NumberStyles.None, CultureInfo.InvariantCulture, out var part)
                 || value.ValueKind is not (JsonValueKind.True or JsonValueKind.False))
@@ -222,7 +235,10 @@ public static class CaseLoader
             noCard[part] = value.GetBoolean();
         }
 
-        checkedStep = step with { Expect = expect with { Extra = null, NoCard = noCard } };
+        checkedStep = step with
+        {
+            Expect = expect with { Extra = null, NoCard = noCard, AliasOfferSet = aliasOfferSet, AliasOffer = aliasOffer },
+        };
         return null;
     }
 }

@@ -126,6 +126,39 @@ public sealed class CaseLoaderTests : IDisposable
     }
 
     [Fact]
+    public void AnExplicitNullAliasOfferLoadsAsSetAndNull()
+    {
+        var path = Write(FixtureLine(0).Replace("\"alias_offer\": \"Hammoudi\"", "\"alias_offer\": null", StringComparison.Ordinal));
+
+        var expect = CaseLoader.Load(path)[0].Steps[8].Expect!;
+
+        Assert.True(expect.AliasOfferSet);
+        Assert.Null(expect.AliasOffer);
+        Assert.Null(expect.Extra);
+    }
+
+    [Fact]
+    public void AnAliasOfferWithTextLoadsAsSetAndAnAbsentOneAsNotSet()
+    {
+        var steps = CaseLoader.Load(Fixture)[0].Steps;
+
+        Assert.True(steps[8].Expect!.AliasOfferSet);
+        Assert.Equal("Hammoudi", steps[8].Expect!.AliasOffer);
+        Assert.False(steps[3].Expect!.AliasOfferSet);
+        Assert.Null(steps[3].Expect!.AliasOffer);
+    }
+
+    [Fact]
+    public void AnAliasOfferThatIsNotTextOrNullIsRefused()
+    {
+        var path = Write(FixtureLine(0).Replace("\"alias_offer\": \"Hammoudi\"", "\"alias_offer\": 7", StringComparison.Ordinal));
+
+        var ex = Assert.Throws<CaseFileException>(() => CaseLoader.Load(path));
+
+        Assert.Contains("alias_offer", ex.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void AnUnknownKeyIsRefused()
     {
         var path = Write(FixtureLine(0).Replace("\"consent_screen\": false", "\"consent_screen\": false, \"surprise\": 1", StringComparison.Ordinal));

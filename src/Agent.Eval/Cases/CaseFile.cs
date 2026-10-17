@@ -64,14 +64,15 @@ public sealed record CaseStep(
 
 /// <summary>
 /// What must hold right after a step. <c>no_card_N</c> keys (a compound request's part N gives no card) land in
-/// <see cref="NoCard"/>; any other unknown key is refused by <see cref="CaseLoader"/>.
+/// <see cref="NoCard"/>; <c>alias_offer</c> lands in <see cref="AliasOfferSet"/> and <see cref="AliasOffer"/>, so an
+/// explicit null ("no offer") is told from an absent key ("not graded"); any other unknown key is refused by
+/// <see cref="CaseLoader"/>.
 /// </summary>
 public sealed record StepExpect(
     string? Card = null,
     string? CardOutcome = null,
     string? Reply = null,
     long? Moved = null,
-    string? AliasOffer = null,
     IReadOnlyList<string>? StatusSequence = null,
     int? Executions = null,
     int? PinAttemptsLeft = null,
@@ -86,6 +87,19 @@ public sealed record StepExpect(
     /// <summary>The <c>no_card_N</c> expectations, by part number.</summary>
     [JsonIgnore]
     public IReadOnlyDictionary<int, bool> NoCard { get; init; } = new Dictionary<int, bool>();
+
+    /// <summary>True when the step names <c>alias_offer</c>, with a text or an explicit null (milestone 9a, ruling 9).</summary>
+    [JsonIgnore]
+    public bool AliasOfferSet { get; init; }
+
+    /// <summary>The alias text the step expects offered; null with <see cref="AliasOfferSet"/> means no offer.</summary>
+    /// <remarks>
+    /// Renamed for the serializer: an ignored property still claims its JSON name, and the raw <c>alias_offer</c> must reach
+    /// <see cref="Extra"/>, where <see cref="CaseLoader"/> reads it.
+    /// </remarks>
+    [JsonIgnore]
+    [JsonPropertyName("loaded_alias_offer")]
+    public string? AliasOffer { get; init; }
 }
 
 /// <summary>The fault of a case: <see cref="Code"/> from <c>settings.json</c>, and when it is injected.</summary>

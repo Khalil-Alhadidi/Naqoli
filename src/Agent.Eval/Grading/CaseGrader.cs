@@ -69,6 +69,7 @@ public sealed class CaseGrader
             verdicts.Add(Equal("consent_screen", Flag(consent), Flag(observation.ConsentShown)));
         if (expect.Final is { } final)
             GradeFinal(final, observation, verdicts);
+        GradeAliasSaved(expect.Final?.AliasSaved, observation.WalletDiff, verdicts);
         GradeSteps(evalCase.Steps, observation.Steps, verdicts);
 
         long[] balances = [observation.WalletBefore.BalanceIqd, .. observation.CardsIssued.Select(c => c.BalanceAfterIqd)];
@@ -438,9 +439,23 @@ public sealed class CaseGrader
             var now = observation.WalletAfter.BillsDue.TryGetValue(code, out var value) ? value : (long?)null;
             verdicts.Add(Equal("final.bills_now." + code, Figure(due), Figure(now)));
         }
+    }
 
-        if (final.AliasSaved is not null)
-            verdicts.Add(new FieldVerdict("final.alias_saved", "alias", "not graded", true, Graded: false));
+    /// <summary>
+    /// Ruling 9 (milestone 9a): <c>final.alias_saved</c> is graded on every case. Null passes when the case added no
+    /// alias; a text passes when it added exactly one and its text is that text (ordinal). Rendered as "alias equal" or
+    /// "alias different", or a count, never the text.
+    /// </summary>
+    private static void GradeAliasSaved(string? expected, WalletDiff diff, List<FieldVerdict> verdicts)
+    {
+        const string Field = "final.alias_saved";
+        if (diff.AliasesAdded > 1)
+        {
+            verdicts.Add(new FieldVerdict(Field, expected is null ? "null" : "alias", Figure(diff.AliasesAdded) + " aliases", false));
+            return;
+        }
+
+        verdicts.Add(Name(Field, "alias", "alias", expected, diff.AliasSaved));
     }
 
     // ---- steps ----
@@ -497,8 +512,8 @@ public sealed class CaseGrader
                 verdicts.Add(Equal(field + ".pin_in_chat_or_logs", Flag(pinSeen), Flag(step.PinSeen)));
             if (expect.StatusSequence is { } sequence)
                 verdicts.Add(Equal(field + ".status_sequence", Codes(sequence), Codes(step.StatusSequence)));
-            if (expect.AliasOffer is not null)
-                verdicts.Add(new FieldVerdict(field + ".alias_offer", "alias", "not graded", true, Graded: false));
+            if (expect.AliasOfferSet)
+                verdicts.Add(Name(field + ".alias_offer", "alias", "alias", expect.AliasOffer, step.AliasOffered));
             if (expect.ThenReply is { } thenReply)
                 verdicts.Add(new FieldVerdict(field + ".then_reply", thenReply, "not graded", true, Graded: false));
             foreach (var (part, noCard) in expect.NoCard)

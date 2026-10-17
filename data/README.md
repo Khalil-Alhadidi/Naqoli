@@ -58,6 +58,7 @@ A step may carry `expect`, checked right after that step: `card` (unchanged, can
 - `replies`: replies that carry information and are expected in order (a balance reply with the amount; the refusal of a second part).
 - `refusal`: the reason code when the request gets no card at all, with the figure the reply carries when the key names one: `limit` (a cap), `left_today` (what is left of the daily cap) or `amount_due` (a bill's full amount due from the biller, for `bills_paid_in_full`; added 16 Oct 2026). `consent_screen` is true when the consent screen replaces everything.
 - `final`: the wallet after the case: balance, the list of new transactions, bills that changed, codes issued, alias saved.
+  Since milestone 9a, `final.alias_saved` is graded on every case: null (or absent) means the case saves no alias.
 - `learning_log`: the entry expected in the learning log, or null.
 - `either` (GAP-08 only): two acceptable outcomes; anything else is a wrong card.
 

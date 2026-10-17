@@ -20,6 +20,9 @@ public sealed record SnapshotTransaction(
     string? ProductCode,
     string? Reference = null);
 
+/// <summary>One alias of the user, as the runner compares it (milestone 9a): its id and its text, never printed.</summary>
+public sealed record SnapshotAlias(int AliasId, string Text);
+
 /// <summary>What the case changed in the wallet.</summary>
 /// <param name="NewTransactions">The new transactions, in the order the wallet ran them (the external debit left out).</param>
 /// <param name="CodesIssued">How many purchase codes were issued (new store orders).</param>
@@ -29,7 +32,14 @@ public sealed record WalletDiff(
     IReadOnlyList<SnapshotTransaction> NewTransactions,
     int CodesIssued,
     IReadOnlyDictionary<string, long> BillsNow,
-    long BalanceIqd);
+    long BalanceIqd)
+{
+    /// <summary>How many aliases the case added (by alias id).</summary>
+    public int AliasesAdded { get; init; }
+
+    /// <summary>The text of the one alias the case added, or null when it added none or several.</summary>
+    public string? AliasSaved { get; init; }
+}
 
 /// <summary>
 /// The user's side of the wallet at one moment: the balance, the history (up to 200 rows), the amount due per bill code,
@@ -43,6 +53,9 @@ public sealed record WalletSnapshot(
     int OrdersCount)
 {
     private const int HistoryTake = 200;
+
+    /// <summary>The user's aliases, in id order (milestone 9a), from <c>GET /users/{id}/contacts</c>.</summary>
+    public IReadOnlyList<SnapshotAlias> Aliases { get; init; } = [];
 
     /// <summary>Reads the snapshot of <paramref name="userId"/>.</summary>
     /// <exception cref="InvalidOperationException">A wallet read gave no answer.</exception>
@@ -59,6 +72,7 @@ public sealed record WalletSnapshot(
         var bills = Ok(await wallet.GetBillsAsync(userId, cancellationToken), "bills");
         var history = Ok(await wallet.GetHistoryAsync(userId, null, null, HistoryTake, cancellationToken), "history");
         var products = Ok(await wallet.GetProductsAsync(null, null, null, cancellationToken), "products");
+        var contacts = Ok(await wallet.GetContactsAsync(userId, cancellationToken), "contacts");
         var orders = await admin.OrdersCountAsync(userId, cancellationToken);
 
         var billCodes = bills.ToDictionary(b => b.BillAccountId, b => b.Code);
@@ -81,7 +95,10 @@ public sealed record WalletSnapshot(
             balance.BalanceIqd,
             rows,
             bills.ToDictionary(b => b.Code, b => b.AmountDueIqd, StringComparer.Ordinal),
-            orders);
+            orders)
+        {
+            Aliases = [.. contacts.Aliases.OrderBy(a => a.AliasId).Select(a => new SnapshotAlias(a.AliasId, a.Text))],
+        };
     }
 
     /// <summary>What changed from <paramref name="before"/> to <paramref name="after"/>, leaving out <paramref name="excluded"/> transactions.</summary>
@@ -101,7 +118,14 @@ public sealed record WalletSnapshot(
             .Where(b => !before.BillsDue.TryGetValue(b.Key, out var was) || was != b.Value)
             .ToDictionary(b => b.Key, b => b.Value, StringComparer.Ordinal);
 
-        return new WalletDiff(added, after.OrdersCount - before.OrdersCount, bills, after.BalanceIqd);
+        var knownAliases = before.Aliases.Select(a => a.AliasId).ToHashSet();
+        var newAliases = after.Aliases.Where(a => !knownAliases.Contains(a.AliasId)).ToList();
+
+        return new WalletDiff(added, after.OrdersCount - before.OrdersCount, bills, after.BalanceIqd)
+        {
+            AliasesAdded = newAliases.Count,
+            AliasSaved = newAliases.Count == 1 ? newAliases[0].Text : null,
+        };
     }
 
     private static T Ok<T>(WalletResult<T> result, string what)

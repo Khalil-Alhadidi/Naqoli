@@ -140,13 +140,6 @@ public sealed class CaseDriver
                 var cardBefore = conversation.Card?.PendingId;
                 var statusesBefore = watcher.Sequence.Count;
 
-                if (step.Tap is "save_alias")
-                {
-                    // 9a (save an alias) is not built yet.
-                    unsupported = kind;
-                    break;
-                }
-
                 try
                 {
                     if (step.Tap == "confirm" && fault is { On: "confirm" } && !walletFaultSet && WalletFaultMode(fault.Code) is { } mode)
@@ -322,6 +315,11 @@ public sealed class CaseDriver
                 await conversation.ReissueAsync();
                 break;
 
+            case "save_alias":
+                // Rule 18 (milestone 9a): the Save button of the open alias offer; with none open it does nothing.
+                await conversation.SaveAliasAsync();
+                break;
+
             default:
                 throw new InvalidOperationException("Unknown tap " + step.Tap + ".");
         }
@@ -393,6 +391,10 @@ public sealed class CaseDriver
         var card = conversation.Card;
         var cardIssued = card is not null && card.PendingId != cardBefore;
 
+        // The offer this step opened: its message was added during the step and the offer is still open.
+        var offerShown = replies.Any(m => m.Kind == ConversationKind.AliasOffer);
+        var aliasOffered = offerShown ? conversation.AliasOffer?.Text : null;
+
         var now = await WalletSnapshot.TakeAsync(services, admin, conversation.UserId, cancellationToken);
         var diff = WalletSnapshot.Diff(before, now, excluded);
         var done = diff.NewTransactions.Where(t => t.Status == "done").ToList();
@@ -411,7 +413,8 @@ public sealed class CaseDriver
             cardIssued && cardBefore is not null,
             await PinSeenAsync(conversation.Messages, pin, cancellationToken),
             [.. watcher.Sequence.Skip(statusesBefore)],
-            elapsedMs);
+            elapsedMs,
+            aliasOffered);
     }
 
     /// <summary>The reason codes among <paramref name="replies"/>, in order.</summary>

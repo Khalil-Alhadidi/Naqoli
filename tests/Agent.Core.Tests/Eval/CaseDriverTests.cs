@@ -49,6 +49,7 @@ public sealed class CaseDriverTests(AgentHost host) : IAsyncDisposable
         [
             new ScriptedSentence(HammoudiSentence, ParsedRequest.Transfer(SeedFacts.Contact("S01").Alias, 50, AmountUnit.Thousand)),
             new ScriptedSentence(TraderSentence, ParsedRequest.Transfer(SeedFacts.Contact("T01").SavedName, 1_100_000, AmountUnit.Dinars)),
+            new ScriptedSentence(DevSetText.Say("AMB-19"), ParsedRequest.Transfer(DevSetText.SidecarRecipient("AMB-19"), 10, AmountUnit.Thousand)),
         ]));
         var clock = provider.GetRequiredService<EvalClock>();
         var options = new EvalOptions { SettleDelayMs = 50 };
@@ -254,16 +255,27 @@ public sealed class CaseDriverTests(AgentHost host) : IAsyncDisposable
     }
 
     [Fact]
-    public async Task SaveAliasIsMarkedUnsupported()
+    public async Task SaveAliasAfterADonePaymentWritesTheAliasAndTheSnapshotSeesIt()
     {
+        // AMB-19's three steps (the sentence, the tap on S08, the confirm), then the offer's Save tap (rule 18).
         var runner = Start();
+        var offered = DevSetText.AliasOffer("AMB-19", 2);
 
         var seen = await runner.Driver.PlayAsync(
-            Case("U1", null, Say(HammoudiSentence), new CaseStep(Tap: "save_alias"), Confirm()), Token);
+            Case("U1", null, Say(DevSetText.Say("AMB-19")), new CaseStep(Tap: "option", Value: System.Text.Json.JsonSerializer.SerializeToElement("S08")), Confirm(), new CaseStep(Tap: "save_alias")),
+            Token);
 
-        Assert.Equal("tap save_alias", seen.UnsupportedStep);
-        Assert.Single(seen.Steps);
-        Assert.Empty(seen.WalletDiff.NewTransactions);
+        Assert.Null(seen.UnsupportedStep);
+        Assert.Null(seen.StepError);
+        Assert.Equal(4, seen.Steps.Count);
+        Assert.Null(seen.Steps[1].AliasOffered);
+        Assert.Equal(offered, seen.Steps[2].AliasOffered);
+        Assert.Null(seen.Steps[3].AliasOffered);
+        Assert.Equal((1, 1), (seen.Steps[2].Executions, seen.Steps[3].Executions));
+        Assert.Equal(1, seen.WalletDiff.AliasesAdded);
+        Assert.Equal(offered, seen.WalletDiff.AliasSaved);
+        Assert.Equal(seen.WalletBefore.Aliases.Count + 1, seen.WalletAfter.Aliases.Count);
+        Assert.Single(seen.WalletDiff.NewTransactions);
     }
 
     [Fact]

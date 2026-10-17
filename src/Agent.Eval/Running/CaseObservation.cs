@@ -23,6 +23,10 @@ namespace Agent.Eval.Running;
 /// The time from the start of the case's first step to the end of this step (its settles and the external debit
 /// included, the runner's observation of the step not).
 /// </param>
+/// <param name="AliasOffered">
+/// The text of the alias offer the step opened (milestone 9a): an alias offer message was added during the step and
+/// the offer is still open at its end; null otherwise. Graded against <c>alias_offer</c>, never printed.
+/// </param>
 public sealed record StepObservation(
     int Index,
     string Kind,
@@ -37,7 +41,8 @@ public sealed record StepObservation(
     bool NewCard,
     bool PinSeen,
     IReadOnlyList<string> StatusSequence,
-    long ElapsedMs = 0);
+    long ElapsedMs = 0,
+    string? AliasOffered = null);
 
 /// <summary>
 /// The link from a wallet transaction to the pending record that reached it: the record's ID and the wallet reference its
