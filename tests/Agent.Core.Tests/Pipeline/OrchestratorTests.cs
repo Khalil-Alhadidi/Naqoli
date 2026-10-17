@@ -491,6 +491,23 @@ public class OrchestratorTests(AgentHost host)
     }
 
     [Fact]
+    public async Task NoneOfTheseOnAContactQuestionIsRecipientNotFound()
+    {
+        await StartAsync();
+        var shared = ParsedRequest.Transfer(SeedFacts.Contact("S08").SavedName, 50_000, AmountUnit.Dinars);
+
+        var refusal = Refusal(await HandleAsync(U1, shared, new SlotAnswers(ContactOption: Option.NoneOfThese)), ReasonCodes.RecipientNotFound);
+
+        Assert.Equal(shared.RecipientText, refusal.Detail);
+        var row = Assert.Single(await AuditAsync());
+        Assert.Equal((AuditEvents.Refused, ReasonCodes.RecipientNotFound, (string?)null), (row.Event, row.Reason, row.Detail));
+
+        // On a name that resolves to one card, there is no question, so the answer is ignored.
+        var exact = ParsedRequest.Transfer(HammoudiAlias, 50_000, AmountUnit.Dinars);
+        Assert.Equal(SeedFacts.HammoudiPhone, Card(await HandleAsync(U1, exact, new SlotAnswers(ContactOption: Option.NoneOfThese))).ToPhone);
+    }
+
+    [Fact]
     public async Task ATappedBillOrProductThatIsNotTheUsersIsResolvedAsIfUntapped()
     {
         await StartAsync();

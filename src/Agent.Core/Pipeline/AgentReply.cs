@@ -26,6 +26,18 @@ public sealed record Option(
 {
     /// <summary>The value of the "a card from the store" option of a <c>bill_or_store</c> question (rule 13).</summary>
     public const string StoreInternet = "store:internet";
+
+    /// <summary>
+    /// The final option of a <c>which_contact</c> or <c>did_you_mean</c> question that has options: the person is none
+    /// of them (<c>recipient_not_found</c>). Never in a question's <see cref="AgentReply.Question.Options"/>.
+    /// </summary>
+    public const string NoneOfThese = "none_of_these";
+
+    /// <summary>
+    /// The final option of every other question, typed ones included: it clears the pending request
+    /// (<c>question_cancelled</c>). Never in a question's <see cref="AgentReply.Question.Options"/>.
+    /// </summary>
+    public const string CancelQuestion = "cancel_question";
 }
 
 /// <summary>

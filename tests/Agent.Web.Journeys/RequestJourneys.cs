@@ -1,6 +1,7 @@
 extern alias AgentWeb;
 
 using Agent.Core.Audit;
+using Agent.Core.Pipeline;
 using Agent.Core.Text;
 using AgentWeb::Agent.Web.Services;
 using Microsoft.Playwright;
@@ -97,6 +98,77 @@ public sealed class RequestJourneys(JourneyHost host) : JourneyBase(host)
         Assert.Equal(contact.Phone, history[0].CounterpartyPhone);
         Assert.Equal(699_000, await Host.BalanceAsync(U1));
         Assert.Equal(1, await AuditCountAsync(AuditEvents.Done));
+    }
+
+    [Fact]
+    public async Task NoneOfTheseOnWhichContactRefusesRecipientNotFound()
+    {
+        var page = await OpenAsync(Host.WebAddress);
+
+        await SayAsync(page, DevSet.Say("AMB-02", 0));
+
+        // The two options, then the final option, "none of these" (17 Oct 2026).
+        await Expect(page.GetByTestId("question-option")).ToHaveCountAsync(2);
+        var decline = page.GetByTestId("question-decline");
+        await Expect(decline).ToHaveCountAsync(1);
+        await Expect(decline).ToHaveAttributeAsync("data-value", Option.NoneOfThese);
+        await Expect(decline).ToHaveTextAsync(Text["Option_NoneOfThese"].Value);
+
+        await decline.ClickAsync();
+
+        await Expect(LastAgentMessage(page)).ToHaveTextAsync(Text["Refusal_recipient_not_found"].Value);
+        await Expect(page.GetByTestId("question-option")).ToHaveCountAsync(0);
+        await Expect(page.GetByTestId("question-decline")).ToHaveCountAsync(0);
+        await Expect(page.GetByTestId("card")).ToHaveCountAsync(0);
+        Assert.Contains(await LearningRowsAsync(), r => r.Reason == "recipient_not_found");
+        Assert.Equal(U1Balance, await Host.BalanceAsync(U1));
+    }
+
+    [Fact]
+    public async Task NoneOfTheseOnDidYouMeanRefusesRecipientNotFound()
+    {
+        var page = await OpenAsync(Host.WebAddress);
+
+        await SayAsync(page, DevSet.Say("CLN-03-v1", 0));
+
+        await Expect(page.GetByTestId("question-option")).ToHaveCountAsync(1);
+        var decline = page.GetByTestId("question-decline");
+        await Expect(decline).ToHaveTextAsync(Text["Option_NoneOfThese"].Value);
+
+        await decline.ClickAsync();
+
+        await Expect(LastAgentMessage(page)).ToHaveTextAsync(Text["Refusal_recipient_not_found"].Value);
+        await Expect(page.GetByTestId("question-option")).ToHaveCountAsync(0);
+        await Expect(page.GetByTestId("card")).ToHaveCountAsync(0);
+        Assert.Contains(await LearningRowsAsync(), r => r.Reason == "recipient_not_found");
+        Assert.Equal(U1Balance, await Host.BalanceAsync(U1));
+    }
+
+    [Fact]
+    public async Task CancelOnATypedQuestionClearsThePendingRequest()
+    {
+        var page = await OpenAsync(Host.WebAddress);
+
+        await SayAsync(page, DevSet.Say("AMB-06", 0));
+
+        // A typed question has no options: the panel shows only the final option, "cancel".
+        await Expect(page.GetByTestId("question-option")).ToHaveCountAsync(0);
+        var decline = page.GetByTestId("question-decline");
+        await Expect(decline).ToHaveCountAsync(1);
+        await Expect(decline).ToHaveAttributeAsync("data-value", Option.CancelQuestion);
+        await Expect(decline).ToHaveTextAsync(Text["Option_CancelQuestion"].Value);
+
+        await decline.ClickAsync();
+
+        await Expect(LastAgentMessage(page)).ToHaveTextAsync(Text["Refusal_question_cancelled"].Value);
+        await Expect(page.GetByTestId("question-decline")).ToHaveCountAsync(0);
+
+        // Nothing is pending any more, so the amount alone completes nothing.
+        await SayAsync(page, DevSet.Say("AMB-06", 1));
+
+        await Expect(page.GetByTestId("card")).ToHaveCountAsync(0);
+        Assert.Equal(0, await AuditCountAsync(AuditEvents.Created));
+        Assert.Equal(U1Balance, await Host.BalanceAsync(U1));
     }
 
     [Fact]

@@ -42,6 +42,12 @@ public static class ReasonCodes
     /// </summary>
     public const string AmountBelowMinimum = "amount_below_minimum";
 
+    /// <summary>
+    /// The user tapped the cancel option of a question (<c>Option.CancelQuestion</c>): the pending request is cleared and
+    /// nothing was taken. Not in Khalil's list (data/README.md); not a logged reason.
+    /// </summary>
+    public const string QuestionCancelled = "question_cancelled";
+
     /// <summary>The detail of a <see cref="NotSupported"/> refusal for a transfer to the user's own number.</summary>
     public const string OwnNumberDetail = "own_number";
 

@@ -44,6 +44,8 @@
   <data name="Option_store_internet" xml:space="preserve"><value>كارت من المتجر</value></data>
   <data name="Option_LastSent" xml:space="preserve"><value>آخر تحويل {0}</value></data>
   <data name="Option_NoPreviousTransfer" xml:space="preserve"><value>ما حوّلتله من قبل</value></data>
+  <data name="Option_NoneOfThese" xml:space="preserve"><value>مو هو</value></data>
+  <data name="Option_CancelQuestion" xml:space="preserve"><value>إلغاء</value></data>
   <data name="Refusal_insufficient_balance" xml:space="preserve"><value>رصيدك ما يكفي، تحتاج بعد {0}</value></data>
   <data name="Refusal_recipient_not_found" xml:space="preserve"><value>ما لكيت هذا الشخص بجهات الاتصال مالتك</value></data>
   <data name="Refusal_number_has_no_wallet" xml:space="preserve"><value>هذا الرقم ما عنده محفظة</value></data>
@@ -59,6 +61,7 @@
   <data name="Refusal_not_supported" xml:space="preserve"><value>هاي ما أكدر أسويها</value></data>
   <data name="Refusal_not_understood" xml:space="preserve"><value>ما فهمت عليك، عيدها بطريقة ثانية</value></data>
   <data name="Refusal_not_understood_repeat" xml:space="preserve"><value>ما فهمت. {0}</value></data>
+  <data name="Refusal_question_cancelled" xml:space="preserve"><value>TODO-AR: Cancelled. Nothing was taken.</value></data>
   <data name="Refusal_only_own_balance" xml:space="preserve"><value>أكدر أكولك رصيدك إنت بس</value></data>
   <data name="Refusal_model_unavailable" xml:space="preserve"><value>ما أكدر أقرأ الرسائل هسه. جرب بعد شوية، أو استخدم التطبيق</value></data>
   <data name="Refusal_dinars_only" xml:space="preserve"><value>أشتغل بالدينار العراقي بس</value></data>

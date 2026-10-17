@@ -20,11 +20,11 @@ public class PhoneStringsTests
     }
 
     /// <summary>
-    /// Keys added after Khalil wrote the phone's wording and still English placeholders until he writes them. Empty
-    /// since 16 Oct 2026 (<c>Card_TryAgain</c> and <c>Card_SendAgain</c> were the last); a new key goes here until its
-    /// Arabic is in, and no other key may be a placeholder.
+    /// Keys added after Khalil wrote the phone's wording and still English placeholders until he writes them: the reply
+    /// after a question's cancel option (17 Oct 2026). A new key goes here until its Arabic is in, and no other key may
+    /// be a placeholder.
     /// </summary>
-    private static readonly string[] AwaitingKhalil = [];
+    private static readonly string[] AwaitingKhalil = ["Refusal_question_cancelled"];
 
     [Fact]
     public void NoValueIsAPlaceholderExceptTheKeysAwaitingKhalil()

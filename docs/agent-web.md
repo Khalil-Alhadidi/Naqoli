@@ -271,7 +271,7 @@ Options validation requires `StaleExecutingAfterSeconds` to be more than three t
 
 `src/Agent.Web/Resources/PhoneStrings.resx` (neutral culture, read through `IStringLocalizer<PhoneStrings>`) holds every text the phone shows (rule 4). Khalil wrote the values in Iraqi Arabic on 15 Oct 2026 (commit a32ac1d); nothing else writes or changes them. `{0}` and `{1}` are filled by code, with figures in Arabic-Indic digits. `Word_yes` and `Word_no` are comma-separated lists (`PhoneWords.Split`), compared after `ArabicText.Normalize`. The table gives each key's meaning in English, not its Arabic value.
 
-No key is a placeholder. `Card_TryAgain` and `Card_SendAgain` (milestone 7, D19), and the D21 wording of `Refusal_invalid_number` (it now asks for the full mobile number or a saved name) were written by Khalil on 16 Oct 2026. `PhoneStringsTests.NoValueIsAPlaceholderExceptTheKeysAwaitingKhalil` keeps the allow-list, empty again: a new key is added there with a `TODO-AR` value until he writes it.
+One key is a placeholder: `Refusal_question_cancelled` (17 Oct 2026, the reply after a question's cancel option), `TODO-AR` until Khalil writes it, and the only entry of the allow-list. `Card_TryAgain` and `Card_SendAgain` (milestone 7, D19), and the D21 wording of `Refusal_invalid_number` (it now asks for the full mobile number or a saved name) were written by Khalil on 16 Oct 2026. `PhoneStringsTests.NoValueIsAPlaceholderExceptTheKeysAwaitingKhalil` keeps the allow-list: a new key is added there with a `TODO-AR` value until he writes it.
 
 | Key | Meaning | Note |
 |---|---|---|
@@ -314,6 +314,8 @@ No key is a placeholder. `Card_TryAgain` and `Card_SendAgain` (milestone 7, D19)
 | `Option_store_internet` | A card from the store | |
 | `Option_LastSent` | Last transfer {0} | Under a contact option (`which_contact`, `did_you_mean`); Khalil's Arabic, 16 Oct 2026 |
 | `Option_NoPreviousTransfer` | You have not sent to this person before | Under a contact option with no previous transfer; Khalil's Arabic, 16 Oct 2026 |
+| `Option_NoneOfThese` | It is not him | The final option of `which_contact` and `did_you_mean` with options; Khalil's Arabic, 17 Oct 2026 |
+| `Option_CancelQuestion` | Cancel | The final option of every other question, typed ones included; Khalil's Arabic, 17 Oct 2026 |
 | `Refusal_insufficient_balance` | Your balance is not enough. You are {0} short | |
 | `Refusal_recipient_not_found` | I could not find this person in your contacts | |
 | `Refusal_number_has_no_wallet` | This number has no wallet | |
@@ -328,6 +330,8 @@ No key is a placeholder. `Card_TryAgain` and `Card_SendAgain` (milestone 7, D19)
 | `Refusal_product_not_found` | I could not find this product | |
 | `Refusal_not_supported` | I cannot do this | |
 | `Refusal_not_understood` | I did not understand. Please say it again | |
+| `Refusal_not_understood_repeat` | I did not understand. {0} | `{0}` is the open question's text; the question stays open. Khalil's Arabic, 17 Oct 2026 |
+| `Refusal_question_cancelled` | Cancelled. Nothing was taken. | `TODO-AR`: the reply after a question's cancel option; awaiting Khalil's Arabic (17 Oct 2026) |
 | `Refusal_only_own_balance` | I can only show your own balance | |
 | `Refusal_model_unavailable` | I cannot read messages right now. Please try again later | |
 | `Refusal_dinars_only` | I work in Iraqi dinars only | |
@@ -476,6 +480,7 @@ The journeys locate elements only by these attributes.
 | Card buttons and PIN | `card-confirm`, `card-cancel`, `card-pin` | |
 | Card reissue buttons (D19) | `card-try-again` (state `expired`, `cancelled` or `notdone`), `card-send-again` (state `done`); neither while live or checking | |
 | Question option | `question-option` | `data-value` |
+| Question's final option (none of these, or cancel) | `question-decline` | `data-value` (`none_of_these`, `cancel_question`) |
 | Contact option's last-sent line | `option-last-sent` (inside a `which_contact` or `did_you_mean` option) | |
 | Consent and settle buttons | `consent-button`, `check-again` (in the chat), `card-check-again` (on the card while Checking) | |
 | Trace entry | `trace-entry` | `data-zone` (`user`, `code`, `model`, `write`) |
@@ -518,6 +523,9 @@ The journeys locate elements only by these attributes.
 | `DoubleTapExecutesOnce` | Two forced clicks on Confirm at once give exactly one done outcome, still one after another second. There is one new history row, the balance is 699,000, and there is exactly one `done` audit row |
 | `TypedNumberShowsTheRegisteredNameAndFirstTime` | ADD-01: `card-display` is the typed number in Arabic-Indic digits, `card-registered` the account's registered name read from the wallet by phone, `card-first-time` shows; Confirm gives one done outcome, the newest history row is to that number, balance 729,000 |
 | `AmbiguousNameOffersOptionsAndTheTapGivesTheCard` | AMB-02 (D3): one `question` chat message with exactly two `question-option` elements, `data-value` S10 and S11, and no card; each option's `option-last-sent` is `Option_LastSent` with that contact's `lastSentAmountIqd` from the wallet, or `Option_NoPreviousTransfer` when it has none; the tap on S10 gives a live card whose `card-display` and `card-registered` are S10's saved name and registered name read from the wallet, `card-amount` 50,000, `card-amount-words` is `Card_AmountWords` with the words of 50,000 composed from the resource values, nothing moved; Confirm gives one done outcome, one new history row to S10's number, balance 699,000, one `done` audit row |
+| `NoneOfTheseOnWhichContactRefusesRecipientNotFound` | AMB-02: the two options plus `question-decline` with `Option_NoneOfThese`'s text; the click gives `Refusal_recipient_not_found`, no option or decline button remains, no card, a `recipient_not_found` learning row, balance unchanged |
+| `NoneOfTheseOnDidYouMeanRefusesRecipientNotFound` | CLN-03-v1: the one `did_you_mean` option plus `Option_NoneOfThese`; the click gives `Refusal_recipient_not_found`, no card, a `recipient_not_found` learning row, balance unchanged |
+| `CancelOnATypedQuestionClearsThePendingRequest` | AMB-06 step 0: the typed `which_amount` question shows only `question-decline` with `Option_CancelQuestion`'s text; the click gives `Refusal_question_cancelled` and the panel goes; AMB-06 step 1 then gives no card and no `created` audit row |
 | `AccountNumberIsRefusedAndMasked` | ADD-03: the reply is `Refusal_invalid_number`, no card, balance unchanged; the 14 digits are in no `trace-entry` and no audit or learning row |
 | `UnknownContactIsRefused` | ADD-02: the reply is `Refusal_recipient_not_found`, no card, balance unchanged |
 | `InsufficientBalanceIsRefused` | NOGO-11 on U2's console: the reply holds the fixed text of `Refusal_insufficient_balance`, no card, the balance stays 18,500 |

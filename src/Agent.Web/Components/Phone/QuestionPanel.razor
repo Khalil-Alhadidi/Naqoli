@@ -1,6 +1,6 @@
 @inherits SessionComponent
 
-@if (Session.Question is { } question && question.Options.Count > 0)
+@if (Session.Question is { } question)
 {
     <div class="phone-options">
         @foreach (var option in question.Options)
@@ -20,6 +20,13 @@
                 </span>
             </MudButton>
         }
+
+        @* The final option of every question (17 Oct 2026): "none of these" on a contact question with options, "cancel"
+           on every other one, typed questions included. Not one of the question's options. *@
+        <MudButton data-testid="question-decline" data-value="@DeclineValue(question)" Variant="Variant.Text" FullWidth="true"
+                   Disabled="@Session.Busy" OnClick="@Session.DeclineQuestionAsync">
+            <bdi>@Text[DeclineValue(question) == Option.NoneOfThese ? "Option_NoneOfThese" : "Option_CancelQuestion"]</bdi>
+        </MudButton>
     </div>
 }
 
@@ -27,6 +34,9 @@
     // The options of a contact question label the last amount sent to that contact, or say there was none.
     private static bool IsContactQuestion(string kind)
         => kind is QuestionKinds.WhichContact or QuestionKinds.DidYouMean;
+
+    private static string DeclineValue(AgentReply.Question question)
+        => IsContactQuestion(question.Kind) && question.Options.Count > 0 ? Option.NoneOfThese : Option.CancelQuestion;
 
     private string LastSent(Option option)
         => option.LastSentAmountIqd is { } last

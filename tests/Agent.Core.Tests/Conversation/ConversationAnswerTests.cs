@@ -380,6 +380,65 @@ public sealed class ConversationAnswerTests(AgentHost host)
     }
 
     [Fact]
+    public async Task NoneOfTheseOnAContactQuestionIsRecipientNotFound()
+    {
+        await using var harness = await StartAsync();
+        var conversation = harness.Conversation;
+        await conversation.SendAsync(SharedNameSentence);
+
+        await conversation.DeclineQuestionAsync();
+
+        var messages = conversation.Messages;
+        Assert.Equal(new ConversationMessage(ConversationRole.User, ConversationKind.Option, Option.NoneOfThese), messages[^2]);
+        Assert.Equal(new ConversationMessage(ConversationRole.Agent, ConversationKind.Refusal, ReasonCodes.RecipientNotFound), messages[^1]);
+        Assert.Null(conversation.Question);
+        Assert.Null(conversation.Card);
+        Assert.Contains(harness.Trace.Entries, e => e.Step == "recipient_resolved" && e.Detail == "none_of_these");
+        Assert.Equal(ReasonCodes.RecipientNotFound, Assert.Single(await harness.LearningRowsAsync()).Reason);
+    }
+
+    [Fact]
+    public async Task CancelOnAQuestionClearsThePendingRequestSoTheNextAmountIsANewRequest()
+    {
+        await using var harness = await StartAsync();
+        var conversation = harness.Conversation;
+        await conversation.SendAsync(NoAmountSentence);
+
+        await conversation.DeclineQuestionAsync();
+
+        var messages = conversation.Messages;
+        Assert.Equal(new ConversationMessage(ConversationRole.User, ConversationKind.Option, Option.CancelQuestion), messages[^2]);
+        Assert.Equal(new ConversationMessage(ConversationRole.Agent, ConversationKind.Refusal, ReasonCodes.QuestionCancelled), messages[^1]);
+        Assert.Null(conversation.Question);
+        Assert.Null(conversation.LastRequest);
+        Assert.Equal(new AgentReply.Refusal(ReasonCodes.QuestionCancelled, null, null), conversation.LastReply);
+        Assert.Null(conversation.LastLearningEntry);
+        Assert.Contains(harness.Trace.Entries, e => e.Step == "question_cancelled" && e.Detail == QuestionKinds.WhichAmount);
+        var refused = Assert.Single(await harness.AuditRowsAsync(), r => r.Event == global::Agent.Core.Audit.AuditEvents.Refused);
+        Assert.Equal(ReasonCodes.QuestionCancelled, refused.Reason);
+
+        // Nothing is pending, so an amount alone is a fresh message, not an answer: no card.
+        await conversation.SendAsync("50");
+
+        Assert.Null(conversation.Card);
+        Assert.DoesNotContain(harness.Trace.Entries, e => e.Step == "answer_parsed");
+        Assert.Equal(new ConversationMessage(ConversationRole.Agent, ConversationKind.Refusal, ReasonCodes.NotUnderstood), conversation.Messages[^1]);
+        Assert.DoesNotContain(await harness.AuditRowsAsync(), r => r.Event == global::Agent.Core.Audit.AuditEvents.Created);
+    }
+
+    [Fact]
+    public async Task DeclineWithNoOpenQuestionDoesNothing()
+    {
+        await using var harness = await StartAsync();
+        var conversation = harness.Conversation;
+
+        await conversation.DeclineQuestionAsync();
+
+        Assert.Empty(conversation.Messages);
+        Assert.Contains(harness.Trace.Entries, e => e.Step == "option_rejected");
+    }
+
+    [Fact]
     public async Task AnEndearmentIsDroppedAndTheTransferGoesStraightToTheCard()
     {
         // ADD-19 end to end, with the console's endearments: no question, the card to S14.

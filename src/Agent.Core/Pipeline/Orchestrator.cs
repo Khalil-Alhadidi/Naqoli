@@ -39,6 +39,7 @@ public sealed class Orchestrator
     private const string RecipientByContact = "contact";
     private const string RecipientByAlias = "alias";
     private const string RecipientByOption = "option";
+    private const string NoneOfThese = "none_of_these";
     private const string ConsentGiven = "given";
     private const string ConsentRequired = "required";
 
@@ -320,7 +321,8 @@ public sealed class Orchestrator
 
     /// <summary>
     /// Step 4: the recipient first (rule 16), then the amount, then the checks and the card. A question among contacts
-    /// that the user has answered by a tap (<see cref="SlotAnswers.ContactOption"/>) takes the tapped candidate.
+    /// that the user has answered by a tap (<see cref="SlotAnswers.ContactOption"/>) takes the tapped candidate; the
+    /// question's "none of these" option (<see cref="Option.NoneOfThese"/>) is <c>recipient_not_found</c>.
     /// </summary>
     private async Task<AgentReply> TransferAsync(
         WalletUser user, ParsedRequest request, SlotAnswers answers, CancellationToken cancellationToken)
@@ -362,6 +364,13 @@ public sealed class Orchestrator
             var resolution = ContactResolver.Resolve(
                 request.RecipientText, ContactCandidate.From(contacts), options.MinSubstringWordLength, options.Endearments);
             var byOption = false;
+            if (resolution is Resolution.Options && answers.ContactOption == Option.NoneOfThese)
+            {
+                // The question's "none of these" option: the person is not among the user's contacts.
+                trace.Record(TraceZone.Code, TraceSteps.RecipientResolved, NoneOfThese);
+                return await RefuseAsync(userId, ReasonCodes.RecipientNotFound, request.RecipientText, null, cancellationToken);
+            }
+
             if (resolution is Resolution.Options offered && answers.ContactOption is { } tapped)
             {
                 // D3: the tap picks one of the candidates this same resolution offers, by its option value. A value that

@@ -377,6 +377,67 @@ public sealed class Conversation : IDisposable
     }
 
     /// <summary>
+    /// The final option of the open question (17 Oct 2026), under the same gate as <see cref="TapOptionAsync"/>; with no
+    /// open question it does nothing (traced as <c>option_rejected</c>). On <c>which_contact</c> or <c>did_you_mean</c>
+    /// with options it is "none of these" (<see cref="Option.NoneOfThese"/>): the pending request goes back to the
+    /// orchestrator with that answer, which refuses it <c>recipient_not_found</c>. On every other question, typed ones
+    /// included, it is "cancel" (<see cref="Option.CancelQuestion"/>): the pending request is cleared, an audit row
+    /// <c>refused</c> with <c>question_cancelled</c> is written, and the next message is a fresh request.
+    /// </summary>
+    public async Task DeclineQuestionAsync()
+    {
+        if (!await EnterAsync())
+            return;
+        try
+        {
+            SetBusy(true);
+            var token = stopping;
+            var question = Question;
+            if (question is null || lastRequest is null)
+            {
+                trace.Record(TraceZone.Code, "option_rejected", null);
+                return;
+            }
+
+            var noneOfThese = question.Options.Count > 0 && question.Kind is QuestionKinds.WhichContact or QuestionKinds.DidYouMean;
+
+            // Added while the question is still open, as a tap is.
+            Add(new ConversationMessage(
+                ConversationRole.User, ConversationKind.Option, noneOfThese ? Option.NoneOfThese : Option.CancelQuestion));
+            if (noneOfThese)
+            {
+                await HandleCoreAsync(lastRequest, answers with { ContactOption = Option.NoneOfThese }, token);
+                return;
+            }
+
+            trace.Record(TraceZone.Code, "question_cancelled", question.Kind);
+            await using (var scope = scopes.CreateAsyncScope())
+                await scope.ServiceProvider.GetRequiredService<AuditLog>().WriteRefusalAsync(userId, ReasonCodes.QuestionCancelled, null, token);
+
+            lastRequest = null;
+            answers = SlotAnswers.None;
+            Question = null;
+            QuestionMessageIndex = null;
+            typedSlot = null;
+            LastReply = new AgentReply.Refusal(ReasonCodes.QuestionCancelled, null, null);
+            LastLearningEntry = null;
+            AddRefusal(ReasonCodes.QuestionCancelled);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            Failed(ex);
+        }
+        catch (OperationCanceledException) when (stopping.IsCancellationRequested)
+        {
+            // The conversation ended; the agent has recorded what it could (see Dispose).
+        }
+        finally
+        {
+            Release();
+        }
+    }
+
+    /// <summary>
     /// The consent button: records consent in the wallet, then answers the pending request again, with what taps have
     /// answered for it. (The consent gate comes before any question, so a pending request normally has no answers here;
     /// they are passed all the same.)

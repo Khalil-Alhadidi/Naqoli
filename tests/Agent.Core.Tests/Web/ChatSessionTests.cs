@@ -161,8 +161,13 @@ public sealed class ChatSessionTests(AgentHost host) : IAsyncDisposable
 
     private const string SharedNameSentence = "send fifty thousand to a shared name";
 
+    private const string NoAmountSentence = "send to hammoudi";
+
     private static ScriptedSentence SharedName()
         => new(SharedNameSentence, ParsedRequest.Transfer(SeedFacts.Contact("S08").SavedName, 50_000, AmountUnit.Dinars));
+
+    private static ScriptedSentence NoAmount()
+        => new(NoAmountSentence, ParsedRequest.Transfer(SeedFacts.Contact("S01").Alias, null, AmountUnit.None));
 
     [Fact]
     public async Task ANotUnderstoodAnswerRepeatsTheQuestionsTextInTheRepeatTemplate()
@@ -180,4 +185,32 @@ public sealed class ChatSessionTests(AgentHost host) : IAsyncDisposable
         Assert.Equal(questionId, session.QuestionMessageId);
     }
 
+    [Fact]
+    public async Task TheFinalOptionOfAContactQuestionIsNoneOfThese()
+    {
+        var circuit = await StartAsync(SeedFacts.DemoUserId, SharedName());
+        var session = circuit.Session;
+        await session.SendAsync(SharedNameSentence);
+
+        await session.DeclineQuestionAsync();
+
+        Assert.Equal(circuit.Text["Option_NoneOfThese"].Value, session.Messages.Last(m => m.Role == ChatRole.User).Text);
+        Assert.Equal(circuit.Text["Refusal_" + ReasonCodes.RecipientNotFound].Value, LastAgentMessage(session).Text);
+        Assert.Null(session.Question);
+    }
+
+    [Fact]
+    public async Task TheFinalOptionOfATypedQuestionIsCancel()
+    {
+        var circuit = await StartAsync(SeedFacts.DemoUserId, NoAmount());
+        var session = circuit.Session;
+        await session.SendAsync(NoAmountSentence);
+        Assert.Equal(QuestionKinds.WhichAmount, session.Question?.Kind);
+
+        await session.DeclineQuestionAsync();
+
+        Assert.Equal(circuit.Text["Option_CancelQuestion"].Value, session.Messages.Last(m => m.Role == ChatRole.User).Text);
+        Assert.Equal(circuit.Text["Refusal_" + ReasonCodes.QuestionCancelled].Value, LastAgentMessage(session).Text);
+        Assert.Null(session.Question);
+    }
 }

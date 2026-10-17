@@ -114,6 +114,16 @@ public sealed class ChatSession : IDisposable
         await conversation.TapOptionAsync(value);
     }
 
+    /// <summary>
+    /// The question panel's final option (see <see cref="Conversation.DeclineQuestionAsync"/>): "none of these" on a
+    /// contact question with options, "cancel" on every other question.
+    /// </summary>
+    public async Task DeclineQuestionAsync()
+    {
+        TraceLog.Current.Value = trace;
+        await conversation.DeclineQuestionAsync();
+    }
+
     /// <summary>The consent button.</summary>
     public async Task GiveConsentAsync()
     {
@@ -217,6 +227,11 @@ public sealed class ChatSession : IDisposable
                 yield return (ChatRole.User, OptionText(message.Code), ChatMessageKind.Text, null, ChatAction.None);
                 break;
 
+            case ConversationKind.Refusal when message.QuestionKind is { } repeated:
+                // Not understood while a question is open: the question is asked again in the same message.
+                yield return (ChatRole.Agent, Text("Refusal_not_understood_repeat", Text("Question_" + repeated)), ChatMessageKind.Text, null, ChatAction.None);
+                break;
+
             case ConversationKind.Refusal:
                 yield return (ChatRole.Agent, RefusalText(message.Code, message.AmountIqd), ChatMessageKind.Text, null, ChatAction.None);
                 break;
@@ -227,11 +242,6 @@ public sealed class ChatSession : IDisposable
 
             case ConversationKind.Unsupported:
                 var key = "Unsupported_" + message.Code;
-            case ConversationKind.Refusal when message.QuestionKind is { } repeated:
-                // Not understood while a question is open: the question is asked again in the same message.
-                yield return (ChatRole.Agent, Text("Refusal_not_understood_repeat", Text("Question_" + repeated)), ChatMessageKind.Text, null, ChatAction.None);
-                break;
-
                 var body = text[key].ResourceNotFound ? Text("Refusal_" + ReasonCodes.NotSupported) : Text(key);
                 yield return (ChatRole.Agent, body, ChatMessageKind.Text, null, ChatAction.None);
                 break;
@@ -316,13 +326,18 @@ public sealed class ChatSession : IDisposable
 
     /// <summary>
     /// The text of a tapped option, from the open question (the conversation adds the tap while the question is still
-    /// open): the store option's string, the display name, or the amount.
+    /// open): the store option's string, the final option's string ("none of these" or "cancel"), the display name, or
+    /// the amount.
     /// </summary>
     private string OptionText(string? value)
     {
         var option = conversation.Question?.Options.FirstOrDefault(o => string.Equals(o.Value, value, StringComparison.Ordinal));
         if (value == Option.StoreInternet)
             return Text("Option_store_internet");
+        if (value == Option.NoneOfThese)
+            return Text("Option_NoneOfThese");
+        if (value == Option.CancelQuestion)
+            return Text("Option_CancelQuestion");
         if (option?.Display is { } display)
             return display;
         if (option?.AmountIqd is { } amount)

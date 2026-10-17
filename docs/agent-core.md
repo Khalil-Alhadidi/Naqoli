@@ -569,6 +569,7 @@ Every action opens its own DI scope (`CreateAsyncScope`) and resolves the agent'
 |---|---|
 | `SendAsync(text)` | D6 first (below), then the parse call with the pending note, then `Orchestrator.HandleAsync`; the reply becomes messages. A `ParserUnavailableException` gives `model_unavailable` |
 | `TapOptionAsync(value)` | Checks the value against the open question's options (anything else is traced `option_rejected` and ignored), then answers the pending request with the tap (below, "Answers to a question"); no wallet read |
+| `DeclineQuestionAsync()` | The question's final option (17 Oct 2026); with no open question, traced `option_rejected`. On `which_contact` or `did_you_mean` with options it is `Option.NoneOfThese`: the pending request goes back to the orchestrator with that `ContactOption`, and `Orchestrator.TransferAsync`, seeing a resolution with options and that value, traces `recipient_resolved` with `none_of_these` and refuses `recipient_not_found` through `RefuseAsync` (audit row and learning row as always). On every other question, typed ones included, it is `Option.CancelQuestion`: traced `question_cancelled` with the kind, an audit row `refused` with `question_cancelled` (`ReasonCodes.QuestionCancelled`), the pending request, answers and question cleared, the reply `question_cancelled`, no learning row; the next message is a fresh request. The user's `Option` message carries the constant |
 | `GiveConsentAsync()` | `WalletClient.GiveConsentAsync`, then answers the pending request and its answers again |
 | `ConfirmAsync(pin)` | `ConfirmHandler.ConfirmAsync(user, Card.PendingId, pin)`; the PIN is passed through and kept nowhere |
 | `SettleAsync()` | Only while the card is Checking: `ConfirmHandler.SettleCheckingAsync`, the same body under the same key (rule 6) |
@@ -672,8 +673,8 @@ A `ConversationMessage(Role, Kind, Code, AmountIqd, Reference, PurchaseCode, Att
 | Kind | Role | Code | Figures |
 |---|---|---|---|
 | `Typed` | User | none | none |
-| `Option` | User | The option's value | none |
-| `Refusal` | Agent | The reason code (`ReasonCodes`), including `model_unavailable` and `not_done_nothing_taken` | `AmountIqd`: the refusal's figure, if any |
+| `Option` | User | The option's value, or `none_of_these` / `cancel_question` for the question's final option | none |
+| `Refusal` | Agent | The reason code (`ReasonCodes`), including `model_unavailable`, `not_done_nothing_taken` and `question_cancelled` | `AmountIqd`: the refusal's figure, if any; `QuestionKind` on a repeated question |
 | `Unsupported` | Agent | The parsed unsupported reason | none |
 | `Question` | Agent | The question kind (`QuestionKinds`) | none; the options are on `Question` |
 | `Balance` | Agent | none | `AmountIqd`: the balance |
