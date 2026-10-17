@@ -623,6 +623,33 @@ public sealed class ConversationAnswerTests(AgentHost host)
     }
 
     [Fact]
+    public async Task ASecondAmountRefusalReopensTheWindow()
+    {
+        var parser = TooMuchParser();
+        await using var harness = await StartAsync(parser);
+        var conversation = harness.Conversation;
+        await conversation.SendAsync(TooMuchSentence);
+        Assert.Equal(ReasonCodes.InsufficientBalance, Assert.IsType<AgentReply.Refusal>(conversation.LastReply).Code);
+
+        // A bare number is read in thousands (rule 9): 900 thousand is still above U1's balance, refused again, and the
+        // window reopens (confirmed by Khalil, 17 Oct 2026).
+        await conversation.SendAsync("900");
+
+        Assert.Single(parser.Calls);
+        Assert.Equal(ReasonCodes.InsufficientBalance, Assert.IsType<AgentReply.Refusal>(conversation.LastReply).Code);
+        Assert.Null(conversation.Card);
+
+        // ADD-21's second message, Khalil's typed amount: merged again, and this one fits.
+        await conversation.SendAsync(DevSetText.Say("ADD-21", 1));
+
+        Assert.Single(parser.Calls);
+        var card = Assert.IsType<CardView>(conversation.Card);
+        Assert.Equal(SeedFacts.Contact("S14").Number, card.ToPhone);
+        Assert.Equal(600_000, card.AmountIqd);
+        Assert.Equal(2, harness.Trace.Entries.Count(e => e.Step == "amount_retry"));
+    }
+
+    [Fact]
     public async Task ABillRefusedForTheBalanceDoesNotOpenTheRetry()
     {
         // NOGO-11: U2's school fees against her balance, as its sidecar parse has it (the biller code only).

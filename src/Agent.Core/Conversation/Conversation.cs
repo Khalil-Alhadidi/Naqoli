@@ -829,7 +829,7 @@ public sealed class Conversation : IDisposable
     /// True when <paramref name="reply"/> refuses a transfer for an amount reason (<see cref="AmountRetryCodes"/>): the
     /// next typed message, and only that one, goes into the transfer when it reads as an amount, and the checks run
     /// again. Bills and purchases carry no typed amount, so they never open it. A merged amount refused for an amount
-    /// reason again opens it again, by the same rule.
+    /// reason again opens it again (confirmed by Khalil, 17 Oct 2026).
     /// </summary>
     private static bool OpensAmountRetry(ParsedRequest request, AgentReply reply)
         => request.Intent == RequestIntent.Transfer
