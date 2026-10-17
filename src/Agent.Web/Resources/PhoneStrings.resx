@@ -18,7 +18,7 @@
   <data name="Card_Confirm" xml:space="preserve"><value>تأكيد</value></data>
   <data name="Card_Cancel" xml:space="preserve"><value>إلغاء</value></data>
   <data name="Card_Pin" xml:space="preserve"><value>الرقم السري</value></data>
-  <data name="Card_Expired" xml:space="preserve"><value>خلص الوقت. ما انحوّل شي</value></data>
+  <data name="Card_Expired" xml:space="preserve"><value>خلص الوقت. ما اتحوّل شي</value></data>
   <data name="Card_Cancelled" xml:space="preserve"><value>العملية ملغية</value></data>
   <data name="Card_Timer" xml:space="preserve"><value>ينلغي بعد {0} ثانية إذا ما ضغطت تأكيد</value></data>
   <data name="Card_TryAgain" xml:space="preserve"><value>جرب مرة ثانية</value></data>
