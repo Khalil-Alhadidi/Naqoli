@@ -246,6 +246,66 @@ public sealed class ConversationAnswerTests(AgentHost host)
     }
 
     [Fact]
+    public async Task ATypedAmountIsReadByCodeAndNeverReachesTheModel()
+    {
+        // AMB-06: the amount is missing, so which_amount (typed); the answer is read in code, with no parse call.
+        var parser = KnowsOnly((DevSetText.Say("AMB-06", 0), ParsedRequest.Transfer(DevSetText.SidecarRecipient("AMB-06", 0), null, AmountUnit.None)));
+        await using var harness = await StartAsync(parser);
+        var conversation = harness.Conversation;
+
+        await conversation.SendAsync(DevSetText.Say("AMB-06", 0));
+        Assert.Equal(QuestionKinds.WhichAmount, Assert.IsType<AgentReply.Question>(conversation.Question).Kind);
+
+        await conversation.SendAsync(DevSetText.Say("AMB-06", 1));
+
+        Assert.Single(parser.Calls);
+        var card = Assert.IsType<CardView>(conversation.Card);
+        Assert.Equal(SeedFacts.Contact("S19").Number, card.ToPhone);
+        Assert.Equal(30_000, card.AmountIqd);
+        Assert.Contains(harness.Trace.Entries, e => e.Step == "answer_parsed" && e.Detail == QuestionKinds.WhichAmount);
+        Assert.Single(conversation.QuestionsAsked);
+    }
+
+    [Fact]
+    public async Task ATypedContactWithThePrepositionIsMatchedByCodeAndNeverReachesTheModel()
+    {
+        // AMB-13: no recipient, so which_contact (typed); the answer is S12's alias with the preposition lam against it.
+        var parser = KnowsOnly((DevSetText.Say("AMB-13", 0), ParsedRequest.Transfer(null, 20, AmountUnit.Thousand)));
+        await using var harness = await StartAsync(parser);
+        var conversation = harness.Conversation;
+
+        await conversation.SendAsync(DevSetText.Say("AMB-13", 0));
+        var question = Assert.IsType<AgentReply.Question>(conversation.Question);
+        Assert.Equal((QuestionKinds.WhichContact, QuestionAnswer.Typed), (question.Kind, question.Answer));
+
+        await conversation.SendAsync(DevSetText.Say("AMB-13", 1));
+
+        Assert.Single(parser.Calls);
+        var card = Assert.IsType<CardView>(conversation.Card);
+        Assert.Equal(SeedFacts.Contact("S12").Number, card.ToPhone);
+        Assert.Equal(SeedFacts.Contact("S12").Alias, card.DisplayName);
+        Assert.Equal(20_000, card.AmountIqd);
+        Assert.Contains(harness.Trace.Entries, e => e.Step == "answer_parsed" && e.Detail == QuestionKinds.WhichContact);
+        Assert.Null(conversation.LastAnswers.ContactOption);
+    }
+
+    [Fact]
+    public async Task ATypedAnswerTheCodeCannotReadGoesToTheModel()
+    {
+        var parser = KnowsOnly((DevSetText.Say("AMB-06", 0), ParsedRequest.Transfer(DevSetText.SidecarRecipient("AMB-06", 0), null, AmountUnit.None)));
+        await using var harness = await StartAsync(parser);
+        var conversation = harness.Conversation;
+        await conversation.SendAsync(DevSetText.Say("AMB-06", 0));
+
+        await conversation.SendAsync("not an amount at all");
+
+        Assert.Equal(2, parser.Calls.Count);
+        Assert.Equal("not an amount at all", parser.Calls[1].Text);
+        Assert.DoesNotContain(harness.Trace.Entries, e => e.Step == "answer_parsed");
+        Assert.Null(conversation.Card);
+    }
+
+    [Fact]
     public async Task AnEndearmentIsDroppedAndTheTransferGoesStraightToTheCard()
     {
         // ADD-19 end to end, with the console's endearments: no question, the card to S14.

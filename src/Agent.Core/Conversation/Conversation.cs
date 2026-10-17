@@ -1,4 +1,3 @@
-using System.Globalization;
 using Agent.Core.Confirm;
 using Agent.Core.Learning;
 using Agent.Core.Masking;
@@ -184,11 +183,15 @@ public sealed class Conversation : IDisposable
 
     /// <summary>
     /// A typed message. With a live card, a yes word points to the Confirm button (D6: words never confirm), a no word
-    /// cancels the card, and anything else cancels it and goes on as a new request. While a typed question is open
-    /// (<c>which_amount</c> or <c>which_contact</c> with no options), a message the parse call reads as unclear fills
-    /// that slot from the typed text, a transfer that is itself missing a recipient or an amount merges into the pending
-    /// transfer, and anything else (a complete request, another intent) replaces the pending request. A parser that is
-    /// unavailable gives <c>model_unavailable</c>.
+    /// cancels the card, and anything else cancels it and goes on as a new request. While a question is open, a message
+    /// that is not a yes or a no is first read in code, before any masking or parse call (17 Oct 2026): an answer to
+    /// <c>which_amount</c> by <see cref="AmountText.TryRead"/>, an answer to <c>which_contact</c> or <c>did_you_mean</c>
+    /// by <see cref="ContactResolver.ResolveAnswer"/> over the user's contacts; a hit fills the slot and the model is
+    /// never called. Only what the code cannot read goes to the parse call. Then, while a question is open, a message the
+    /// parse call reads as unclear repeats the question and leaves it open (<c>not_understood</c> with the question's
+    /// kind); while a typed question is open, a transfer that is itself missing a recipient or an amount merges into the
+    /// pending transfer; anything else (a complete request, another intent) replaces the pending request. A parser that
+    /// is unavailable gives <c>model_unavailable</c>.
     /// </summary>
     public async Task SendAsync(string typedText)
     {
@@ -229,6 +232,16 @@ public sealed class Conversation : IDisposable
 
                 // Anything else is parsed first, with the card still waiting (the pending note says so): only a new
                 // request cancels it (below).
+            }
+
+            // An answer to the open question is read in code first; only what the code cannot read reaches the model.
+            if (!cardWaiting && !isYes && !isNo && Question is { } open && lastRequest is not null
+                && await AnswerInCodeAsync(open.Kind, lastRequest, typedText, token) is { } answered)
+            {
+                trace.Record(TraceZone.Code, AnswerParsedStep, open.Kind);
+                lastMaskedText = Masker.Mask(typedText).Text;
+                await HandleCoreAsync(answered.Request, answered.Answers, token);
+                return;
             }
 
             // Rule 5: the parse call sees the typed text with every number masked, and nothing else of the user's.
@@ -285,23 +298,12 @@ public sealed class Conversation : IDisposable
 
             var request = parsed;
             var kept = SlotAnswers.None;
-            if (typedSlot is not null && lastRequest is not null)
+            if (typedSlot is not null && lastRequest is not null && MergePartial(lastRequest, parsed) is { } merged)
             {
-                if (parsed.Intent == RequestIntent.Unclear)
-                {
-                    if (!isYes && !isNo && FillTypedSlot(lastRequest, typedSlot, typedText) is { } filled)
-                    {
-                        request = filled;
-                        kept = answers;
-                    }
-                }
-                else if (MergePartial(lastRequest, parsed) is { } merged)
-                {
-                    // D3: the answer to a typed question that the model read as a partial request of the same kind.
-                    trace.Record(TraceZone.Code, "answer_merged", typedSlot);
-                    request = merged;
-                    kept = answers;
-                }
+                // D3: the answer to a typed question that the model read as a partial request of the same kind.
+                trace.Record(TraceZone.Code, "answer_merged", typedSlot);
+                request = merged;
+                kept = answers;
             }
 
             await HandleCoreAsync(request, kept, token, ReferenceEquals(request, parsed) ? invalidReply : null);
@@ -793,21 +795,48 @@ public sealed class Conversation : IDisposable
         }
     }
 
-    /// <summary>The request again with the typed answer in its slot; null when the text does not fill it.</summary>
-    private static ParsedRequest? FillTypedSlot(ParsedRequest last, string slot, string typedText)
+    /// <summary>The trace step of an answer the code read without the parse call; the detail is the question kind.</summary>
+    private const string AnswerParsedStep = "answer_parsed";
+
+    /// <summary>
+    /// The pending request and answers a typed answer to the open question stands for, read in code before any parse
+    /// call (17 Oct 2026); null when the code cannot read it, and the text then goes to the model as any message.
+    /// <c>which_amount</c>: <see cref="AmountText.TryRead"/>, into the amount and its unit, answers kept.
+    /// <c>which_contact</c> and <c>did_you_mean</c>, with or without options: the user's contacts are read from the
+    /// wallet and matched by <see cref="ContactResolver.ResolveAnswer"/>; a card or a question puts the form that matched
+    /// into the recipient, with no tapped contact (a fresh name is a fresh resolution, which the orchestrator runs again).
+    /// A wallet read that fails, or no match, is null.
+    /// </summary>
+    private async Task<(ParsedRequest Request, SlotAnswers Answers)?> AnswerInCodeAsync(
+        string kind, ParsedRequest last, string typedText, CancellationToken token)
     {
-        var typed = typedText.Trim();
-        if (slot == QuestionKinds.WhichAmount)
+        switch (kind)
         {
-            return decimal.TryParse(ArabicDigits.ToAscii(typed), NumberStyles.Number, CultureInfo.InvariantCulture, out var amount)
-                ? last with { AmountValue = amount, AmountUnit = AmountUnit.None }
-                : null;
+            case QuestionKinds.WhichAmount:
+                return AmountText.TryRead(typedText, out var value, out var unit)
+                    ? (last with { AmountValue = value, AmountUnit = unit }, answers)
+                    : null;
+
+            case QuestionKinds.WhichContact:
+            case QuestionKinds.DidYouMean:
+                {
+                    WalletResult<WalletContacts> read;
+                    await using (var scope = scopes.CreateAsyncScope())
+                        read = await scope.ServiceProvider.GetRequiredService<WalletClient>().GetContactsAsync(userId, token);
+                    if (read is not WalletResult<WalletContacts>.Ok { Value: var contacts })
+                        return null;
+
+                    var current = options.CurrentValue;
+                    var match = ContactResolver.ResolveAnswer(
+                        typedText, ContactCandidate.From(contacts), current.MinSubstringWordLength, current.Endearments);
+                    return match.Resolution is Resolution.NotFound
+                        ? null
+                        : (last with { RecipientText = match.Text }, answers with { ContactOption = null });
+                }
+
+            default:
+                return null;
         }
-
-        if (slot == QuestionKinds.WhichContact && typed.Length > 0)
-            return last with { RecipientText = typed };
-
-        return null;
     }
 
     /// <summary>

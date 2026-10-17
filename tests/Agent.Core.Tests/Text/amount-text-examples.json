@@ -1,0 +1,20 @@
+[
+  { "source": "khalil", "text": "650 الف دينار", "reads": true, "value": 650, "unit": "thousand" },
+  { "source": "khalil", "text": "٣٠ الف", "reads": true, "value": 30, "unit": "thousand" },
+  { "source": "khalil", "text": "خمسين الف", "reads": true, "value": 50, "unit": "thousand" },
+  { "source": "composed", "text": "50", "reads": true, "value": 50, "unit": "none" },
+  { "source": "composed", "text": "خمسين", "reads": true, "value": 50, "unit": "none" },
+  { "source": "composed", "text": "50,000", "reads": true, "value": 50000, "unit": "none" },
+  { "source": "composed", "text": "الفين", "reads": true, "value": 2, "unit": "thousand" },
+  { "source": "composed", "text": "مليون", "reads": true, "value": 1, "unit": "million" },
+  { "source": "composed", "text": "خمسة وعشرين الف", "reads": true, "value": 25, "unit": "thousand" },
+  { "source": "composed", "text": "مية وخمسين الف", "reads": true, "value": 150, "unit": "thousand" },
+  { "source": "composed", "text": "خمس مية الف", "reads": true, "value": 500, "unit": "thousand" },
+  { "source": "composed", "text": "ثلث آلاف", "reads": true, "value": 3, "unit": "thousand" },
+  { "source": "composed", "text": "650 دينار", "reads": true, "value": 650, "unit": "dinars" },
+  { "source": "composed", "text": "مليون وخمسمية الف", "reads": true, "value": 1500000, "unit": "dinars" },
+  { "source": "composed", "text": "ابو المولدة", "reads": false },
+  { "source": "composed", "text": "لا", "reads": false },
+  { "source": "composed", "text": "", "reads": false },
+  { "source": "composed", "text": "2.5 الف", "reads": false }
+]

@@ -21,7 +21,8 @@ public static class ArabicText
     private const char Yeh = '\u064A';              // ARABIC LETTER YEH
     private const char TehMarbuta = '\u0629';       // ARABIC LETTER TEH MARBUTA
     private const char Heh = '\u0647';              // ARABIC LETTER HEH
-    private const char Lam = '\u0644';              // ARABIC LETTER LAM
+    /// <summary>ARABIC LETTER LAM: also the preposition "to" written against the next word (<c>ContactResolver.ResolveAnswer</c>).</summary>
+    internal const char Lam = '\u0644';
 
     /// <summary>
     /// NFC; drops Unicode format characters (zero-width joiner and non-joiner, zero-width space, bidi controls),

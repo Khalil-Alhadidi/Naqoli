@@ -242,6 +242,48 @@ public class ContactResolverTests
         => Assert.Equal(ContactResolver.MinSubstringWordLength, new AgentOptions().MinSubstringWordLength);
 
     [Fact]
+    public void AnAnswerWithTheLamPrefixMatchesTheAliasExactly()
+    {
+        // AMB-13's typed answer is S12's alias with the preposition lam written against it: the stripped form is the
+        // exact alias, so the answer gives S12's card.
+        var typed = DevSetText.Say("AMB-13", 1);
+
+        var match = ContactResolver.ResolveAnswer(typed, SeedCandidates.For("U1"), ContactResolver.MinSubstringWordLength, []);
+
+        var card = Assert.IsType<Resolution.Card>(match.Resolution, exactMatch: true);
+        Assert.Equal(SeedFacts.Contact("S12").Number, card.Chosen.Phone);
+        Assert.Equal(SeedFacts.Contact("S12").Alias, card.Chosen.Text);
+        Assert.Equal(typed[1..], match.Text);
+    }
+
+    [Fact]
+    public void AnAnswerThatIsAnExactNameBeatsTheStrippedForm()
+    {
+        // A contact saved under the answer exactly as typed (its first letter a lam) wins over the stripped form, which
+        // is another contact's exact alias.
+        var typed = DevSetText.Say("AMB-13", 1);
+        ContactCandidate[] candidates =
+        [
+            new(SeedFacts.Contact("S12").Alias!, true, 1, "07805550901", null, "active", "X1", null, null),
+            new(typed, false, 2, "07805550902", null, "active", "X2", null, null),
+        ];
+
+        var match = ContactResolver.ResolveAnswer(typed, candidates, ContactResolver.MinSubstringWordLength, []);
+
+        Assert.Equal("X2", Assert.IsType<Resolution.Card>(match.Resolution, exactMatch: true).Chosen.ContactCode);
+        Assert.Equal(typed, match.Text);
+    }
+
+    [Fact]
+    public void AnAnswerThatMatchesNothingIsNotFoundAsTyped()
+    {
+        var match = ContactResolver.ResolveAnswer("  nobody at all ", SeedCandidates.For("U1"), ContactResolver.MinSubstringWordLength, []);
+
+        Assert.IsType<Resolution.NotFound>(match.Resolution, exactMatch: true);
+        Assert.Equal("nobody at all", match.Text);
+    }
+
+    [Fact]
     public void AnAliasThatContainsAnEndearmentExactMatchesBeforeAnyStripping()
     {
         // Rule 1, endearments (Khalil, 17 Oct 2026): an alias equal to ADD-19's recipient text on one account, S14's

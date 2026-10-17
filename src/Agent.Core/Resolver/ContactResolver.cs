@@ -132,6 +132,50 @@ public static class ContactResolver
     }
 
     /// <summary>
+    /// Matches a typed answer to <c>which_contact</c> or <c>did_you_mean</c> by the same rules (the 14 Oct 2026 addition
+    /// to the matching rules: a typed answer goes through the same matching as a fresh request, AMB-13). The answer may
+    /// carry the preposition lam written against its first word, so two forms are tried: the text as typed and, when
+    /// its first word starts with lam and has at least three letters, the text with that lam dropped. An exact hit in
+    /// either form wins first (as typed before stripped); then the first form that is not
+    /// <see cref="Resolution.NotFound"/> (as typed before stripped). Pure.
+    /// </summary>
+    /// <param name="text">The answer as the user typed it.</param>
+    /// <param name="candidates">The user's saved names and aliases (<see cref="ContactCandidate.From"/>).</param>
+    /// <param name="minSubstringWordLength"><see cref="AgentOptions.MinSubstringWordLength"/>.</param>
+    /// <param name="endearments"><see cref="AgentOptions.Endearments"/>.</param>
+    /// <returns>The form that matched with its resolution, or the text as typed with <see cref="Resolution.NotFound"/>.</returns>
+    public static AnswerMatch ResolveAnswer(
+        string text, IReadOnlyList<ContactCandidate> candidates, int minSubstringWordLength, IReadOnlyCollection<string> endearments)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        ArgumentNullException.ThrowIfNull(candidates);
+        ArgumentNullException.ThrowIfNull(endearments);
+
+        var typed = text.Trim();
+        List<string> forms = [typed];
+        var firstWord = typed.Split((char[]?)null, 2, StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? string.Empty;
+        if (firstWord.Length >= 3 && firstWord[0] == ArabicText.Lam)
+            forms.Add(typed[1..]);
+
+        var keys = candidates.Select(c => ArabicText.Key(c.Text)).ToHashSet(StringComparer.Ordinal);
+        foreach (var form in forms)
+        {
+            var key = ArabicText.Key(form);
+            if (key.Length > 0 && keys.Contains(key))
+                return new AnswerMatch(form, Resolve(form, candidates, minSubstringWordLength, endearments));
+        }
+
+        foreach (var form in forms)
+        {
+            var resolution = Resolve(form, candidates, minSubstringWordLength, endearments);
+            if (resolution is not Resolution.NotFound)
+                return new AnswerMatch(form, resolution);
+        }
+
+        return new AnswerMatch(typed, new Resolution.NotFound());
+    }
+
+    /// <summary>
     /// The typed name without its endearments, words joined by one space (empty when nothing is left), or null when no
     /// typed word is one.
     /// </summary>

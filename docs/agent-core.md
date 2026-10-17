@@ -637,26 +637,32 @@ The orchestrator uses an answer only to pick among what it resolved itself:
 - **Bill.** A `BillCode` that is one of the user's bills skips `BillResolver`: nothing due is `nothing_due`, otherwise the D9 named-amount check and the card. Any other code falls through to the resolver.
 - **Purchase.** A `ProductCode` in the catalogue skips `ProductResolver`. Any other code falls through.
 
-A typed question (`which_amount` or `which_contact` with no options) takes the next message as its answer:
+While a question is open, a typed message that is not a D6 yes or no is first read in code, before masking and before any parse call (17 Oct 2026). The model is the fallback: only what the code cannot read goes to the parse call, exactly as before, and the pending note it sees is unchanged.
 
-- **The parse call reads it as `Unclear`.** The slot is filled from the typed text: the amount with `ArabicDigits.ToAscii` and invariant `decimal.TryParse`, so both digit forms work; the recipient as the trimmed text. A text that does not fill the slot is answered as parsed (`not_understood`).
-- **A transfer missing its recipient or its amount, on a pending transfer.** It merges: the pending transfer with every slot the parse names put in (`RecipientText`; `AmountValue` with `AmountUnit`; `CurrencyText`), answers kept, trace `answer_merged` with the question kind (AMB-06, AMB-13).
+- **`which_amount`.** `AmountText.TryRead` (`src/Agent.Core/Text/AmountText.cs`) reads digits in any digit form (a comma between groups of three, rule 19; a dot is never a decimal point here, so "2.5 thousand" written with digits does not read) or Khalil's number words (the embedded `amount-words.json`, the same values as the phone's `Words_*` keys, kept equal by `AmountTextWordsTests`, plus his spelling of millions and the word for dinar), with "and" as its own word or written against the next one, a scale word and an optional trailing word for dinar. Any other word means it is not an amount. A number with a scale word is (number, `Thousand` or `Million`); a scale word alone is (1, scale), the dual (2, scale); a bare number is (number, `None`), so rule 9 decides it (`50` and its word are 50,000); a bare number with the word for dinar is (number, `Dinars`); two scale groups add up in dinars. The plural scale words need a count before them.
+- **`which_contact` or `did_you_mean`, with or without options.** The user's contacts are read from the wallet in a scope and matched by `ContactResolver.ResolveAnswer`: the text as typed and, when its first word starts with the preposition lam and has at least three letters, the text with that lam dropped (AMB-13's answer). An exact hit in either form wins first (as typed before stripped), then the first form that is not `NotFound`. A card or a question puts the form that matched into `RecipientText` with `ContactOption` cleared (a fresh name is a fresh resolution; the orchestrator resolves it again and gives the card or the next question). A wallet read that fails, or `NotFound`, falls through to the model.
+- **On a hit** the slot is filled, answers kept, trace `answer_parsed` with the question kind, `lastMaskedText` set to the masked message (for a later learning row), and the orchestrator answers with no parse call (AMB-06, AMB-13, ADD-12, ADD-20).
+
+What reaches the parse call:
+
+- **`Unclear` while a question is open** (a plain unclear, a structure the validator refused, `model_invalid_reply`, or a message the model refused, `model_refusal`). The question is asked again and stays open: trace `question_repeated` with the kind, the audit row `RefuseAsync` writes for `not_understood`, a `Refusal` message `not_understood` carrying `QuestionKind`, `LastReply` `not_understood`, and the learning entry `HandleCoreAsync` would write. `Question`, its message index, `typedSlot`, the pending request and its answers stay, so the options stay on screen and the next message answers the same question. `model_unavailable` is unchanged (it already leaves the question open).
+- **A transfer missing its recipient or its amount, on a pending transfer, while a typed question is open.** It merges: the pending transfer with every slot the parse names put in (`RecipientText`; `AmountValue` with `AmountUnit`; `CurrencyText`), answers kept, trace `answer_merged` with the question kind.
 - **Anything else** (a complete request, another intent, the balance, an unsupported request) replaces the pending pair, with no answers.
 
 The learning-log entry is for the request actually handled. A new request while a card is live cancels the card and replaces the pair.
 
 ```mermaid
 flowchart TD
-    A[Typed message, typed question open] --> B{Parsed intent}
-    B -- Unclear --> C{Typed text fills the slot?}
-    C -- yes --> D[Pending request with the slot filled]
-    C -- no --> E[Parsed request: not_understood]
-    B -- Transfer, recipient or amount missing,<br/>pending is a transfer --> F[Merge into the pending transfer]
+    A[Typed message, question open, not yes or no] --> K{Read in code?<br/>AmountText or ContactResolver.ResolveAnswer}
+    K -- yes --> D[Pending request with the slot filled, trace answer_parsed]
+    K -- no --> M[Mask, parse call]
+    M --> B{Parsed intent}
+    B -- Unclear --> R[Repeat the question: not_understood with its kind, question stays open]
+    B -- Transfer, recipient or amount missing,<br/>typed question, pending is a transfer --> F[Merge into the pending transfer]
     B -- anything else --> G[Replace the pending request]
     D --> H[Orchestrator.HandleAsync with the pending answers]
     F --> H
     G --> I[Orchestrator.HandleAsync with no answers]
-    E --> I
 ```
 
 ### Messages as codes

@@ -22,6 +22,8 @@
   <ItemGroup>
     <!-- Khalil's word lists from matching rule 1 (kinship groups and title words). -->
     <EmbeddedResource Include="Text\arabic-words.json" />
+    <!-- Khalil's number words, for reading a typed amount in code (AmountText). -->
+    <EmbeddedResource Include="Text\amount-words.json" />
     <!-- The frozen prompt of the Claude parser (its version on the first line). -->
     <EmbeddedResource Include="Parsing\parse-prompt.md" />
   </ItemGroup>

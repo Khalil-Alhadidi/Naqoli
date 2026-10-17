@@ -27,3 +27,11 @@ public abstract record Resolution
     /// <summary>No hit (rule 8): no card.</summary>
     public sealed record NotFound : Resolution;
 }
+
+/// <summary>
+/// A typed answer to a contact question, matched by <see cref="ContactResolver.ResolveAnswer"/>: the form of the answer
+/// that matched (as typed, or with the preposition lam dropped) and its resolution.
+/// </summary>
+/// <param name="Text">The form that matched; the conversation puts it in the request's recipient.</param>
+/// <param name="Resolution">What the matching gave for <paramref name="Text"/>.</param>
+public sealed record AnswerMatch(string Text, Resolution Resolution);
