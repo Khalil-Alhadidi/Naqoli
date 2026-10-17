@@ -359,7 +359,8 @@ public sealed class Orchestrator
             if (contactsRead is not WalletResult<WalletContacts>.Ok { Value: var contacts })
                 return await RefuseUnreadAsync(userId, contactsRead, cancellationToken);
 
-            var resolution = ContactResolver.Resolve(request.RecipientText, ContactCandidate.From(contacts), options.MinSubstringWordLength);
+            var resolution = ContactResolver.Resolve(
+                request.RecipientText, ContactCandidate.From(contacts), options.MinSubstringWordLength, options.Endearments);
             var byOption = false;
             if (resolution is Resolution.Options offered && answers.ContactOption is { } tapped)
             {

@@ -1,5 +1,6 @@
 using Agent.Core.Confirm;
 using Agent.Core.Conversation;
+using Agent.Core.Masking;
 using Agent.Core.Parsing;
 using Agent.Core.Pipeline;
 using Agent.Core.Requests;
@@ -232,6 +233,35 @@ public sealed class ConversationAnswerTests(AgentHost host)
         Assert.Equal(("purchase", "AC-NET-10", 10_000L), (card.Type, card.ProductCode, card.AmountIqd));
         Assert.Single(conversation.QuestionsAsked);
         Assert.Equal(RequestIntent.Purchase, conversation.LastRequest?.Intent);
+    }
+
+    /// <summary>A parser that knows only the given dev-set say steps (by their masked text), so any other parse call shows.</summary>
+    private static CapturingParser KnowsOnly(params (string Text, ParsedRequest Request)[] says)
+        => new(says.ToDictionary(s => Masker.Mask(s.Text).Text, s => s.Request, StringComparer.Ordinal));
+
+    private async Task<ConversationHarness> StartAsync(IParser parser, Action<AgentOptions>? configure = null)
+    {
+        Assert.SkipUnless(host.DatabaseAvailable, host.SkipReason);
+        return await ConversationHarness.StartAsync(host, parser, SeedFacts.DemoUserId, configure);
+    }
+
+    [Fact]
+    public async Task AnEndearmentIsDroppedAndTheTransferGoesStraightToTheCard()
+    {
+        // ADD-19 end to end, with the console's endearments: no question, the card to S14.
+        var parser = KnowsOnly((DevSetText.Say("ADD-19", 0), ParsedRequest.Transfer(DevSetText.SidecarRecipient("ADD-19", 0), 150, AmountUnit.Thousand)));
+        await using var harness = await StartAsync(parser, o => o.Endearments = DevSetText.ConfiguredEndearments());
+        var conversation = harness.Conversation;
+
+        await conversation.SendAsync(DevSetText.Say("ADD-19", 0));
+
+        Assert.Empty(conversation.QuestionsAsked);
+        var card = Assert.IsType<CardView>(conversation.Card);
+        Assert.Equal(SeedFacts.Contact("S14").Number, card.ToPhone);
+        Assert.Equal(SeedFacts.Contact("S14").SavedName, card.DisplayName);
+        Assert.Equal(150_000, card.AmountIqd);
+        Assert.IsType<ConfirmOutcome.Done>(await conversation.ConfirmAsync(null));
+        Assert.Equal(SeedFacts.DemoBalance - 151_000, await host.Wallet.AccountBalanceAsync(SeedFacts.DemoPhone));
     }
 
     [Fact]

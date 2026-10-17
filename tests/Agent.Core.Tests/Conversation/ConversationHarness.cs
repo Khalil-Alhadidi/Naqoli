@@ -31,7 +31,14 @@ internal sealed class ConversationHarness : IAsyncDisposable
     public RecordingTrace Trace { get; }
 
     /// <summary>Resets the host (wallet, agent tables, clock) and starts a conversation for <paramref name="userId"/>.</summary>
-    public static async Task<ConversationHarness> StartAsync(AgentHost host, IParser parser, int userId)
+    public static Task<ConversationHarness> StartAsync(AgentHost host, IParser parser, int userId)
+        => StartAsync(host, parser, userId, null);
+
+    /// <summary>
+    /// As <see cref="StartAsync(AgentHost, IParser, int)"/>, with <paramref name="configure"/> applied to the agent's
+    /// options after the host's configuration (for a setting the host does not set, such as the endearments).
+    /// </summary>
+    public static async Task<ConversationHarness> StartAsync(AgentHost host, IParser parser, int userId, Action<AgentOptions>? configure)
     {
         await host.ResetAsync();
         var trace = new RecordingTrace();
@@ -40,6 +47,8 @@ internal sealed class ConversationHarness : IAsyncDisposable
             // Registered before AddAgentCore, so its TryAddScoped NullTraceSink does nothing.
             services.AddSingleton<ITraceSink>(trace);
             services.AddAgentCore(configuration);
+            if (configure is not null)
+                services.PostConfigure(configure);
         });
 
         var conversation = new AgentConversation(

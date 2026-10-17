@@ -5,7 +5,8 @@ namespace Agent.Core.Resolver;
 /// <summary>
 /// Resolves a typed name against a user's saved names and aliases by matching rules 1 to 8 and 15
 /// (<c>docs/matching-rules.md</c>). Pure: no I/O, no wallet calls. Steps, first that hits wins: exact, near, partial,
-/// shared word, not found (near before partial: Khalil, 15 Oct 2026).
+/// shared word, not found (near before partial: Khalil, 15 Oct 2026). When nothing matches exactly and the typed name
+/// holds an endearment, the endearments are dropped and the steps run again from exact (rule 1, 17 Oct 2026).
 /// </summary>
 public static class ContactResolver
 {
@@ -27,9 +28,25 @@ public static class ContactResolver
     /// <see cref="AgentOptions.MinSubstringWordLength"/>: a shorter typed word must equal a whole word of a candidate.
     /// </param>
     public static Resolution Resolve(string typedName, IReadOnlyList<ContactCandidate> candidates, int minSubstringWordLength)
+        => Resolve(typedName, candidates, minSubstringWordLength, []);
+
+    /// <param name="typedName">The name as the user typed it.</param>
+    /// <param name="candidates">The user's saved names and aliases (<see cref="ContactCandidate.From"/>).</param>
+    /// <param name="minSubstringWordLength">
+    /// <see cref="AgentOptions.MinSubstringWordLength"/>: a shorter typed word must equal a whole word of a candidate.
+    /// </param>
+    /// <param name="endearments">
+    /// <see cref="AgentOptions.Endearments"/> (rule 1, Khalil, 17 Oct 2026): words of affection that are dropped from the
+    /// typed name, and the whole matching run again on what is left, only when nothing matches the full text exactly, so
+    /// an alias that itself contains one of these words wins untouched. Compared whole word after the letter
+    /// normalisation, with no al strip (the words carry their article). Nothing left after the drop is not found.
+    /// </param>
+    public static Resolution Resolve(
+        string typedName, IReadOnlyList<ContactCandidate> candidates, int minSubstringWordLength, IReadOnlyCollection<string> endearments)
     {
         ArgumentNullException.ThrowIfNull(typedName);
         ArgumentNullException.ThrowIfNull(candidates);
+        ArgumentNullException.ThrowIfNull(endearments);
         ArgumentOutOfRangeException.ThrowIfLessThan(minSubstringWordLength, 1);
 
         var typedKey = ArabicText.Key(typedName);
@@ -46,6 +63,15 @@ public static class ContactResolver
             return accounts.Count == 1
                 ? new Resolution.Card(accounts[0])
                 : new Resolution.Options(QuestionKind.WhichContact, accounts);
+        }
+
+        // Rule 1, endearments (Khalil, 17 Oct 2026): nothing matched the full text exactly, so the words of affection
+        // are dropped and the whole matching runs again, from the exact step, on what is left.
+        if (WithoutEndearments(typedName, endearments) is { } rest)
+        {
+            return rest.Length == 0
+                ? new Resolution.NotFound()
+                : Resolve(rest, candidates, minSubstringWordLength, []);
         }
 
         // A typed name of title and kinship words only is not a name (rules 1 and 15).
@@ -103,6 +129,25 @@ public static class ContactResolver
 
         // 5. None (rule 8).
         return new Resolution.NotFound();
+    }
+
+    /// <summary>
+    /// The typed name without its endearments, words joined by one space (empty when nothing is left), or null when no
+    /// typed word is one.
+    /// </summary>
+    private static string? WithoutEndearments(string typedName, IReadOnlyCollection<string> endearments)
+    {
+        if (endearments.Count == 0)
+            return null;
+
+        var words = endearments
+            .Where(e => !string.IsNullOrWhiteSpace(e))
+            .Select(ArabicText.NormalizeLetters)
+            .ToHashSet(StringComparer.Ordinal);
+        var typedWords = ArabicText.NormalizeLetters(typedName).Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        return typedWords.Any(words.Contains)
+            ? string.Join(' ', typedWords.Where(w => !words.Contains(w)))
+            : null;
     }
 
     private static bool IsTitleName(ContactCandidate candidate)

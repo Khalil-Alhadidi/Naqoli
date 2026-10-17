@@ -142,6 +142,14 @@ public sealed class AgentOptions
     public Dictionary<string, List<string>> ProviderSpellings { get; set; } = new(StringComparer.Ordinal);
 
     /// <summary>
+    /// Matching rule 1, endearments (Khalil, 17 Oct 2026): words of affection a user adds to a name. The contact resolver
+    /// matches the full typed text exactly first, so an alias that itself contains one of these words wins untouched;
+    /// only when nothing matches exactly are these words dropped and the matching run again. Configuration, not code:
+    /// <c>Agent.Core</c> holds no Arabic. Empty by default; shown read only (as a count) in the settings component.
+    /// </summary>
+    public string[] Endearments { get; set; } = [];
+
+    /// <summary>
     /// The parse call: <c>scripted</c> (the default; no model) or <c>claude</c> (the <c>Model</c> section's candidate,
     /// with a key in user secrets). Read by <see cref="Parsing.ParserFactory.AddAgentParser"/>.
     /// </summary>

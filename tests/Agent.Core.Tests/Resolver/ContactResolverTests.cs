@@ -241,6 +241,64 @@ public class ContactResolverTests
     public void TheDefaultMinimumIsTheSetting()
         => Assert.Equal(ContactResolver.MinSubstringWordLength, new AgentOptions().MinSubstringWordLength);
 
+    [Fact]
+    public void AnAliasThatContainsAnEndearmentExactMatchesBeforeAnyStripping()
+    {
+        // Rule 1, endearments (Khalil, 17 Oct 2026): an alias equal to ADD-19's recipient text on one account, S14's
+        // saved name on another. The full text matches the alias exactly, so nothing is dropped.
+        var alias = DevSetText.SidecarRecipient("ADD-19")!;
+        ContactCandidate[] candidates =
+        [
+            new(SeedFacts.Contact("S14").SavedName, false, 2, "07805550902", null, "active", "X2", null, null),
+            new(alias, true, 1, "07805550901", null, "active", "X1", null, null),
+        ];
+
+        var resolution = ContactResolver.Resolve(
+            alias, candidates, ContactResolver.MinSubstringWordLength, DevSetText.ConfiguredEndearments());
+
+        Assert.Equal("X1", Assert.IsType<Resolution.Card>(resolution, exactMatch: true).Chosen.ContactCode);
+    }
+
+    [Fact]
+    public void AnEndearmentIsDroppedWhenNothingMatchesExactly()
+    {
+        // ADD-19: nothing of U1's matches the full text; without the endearment it is S14's exact saved name.
+        var typed = DevSetText.SidecarRecipient("ADD-19")!;
+
+        var resolution = ContactResolver.Resolve(
+            typed, SeedCandidates.For("U1"), ContactResolver.MinSubstringWordLength, DevSetText.ConfiguredEndearments());
+
+        var card = Assert.IsType<Resolution.Card>(resolution, exactMatch: true);
+        Assert.Equal("S14", card.Chosen.ContactCode);
+        Assert.Equal(SeedFacts.Contact("S14").SavedName, card.Chosen.Text);
+    }
+
+    [Fact]
+    public void WithoutTheListTheEndearmentIsNotDropped()
+    {
+        // The three-argument overload has no endearments: S14's saved name is only a shared word, so a question.
+        var typed = DevSetText.SidecarRecipient("ADD-19")!;
+
+        var resolution = ContactResolver.Resolve(typed, SeedCandidates.For("U1"), ContactResolver.MinSubstringWordLength);
+
+        var options = Assert.IsType<Resolution.Options>(resolution, exactMatch: true);
+        Assert.Equal(QuestionKind.WhichContact, options.Kind);
+        Assert.Equal("S14", Assert.Single(options.Candidates).ContactCode);
+    }
+
+    [Fact]
+    public void ATypedNameOfEndearmentsOnlyIsNotFound()
+    {
+        var endearments = DevSetText.ConfiguredEndearments();
+
+        var resolution = ContactResolver.Resolve(endearments[0], SeedCandidates.For("U1"), ContactResolver.MinSubstringWordLength, endearments);
+
+        Assert.IsType<Resolution.NotFound>(resolution, exactMatch: true);
+    }
+
+    [Fact]
+    public void TheEndearmentsAreEmptyByDefault() => Assert.Empty(new AgentOptions().Endearments);
+
     private static string KindName(QuestionKind kind) => kind switch
     {
         QuestionKind.WhichContact => "which_contact",
