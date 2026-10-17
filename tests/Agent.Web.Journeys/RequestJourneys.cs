@@ -172,6 +172,39 @@ public sealed class RequestJourneys(JourneyHost host) : JourneyBase(host)
     }
 
     [Fact]
+    public async Task AllMyMoneyAsksTheAmountAndTheTypedAnswerGivesTheCard()
+    {
+        var page = await OpenAsync(Host.WebAddress);
+        var historyBefore = (await Host.HistoryAsync(U1)).Count;
+
+        await SayAsync(page, DevSet.Say("ADD-20", 0));
+
+        // ADD-20: "all my money" is a transfer with the amount missing; the agent asks, and never reads the balance in.
+        var question = page.Locator("[data-testid=chat-message][data-kind=question]");
+        await Expect(question).ToHaveCountAsync(1);
+        await Expect(question).ToHaveTextAsync(Text["Question_which_amount"].Value);
+        await Expect(page.GetByTestId("question-option")).ToHaveCountAsync(0);
+        await Expect(page.GetByTestId("question-decline")).ToHaveCountAsync(1);
+
+        await SayAsync(page, DevSet.Say("ADD-20", 1));
+
+        var contact = (await Host.ContactsAsync(U1)).Contacts.Single(c => c.Code == "S14");
+        await Expect(page.GetByTestId("card")).ToHaveAttributeAsync("data-state", "live");
+        await Expect(page.GetByTestId("card-display")).ToHaveTextAsync(contact.SavedName);
+        await Expect(page.GetByTestId("card-amount")).ToHaveTextAsync(PhoneFormat.Amount(650_000, Text));
+        await Expect(page.GetByTestId("card-amount-words"))
+            .ToHaveTextAsync(Text["Card_AmountWords", AmountWords.Compose(650_000, AmountWordParts.FromResources(Text))!].Value);
+
+        await page.GetByTestId("card-confirm").ClickAsync();
+
+        await Expect(Outcomes(page, "done")).ToHaveCountAsync(1);
+        Assert.Equal(99_000, await Host.BalanceAsync(U1));
+        var history = await Host.HistoryAsync(U1);
+        Assert.Equal(historyBefore + 1, history.Count);
+        Assert.Equal(contact.Phone, history[0].CounterpartyPhone);
+    }
+
+    [Fact]
     public async Task AccountNumberIsRefusedAndMasked()
     {
         var page = await OpenAsync(Host.WebAddress);
