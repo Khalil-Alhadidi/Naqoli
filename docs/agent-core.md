@@ -746,6 +746,7 @@ sequenceDiagram
 | `consent_shown` | `Orchestrator` |
 | `balance_shown` | `Orchestrator`; no figure |
 | `kill_switch` | The console's settings component; the reason is `on` or `off` |
+| `alias_saved`, `alias_deleted` | `AliasDirectory` (milestone 9a), through `AuditLog.WriteAliasAsync`; `Detail` is the account id, never the alias text (the method has no parameter for it) |
 
 Never stored: a PIN, a balance figure, a purchase code (full or partial), the typed recipient text, a refusal's figure, or a refusal's detail other than the wallet code kept with `not_done_nothing_taken`. `AuditLog.WriteAsync` and `WriteRefusalAsync` have no parameter for a PIN, a balance or a code, and `AuditLogTests.WriteHasNoParameterForAPinABalanceOrAPurchaseCode` checks both; `AuditLogTests.RefusalKeepsTheDetailOnlyWhenNothingWasTaken` checks the detail rule. `AmountIqd` is the payment's amount, never a balance.
 
@@ -800,6 +801,37 @@ The conversation calls it after every reply that yields an entry, with the maske
 - `TheReissuePathNeverReachesExecute` (D19) builds the call graph of `Agent.Core` with the same scan and follows it from `Orchestrator.ReissueAsync` and `Conversation.ReissueAsync`: what they reach includes `PendingStore.CreateAsync` and never `WalletClient.ExecuteAsync`, the Confirm handler's two entries or the conversation's Confirm and settle; no `ReissueAsync` in `Agent.Web` or `Agent.Eval` calls the conversation's Confirm or settle.
 - `ExecuteIsInternal` checks that `ExecuteAsync` is `internal`, not public, and that `Agent.Core.Tests` is the only friend assembly.
 
+## Aliases (milestone 9a)
+
+The wallet owns aliases; the agent reads them with the contacts and writes them through `POST` and `DELETE /users/{id}/aliases` ([wallet-api.md](wallet-api.md), "Aliases"). `src/Agent.Core/Aliases/` holds the agent's side.
+
+- **Which step asked.** `Resolution.Options` carries `MatchStep Step`: `Exact` (rule 3, several accounts), `Near` (rule 6), `Partial` (rule 4, several accounts), `TitleOnly` (rule 5, one account) or `SharedWord` (rule 15). `ContactResolverTests.TheStepOfEachQuestionIsNamed` checks every question example of the matching rules.
+- **`AliasRule.Offers(options)`** (rule 18, ruling 2), pure: true after a `Near`, `SharedWord` or `TitleOnly` question, false after `Exact` or `Partial` (a bare name shared by several). `AliasRuleTests` drives it from the matching examples, tagged by rule, and from AMB-19's recipient.
+- **`AliasDirectory`** (scoped): `ListAsync`, `SaveAsync(userId, text, targetAccountId)` (the account must be one of the user's contacts or aliases), `SaveForPhoneAsync(userId, text, phone)` (D21: a complete number, not the user's own, with a wallet behind it) and `DeleteAsync(userId, aliasId)` (an alias of the user). It returns an `AliasResult`: `Saved(WalletAlias)`, `Deleted`, `Refused(code)` or `Unavailable`. One alias, one account (D15, ruling 4): the text is trimmed and refused `alias_invalid` when blank, longer than `MaxAliasLength`, of an empty key or number-like; then refused `alias_exists` when its key (`ArabicText.Key`) equals the key of any saved name or alias of the user, on any account, before the wallet is written; a wallet 409 is `alias_exists` too. So an alias never makes an exact hit on two accounts and never shadows a saved name (`AliasDirectoryTests`). A save or delete writes its audit row and traces `alias_saved` or `alias_deleted` with the account id; a refusal traces `alias_refused:<code>`. Nothing about money: no pending record, no key.
+
+```mermaid
+sequenceDiagram
+    participant U as Caller
+    participant A as AliasDirectory
+    participant W as WalletClient
+    participant L as AuditLog
+
+    U->>A: SaveAsync(userId, text, accountId)
+    A->>A: trim; blank, too long, empty key or number-like gives alias_invalid
+    A->>W: GET /users/{id}/contacts
+    A->>A: key equals a saved name or alias key gives alias_exists
+    A->>A: account not among the contacts or aliases gives recipient_not_found
+    A->>W: POST /users/{id}/aliases
+    alt 201
+        A->>L: alias_saved, detail the account id
+        A-->>U: Saved
+    else 409, 422 or 404
+        A-->>U: Refused alias_exists, alias_invalid or recipient_not_found
+    else no answer
+        A-->>U: Unavailable
+    end
+```
+
 ## Settings
 
 `AgentOptions` (section `Agent`, validated at start). The limit defaults equal `data/seed/settings.json`; `AgentOptionsTests.DefaultsMatchTheSettingsFile` keeps them equal. `src/Agent.Web/appsettings.json` sets the same values.
@@ -825,13 +857,14 @@ The conversation calls it after every reply that yields an entry, with the maske
 | `MinSubstringWordLength` | 3; 1 to 20 | `ContactResolver`, rule 4: a shorter typed word must equal a whole word |
 | `MaxYesNoWords` | 4; 1 to 20 | `Conversation`, D6: a yes or a no has at most this many words |
 | `LogPageSize` | 100; 1 to 1,000 | The console's log component: how many audit rows, newest first, it shows (`AuditLog.ReadLatestAsync`) |
+| `MaxAliasLength` | 100; 1 to 100 | `AliasDirectory` (milestone 9a, ruling 8): the longest alias text, in characters after trimming, it saves; a longer one is refused `alias_invalid`. The wallet's column holds 100 and refuses a longer text as `alias_text_invalid` anyway |
 | `CheckingRetrySeconds` | 5; 1 to 600 | The phone's card panel (milestone 8, ruling 5): while a card is Checking it settles it by itself every this many seconds through `ChatSession.SettleAsync`, the same settle as "check again", under the same key. Read on every tick, so a saved value applies at once |
 | `ProviderSpellings` | empty in code; `internet` has 3 spellings in both `appsettings.json` files | `BillResolver.NamesProvider`: by biller code, the provider spellings that count besides the first word of the wallet's biller name (Khalil, 16 Oct 2026). Phone text, so read only: the settings component and the runner's report header show the count per biller |
 | `Parser` | `scripted` | `ParserFactory.AddAgentParser`: `scripted` (the oracle) or `claude` |
 | `DevSetPath` | `data/requests.dev.jsonl` | The oracle: the development set, relative to the repository root unless rooted; its file name must be `requests.dev.jsonl` (rule 7) |
 | `YesWords`, `NoWords` | empty | `Conversation`, D6. Phone text, so not set in `Agent.Core`: the console post-configures them from `Word_yes` and `Word_no` in its resource file, and the test host sets `yes` and `no` |
 
-The settings component shows them ([agent-web.md](agent-web.md), "The settings component"). It edits exactly `RuntimeSettings.EditableNames`: `MinAmountIqd`, `PerTransactionCapIqd`, `PerDayCapIqd`, `CardTimerSeconds`, `MaxProductsInOneQuestion`, `RepeatWarningWindowMinutes`, `HistoryDays`, `MinSubstringWordLength`, `MaxYesNoWords`, `LogPageSize` and `CheckingRetrySeconds`. The runtime store refuses any other key. The rest, `MaxRequestsPerMessage` included (nothing reads it yet), is read only. The client key goes in user secrets or the environment, never in a committed file.
+The settings component shows them ([agent-web.md](agent-web.md), "The settings component"). It edits exactly `RuntimeSettings.EditableNames`: `MinAmountIqd`, `PerTransactionCapIqd`, `PerDayCapIqd`, `CardTimerSeconds`, `MaxProductsInOneQuestion`, `RepeatWarningWindowMinutes`, `HistoryDays`, `MinSubstringWordLength`, `MaxYesNoWords`, `LogPageSize`, `CheckingRetrySeconds` and `MaxAliasLength`. The runtime store refuses any other key. The rest, `MaxRequestsPerMessage` included (nothing reads it yet), is read only. The client key goes in user secrets or the environment, never in a committed file.
 
 **Options at run time (D8, milestone 7).** Every scoped service that reads `AgentOptions` reads `IOptionsSnapshot<AgentOptions>`, which is computed again per scope. Every conversation action and every eval step opens its own scope, so a value saved in the settings component applies to the next action without a restart. The singletons (`PendingSweeper`, the `WalletClient` configuration) keep `IOptions`. The conversation takes `IOptionsMonitor<AgentOptions>`: it reads the D6 word lists once, when it is built, and `MaxYesNoWords` again for every message, so a saved limit applies to the next message of an open page (`ConversationTests.AMaxYesNoWordsSavedInTheSettingsAppliesToTheNextMessage`). A value is validated before it is published, as the options are at start (`[Range]` and the cross-field rules), so a refused one never takes effect anywhere (`RuntimeSettingsTests`, `ChecksTests.ACapChangedLiveAppliesToTheNextCheck`).
 

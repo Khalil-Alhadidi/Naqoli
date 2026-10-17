@@ -59,6 +59,47 @@ public class WalletClientTests(AgentHost host)
     }
 
     [Fact]
+    public async Task AddAliasReturnsTheAliasAndDeleteRemovesIt()
+    {
+        Assert.SkipUnless(host.DatabaseAvailable, host.SkipReason);
+        await host.ResetAsync();
+        var before = Assert.IsType<WalletResult<WalletContacts>.Ok>(await Client.GetContactsAsync(DemoUserId, Token)).Value;
+        var s03 = Assert.Single(before.Contacts, c => c.Code == "S03");
+        var text = s03.SavedName + " x";
+
+        var added = Assert.IsType<WalletResult<WalletAlias>.Ok>(
+            await Client.AddAliasAsync(DemoUserId, new WalletAliasRequest(text, s03.TargetAccountId), Token)).Value;
+
+        Assert.Equal(text, added.Text);
+        Assert.Equal(s03.TargetAccountId, added.TargetAccountId);
+        Assert.Equal(s03.Phone, added.Phone);
+        var after = Assert.IsType<WalletResult<WalletContacts>.Ok>(await Client.GetContactsAsync(DemoUserId, Token)).Value;
+        Assert.Equal(added, after.Aliases[^1]);
+
+        Assert.True(Assert.IsType<WalletResult<bool>.Ok>(await Client.DeleteAliasAsync(DemoUserId, added.AliasId, Token)).Value);
+        var deleted = Assert.IsType<WalletResult<WalletContacts>.Ok>(await Client.GetContactsAsync(DemoUserId, Token)).Value;
+        Assert.Equal(before.Aliases, deleted.Aliases);
+
+        var again = Assert.IsType<WalletResult<bool>.Refused>(await Client.DeleteAliasAsync(DemoUserId, added.AliasId, Token));
+        Assert.Equal(new WalletProblem(404, "unknown_alias", null, null), again.Problem);
+    }
+
+    [Fact]
+    public async Task AddAliasTwiceIsRefusedAliasExists()
+    {
+        Assert.SkipUnless(host.DatabaseAvailable, host.SkipReason);
+        await host.ResetAsync();
+        var contacts = Assert.IsType<WalletResult<WalletContacts>.Ok>(await Client.GetContactsAsync(DemoUserId, Token)).Value;
+        var s03 = Assert.Single(contacts.Contacts, c => c.Code == "S03");
+        var request = new WalletAliasRequest(s03.SavedName + " x", s03.TargetAccountId);
+
+        Assert.IsType<WalletResult<WalletAlias>.Ok>(await Client.AddAliasAsync(DemoUserId, request, Token));
+        var second = Assert.IsType<WalletResult<WalletAlias>.Refused>(await Client.AddAliasAsync(DemoUserId, request, Token));
+
+        Assert.Equal(new WalletProblem(409, "alias_exists", null, null), second.Problem);
+    }
+
+    [Fact]
     public async Task QuoteReturnsFiguresAndSufficient()
     {
         Assert.SkipUnless(host.DatabaseAvailable, host.SkipReason);

@@ -30,6 +30,12 @@ public sealed record WalletAlias(
     string? RegisteredName,
     string AccountStatus);
 
+/// <summary>
+/// The body of <c>POST /users/{id}/aliases</c> (milestone 9a): <see cref="Text"/> as the user's alias of the one account
+/// <see cref="TargetAccountId"/> (D15).
+/// </summary>
+public sealed record WalletAliasRequest(string Text, int TargetAccountId);
+
 /// <summary>The contacts and aliases of a user (<c>GET /users/{id}/contacts</c>).</summary>
 public sealed record WalletContacts(IReadOnlyList<WalletContact> Contacts, IReadOnlyList<WalletAlias> Aliases);
 

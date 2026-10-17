@@ -121,6 +121,13 @@ public sealed class AgentOptions
     public int LogPageSize { get; set; } = 100;
 
     /// <summary>
+    /// The longest alias text, in characters after trimming, that <see cref="Aliases.AliasDirectory"/> saves (milestone
+    /// 9a, ruling 8). At most 100, the wallet's column, which refuses a longer text anyway. Editable live.
+    /// </summary>
+    [Range(1, 100)]
+    public int MaxAliasLength { get; set; } = 100;
+
+    /// <summary>
     /// D6: the typed words that mean "yes" while a card is live. A yes never confirms; it points to the Confirm button.
     /// Each entry is a phrase: its words, normalised as a message is (<see cref="Text.ArabicText.Normalize"/>,
     /// punctuation and symbols dropped, Latin lower-cased), kept in order. A message of at most

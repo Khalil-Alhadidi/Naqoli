@@ -24,6 +24,20 @@ public static class TraceSteps
     /// <summary>A known gap handled with a card and a note; the detail is the gap's code (<c>choose_account</c>).</summary>
     public const string KnownGap = "known_gap";
 
+    // Code zone: aliases (milestone 9a). The detail is an account id or a code, never the alias text.
+
+    /// <summary>An alias was offered under a Done outcome (rule 18); the detail is the account id.</summary>
+    public const string AliasOffered = "alias_offered";
+
+    /// <summary>An alias was saved; the detail is the account id.</summary>
+    public const string AliasSaved = "alias_saved";
+
+    /// <summary>An alias was deleted; the detail is the account id.</summary>
+    public const string AliasDeleted = "alias_deleted";
+
+    /// <summary>An alias save or delete was refused; the step ends with the reason code (<c>alias_refused:alias_exists</c>).</summary>
+    public const string AliasRefusedPrefix = "alias_refused:";
+
     // Write zone: the Confirm handler.
     public const string BeginExecute = "begin_execute";
     public const string RecheckOk = "recheck_ok";

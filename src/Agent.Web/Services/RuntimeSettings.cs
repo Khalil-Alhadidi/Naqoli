@@ -79,6 +79,7 @@ public sealed class RuntimeSettings
         nameof(AgentOptions.MaxYesNoWords),
         nameof(AgentOptions.LogPageSize),
         nameof(AgentOptions.CheckingRetrySeconds),
+        nameof(AgentOptions.MaxAliasLength),
     ];
 
     private const string Prefix = AgentOptions.SectionName + ":";

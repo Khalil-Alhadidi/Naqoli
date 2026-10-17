@@ -117,6 +117,7 @@
         nameof(AgentOptions.MaxYesNoWords) => o => o.MaxYesNoWords,
         nameof(AgentOptions.LogPageSize) => o => o.LogPageSize,
         nameof(AgentOptions.CheckingRetrySeconds) => o => o.CheckingRetrySeconds,
+        nameof(AgentOptions.MaxAliasLength) => o => o.MaxAliasLength,
         _ => throw new InvalidOperationException("No reader for the editable setting " + name + "."),
     };
 

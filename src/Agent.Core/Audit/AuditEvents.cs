@@ -18,4 +18,10 @@ public static class AuditEvents
 
     /// <summary>The kill switch was flipped in the console; the reason is <c>on</c> or <c>off</c>.</summary>
     public const string KillSwitch = "kill_switch";
+
+    /// <summary>An alias was saved in the wallet (milestone 9a); the detail is the account id, never the alias text.</summary>
+    public const string AliasSaved = "alias_saved";
+
+    /// <summary>An alias was deleted in the wallet (milestone 9a); the detail is the account id, never the alias text.</summary>
+    public const string AliasDeleted = "alias_deleted";
 }

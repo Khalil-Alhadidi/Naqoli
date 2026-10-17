@@ -1,3 +1,4 @@
+using Agent.Core.Aliases;
 using Agent.Core.Audit;
 using Agent.Core.Confirm;
 using Agent.Core.Data;
@@ -22,7 +23,8 @@ public static class AgentCoreServiceCollectionExtensions
     /// Adds <see cref="AgentOptions"/> (section <c>Agent</c>, validated at start), a <see cref="TimeProvider"/>
     /// unless one is registered, the <see cref="AgentDbContext"/> on <c>ConnectionStrings:Agent</c> and the typed
     /// <see cref="WalletClient"/>, the scoped <see cref="Checks"/>, <see cref="AuditLog"/>, <see cref="LearningLog"/>,
-    /// <see cref="PendingStore"/>, <see cref="CardBuilder"/>, <see cref="Orchestrator"/> and <see cref="ConfirmHandler"/>, the
+    /// <see cref="PendingStore"/>, <see cref="CardBuilder"/>, <see cref="Orchestrator"/>, <see cref="ConfirmHandler"/> and
+    /// <see cref="AliasDirectory"/>, the
     /// singleton <see cref="KillSwitch"/> (off at start), a scoped
     /// <see cref="NullTraceSink"/> as <see cref="ITraceSink"/> unless one is registered, and the hosted
     /// <see cref="PendingSweeper"/> when <c>Agent:SweepIntervalSeconds</c> is above 0. No <c>IParser</c> is registered:
@@ -73,6 +75,7 @@ public static class AgentCoreServiceCollectionExtensions
         services.AddScoped<CardBuilder>();
         services.AddScoped<Orchestrator>();
         services.AddScoped<ConfirmHandler>();
+        services.AddScoped<AliasDirectory>();
         services.TryAddScoped<ITraceSink, NullTraceSink>();
 
         // The sweep runs in the host only when it has an interval; the test hosts set 0 and sweep by hand.

@@ -1,3 +1,4 @@
+using System.Globalization;
 using Agent.Core.Data;
 using Agent.Core.Pipeline;
 using Microsoft.EntityFrameworkCore;
@@ -40,6 +41,21 @@ public sealed class AuditLog(AgentDbContext db, TimeProvider time)
             kept = kept[..AgentDbContext.TextLength];
 
         Stage(userId, null, AuditEvents.Refused, null, null, reason, null, null, kept);
+        await db.SaveChangesAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// Writes an <see cref="AuditEvents.AliasSaved"/> or <see cref="AuditEvents.AliasDeleted"/> row (milestone 9a, ruling
+    /// 6) whose detail is <paramref name="accountId"/> as invariant text. There is no parameter for the alias text, so the
+    /// audit log never holds it; the wallet does.
+    /// </summary>
+    /// <exception cref="ArgumentException"><paramref name="event"/> is not one of the two alias events.</exception>
+    public async Task WriteAliasAsync(int userId, string @event, int accountId, CancellationToken cancellationToken)
+    {
+        if (@event is not (AuditEvents.AliasSaved or AuditEvents.AliasDeleted))
+            throw new ArgumentException("Not an alias event: " + @event, nameof(@event));
+
+        Stage(userId, null, @event, null, null, null, null, null, accountId.ToString(CultureInfo.InvariantCulture));
         await db.SaveChangesAsync(cancellationToken);
     }
 

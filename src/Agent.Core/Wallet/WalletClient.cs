@@ -122,6 +122,33 @@ public sealed partial class WalletClient
         return await SendAsync<bool>("consent", message, static (_, _) => Task.FromResult(true), cancellationToken);
     }
 
+    /// <summary>
+    /// Saves one alias of one account for <paramref name="userId"/> (<c>POST /users/{id}/aliases</c>, milestone 9a): the
+    /// new alias on 201; refused 404 <c>unknown_user</c> or <c>unknown_account</c>, 409 <c>alias_exists</c>, 422
+    /// <c>alias_text_invalid</c>. Moves no money. Only the route name is logged, never the text.
+    /// </summary>
+    public async Task<WalletResult<WalletAlias>> AddAliasAsync(
+        int userId, WalletAliasRequest request, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        using var message = new HttpRequestMessage(HttpMethod.Post, FormattableString.Invariant($"users/{userId}/aliases"))
+        {
+            Content = JsonContent.Create(request, options: Json),
+        };
+        return await SendAsync("aliases", message, ReadBodyAsync<WalletAlias>, cancellationToken);
+    }
+
+    /// <summary>
+    /// Deletes one of <paramref name="userId"/>'s aliases (<c>DELETE /users/{id}/aliases/{aliasId}</c>, milestone 9a):
+    /// true on 204; refused 404 <c>unknown_user</c> or <c>unknown_alias</c> (another user's alias included).
+    /// </summary>
+    public async Task<WalletResult<bool>> DeleteAliasAsync(int userId, int aliasId, CancellationToken cancellationToken = default)
+    {
+        using var message = new HttpRequestMessage(
+            HttpMethod.Delete, FormattableString.Invariant($"users/{userId}/aliases/{aliasId}"));
+        return await SendAsync<bool>("aliases", message, static (_, _) => Task.FromResult(true), cancellationToken);
+    }
+
     /// <summary>The outcome stored under <paramref name="key"/> for <paramref name="userId"/>; 404 <c>unknown_key</c> for any other user.</summary>
     public Task<WalletResult<WalletTransaction>> FindByKeyAsync(string key, int userId, CancellationToken cancellationToken = default)
         => GetAsync<WalletTransaction>(
@@ -221,7 +248,7 @@ public sealed partial class WalletClient
         => await response.Content.ReadFromJsonAsync<T>(Json, cancellationToken);
 
     /// <summary>
-    /// Sends a read, quote or consent call. A 2xx with a readable body is <c>Ok</c>, a 4xx is <c>Refused</c>, and
+    /// Sends a read, quote, consent or alias call. A 2xx with a readable body is <c>Ok</c>, a 4xx is <c>Refused</c>, and
     /// anything else is <c>Unavailable</c>: another status (<c>http_NNN</c>), the client's timeout (<c>timeout</c>), a
     /// transport failure (<c>connection</c>) or a body that cannot be read (<c>unreadable_response</c>). Only the
     /// caller's own cancellation throws.

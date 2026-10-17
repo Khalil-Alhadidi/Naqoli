@@ -26,7 +26,8 @@ public sealed class AuditEntry
 
     /// <summary>
     /// The detail of a <c>refused</c> row whose reason is <c>not_done_nothing_taken</c>: the wallet's code or
-    /// <c>wallet_</c> and the reason. Null on every other row.
+    /// <c>wallet_</c> and the reason; of an <c>alias_saved</c> or <c>alias_deleted</c> row: the account id, never the
+    /// alias text (milestone 9a). Null on every other row.
     /// </summary>
     public string? Detail { get; set; }
 

@@ -48,6 +48,18 @@ public static class ReasonCodes
     /// </summary>
     public const string QuestionCancelled = "question_cancelled";
 
+    /// <summary>
+    /// An alias refused because its key (<see cref="Text.ArabicText.Key"/>) equals the key of a saved name or alias the
+    /// user already has, or the wallet holds that text already (milestone 9a, ruling 4, D15). Not a logged reason.
+    /// </summary>
+    public const string AliasExists = "alias_exists";
+
+    /// <summary>
+    /// An alias refused because its text is blank, longer than <see cref="AgentOptions.MaxAliasLength"/>, has a key of
+    /// zero length, or looks like a phone number (milestone 9a, ruling 4). Not a logged reason.
+    /// </summary>
+    public const string AliasInvalid = "alias_invalid";
+
     /// <summary>The detail of a <see cref="NotSupported"/> refusal for a transfer to the user's own number.</summary>
     public const string OwnNumberDetail = "own_number";
 
