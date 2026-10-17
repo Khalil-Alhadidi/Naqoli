@@ -271,7 +271,7 @@ Options validation requires `StaleExecutingAfterSeconds` to be more than three t
 
 `src/Agent.Web/Resources/PhoneStrings.resx` (neutral culture, read through `IStringLocalizer<PhoneStrings>`) holds every text the phone shows (rule 4). Khalil wrote the values in Iraqi Arabic on 15 Oct 2026 (commit a32ac1d); nothing else writes or changes them. `{0}` and `{1}` are filled by code, with figures in Arabic-Indic digits. `Word_yes` and `Word_no` are comma-separated lists (`PhoneWords.Split`), compared after `ArabicText.Normalize`. The table gives each key's meaning in English, not its Arabic value.
 
-One key is a placeholder: `Refusal_question_cancelled` (17 Oct 2026, the reply after a question's cancel option), `TODO-AR` until Khalil writes it, and the only entry of the allow-list. `Card_TryAgain` and `Card_SendAgain` (milestone 7, D19), and the D21 wording of `Refusal_invalid_number` (it now asks for the full mobile number or a saved name) were written by Khalil on 16 Oct 2026. `PhoneStringsTests.NoValueIsAPlaceholderExceptTheKeysAwaitingKhalil` keeps the allow-list: a new key is added there with a `TODO-AR` value until he writes it.
+No key is a placeholder. `Refusal_question_cancelled` (the reply after a question's cancel option) was written by Khalil on 17 Oct 2026, so the allow-list is empty again. `Card_TryAgain` and `Card_SendAgain` (milestone 7, D19), and the D21 wording of `Refusal_invalid_number` (it now asks for the full mobile number or a saved name) were written by Khalil on 16 Oct 2026. `PhoneStringsTests.NoValueIsAPlaceholderExceptTheKeysAwaitingKhalil` keeps the allow-list, now empty: a new key is added there with a `TODO-AR` value until he writes it.
 
 | Key | Meaning | Note |
 |---|---|---|
@@ -331,7 +331,7 @@ One key is a placeholder: `Refusal_question_cancelled` (17 Oct 2026, the reply a
 | `Refusal_not_supported` | I cannot do this | |
 | `Refusal_not_understood` | I did not understand. Please say it again | |
 | `Refusal_not_understood_repeat` | I did not understand. {0} | `{0}` is the open question's text; the question stays open. Khalil's Arabic, 17 Oct 2026 |
-| `Refusal_question_cancelled` | Cancelled. Nothing was taken. | `TODO-AR`: the reply after a question's cancel option; awaiting Khalil's Arabic (17 Oct 2026) |
+| `Refusal_question_cancelled` | Done. I did nothing | The reply after a question's cancel option; Khalil's Arabic, 17 Oct 2026 |
 | `Refusal_only_own_balance` | I can only show your own balance | |
 | `Refusal_model_unavailable` | I cannot read messages right now. Please try again later | |
 | `Refusal_dinars_only` | I work in Iraqi dinars only | |
@@ -367,7 +367,7 @@ One key is a placeholder: `Refusal_question_cancelled` (17 Oct 2026, the reply a
 | `Currency_iqd` | IQD | |
 | `Phone_Placeholder` | Write your request | |
 | `Phone_Send` | Send | |
-| `Words_1` .. `Words_19`, `Words_20` .. `Words_90` (tens), `Words_100` .. `Words_900` (hundreds), `Words_Thousand`, `Words_TwoThousand`, `Words_Thousands`, `Words_Million`, `Words_TwoMillion`, `Words_Millions`, `Words_Construct_3` .. `Words_Construct_10`, `Words_And` | The number words of the amount in words: units, tens, hundreds, the thousand and million forms (one, two, the plural after a construct form), the short counting forms for 3 to 10, and the joiner | Khalil's list, 17 Oct 2026. `Words_Construct_4` to `Words_Construct_9` are derived from his hundreds' stems and carry a resx comment for his review |
+| `Words_1` .. `Words_19`, `Words_20` .. `Words_90` (tens), `Words_100` .. `Words_900` (hundreds), `Words_Thousand`, `Words_TwoThousand`, `Words_Thousands`, `Words_Million`, `Words_TwoMillion`, `Words_Millions`, `Words_Construct_3` .. `Words_Construct_10`, `Words_And` | The number words of the amount in words: units, tens, hundreds, the thousand and million forms (one, two, the plural after a construct form), the short counting forms for 3 to 10, and the joiner | Khalil's list, 17 Oct 2026. `Words_Construct_4` to `Words_Construct_9` were derived from his hundreds' stems and are confirmed by Khalil on 17 Oct 2026 |
 
 ## The oracle
 
