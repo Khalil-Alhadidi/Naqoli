@@ -546,4 +546,99 @@ public sealed class ConversationAnswerTests(AgentHost host)
 
     [Fact]
     public void TheFillerWordsAreEmptyByDefault() => Assert.Empty(new AgentOptions().FillerWords);
+
+    /// <summary>A synthetic English sentence: a transfer to S14's saved name (as ADD-20's sidecar has it) of 800 thousand, above U1's balance.</summary>
+    private const string TooMuchSentence = "send eight hundred thousand to my mother";
+
+    /// <summary>A synthetic English sentence: 500 dinars to S01's alias, below the smallest amount.</summary>
+    private const string TooLittleSentence = "send five hundred dinars to hammoudi";
+
+    private static CapturingParser TooMuchParser()
+        => KnowsOnly((TooMuchSentence, ParsedRequest.Transfer(DevSetText.SidecarRecipient("ADD-20"), 800, AmountUnit.Thousand)));
+
+    [Fact]
+    public async Task AnAmountRefusedForTheBalanceMergesTheNextTypedAmountAndChecksAgain()
+    {
+        var parser = TooMuchParser();
+        await using var harness = await StartAsync(parser);
+        var conversation = harness.Conversation;
+
+        await conversation.SendAsync(TooMuchSentence);
+        Assert.Equal(ReasonCodes.InsufficientBalance, Assert.IsType<AgentReply.Refusal>(conversation.LastReply).Code);
+        Assert.Null(conversation.Card);
+
+        // ADD-21's second message, Khalil's typed amount: read in code and merged into the refused transfer.
+        await conversation.SendAsync(DevSetText.Say("ADD-21", 1));
+
+        Assert.Single(parser.Calls);
+        var card = Assert.IsType<CardView>(conversation.Card);
+        Assert.Equal(SeedFacts.Contact("S14").Number, card.ToPhone);
+        Assert.Equal(SeedFacts.Contact("S14").SavedName, card.DisplayName);
+        Assert.Equal(600_000, card.AmountIqd);
+        Assert.Contains(harness.Trace.Entries, e => e.Step == "amount_retry");
+        Assert.Empty(conversation.QuestionsAsked);
+    }
+
+    [Fact]
+    public async Task AnAmountBelowTheMinimumMergesTheNextTypedAmount()
+    {
+        var parser = KnowsOnly((TooLittleSentence, ParsedRequest.Transfer(HammoudiAlias, 500, AmountUnit.Dinars)));
+        await using var harness = await StartAsync(parser);
+        var conversation = harness.Conversation;
+
+        await conversation.SendAsync(TooLittleSentence);
+        Assert.Equal(ReasonCodes.AmountBelowMinimum, Assert.IsType<AgentReply.Refusal>(conversation.LastReply).Code);
+
+        // AMB-06's typed answer, Khalil's 30 thousand.
+        await conversation.SendAsync(DevSetText.Say("AMB-06", 1));
+
+        Assert.Single(parser.Calls);
+        var card = Assert.IsType<CardView>(conversation.Card);
+        Assert.Equal(SeedFacts.HammoudiPhone, card.ToPhone);
+        Assert.Equal(30_000, card.AmountIqd);
+        Assert.Contains(harness.Trace.Entries, e => e.Step == "amount_retry");
+    }
+
+    [Fact]
+    public async Task AnythingElseAfterAnAmountRefusalDropsTheRequest()
+    {
+        var parser = TooMuchParser();
+        await using var harness = await StartAsync(parser);
+        var conversation = harness.Conversation;
+        await conversation.SendAsync(TooMuchSentence);
+        Assert.Equal(ReasonCodes.InsufficientBalance, Assert.IsType<AgentReply.Refusal>(conversation.LastReply).Code);
+
+        await conversation.SendAsync("not an amount at all");
+
+        Assert.Equal(2, parser.Calls.Count);
+        Assert.Null(conversation.Card);
+
+        // The retry was for one message only: an amount typed now is a fresh message, which this parser does not know.
+        await conversation.SendAsync(DevSetText.Say("ADD-21", 1));
+
+        Assert.Equal(3, parser.Calls.Count);
+        Assert.Null(conversation.Card);
+        Assert.DoesNotContain(harness.Trace.Entries, e => e.Step == "amount_retry");
+        Assert.Equal(new ConversationMessage(ConversationRole.Agent, ConversationKind.Refusal, ReasonCodes.NotUnderstood), conversation.Messages[^1]);
+    }
+
+    [Fact]
+    public async Task ABillRefusedForTheBalanceDoesNotOpenTheRetry()
+    {
+        // NOGO-11: U2's school fees against her balance, as its sidecar parse has it (the biller code only).
+        const string schoolFeesSentence = "pay the school fees";
+        var parser = KnowsOnly((schoolFeesSentence, ParsedRequest.Bill("school_fees", null, null, AmountUnit.None)));
+        Assert.SkipUnless(host.DatabaseAvailable, host.SkipReason);
+        await using var harness = await ConversationHarness.StartAsync(host, parser, U2);
+        var conversation = harness.Conversation;
+
+        await conversation.SendAsync(schoolFeesSentence);
+        Assert.Equal(ReasonCodes.InsufficientBalance, Assert.IsType<AgentReply.Refusal>(conversation.LastReply).Code);
+
+        await conversation.SendAsync(DevSetText.Say("AMB-06", 1));
+
+        Assert.Equal(2, parser.Calls.Count);
+        Assert.Null(conversation.Card);
+        Assert.DoesNotContain(harness.Trace.Entries, e => e.Step == "amount_retry");
+    }
 }

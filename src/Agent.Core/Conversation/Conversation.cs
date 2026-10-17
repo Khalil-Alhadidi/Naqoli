@@ -54,6 +54,10 @@ public sealed class Conversation : IDisposable
     private string? lastMaskedText;
     private bool disposed;
 
+    // D6 extension (Khalil, 17 Oct 2026): the last request was a transfer refused for an amount reason, so the next
+    // typed message may be a new amount for it (one message only; see AmountRetryCodes).
+    private bool amountRetryOpen;
+
     /// <param name="scopes">Opens one scope per action.</param>
     /// <param name="parser">The parse call (rule 2).</param>
     /// <param name="clock">The agent's clock; the card's timer is measured against it.</param>
@@ -237,6 +241,22 @@ public sealed class Conversation : IDisposable
 
                 // Anything else is parsed first, with the card still waiting (the pending note says so): only a new
                 // request cancels it (below).
+            }
+
+            // D6 extension (17 Oct 2026): after a transfer refused for an amount reason, the next message only, if it
+            // reads as an amount, goes into that transfer and the checks run again; anything else is a fresh message.
+            if (amountRetryOpen)
+            {
+                amountRetryOpen = false;
+                if (!cardWaiting && !isYes && !isNo && lastRequest is { } refused
+                    && WithoutFillerWords(typedText, options.CurrentValue.FillerWords) is { } amountText
+                    && AmountText.TryRead(amountText, out var retryValue, out var retryUnit))
+                {
+                    trace.Record(TraceZone.Code, AmountRetryStep, null);
+                    lastMaskedText = Masker.Mask(typedText).Text;
+                    await HandleCoreAsync(refused with { AmountValue = retryValue, AmountUnit = retryUnit }, answers, token);
+                    return;
+                }
             }
 
             // An answer to the open question is read in code first; only what the code cannot read reaches the model.
@@ -780,6 +800,7 @@ public sealed class Conversation : IDisposable
         Question = null;
         QuestionMessageIndex = null;
         typedSlot = null;
+        amountRetryOpen = false;
 
         AgentReply reply;
         await using (var scope = scopes.CreateAsyncScope())
@@ -787,9 +808,33 @@ public sealed class Conversation : IDisposable
 
         LastReply = reply;
         ShowReply(reply);
+        amountRetryOpen = OpensAmountRetry(request, reply);
         LastLearningEntry = invalidReply ?? LearningLogRule.EntryFor(reply, request);
         await WriteLearningAsync(LastLearningEntry, token);
     }
+
+    /// <summary>The trace step of a typed amount merged into a transfer refused for an amount reason.</summary>
+    private const string AmountRetryStep = "amount_retry";
+
+    /// <summary>The refusals that leave a transfer open for one more typed amount (D6 extension, Khalil, 17 Oct 2026).</summary>
+    private static readonly string[] AmountRetryCodes =
+    [
+        ReasonCodes.InsufficientBalance,
+        ReasonCodes.OverPerTransactionCap,
+        ReasonCodes.OverDailyCap,
+        ReasonCodes.AmountBelowMinimum,
+    ];
+
+    /// <summary>
+    /// True when <paramref name="reply"/> refuses a transfer for an amount reason (<see cref="AmountRetryCodes"/>): the
+    /// next typed message, and only that one, goes into the transfer when it reads as an amount, and the checks run
+    /// again. Bills and purchases carry no typed amount, so they never open it. A merged amount refused for an amount
+    /// reason again opens it again, by the same rule.
+    /// </summary>
+    private static bool OpensAmountRetry(ParsedRequest request, AgentReply reply)
+        => request.Intent == RequestIntent.Transfer
+            && reply is AgentReply.Refusal { Code: var code }
+            && AmountRetryCodes.Contains(code, StringComparer.Ordinal);
 
     /// <summary>
     /// Writes <paramref name="entry"/> with the masked text of the last typed message (rule 5: never the typed text).
