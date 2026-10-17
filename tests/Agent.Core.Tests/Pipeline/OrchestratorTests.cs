@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Agent.Core.Aliases;
 using Agent.Core.Audit;
 using Agent.Core.Confirm;
 using Agent.Core.Data;
@@ -488,6 +489,51 @@ public class OrchestratorTests(AgentHost host)
         // One of the candidates gives its card.
         var card = Card(await HandleAsync(U1, shared, new SlotAnswers(ContactOption: "S08")));
         Assert.Equal(SeedFacts.Contact("S08").Number, card.ToPhone);
+    }
+
+    [Fact]
+    public async Task ATransferAnsweredByATapOnASharedWordQuestionCarriesTheAliasOffer()
+    {
+        // AMB-19: the recipient shares a name word with S08 and S09 (rule 15); the tap on S08 gives the card, and rule 18
+        // offers what the user typed as an alias of S08's account.
+        await StartAsync();
+        var typed = DevSetText.SidecarRecipient("AMB-19")!;
+        var request = ParsedRequest.Transfer(typed, 10, AmountUnit.Thousand);
+        var question = Question(await HandleAsync(U1, request), QuestionKinds.WhichContact, QuestionAnswer.Tap);
+        Assert.Contains("S08", question.Options.Select(o => o.Value));
+
+        var issued = Assert.IsType<AgentReply.CardIssued>(await HandleAsync(U1, request, new SlotAnswers(ContactOption: "S08")));
+
+        var offer = Assert.IsType<AliasOffer>(issued.Alias);
+        Assert.Equal(typed.Trim(), offer.Text);
+        Assert.Equal(issued.Pending.ToAccountId, offer.AccountId);
+        Assert.Equal(SeedFacts.Contact("S08").Number, issued.Pending.ToPhone);
+        Assert.Equal(SeedFacts.Account(SeedFacts.Contact("S08").Number).RegisteredName, offer.RegisteredName);
+    }
+
+    [Fact]
+    public async Task ATransferAnsweredByATapOnAnExactNameSharedBySeveralCarriesNoOffer()
+    {
+        // AMB-02: a bare name saved for several contacts (rule 3); the tap pays, and no alias is offered.
+        await StartAsync();
+        var request = ParsedRequest.Transfer(DevSetText.SidecarRecipient("AMB-02"), 50, AmountUnit.Thousand);
+
+        var issued = Assert.IsType<AgentReply.CardIssued>(await HandleAsync(U1, request, new SlotAnswers(ContactOption: "S10")));
+
+        Assert.Equal(SeedFacts.Contact("S10").Number, issued.Pending.ToPhone);
+        Assert.Null(issued.Alias);
+    }
+
+    [Fact]
+    public async Task ATransferThatNeededNoQuestionCarriesNoOffer()
+    {
+        // CLN-01: the alias goes straight to the card.
+        await StartAsync();
+        var request = ParsedRequest.Transfer(DevSetText.SidecarRecipient("CLN-01"), 50, AmountUnit.Thousand);
+
+        var issued = Assert.IsType<AgentReply.CardIssued>(await HandleAsync(U1, request));
+
+        Assert.Null(issued.Alias);
     }
 
     [Fact]

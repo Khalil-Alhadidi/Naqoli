@@ -1,4 +1,5 @@
 using System.Globalization;
+using Agent.Core.Aliases;
 using Agent.Core.Audit;
 using Agent.Core.Learning;
 using Agent.Core.Pending;
@@ -363,6 +364,7 @@ public sealed class Orchestrator
             var resolution = ContactResolver.Resolve(
                 request.RecipientText, ContactCandidate.From(contacts), options.MinSubstringWordLength, options.Endearments);
             var byOption = false;
+            Resolution.Options? askedBy = null;
             if (resolution is Resolution.Options && answers.ContactOption == Option.NoneOfThese)
             {
                 // The question's "none of these" option: the person is not among the user's contacts.
@@ -381,14 +383,20 @@ public sealed class Orchestrator
                 {
                     resolution = new Resolution.Card(picked[0]);
                     byOption = true;
+                    askedBy = offered;
                 }
             }
 
             switch (resolution)
             {
                 case Resolution.Card { Chosen: var chosen }:
+                    // Rule 18: a recipient a tap picked from a question that was not a bare name shared by several is
+                    // offered as an alias, as the user typed it, once the payment is done.
+                    var alias = byOption && askedBy is not null && AliasRule.Offers(askedBy)
+                        ? new AliasOffer(request.RecipientText.Trim(), chosen.AccountId, chosen.RegisteredName)
+                        : null;
                     subject = new CardSubject(
-                        TransferType, chosen.Phone, chosen.AccountId, chosen.Text, chosen.RegisteredName, null, null, null, null);
+                        TransferType, chosen.Phone, chosen.AccountId, chosen.Text, chosen.RegisteredName, null, null, null, null, alias);
                     accountStatus = chosen.AccountStatus;
                     trace.Record(
                         TraceZone.Code,
@@ -614,7 +622,7 @@ public sealed class Orchestrator
             TraceZone.Code,
             TraceSteps.CardCreated,
             FormattableString.Invariant($"{record.Type} {record.TotalIqd}{(record.PinRequired ? " pin" : string.Empty)}"));
-        return new AgentReply.CardIssued(record);
+        return new AgentReply.CardIssued(record, Alias: subject.Alias);
     }
 
     private static Option BillOption(WalletBill bill)

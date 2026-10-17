@@ -1,3 +1,4 @@
+using Agent.Core.Aliases;
 using Agent.Core.Pending;
 
 namespace Agent.Core.Pipeline;
@@ -65,9 +66,11 @@ public abstract record AgentReply
     /// <summary>
     /// A confirmation card was issued for <see cref="Pending"/>. The record is for <c>Agent.Core</c> callers; a component
     /// gets <see cref="View"/> only. <see cref="Note"/> is a reason code shown with the card (a known gap:
-    /// <see cref="ReasonCodes.AccountChoiceUnavailable"/>), or null.
+    /// <see cref="ReasonCodes.AccountChoiceUnavailable"/>), or null. <see cref="Alias"/> is the alias to offer once the
+    /// payment is done (rule 18, milestone 9a): set only for a transfer whose recipient a tap picked from a question that
+    /// <see cref="AliasRule.Offers"/>; null otherwise. Kept in memory only, never stored on the record.
     /// </summary>
-    public sealed record CardIssued(PendingRecord Pending, string? Note = null) : AgentReply
+    public sealed record CardIssued(PendingRecord Pending, string? Note = null, AliasOffer? Alias = null) : AgentReply
     {
         /// <summary>The card as the screen shows it, projected from <see cref="Pending"/>.</summary>
         public CardView View => CardView.From(Pending);

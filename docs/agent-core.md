@@ -576,13 +576,17 @@ Every action opens its own DI scope (`CreateAsyncScope`) and resolves the agent'
 | `CancelAsync()` | `PendingStore.CancelAsync` while the card is live |
 | `ReissueAsync()` | D19, the card's Try again or Send again: only for a card shown as Expired, Cancelled or NotDone (`ReissueKind.TryAgain`) or Done (`ReissueKind.SendAgain`), and only when its stored record is not live, Executing or Checking (else traced `reissue_rejected`). Reads the record, then `Orchestrator.ReissueAsync`; the reply is shown as any reply (a new card, or a refusal that leaves the old card). Never the Confirm handler |
 | `RefreshAsync()` | Reads the record; marks the card expired when it is Pending past `ExpiresAt`, Expired, or gone |
+| `SaveAliasAsync()` | Milestone 9a, the Save tap of the open alias offer (rule 18): `AliasDirectory.SaveAsync` with the offer's text and account. With no open offer it returns null (traced `option_rejected`). `Saved` adds a `ConversationKind.AliasSaved` message and raises `WalletVersion`. `Refused` adds a refusal with its code. Both close the offer. `Unavailable` adds `not_done_nothing_taken` and keeps the offer open |
+| `ListAliasesAsync()`, `AddAliasAsync(text, accountId)`, `AddAliasForPhoneAsync(text, phone)`, `DeleteAliasAsync(aliasId)` | Milestone 9a, the alias directory under the conversation's turn, through `AliasDirectory`. `WalletVersion` goes up after a save or delete. They add no conversation message |
 
 When the Confirm handler throws, the conversation reads the record:
 
 - if it is Pending, nothing was sent, and the reply is `not_done_nothing_taken`;
 - otherwise the outcome is shown as checking, never as failed (rule 6).
 
-Any other exception in an action is traced as `error` (the exception type) and answered with `not_done_nothing_taken`.
+Any other exception in an action is traced as `error` (the exception type) and answered with `not_done_nothing_taken`. A directory action is the exception: it is traced as `error` and returns null, with no message.
+
+The alias offer (milestone 9a) adds two message kinds, neither with a code: `AliasOffer`, shown under the Done outcome (the text is `Conversation.AliasOffer`), and `AliasSaved`, after the Save tap. Every action that starts something new clears the open offer first: `SendAsync`, `TapOptionAsync`, `DeclineQuestionAsync`, `ReissueAsync` and `SaveAliasAsync`. `ConfirmAsync`, `SettleAsync`, `CancelAsync` and `RefreshAsync` leave it.
 
 ### State
 
@@ -832,6 +836,55 @@ sequenceDiagram
     end
 ```
 
+### The offer (rule 18)
+
+`Orchestrator.TransferAsync` sets `CardSubject.Alias` to `AliasOffer(Text, AccountId, RegisteredName)` when the recipient came from a tap on a question for which `AliasRule.Offers` is true. The text is the recipient as the user typed it, trimmed. `CheckAndIssueAsync` passes it into `AgentReply.CardIssued(Pending, Note, Alias)`. Nothing is stored on the pending record or the card draft, and no card field changes.
+
+The conversation keeps the alias with the card only when the recipient is the user's own words (ruling 3). That is an answer the code read, or a `recipient_text` that occurs verbatim (ordinal) in the typed message after unmasking. A merge keeps the flag of the message that supplied the recipient, and a tap keeps the flag. A recipient the model did not copy verbatim gets no offer; the payment is untouched (`ConversationAliasTests.ARecipientTheModelDidNotCopyVerbatimGetsNoOffer`). On the Done outcome of that transfer, the conversation sets `AliasOffer`, adds a `ConversationKind.AliasOffer` message (no code; `AliasOfferMessageIndex`) and traces `alias_offered` with no detail. `SaveAliasAsync()`, the offer's Save tap, is the only way an offer is saved. The next typed message, tap, decline, reissue or save closes the offer (ruling 7), so AMB-19's second request asks again and saves nothing.
+
+```mermaid
+flowchart TD
+    A[Recipient resolved] --> B{Picked by a tap on a question?}
+    B -- no --> N[No offer]
+    B -- yes --> C{Question step}
+    C -- Exact or Partial: a bare name shared by several --> N
+    C -- Near, SharedWord or TitleOnly --> D{Recipient typed verbatim by the user?}
+    D -- no --> N
+    D -- yes --> E[CardIssued carries AliasOffer]
+    E --> F{Payment outcome}
+    F -- not done, expired, cancelled --> N
+    F -- done --> G[Offer shown under the Done outcome]
+```
+
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant C as Conversation
+    participant O as Orchestrator
+    participant H as ConfirmHandler
+    participant A as AliasDirectory
+    participant W as Wallet
+
+    U->>C: SendAsync, the sentence
+    C->>O: HandleAsync
+    O-->>C: Question, shared word
+    U->>C: TapOptionAsync S08
+    C->>O: HandleAsync with ContactOption
+    O-->>C: CardIssued with AliasOffer
+    U->>C: ConfirmAsync
+    C->>H: ConfirmAsync
+    H-->>C: Done
+    C->>C: AliasOffer set, alias_offered traced
+    U->>C: SaveAliasAsync, the Save tap
+    C->>A: SaveAsync text and account id
+    A->>W: POST /users/{id}/aliases
+    W-->>A: 201
+    A-->>C: Saved, audit alias_saved
+    C->>C: AliasSaved message, WalletVersion up, offer closed
+```
+
+A saved alias never reaches the model: the parse call sees the user's masked words and the pending note, and the note carries no offer (`OutboundPayloadTests.ASavedAliasNeverReachesTheModel`, `ConversationAliasTests.ASavedAliasNeverReachesTheParser`). A biller alias (one word for one biller account) is a later item of the build plan and is not built; `AliasDirectory` takes an account only.
+
 ## Settings
 
 `AgentOptions` (section `Agent`, validated at start). The limit defaults equal `data/seed/settings.json`; `AgentOptionsTests.DefaultsMatchTheSettingsFile` keeps them equal. `src/Agent.Web/appsettings.json` sets the same values.
@@ -915,3 +968,4 @@ Still open:
 | Checking rows are not counted toward the daily cap (only `done` rows) | Decide whether an open Checking record blocks new cards |
 | A reissued `choose_account` card (GAP-04) does not carry the `account_choice_unavailable` note | Deferred, minor |
 | `Attempts` counts Confirm taps that began an execute, not settle resends | Display only |
+| A biller alias (one word for one biller account) is not built; aliases point to accounts only | A later item of the build plan, after milestone 9a |

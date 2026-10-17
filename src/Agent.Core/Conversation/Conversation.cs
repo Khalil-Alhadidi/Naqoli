@@ -1,3 +1,4 @@
+using Agent.Core.Aliases;
 using Agent.Core.Audit;
 using Agent.Core.Confirm;
 using Agent.Core.Learning;
@@ -53,6 +54,13 @@ public sealed class Conversation : IDisposable
     private string? typedSlot;
     private string? lastMaskedText;
     private bool disposed;
+
+    // Ruling 3 (milestone 9a): the recipient of lastRequest occurs verbatim in a message the user typed (an answer the
+    // code read, or the model's recipient_text found inside the typed text). Only then is an alias offered.
+    private bool recipientVerbatim;
+
+    // The alias the card shown would offer once its payment is done (rule 18); kept with the card, never stored.
+    private AliasOffer? cardAlias;
 
     // D6 extension (Khalil, 17 Oct 2026): the last request was a transfer refused for an amount reason, so the next
     // typed message may be a new amount for it (one message only; see AmountRetryCodes).
@@ -140,6 +148,15 @@ public sealed class Conversation : IDisposable
     /// <summary>Goes up after every Done outcome, so a wallet view knows to reload.</summary>
     public int WalletVersion { get; private set; }
 
+    /// <summary>
+    /// The open offer to save an alias (rule 18, milestone 9a), shown under the Done outcome of a transfer whose recipient
+    /// needed a question; null when none is open. Cleared by the next typed message, tap, reissue or save.
+    /// </summary>
+    public AliasOffer? AliasOffer { get; private set; }
+
+    /// <summary>The position in <see cref="Messages"/> of the <see cref="ConversationKind.AliasOffer"/> message of <see cref="AliasOffer"/>.</summary>
+    public int? AliasOfferMessageIndex { get; private set; }
+
     /// <summary>The time the card's countdown measures against.</summary>
     public DateTimeOffset Now => clock.GetUtcNow();
 
@@ -210,6 +227,7 @@ public sealed class Conversation : IDisposable
         try
         {
             SetBusy(true);
+            ClearAliasOffer();
             var token = stopping;
             trace.Record(TraceZone.User, "message_received", FormattableString.Invariant($"length {typedText.Length}"));
             Add(new ConversationMessage(ConversationRole.User, ConversationKind.Typed));
@@ -265,7 +283,10 @@ public sealed class Conversation : IDisposable
             {
                 trace.Record(TraceZone.Code, AnswerParsedStep, open.Kind);
                 lastMaskedText = Masker.Mask(typedText).Text;
-                await HandleCoreAsync(answered.Request, answered.Answers, token);
+
+                // A contact answer the code read is the user's own text (ruling 3); an amount answer keeps the flag.
+                bool? verbatim = open.Kind is QuestionKinds.WhichContact or QuestionKinds.DidYouMean ? true : null;
+                await HandleCoreAsync(answered.Request, answered.Answers, token, verbatim: verbatim);
                 return;
             }
 
@@ -293,6 +314,10 @@ public sealed class Conversation : IDisposable
             trace.Record(TraceZone.Model, "parse:" + parser.Name, parsed.Intent.ToString());
             parsed = Unmask(parsed, masked.Map);
 
+            // Ruling 3: the model's recipient counts as the user's words only when it occurs in the typed text as it is.
+            var parsedVerbatim = parsed.RecipientText is { } recipient
+                && typedText.Contains(recipient.Trim(), StringComparison.Ordinal);
+
             // A structure the validator refused: the reply is not_understood, and the log says why (by field name).
             // A message the model refused to parse is its own path: the same reply, logged as model_refusal, no detail.
             LearningEntry? invalidReply = null;
@@ -314,7 +339,7 @@ public sealed class Conversation : IDisposable
                 if (CardKeptBecause(parsed) is { } reason)
                 {
                     trace.Record(TraceZone.Code, CardKeptStep, reason);
-                    await HandleCoreAsync(parsed, SlotAnswers.None, token, invalidReply);
+                    await HandleCoreAsync(parsed, SlotAnswers.None, token, invalidReply, parsedVerbatim);
                     return;
                 }
 
@@ -330,15 +355,19 @@ public sealed class Conversation : IDisposable
 
             var request = parsed;
             var kept = SlotAnswers.None;
+            var verbatimNow = parsedVerbatim;
             if (typedSlot is not null && lastRequest is not null && MergePartial(lastRequest, parsed) is { } merged)
             {
                 // D3: the answer to a typed question that the model read as a partial request of the same kind.
                 trace.Record(TraceZone.Code, "answer_merged", typedSlot);
                 request = merged;
                 kept = answers;
+
+                // The flag of whichever message supplied the recipient.
+                verbatimNow = string.IsNullOrWhiteSpace(parsed.RecipientText) ? recipientVerbatim : parsedVerbatim;
             }
 
-            await HandleCoreAsync(request, kept, token, ReferenceEquals(request, parsed) ? invalidReply : null);
+            await HandleCoreAsync(request, kept, token, ReferenceEquals(request, parsed) ? invalidReply : null, verbatimNow);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -367,6 +396,7 @@ public sealed class Conversation : IDisposable
         try
         {
             SetBusy(true);
+            ClearAliasOffer();
             var token = stopping;
             var question = Question;
             var option = question?.Options.FirstOrDefault(o => string.Equals(o.Value, value, StringComparison.Ordinal));
@@ -415,6 +445,7 @@ public sealed class Conversation : IDisposable
         try
         {
             SetBusy(true);
+            ClearAliasOffer();
             var token = stopping;
             var question = Question;
             if (question is null || lastRequest is null)
@@ -628,6 +659,7 @@ public sealed class Conversation : IDisposable
         try
         {
             SetBusy(true);
+            ClearAliasOffer();
             var token = stopping;
             trace.Record(TraceZone.User, "reissue_tapped", null);
             if (Card is not { } card || ReissueKindOf(CardState) is not { } kind)
@@ -718,6 +750,151 @@ public sealed class Conversation : IDisposable
     }
 
     /// <summary>
+    /// The Save button of the open alias offer (rule 18): saves <see cref="AliasOffer"/> through
+    /// <see cref="AliasDirectory.SaveAsync"/>, the only way an offer is saved (never by words). With no open offer it does
+    /// nothing and returns null (traced <c>option_rejected</c>). Saved: an <see cref="ConversationKind.AliasSaved"/>
+    /// message and <see cref="WalletVersion"/> up. Refused: a refusal with its code. Either way the offer closes; a wallet
+    /// that gave no answer adds <c>not_done_nothing_taken</c> and keeps the offer open, so the tap can be tried again.
+    /// No money moves and the card's record is untouched.
+    /// </summary>
+    public async Task<AliasResult?> SaveAliasAsync()
+    {
+        if (!await EnterAsync())
+            return null;
+        try
+        {
+            SetBusy(true);
+            var offer = AliasOffer;
+            ClearAliasOffer();
+            if (offer is null)
+            {
+                trace.Record(TraceZone.Code, "option_rejected", null);
+                return null;
+            }
+
+            trace.Record(TraceZone.User, "save_alias_tapped", null);
+            AliasResult result;
+            await using (var scope = scopes.CreateAsyncScope())
+                result = await scope.ServiceProvider.GetRequiredService<AliasDirectory>().SaveAsync(userId, offer.Text, offer.AccountId, stopping);
+
+            switch (result)
+            {
+                case AliasResult.Saved:
+                    WalletVersion++;
+                    Add(new ConversationMessage(ConversationRole.Agent, ConversationKind.AliasSaved));
+                    break;
+                case AliasResult.Refused refused:
+                    AddRefusal(refused.Code);
+                    break;
+                case AliasResult.Unavailable:
+                    // As a wallet read that gave no answer: nothing written; the offer stays open for another tap.
+                    AddRefusal(ReasonCodes.NotDoneNothingTaken);
+                    AliasOffer = offer;
+                    AliasOfferMessageIndex = Add(new ConversationMessage(ConversationRole.Agent, ConversationKind.AliasOffer));
+                    break;
+            }
+
+            return result;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            Failed(ex);
+            return null;
+        }
+        catch (OperationCanceledException) when (stopping.IsCancellationRequested)
+        {
+            return null;
+        }
+        finally
+        {
+            Release();
+        }
+    }
+
+    /// <summary>The directory (milestone 9a): the user's contacts and aliases, under the conversation's turn.</summary>
+    public async Task<WalletResult<WalletContacts>> ListAliasesAsync()
+    {
+        if (!await EnterAsync())
+            return new WalletResult<WalletContacts>.Unavailable(StoppedReason);
+        try
+        {
+            SetBusy(true);
+            await using var scope = scopes.CreateAsyncScope();
+            return await scope.ServiceProvider.GetRequiredService<AliasDirectory>().ListAsync(userId, stopping);
+        }
+        catch (OperationCanceledException) when (stopping.IsCancellationRequested)
+        {
+            return new WalletResult<WalletContacts>.Unavailable(StoppedReason);
+        }
+        finally
+        {
+            Release();
+        }
+    }
+
+    /// <summary>
+    /// The directory: adds an alias of one of the user's contacts or aliases (<see cref="AliasDirectory.SaveAsync"/>).
+    /// Adds no message.
+    /// </summary>
+    public Task<AliasResult?> AddAliasAsync(string text, int targetAccountId)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        return DirectoryAsync((directory, token) => directory.SaveAsync(userId, text, targetAccountId, token));
+    }
+
+    /// <summary>
+    /// The directory: adds an alias of the account behind a typed number (<see cref="AliasDirectory.SaveForPhoneAsync"/>,
+    /// D21). Adds no message.
+    /// </summary>
+    public Task<AliasResult?> AddAliasForPhoneAsync(string text, string phone)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        ArgumentNullException.ThrowIfNull(phone);
+        return DirectoryAsync((directory, token) => directory.SaveForPhoneAsync(userId, text, phone, token));
+    }
+
+    /// <summary>The directory: deletes one of the user's aliases (<see cref="AliasDirectory.DeleteAsync"/>). Adds no message.</summary>
+    public Task<AliasResult?> DeleteAliasAsync(int aliasId)
+        => DirectoryAsync((directory, token) => directory.DeleteAsync(userId, aliasId, token));
+
+    /// <summary>The reason of a directory read that the end of the conversation stopped.</summary>
+    private const string StoppedReason = "stopped";
+
+    /// <summary>
+    /// Runs one directory action under the conversation's turn, in its own scope; <see cref="WalletVersion"/> goes up when
+    /// it saved or deleted. Null when the conversation ended or the action failed for another reason (traced <c>error</c>).
+    /// </summary>
+    private async Task<AliasResult?> DirectoryAsync(Func<AliasDirectory, CancellationToken, Task<AliasResult>> action)
+    {
+        if (!await EnterAsync())
+            return null;
+        try
+        {
+            SetBusy(true);
+            AliasResult result;
+            await using (var scope = scopes.CreateAsyncScope())
+                result = await action(scope.ServiceProvider.GetRequiredService<AliasDirectory>(), stopping);
+
+            if (result is AliasResult.Saved or AliasResult.Deleted)
+                WalletVersion++;
+            return result;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            trace.Record(TraceZone.Code, "error", ex.GetType().Name);
+            return null;
+        }
+        catch (OperationCanceledException) when (stopping.IsCancellationRequested)
+        {
+            return null;
+        }
+        finally
+        {
+            Release();
+        }
+    }
+
+    /// <summary>
     /// Ends the conversation: cancels the token every running action uses, so the agent takes its cancellation path (a
     /// Confirm cancelled before the send goes back to Pending, during it to Checking). The semaphore is deliberately not
     /// disposed: an action still running releases it in its <c>finally</c>, and a disposed semaphore would throw there.
@@ -746,6 +923,9 @@ public sealed class Conversation : IDisposable
     }
 
     private bool IsCardLive => Card is not null && CardState == CardStatus.Live;
+
+    /// <summary>The card type an alias is offered for.</summary>
+    private const string TransferType = "transfer";
 
     /// <summary>The trace step of a reissue tap that rebuilt nothing; the detail is the card's or the record's state.</summary>
     private const string ReissueRejectedStep = "reissue_rejected";
@@ -792,10 +972,16 @@ public sealed class Conversation : IDisposable
     /// (<c>model_invalid_reply</c>) or the model refused the message (<c>model_refusal</c>), else what
     /// <see cref="LearningLogRule.EntryFor"/> returns.
     /// </summary>
+    /// <param name="verbatim">
+    /// Whether the request's recipient occurs verbatim in a message the user typed (ruling 3); null keeps the flag of the
+    /// pending request (a tap, a typed amount, the consent button).
+    /// </param>
     private async Task HandleCoreAsync(
-        ParsedRequest request, SlotAnswers tapped, CancellationToken token, LearningEntry? invalidReply = null)
+        ParsedRequest request, SlotAnswers tapped, CancellationToken token, LearningEntry? invalidReply = null, bool? verbatim = null)
     {
         lastRequest = request;
+        if (verbatim is { } typed)
+            recipientVerbatim = typed;
         answers = tapped;
         Question = null;
         QuestionMessageIndex = null;
@@ -896,6 +1082,9 @@ public sealed class Conversation : IDisposable
                 // A known gap's note comes before the card, as an informational reply (account_choice_unavailable).
                 if (issued.Note is { } note)
                     Add(new ConversationMessage(ConversationRole.Agent, ConversationKind.Info, note));
+
+                // Ruling 3: the alias is kept only when its text is the user's own words.
+                cardAlias = recipientVerbatim ? issued.Alias : null;
                 Card = issued.View;
                 CardState = CardStatus.Live;
                 PinVisible = Card.PinRequired;
@@ -1095,6 +1284,7 @@ public sealed class Conversation : IDisposable
                 ActionMessageIndex = null;
                 WalletVersion++;
                 AddOutcome(OutcomeCodes.Done, done.BalanceAfterIqd, done.Reference, done.PurchaseCode);
+                OfferAlias();
                 break;
 
             case ConfirmOutcome.NotDone notDone:
@@ -1184,6 +1374,7 @@ public sealed class Conversation : IDisposable
 
         if (cancelled)
         {
+            cardAlias = null;
             CardState = CardStatus.Cancelled;
             PinVisible = false;
             AddOutcome(OutcomeCodes.Cancelled);
@@ -1265,6 +1456,27 @@ public sealed class Conversation : IDisposable
         }
 
         return true;
+    }
+
+    /// <summary>
+    /// Rule 18: after a Done transfer whose card carries an alias, opens the offer under the outcome and traces
+    /// <c>alias_offered</c> (no detail: never the text). The card's alias is used once.
+    /// </summary>
+    private void OfferAlias()
+    {
+        if (cardAlias is not { } alias || Card is not { Type: TransferType })
+            return;
+
+        cardAlias = null;
+        AliasOffer = alias;
+        AliasOfferMessageIndex = Add(new ConversationMessage(ConversationRole.Agent, ConversationKind.AliasOffer));
+        trace.Record(TraceZone.Code, TraceSteps.AliasOffered, null);
+    }
+
+    private void ClearAliasOffer()
+    {
+        AliasOffer = null;
+        AliasOfferMessageIndex = null;
     }
 
     private void AddRefusal(string code, long? amountIqd = null)

@@ -1,10 +1,12 @@
 using System.Text.Json;
+using Agent.Core.Aliases;
 using Agent.Core.Parsing;
 using Agent.Core.Pipeline;
 using Agent.Core.Tests.Agent;
 using Agent.Core.Tests.Conversation;
 using Agent.Core.Tests.Wallet;
 using Agent.Core.Text;
+using Agent.Core.Wallet;
 using Agent.Eval.Checks;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -22,6 +24,12 @@ namespace Agent.Core.Tests.Parsing;
 public sealed class OutboundPayloadTests(AgentHost host)
 {
     private const string HammoudiSentence = "send fifty thousand to my brother Hammoudi";
+
+    /// <summary>A transfer to the alias <see cref="ASavedAliasNeverReachesTheModel"/> saves first.</summary>
+    private const string AliasSentence = "send ten thousand to my usual one";
+
+    /// <summary>The alias that test saves: S03's saved name and one Latin letter, on S03's account.</summary>
+    private static string SavedAliasText => SeedFacts.Contact("S03").SavedName + " x";
 
     private static string Reply(string fields) => "{\"requests\":[{" + fields + "}]}";
 
@@ -44,6 +52,12 @@ public sealed class OutboundPayloadTests(AgentHost host)
             return Reply("\"intent\":\"transfer\",\"recipient_text\":" + alias + ",\"amount_value\":50,\"amount_unit\":\"thousand\"," + Nulls("recipient_text", "amount_value"));
         }
 
+        if (message.Contains(AliasSentence, StringComparison.Ordinal))
+        {
+            var alias = JsonSerializer.Serialize(SavedAliasText);
+            return Reply("\"intent\":\"transfer\",\"recipient_text\":" + alias + ",\"amount_value\":10,\"amount_unit\":\"thousand\"," + Nulls("recipient_text", "amount_value"));
+        }
+
         if (message.Contains("<NUM_1>", StringComparison.Ordinal))
             return Reply("\"intent\":\"transfer\",\"recipient_text\":\"<NUM_1>\",\"amount_value\":25000,\"amount_unit\":\"none\"," + Nulls("recipient_text", "amount_value"));
         if (message.Contains("water", StringComparison.Ordinal))
@@ -54,7 +68,16 @@ public sealed class OutboundPayloadTests(AgentHost host)
     }
 
     [Fact]
-    public async Task NothingFromTheWalletReachesTheModel()
+    public Task NothingFromTheWalletReachesTheModel() => PlayAndCheckAsync(saveAlias: false);
+
+    /// <summary>
+    /// Milestone 9a: with an alias saved in the wallet before the sentences, and one more transfer to it at the end, the
+    /// alias text never reaches the model, nor does anything else the existing test checks.
+    /// </summary>
+    [Fact]
+    public Task ASavedAliasNeverReachesTheModel() => PlayAndCheckAsync(saveAlias: true);
+
+    private async Task PlayAndCheckAsync(bool saveAlias)
     {
         Assert.SkipUnless(host.DatabaseAvailable, host.SkipReason);
         var client = new FakeChatClient
@@ -66,6 +89,13 @@ public sealed class OutboundPayloadTests(AgentHost host)
             client, Microsoft.Extensions.Options.Options.Create(ClaudeParserTests.Options()), TimeProvider.System, trace, NullLogger<ClaudeParser>.Instance);
         await using var session = await ConversationHarness.StartAsync(host, parser, SeedFacts.DemoUserId);
         var conversation = session.Conversation;
+        if (saveAlias)
+        {
+            var contacts = Assert.IsType<WalletResult<WalletContacts>.Ok>(
+                await conversation.ListAliasesAsync()).Value;
+            var s03 = Assert.Single(contacts.Contacts, c => c.Code == "S03");
+            Assert.IsType<AliasResult.Saved>(await conversation.AddAliasAsync(SavedAliasText, s03.TargetAccountId));
+        }
 
         await conversation.SendAsync(HammoudiSentence);
         var hammoudiCard = Assert.IsType<CardView>(conversation.Card);
@@ -78,8 +108,16 @@ public sealed class OutboundPayloadTests(AgentHost host)
         var purchaseCard = Assert.IsType<CardView>(conversation.Card);
         await conversation.SendAsync("how much do I have");
         Assert.IsType<AgentReply.BalanceReply>(conversation.LastReply);
+        if (saveAlias)
+        {
+            // The alias gives its card straight away: an exact hit, no question.
+            await conversation.SendAsync(AliasSentence);
+            var aliasCard = Assert.IsType<CardView>(conversation.Card);
+            Assert.Equal(SavedAliasText, aliasCard.DisplayName);
+            Assert.Null(conversation.Question);
+        }
 
-        Assert.Equal(5, client.Calls.Count);
+        Assert.Equal(saveAlias ? 6 : 5, client.Calls.Count);
         var texts = client.Calls
             .SelectMany(c => c.Messages.Select(m => m.Text)
                 .Append(c.Options?.ResponseFormat is ChatResponseFormatJson { Schema: { } schema } ? schema.GetRawText() : string.Empty))
@@ -112,5 +150,6 @@ public sealed class OutboundPayloadTests(AgentHost host)
         Assert.All(names.Where(n => !string.IsNullOrWhiteSpace(n)), name =>
             Assert.DoesNotContain(ArabicText.Normalize(name!), normalizedPayload, StringComparison.Ordinal));
         Assert.All(seed.Users, u => Assert.DoesNotContain(u.Pin, payload, StringComparison.Ordinal));
+        Assert.DoesNotContain(ArabicText.Normalize(SavedAliasText), normalizedPayload, StringComparison.Ordinal);
     }
 }

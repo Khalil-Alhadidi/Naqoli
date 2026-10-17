@@ -267,6 +267,11 @@ public sealed class ChatSession : IDisposable
                     yield return outcome;
                 break;
 
+            case ConversationKind.AliasOffer:
+            case ConversationKind.AliasSaved:
+                // Milestone 9a: the alias offer and its saved note have no chat text yet; the phone's offer comes later.
+                yield break;
+
             default:
                 throw new InvalidOperationException("Unknown conversation message.");
         }

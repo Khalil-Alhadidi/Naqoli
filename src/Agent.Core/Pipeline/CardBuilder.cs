@@ -1,3 +1,4 @@
+using Agent.Core.Aliases;
 using Agent.Core.Pending;
 using Agent.Core.Wallet;
 using Microsoft.Extensions.Options;
@@ -8,6 +9,8 @@ namespace Agent.Core.Pipeline;
 /// What a card is for, as the orchestrator resolved it from the wallet's data (never from model text, rule 3).
 /// <see cref="DisplayName"/> is the alias or saved name of a contact, the typed phone of a new number, or the bill's
 /// label or biller, or the product's operator; <see cref="RegisteredName"/> is the recipient account's registered name.
+/// <see cref="Alias"/> is the alias to offer after the payment (rule 18), carried to <see cref="AgentReply.CardIssued"/>;
+/// it is no field of the card.
 /// </summary>
 public sealed record CardSubject(
     string Type,
@@ -18,7 +21,8 @@ public sealed record CardSubject(
     int? BillAccountId,
     string? BillCode,
     int? ProductId,
-    string? ProductCode);
+    string? ProductCode,
+    AliasOffer? Alias = null);
 
 /// <summary>
 /// Builds the <see cref="CardDraft"/> of a payment that passed the checks: the figures from the wallet's quote, the

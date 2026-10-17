@@ -46,6 +46,15 @@ public enum ConversationKind
 
     /// <summary>A note that is not a reply to a request; <see cref="ConversationMessage.Code"/> is <c>points_to_confirm</c>.</summary>
     Info,
+
+    /// <summary>
+    /// The offer to save an alias under a Done outcome (rule 18, milestone 9a); no code: the text is
+    /// <see cref="Conversation.AliasOffer"/>, read by the screen and the runner.
+    /// </summary>
+    AliasOffer,
+
+    /// <summary>The offered alias was saved on the user's tap (milestone 9a); no code.</summary>
+    AliasSaved,
 }
 
 /// <summary>The codes of <see cref="ConversationKind.Outcome"/> messages.</summary>
