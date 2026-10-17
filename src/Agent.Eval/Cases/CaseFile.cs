@@ -94,8 +94,9 @@ public sealed record StepExpect(
 
     /// <summary>The alias text the step expects offered; null with <see cref="AliasOfferSet"/> means no offer.</summary>
     /// <remarks>
-    /// Renamed for the serializer: an ignored property still claims its JSON name, and the raw <c>alias_offer</c> must reach
-    /// <see cref="Extra"/>, where <see cref="CaseLoader"/> reads it.
+    /// Not dead: an ignored property still claims its JSON name, so without this rename the serializer would swallow
+    /// <c>alias_offer</c> and it would never reach <see cref="Extra"/>, where <see cref="CaseLoader"/> reads it. The four
+    /// alias tests of <c>CaseLoaderTests</c> fail without it (checked in the milestone 9a security fix wave).
     /// </remarks>
     [JsonIgnore]
     [JsonPropertyName("loaded_alias_offer")]

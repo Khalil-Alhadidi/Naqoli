@@ -99,6 +99,31 @@ public sealed class AliasEndpointsTests(WalletApiFixture fixture) : IAsyncLifeti
     }
 
     [Fact]
+    public async Task ConcurrentPostsOfTheSameTextSaveOnce()
+    {
+        // Security review R5: the unique index on (OwnerUserId, Text) is the last guard against a racing save; eight
+        // simultaneous posts of one text give exactly one 201, the rest 409 alias_exists.
+        Assert.SkipUnless(fixture.DatabaseAvailable, fixture.SkipReason);
+        var before = await ContactsAsync(DemoUserId);
+        var s02 = Assert.Single(before.Contacts, c => c.Code == "S02");
+        var request = new AliasRequest(s02.SavedName + " x", s02.TargetAccountId);
+
+        var responses = await Task.WhenAll(Enumerable.Range(0, 8)
+            .Select(_ => fixture.Client.PostAsJsonAsync($"/users/{DemoUserId}/aliases", request, Token)));
+
+        Assert.Single(responses, r => r.StatusCode == HttpStatusCode.Created);
+        var conflicts = responses.Where(r => r.StatusCode != HttpStatusCode.Created).ToList();
+        Assert.Equal(7, conflicts.Count);
+        foreach (var conflict in conflicts)
+        {
+            Assert.Equal(HttpStatusCode.Conflict, conflict.StatusCode);
+            Assert.Equal("alias_exists", (await conflict.ReadProblemAsync(Token)).Code());
+        }
+
+        Assert.Equal(before.Aliases.Count + 1, (await ContactsAsync(DemoUserId)).Aliases.Count);
+    }
+
+    [Fact]
     public async Task PostABlankTextIs422AliasTextInvalid()
     {
         Assert.SkipUnless(fixture.DatabaseAvailable, fixture.SkipReason);

@@ -112,7 +112,16 @@
 
     private async Task LoadAsync()
     {
-        contacts = await Session.ListAliasesAsync();
+        try
+        {
+            contacts = await Session.ListAliasesAsync();
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // Security review M1: a failed read shows the unavailable line with the exception's type, never its message.
+            contacts = new WalletResult<WalletContacts>.Unavailable(ex.GetType().Name);
+        }
+
         StateHasChanged();
     }
 
@@ -139,14 +148,10 @@
             target = null;
         }
 
-        await LoadAsync();
+        // A save raises WalletVersion; OnSessionChanged reloads the list (security review M5).
     }
 
-    private async Task DeleteAsync(int aliasId)
-    {
-        result = CodeOf(await Session.DeleteAliasAsync(aliasId));
-        await LoadAsync();
-    }
+    private async Task DeleteAsync(int aliasId) => result = CodeOf(await Session.DeleteAliasAsync(aliasId));
 
     private static string CodeOf(AliasResult? outcome) => outcome switch
     {

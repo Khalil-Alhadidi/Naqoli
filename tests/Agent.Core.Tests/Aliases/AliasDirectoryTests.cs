@@ -127,6 +127,14 @@ public sealed class AliasDirectoryTests(AgentHost host) : IAsyncLifetime
         {
             var refused = Assert.IsType<AliasResult.Refused>(await SaveAsync(text, target));
             Assert.Equal(ReasonCodes.AliasInvalid, refused.Code);
+
+            // The phone path checks the text before any wallet read (security review M3): even with the user's own
+            // number or a number with no wallet, the text's refusal comes first.
+            foreach (var phone in new[] { SeedFacts.DemoPhone, NoWalletPhone })
+            {
+                var byPhone = Assert.IsType<AliasResult.Refused>(await SaveForPhoneAsync(text, phone));
+                Assert.Equal(ReasonCodes.AliasInvalid, byPhone.Code);
+            }
         }
 
         Assert.Equal(before.Aliases, (await ListAsync()).Aliases);

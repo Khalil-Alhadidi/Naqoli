@@ -761,10 +761,11 @@ public sealed class Conversation : IDisposable
     {
         if (!await EnterAsync())
             return null;
+        AliasOffer? offer = null;
         try
         {
             SetBusy(true);
-            var offer = AliasOffer;
+            offer = AliasOffer;
             ClearAliasOffer();
             if (offer is null)
             {
@@ -798,7 +799,14 @@ public sealed class Conversation : IDisposable
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
+            // Security review R1: nothing is known to be written, so the offer stays open, as on Unavailable.
             Failed(ex);
+            if (offer is not null && AliasOffer is null)
+            {
+                AliasOffer = offer;
+                AliasOfferMessageIndex = Add(new ConversationMessage(ConversationRole.Agent, ConversationKind.AliasOffer));
+            }
+
             return null;
         }
         catch (OperationCanceledException) when (stopping.IsCancellationRequested)
@@ -821,6 +829,13 @@ public sealed class Conversation : IDisposable
             SetBusy(true);
             await using var scope = scopes.CreateAsyncScope();
             return await scope.ServiceProvider.GetRequiredService<AliasDirectory>().ListAsync(userId, stopping);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // Security review M1: a failure here (a torn-down scope, a DI error) is a read with no answer, never a
+            // thrown exception that ends the circuit.
+            trace.Record(TraceZone.Code, "error", ex.GetType().Name);
+            return new WalletResult<WalletContacts>.Unavailable(ErrorReason);
         }
         catch (OperationCanceledException) when (stopping.IsCancellationRequested)
         {
@@ -859,6 +874,9 @@ public sealed class Conversation : IDisposable
 
     /// <summary>The reason of a directory read that the end of the conversation stopped.</summary>
     private const string StoppedReason = "stopped";
+
+    /// <summary>The reason of a directory read that failed for another reason (traced <c>error</c> with the type).</summary>
+    private const string ErrorReason = "error";
 
     /// <summary>
     /// Runs one directory action under the conversation's turn, in its own scope; <see cref="WalletVersion"/> goes up when

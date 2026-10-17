@@ -215,7 +215,32 @@ public sealed class ConversationAliasTests(AgentHost host)
         Assert.Equal(saved.Alias.Text, conversation.Card?.DisplayName);
     }
 
+    [Fact]
+    public async Task AFailingScopeGivesTheDirectoryReadUnavailableAndATracedError()
+    {
+        // Security review M1: a failure before the wallet is asked (here, the scope itself) is an unavailable read with
+        // a traced error, never an exception that would end the phone's circuit.
+        var trace = new ConversationHarness.RecordingTrace();
+        var options = new ServiceCollection().AddOptions<AgentOptions>().Services.BuildServiceProvider()
+            .GetRequiredService<Microsoft.Extensions.Options.IOptionsMonitor<AgentOptions>>();
+        using var conversation = new AgentConversation(
+            new ThrowingScopes(), new CapturingParser(new Dictionary<string, ParsedRequest>()), TimeProvider.System, options, trace, U1);
+
+        var read = await conversation.ListAliasesAsync();
+
+        var unavailable = Assert.IsType<WalletResult<WalletContacts>.Unavailable>(read);
+        Assert.Equal("error", unavailable.Reason);
+        Assert.Contains(trace.Entries, e => e.Step == "error" && e.Detail == nameof(InvalidOperationException));
+        Assert.False(conversation.Busy);
+    }
+
     private static string Say(string id, int step) => DevSetText.Say(id, step);
+
+    /// <summary>A scope factory whose every scope fails, as a torn-down circuit's provider would.</summary>
+    private sealed class ThrowingScopes : IServiceScopeFactory
+    {
+        public IServiceScope CreateScope() => throw new InvalidOperationException("no scope");
+    }
 
     /// <summary>The sentence, the tap on S08 and the confirm (steps 0 to 2 of AMB-19), ending Done.</summary>
     private static async Task PayS08Async(AgentConversation conversation, string sentence)

@@ -969,3 +969,4 @@ Still open:
 | A reissued `choose_account` card (GAP-04) does not carry the `account_choice_unavailable` note | Deferred, minor |
 | `Attempts` counts Confirm taps that began an execute, not settle resends | Display only |
 | A biller alias (one word for one biller account) is not built; aliases point to accounts only | A later item of the build plan, after milestone 9a |
+| The directory accepts a bare first name that is a word of several saved names (ruling 4 refuses only an exact key clash), so that word then goes straight to the alias's card where rule 15 would have asked (security review R4) | By design: the directory is the user's explicit choice (D15 only forbids *offering* such a name), and the registered name on the card is the guard. Whether the directory should refuse or warn is Khalil's decision |

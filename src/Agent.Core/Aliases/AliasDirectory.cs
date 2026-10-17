@@ -67,9 +67,10 @@ public sealed class AliasDirectory
 
     /// <summary>
     /// Saves <paramref name="text"/> (trimmed) as the user's alias of the account behind a typed
-    /// <paramref name="phone"/> (D21), contact or not. Refused <see cref="ReasonCodes.InvalidNumber"/> (not a complete
-    /// number), <see cref="ReasonCodes.NotSupported"/> (the user's own number), <see cref="ReasonCodes.NumberHasNoWallet"/>,
-    /// then as <see cref="SaveAsync"/> for the text.
+    /// <paramref name="phone"/> (D21), contact or not. Checked in this order, pure checks before any wallet read
+    /// (security review M3): <see cref="ReasonCodes.InvalidNumber"/> (not a complete number),
+    /// <see cref="ReasonCodes.AliasInvalid"/> (the text), <see cref="ReasonCodes.NotSupported"/> (the user's own number),
+    /// <see cref="ReasonCodes.NumberHasNoWallet"/>, then <see cref="ReasonCodes.AliasExists"/> as in <see cref="SaveAsync"/>.
     /// </summary>
     public async Task<AliasResult> SaveForPhoneAsync(int userId, string text, string phone, CancellationToken cancellationToken)
     {
@@ -77,6 +78,9 @@ public sealed class AliasDirectory
 
         if (!PhoneNumbers.TryNormalize(phone, out var normalized))
             return Refuse(ReasonCodes.InvalidNumber);
+
+        if (!TryValidate(text, out var trimmed))
+            return Refuse(ReasonCodes.AliasInvalid);
 
         // The user's own number is refused before the wallet is asked about it, as for a transfer.
         switch (await wallet.GetUserAsync(userId, cancellationToken))
@@ -106,9 +110,6 @@ public sealed class AliasDirectory
             default:
                 return Unavailable(null);
         }
-
-        if (!TryValidate(text, out var trimmed))
-            return Refuse(ReasonCodes.AliasInvalid);
 
         if (await ContactsAsync(userId, cancellationToken) is not { } contacts)
             return NoList();

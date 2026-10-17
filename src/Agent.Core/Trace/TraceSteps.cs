@@ -24,9 +24,9 @@ public static class TraceSteps
     /// <summary>A known gap handled with a card and a note; the detail is the gap's code (<c>choose_account</c>).</summary>
     public const string KnownGap = "known_gap";
 
-    // Code zone: aliases (milestone 9a). The detail is an account id or a code, never the alias text.
+    // Code zone: aliases (milestone 9a). The detail is an account id, a code or none, never the alias text.
 
-    /// <summary>An alias was offered under a Done outcome (rule 18); the detail is the account id.</summary>
+    /// <summary>An alias was offered under a Done outcome (rule 18); no detail.</summary>
     public const string AliasOffered = "alias_offered";
 
     /// <summary>An alias was saved; the detail is the account id.</summary>
