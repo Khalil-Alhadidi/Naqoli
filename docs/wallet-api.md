@@ -197,7 +197,7 @@ Tests: `ReadEndpointsTests.SettingsReturnTheConfiguredLimits`; the agent's clien
 
 ### Aliases (milestone 9a)
 
-The two alias routes are the only wallet routes that write an alias. They move no money and touch no transaction, so they do not take the `WalletGate` (a reset may remove an alias saved a moment before it, as it removes every row the seed does not hold). They sit in the client-key group like every other route: without `X-Wallet-Client-Key` the answer is 403 `client_key_required` before any check below. Aliases are read back with `GET /users/{id}/contacts`, in the `aliases` list, ordered by id, so a new alias comes last. Source: `Endpoints/AliasEndpoints.cs`.
+The two alias routes are the only wallet routes that write an alias. They move no money and touch no transaction, but, like `POST /users/{id}/consent`, they take the `WalletGate` shared around their database work, so a reset (which takes it exclusive) never runs in the middle of a save or a delete. A reset that follows a save removes the alias, as it removes every row the seed does not hold. They sit in the client-key group like every other route: without `X-Wallet-Client-Key` the answer is 403 `client_key_required` before any check below. Aliases are read back with `GET /users/{id}/contacts`, in the `aliases` list, ordered by id, so a new alias comes last. Source: `Endpoints/AliasEndpoints.cs`.
 
 `POST /users/{id}/aliases` takes `AliasRequest`:
 
@@ -223,10 +223,12 @@ A save, from the agent to the database:
 sequenceDiagram
     participant A as Agent
     participant E as AliasEndpoints
+    participant G as WalletGate
     participant D as SQL Server
 
     A->>E: POST /users/{id}/aliases with X-Wallet-Client-Key, body text and targetAccountId
     Note over A,E: ClientKeyFilter first, 403 client_key_required
+    E->>G: EnterSharedAsync, a reset waits until the save is over
     E->>D: does the user exist
     E-->>A: 404 unknown_user
     E->>E: trim the text, 1 to 100 characters
@@ -241,6 +243,7 @@ sequenceDiagram
     else inserted
         E-->>A: 201 AliasItem, Location /users/{id}/contacts
     end
+    E->>G: leave the gate
 ```
 
 Tests: `AliasEndpointsTests`.

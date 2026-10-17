@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using Wallet.MockApi.Contracts;
 using Wallet.MockApi.Data;
 using Wallet.MockApi.Data.Entities;
+using Wallet.MockApi.Services;
 
 namespace Wallet.MockApi.Endpoints;
 
@@ -17,7 +18,8 @@ public static class AliasErrors
 
 /// <summary>
 /// The two alias write routes (milestone 9a): save one alias of one account (D15) and delete one. They move no money,
-/// so they do not take the <see cref="Services.WalletGate"/>; the client key is checked by the group they are mapped on.
+/// but, like the consent route, they take the <see cref="WalletGate"/> shared, so a reset never runs in the middle of a
+/// save or a delete; the client key is checked by the group they are mapped on.
 /// Aliases are read back with <c>GET /users/{id}/contacts</c>.
 /// </summary>
 public static class AliasEndpoints
@@ -51,10 +53,17 @@ public static class AliasEndpoints
     /// that text yet. The unique index on <c>(OwnerUserId, Text)</c> is the last guard against a racing save.
     /// </summary>
     private static async Task<Results<Created<AliasItem>, ProblemHttpResult>> CreateAsync(
-        int id, AliasRequest request, WalletDbContext db, CancellationToken cancellationToken)
+        int id, AliasRequest request, WalletDbContext db, WalletGate gate, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
 
+        using (await gate.EnterSharedAsync(cancellationToken))
+            return await CreateCoreAsync(id, request, db, cancellationToken);
+    }
+
+    private static async Task<Results<Created<AliasItem>, ProblemHttpResult>> CreateCoreAsync(
+        int id, AliasRequest request, WalletDbContext db, CancellationToken cancellationToken)
+    {
         if (!await db.Users.AnyAsync(u => u.Id == id, cancellationToken))
             return WalletProblems.UserNotFound();
 
@@ -93,14 +102,18 @@ public static class AliasEndpoints
 
     /// <summary>Deletes one alias of the user. An alias of another user is answered as unknown, never as forbidden.</summary>
     private static async Task<Results<NoContent, ProblemHttpResult>> DeleteAsync(
-        int id, int aliasId, WalletDbContext db, CancellationToken cancellationToken)
+        int id, int aliasId, WalletDbContext db, WalletGate gate, CancellationToken cancellationToken)
     {
-        if (!await db.Users.AnyAsync(u => u.Id == id, cancellationToken))
-            return WalletProblems.UserNotFound();
+        int deleted;
+        using (await gate.EnterSharedAsync(cancellationToken))
+        {
+            if (!await db.Users.AnyAsync(u => u.Id == id, cancellationToken))
+                return WalletProblems.UserNotFound();
 
-        var deleted = await db.Aliases
-            .Where(a => a.Id == aliasId && a.OwnerUserId == id)
-            .ExecuteDeleteAsync(cancellationToken);
+            deleted = await db.Aliases
+                .Where(a => a.Id == aliasId && a.OwnerUserId == id)
+                .ExecuteDeleteAsync(cancellationToken);
+        }
 
         return deleted == 0 ? WalletProblems.AliasNotFound() : TypedResults.NoContent();
     }
