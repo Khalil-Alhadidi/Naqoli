@@ -308,7 +308,7 @@ flowchart TD
 
 `src/Agent.Web/Resources/PhoneStrings.resx` (neutral culture, read through `IStringLocalizer<PhoneStrings>`) holds every text the phone shows (rule 4). Khalil wrote the values in Iraqi Arabic on 15 Oct 2026 (commit a32ac1d); nothing else writes or changes them. `{0}` and `{1}` are filled by code, with figures in Arabic-Indic digits. `Word_yes` and `Word_no` are comma-separated lists (`PhoneWords.Split`), compared after `ArabicText.Normalize`. The table gives each key's meaning in English, not its Arabic value.
 
-Sixteen keys of milestone 9a are placeholders awaiting Khalil's Arabic (`TODO-AR`, English; listed in `PhoneStringsTests.AwaitingKhalil`): `Offer_save_alias`, `Offer_save_alias_button`, `Reply_alias_saved`, `Reply_alias_deleted`, `Refusal_alias_exists`, `Refusal_alias_invalid`, `Directory_Open`, `Directory_Back`, `Directory_Title`, `Directory_Empty`, `Directory_Text`, `Directory_Target`, `Directory_TargetNone`, `Directory_Phone`, `Directory_Save` and `Directory_Delete` (in the table below). Before them, no key was a placeholder: `Refusal_question_cancelled` (the reply after a question's cancel option) was written by Khalil on 17 Oct 2026, so the allow-list is empty again. `Card_TryAgain` and `Card_SendAgain` (milestone 7, D19), and the D21 wording of `Refusal_invalid_number` (it now asks for the full mobile number or a saved name) were written by Khalil on 16 Oct 2026. `PhoneStringsTests.NoValueIsAPlaceholderExceptTheKeysAwaitingKhalil` keeps the allow-list, now empty: a new key is added there with a `TODO-AR` value until he writes it.
+The seventeen keys of milestone 9a (`Offer_save_alias`, `Offer_save_alias_button`, `Reply_alias_saved`, `Reply_alias_deleted`, `Refusal_alias_exists`, `Refusal_alias_invalid`, `Refusal_alias_shared`, `Directory_Open`, `Directory_Back`, `Directory_Title`, `Directory_Empty`, `Directory_Text`, `Directory_Target`, `Directory_TargetNone`, `Directory_Phone`, `Directory_Save` and `Directory_Delete`) were English `TODO-AR` placeholders from 17 Oct 2026 until Khalil wrote them on 18 Oct 2026 (the close-out, `docs/plans/milestone-9a-close.md`); no key is a placeholder now, and the allow-list `PhoneStringsTests.AwaitingKhalil` is empty again. Before them, `Refusal_question_cancelled` (the reply after a question's cancel option) was written by Khalil on 17 Oct 2026; `Card_TryAgain` and `Card_SendAgain` (milestone 7, D19), and the D21 wording of `Refusal_invalid_number` (it now asks for the full mobile number or a saved name) on 16 Oct 2026. `PhoneStringsTests.NoValueIsAPlaceholderExceptTheKeysAwaitingKhalil` keeps the allow-list: a new key is added there with a `TODO-AR` value until he writes it.
 
 | Key | Meaning | Note |
 |---|---|---|
@@ -404,23 +404,23 @@ Sixteen keys of milestone 9a are placeholders awaiting Khalil's Arabic (`TODO-AR
 | `Currency_iqd` | IQD | |
 | `Phone_Placeholder` | Write your request | |
 | `Phone_Send` | Send | |
-| `Offer_save_alias` | Save {0} as a name for {1} next time? | `TODO-AR`. `{0}` is the recipient as the user typed it (rule 18); `{1}` is the account's registered name from the wallet, or the tapped option's saved name or alias when the wallet holds none (review R6) |
-| `Offer_save_alias_button` | Save the name | `TODO-AR`. The button under the offer |
-| `Reply_alias_saved` | Saved. Next time just say {0} | `TODO-AR`. `{0}` is the saved text |
-| `Reply_alias_deleted` | The name was deleted | `TODO-AR`. The directory's result line |
-| `Refusal_alias_exists` | You already use this name for someone; choose another | `TODO-AR` |
-| `Refusal_alias_invalid` | This name cannot be saved (blank, too long, or a number) | `TODO-AR` |
-| `Refusal_alias_shared` | This name looks like more than one person you have. Use a different name | `TODO-AR`. A one-word name the resolver would ask about on several accounts (review R4) |
-| `Directory_Open` | Names (the header button that opens the directory) | `TODO-AR` |
-| `Directory_Back` | Back | `TODO-AR` |
-| `Directory_Title` | Your saved names | `TODO-AR` |
-| `Directory_Empty` | No saved names yet | `TODO-AR` |
-| `Directory_Text` | Name | `TODO-AR`. The text input's placeholder |
-| `Directory_Target` | Contact | `TODO-AR`. The contact select's label |
-| `Directory_TargetNone` | No contact (use the number) | `TODO-AR` |
-| `Directory_Phone` | Mobile number | `TODO-AR` |
-| `Directory_Save` | Save | `TODO-AR` |
-| `Directory_Delete` | Delete | `TODO-AR` |
+| `Offer_save_alias` | Save {0} as a name for {1} next time? | Khalil, 18 Oct 2026. `{0}` is the recipient as the user typed it (rule 18); `{1}` is the account's registered name from the wallet, or the tapped option's saved name or alias when the wallet holds none (review R6) |
+| `Offer_save_alias_button` | Save the name | Khalil, 18 Oct 2026. The button under the offer |
+| `Reply_alias_saved` | Saved. Next time just say {0} | Khalil, 18 Oct 2026. `{0}` is the saved text |
+| `Reply_alias_deleted` | The name was deleted | Khalil, 18 Oct 2026. The directory's result line |
+| `Refusal_alias_exists` | You already use this name for someone; choose another | Khalil, 18 Oct 2026 |
+| `Refusal_alias_invalid` | This name cannot be saved (blank, too long, or a number) | Khalil, 18 Oct 2026 |
+| `Refusal_alias_shared` | This name looks like more than one person you have. Use a different name | Khalil, 18 Oct 2026. A one-word name the resolver would ask about on several accounts (review R4) |
+| `Directory_Open` | Names (the header button that opens the directory) | Khalil, 18 Oct 2026 |
+| `Directory_Back` | Back | Khalil, 18 Oct 2026 |
+| `Directory_Title` | Your saved names | Khalil, 18 Oct 2026 |
+| `Directory_Empty` | No saved names yet | Khalil, 18 Oct 2026 |
+| `Directory_Text` | Name | Khalil, 18 Oct 2026. The text input's placeholder |
+| `Directory_Target` | Contact | Khalil, 18 Oct 2026. The contact select's label |
+| `Directory_TargetNone` | No contact (use the number) | Khalil, 18 Oct 2026 |
+| `Directory_Phone` | Mobile number | Khalil, 18 Oct 2026 |
+| `Directory_Save` | Save | Khalil, 18 Oct 2026 |
+| `Directory_Delete` | Delete | Khalil, 18 Oct 2026 |
 | `Words_1` .. `Words_19`, `Words_20` .. `Words_90` (tens), `Words_100` .. `Words_900` (hundreds), `Words_Thousand`, `Words_TwoThousand`, `Words_Thousands`, `Words_Million`, `Words_TwoMillion`, `Words_Millions`, `Words_Construct_3` .. `Words_Construct_10`, `Words_And` | The number words of the amount in words: units, tens, hundreds, the thousand and million forms (one, two, the plural after a construct form), the short counting forms for 3 to 10, and the joiner | Khalil's list, 17 Oct 2026. `Words_Construct_4` to `Words_Construct_9` were derived from his hundreds' stems and are confirmed by Khalil on 17 Oct 2026 |
 
 ## The oracle

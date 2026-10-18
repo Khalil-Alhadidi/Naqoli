@@ -148,22 +148,22 @@
   <data name="Words_Construct_9" xml:space="preserve"><value>تسع</value></data>
   <data name="Words_Construct_10" xml:space="preserve"><value>عشر</value></data>
   <data name="Words_And" xml:space="preserve"><value>و</value></data>
-  <!-- Milestone 9a: the alias offer and the phone's directory. English placeholders awaiting Khalil's Arabic. -->
-  <data name="Offer_save_alias" xml:space="preserve"><value>TODO-AR: Save {0} as a name for {1} next time?</value></data>
-  <data name="Offer_save_alias_button" xml:space="preserve"><value>TODO-AR: Save the name</value></data>
-  <data name="Reply_alias_saved" xml:space="preserve"><value>TODO-AR: Saved. Next time just say {0}.</value></data>
-  <data name="Reply_alias_deleted" xml:space="preserve"><value>TODO-AR: The name was deleted.</value></data>
-  <data name="Refusal_alias_exists" xml:space="preserve"><value>TODO-AR: You already use this name for someone. Choose another.</value></data>
-  <data name="Refusal_alias_invalid" xml:space="preserve"><value>TODO-AR: This name cannot be saved. Use letters, not a number.</value></data>
-  <data name="Refusal_alias_shared" xml:space="preserve"><value>TODO-AR: This name looks like more than one person you have. Use a different name</value></data>
-  <data name="Directory_Open" xml:space="preserve"><value>TODO-AR: Names</value></data>
-  <data name="Directory_Back" xml:space="preserve"><value>TODO-AR: Back</value></data>
-  <data name="Directory_Title" xml:space="preserve"><value>TODO-AR: Your saved names</value></data>
-  <data name="Directory_Empty" xml:space="preserve"><value>TODO-AR: No saved names yet.</value></data>
-  <data name="Directory_Text" xml:space="preserve"><value>TODO-AR: Name</value></data>
-  <data name="Directory_Target" xml:space="preserve"><value>TODO-AR: Contact</value></data>
-  <data name="Directory_TargetNone" xml:space="preserve"><value>TODO-AR: No contact (use the number)</value></data>
-  <data name="Directory_Phone" xml:space="preserve"><value>TODO-AR: Mobile number</value></data>
-  <data name="Directory_Save" xml:space="preserve"><value>TODO-AR: Save</value></data>
-  <data name="Directory_Delete" xml:space="preserve"><value>TODO-AR: Delete</value></data>
+  <!-- Milestone 9a: the alias offer and the phone's directory. Khalil's wording, 18 Oct 2026. -->
+  <data name="Offer_save_alias" xml:space="preserve"><value>تحب أحفظ "{0}" لـ {1} حتى المرة الجاية ما أسألك؟</value></data>
+  <data name="Offer_save_alias_button" xml:space="preserve"><value>احفظ</value></data>
+  <data name="Reply_alias_saved" xml:space="preserve"><value>انحفظ "{0}". المرة الجاية اكتبه وبس</value></data>
+  <data name="Reply_alias_deleted" xml:space="preserve"><value>انحذف الاسم</value></data>
+  <data name="Refusal_alias_exists" xml:space="preserve"><value>هذا الاسم موجود عندك من قبل</value></data>
+  <data name="Refusal_alias_invalid" xml:space="preserve"><value>الاسم مو مناسب. اكتب اسم قصير بدون أرقام</value></data>
+  <data name="Refusal_alias_shared" xml:space="preserve"><value>هذا الاسم يشبه أكثر من شخص عندك. اكتب اسم مختلف</value></data>
+  <data name="Directory_Open" xml:space="preserve"><value>الأسماء المحفوظة</value></data>
+  <data name="Directory_Back" xml:space="preserve"><value>رجوع</value></data>
+  <data name="Directory_Title" xml:space="preserve"><value>الأسماء المحفوظة</value></data>
+  <data name="Directory_Empty" xml:space="preserve"><value>ماكو أسماء محفوظة بعد</value></data>
+  <data name="Directory_Text" xml:space="preserve"><value>الاسم</value></data>
+  <data name="Directory_Target" xml:space="preserve"><value>الشخص</value></data>
+  <data name="Directory_TargetNone" xml:space="preserve"><value>اختار احد</value></data>
+  <data name="Directory_Phone" xml:space="preserve"><value>رقم الموبايل</value></data>
+  <data name="Directory_Save" xml:space="preserve"><value>احفظ</value></data>
+  <data name="Directory_Delete" xml:space="preserve"><value>احذف</value></data>
 </root>
