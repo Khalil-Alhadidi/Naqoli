@@ -361,8 +361,9 @@ public sealed class Orchestrator
             if (contactsRead is not WalletResult<WalletContacts>.Ok { Value: var contacts })
                 return await RefuseUnreadAsync(userId, contactsRead, cancellationToken);
 
+            var candidates = ContactCandidate.From(contacts);
             var resolution = ContactResolver.Resolve(
-                request.RecipientText, ContactCandidate.From(contacts), options.MinSubstringWordLength, options.Endearments);
+                request.RecipientText, candidates, options.MinSubstringWordLength, options.Endearments);
             var byOption = false;
             Resolution.Options? askedBy = null;
             if (resolution is Resolution.Options && answers.ContactOption == Option.NoneOfThese)
@@ -391,9 +392,11 @@ public sealed class Orchestrator
             {
                 case Resolution.Card { Chosen: var chosen }:
                     // Rule 18: a recipient a tap picked from a question that was not a bare name shared by several is
-                    // offered as an alias, as the user typed it, once the payment is done.
-                    var alias = byOption && askedBy is not null && AliasRule.Offers(askedBy)
-                        ? new AliasOffer(request.RecipientText.Trim(), chosen.AccountId, chosen.RegisteredName ?? chosen.Text)
+                    // offered as an alias, as the user typed it, once the payment is done, unless the save would refuse
+                    // that text as existing or shared (Khalil, 18 Oct 2026).
+                    var typedText = request.RecipientText.Trim();
+                    var alias = byOption && askedBy is not null && AliasRule.Offers(typedText, askedBy, candidates)
+                        ? new AliasOffer(typedText, chosen.AccountId, chosen.RegisteredName ?? chosen.Text)
                         : null;
                     subject = new CardSubject(
                         TransferType, chosen.Phone, chosen.AccountId, chosen.Text, chosen.RegisteredName, null, null, null, null, alias);

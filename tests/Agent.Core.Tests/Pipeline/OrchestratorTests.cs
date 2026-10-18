@@ -512,6 +512,24 @@ public class OrchestratorTests(AgentHost host)
     }
 
     [Fact]
+    public async Task ATransferAnsweredByATapOnANearQuestionAboutSeveralAccountsCarriesNoOffer()
+    {
+        // S08 and S09 share one saved name of one word; with its last letter dropped the near step asks about both
+        // (rule 6). The tap on S08 gives the card, and no offer is made: the save would refuse the one-word text as
+        // shared (alias_shared, Khalil, 18 Oct 2026).
+        await StartAsync();
+        var typed = SeedFacts.Contact("S08").SavedName[..^1];
+        var request = ParsedRequest.Transfer(typed, 10, AmountUnit.Thousand);
+        var question = Question(await HandleAsync(U1, request), QuestionKinds.DidYouMean, QuestionAnswer.Tap);
+        Assert.Equal(["S08", "S09"], question.Options.Select(o => o.Value).Order(StringComparer.Ordinal));
+
+        var issued = Assert.IsType<AgentReply.CardIssued>(await HandleAsync(U1, request, new SlotAnswers(ContactOption: "S08")));
+
+        Assert.Equal(SeedFacts.Contact("S08").Number, issued.Pending.ToPhone);
+        Assert.Null(issued.Alias);
+    }
+
+    [Fact]
     public async Task ATransferAnsweredByATapOnAnExactNameSharedBySeveralCarriesNoOffer()
     {
         // AMB-02: a bare name saved for several contacts (rule 3); the tap pays, and no alias is offered.

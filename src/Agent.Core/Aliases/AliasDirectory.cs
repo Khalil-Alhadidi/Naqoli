@@ -59,7 +59,7 @@ public sealed class AliasDirectory
             return NoList();
 
         var candidates = ContactCandidate.From(contacts);
-        if (Exists(candidates, trimmed))
+        if (AliasChecks.Exists(candidates, trimmed))
             return Refuse(ReasonCodes.AliasExists);
 
         if (IsShared(candidates, trimmed))
@@ -132,7 +132,7 @@ public sealed class AliasDirectory
             return NoList();
 
         var candidates = ContactCandidate.From(contacts);
-        if (Exists(candidates, trimmed))
+        if (AliasChecks.Exists(candidates, trimmed))
             return Refuse(ReasonCodes.AliasExists);
 
         if (IsShared(candidates, trimmed))
@@ -208,25 +208,14 @@ public sealed class AliasDirectory
     private static bool IsClosed(string status) => string.Equals(status, Checks.ClosedStatus, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
-    /// Review R4 (Khalil, 18 Oct 2026): a one-word text that the resolver, over the user's current candidates and with the
-    /// current settings, answers with a question on more than one account (the partial step on several, rule 4; the
-    /// shared-word step, rule 15; or the near step on several). Saved, it would go straight to one account where the
-    /// user would have been asked. A text of two or more words is never refused here, so rule 18's offers still save.
+    /// Review R4 (Khalil, 18 Oct 2026): <see cref="AliasChecks.IsShared"/> on the resolver's answer to the text over the
+    /// user's current candidates, with the current settings.
     /// </summary>
     private bool IsShared(IReadOnlyList<ContactCandidate> candidates, string text)
     {
-        if (ArabicText.Words(text).Count != 1)
-            return false;
-
         var current = options.CurrentValue;
-        return ContactResolver.Resolve(text, candidates, current.MinSubstringWordLength, current.Endearments)
-            is Resolution.Options { Candidates.Count: > 1 };
-    }
-
-    private static bool Exists(IReadOnlyList<ContactCandidate> candidates, string text)
-    {
-        var key = ArabicText.Key(text);
-        return candidates.Any(c => string.Equals(ArabicText.Key(c.Text), key, StringComparison.Ordinal));
+        return AliasChecks.IsShared(
+            text, ContactResolver.Resolve(text, candidates, current.MinSubstringWordLength, current.Endearments));
     }
 
     /// <summary>The user's contacts and aliases, or null when the wallet gave none (traced).</summary>
