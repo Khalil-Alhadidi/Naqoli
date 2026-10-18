@@ -508,7 +508,7 @@ public class OrchestratorTests(AgentHost host)
         Assert.Equal(typed.Trim(), offer.Text);
         Assert.Equal(issued.Pending.ToAccountId, offer.AccountId);
         Assert.Equal(SeedFacts.Contact("S08").Number, issued.Pending.ToPhone);
-        Assert.Equal(SeedFacts.Account(SeedFacts.Contact("S08").Number).RegisteredName, offer.RegisteredName);
+        Assert.Equal(SeedFacts.Account(SeedFacts.Contact("S08").Number).RegisteredName, offer.RecipientName);
     }
 
     [Fact]

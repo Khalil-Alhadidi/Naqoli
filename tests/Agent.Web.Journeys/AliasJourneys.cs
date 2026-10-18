@@ -28,7 +28,9 @@ public sealed class AliasJourneys(JourneyHost host) : JourneyBase(host)
         await PayS08Async(page);
 
         await Expect(page.GetByTestId("save-alias")).ToBeVisibleAsync();
-        await Expect(LastAgentMessage(page)).ToContainTextAsync(Text["Offer_save_alias", DevSet.AliasOffer(Amb19, FirstConfirmStep)!].Value);
+        var registered = S08(await Host.ContactsAsync(U1)).RegisteredName!;
+        await Expect(LastAgentMessage(page)).ToContainTextAsync(
+            Text["Offer_save_alias", DevSet.AliasOffer(Amb19, FirstConfirmStep)!, registered].Value);
 
         // Step 3: the same recipient again asks again; the offer is gone, and nothing was saved.
         await SayAsync(page, DevSet.Say(Amb19, 1));

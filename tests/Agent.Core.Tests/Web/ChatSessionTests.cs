@@ -97,8 +97,11 @@ public sealed class ChatSessionTests(AgentHost host) : IAsyncDisposable
 
         var offer = Assert.IsType<AliasOffer>(session.AliasOffer);
         Assert.Equal(DevSetText.AliasOffer("AMB-19", 2), offer.Text);
+        var registered = SeedFacts.Account(SeedFacts.Contact("S08").Number).RegisteredName;
+        Assert.NotNull(registered);
+        Assert.Equal(registered, offer.RecipientName);
         var message = LastAgentMessage(session);
-        Assert.Equal(circuit.Text["Offer_save_alias", offer.Text].Value, message.Text);
+        Assert.Equal(circuit.Text["Offer_save_alias", offer.Text, registered].Value, message.Text);
         Assert.Equal(ChatAction.SaveAlias, message.Action);
         Assert.Equal(message.Id, session.AliasOfferMessageId);
     }

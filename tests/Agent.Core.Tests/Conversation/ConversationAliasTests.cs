@@ -58,6 +58,9 @@ public sealed class ConversationAliasTests(AgentHost host)
         var offer = Assert.IsType<AliasOffer>(conversation.AliasOffer);
         Assert.Equal(expected, offer.Text);
         Assert.Equal(S08AccountId(await ContactsAsync()), offer.AccountId);
+        var s08Registered = S08(await ContactsAsync()).RegisteredName;
+        Assert.NotNull(s08Registered);
+        Assert.Equal(s08Registered, offer.RecipientName);
         var index = Assert.IsType<int>(conversation.AliasOfferMessageIndex);
         Assert.Equal(ConversationKind.AliasOffer, conversation.Messages[index].Kind);
         Assert.Null(conversation.Messages[index].Code);

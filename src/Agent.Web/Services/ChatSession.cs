@@ -318,8 +318,14 @@ public sealed class ChatSession : IDisposable
                 break;
 
             case ConversationKind.AliasOffer:
-                // Rule 18: the user's own words, as typed, in the template; the Save button sits under it.
-                yield return (ChatRole.Agent, Text("Offer_save_alias", conversation.AliasOffer?.Text ?? string.Empty), ChatMessageKind.Text, null, ChatAction.SaveAlias);
+                // Rule 18: the user's own words, as typed, as {0} and the account's name from the wallet as {1} (review
+                // R6), in the template; the Save button sits under it.
+                yield return (
+                    ChatRole.Agent,
+                    Text("Offer_save_alias", conversation.AliasOffer?.Text ?? string.Empty, conversation.AliasOffer?.RecipientName ?? string.Empty),
+                    ChatMessageKind.Text,
+                    null,
+                    ChatAction.SaveAlias);
                 break;
 
             case ConversationKind.AliasSaved:

@@ -149,7 +149,7 @@
   <data name="Words_Construct_10" xml:space="preserve"><value>عشر</value></data>
   <data name="Words_And" xml:space="preserve"><value>و</value></data>
   <!-- Milestone 9a: the alias offer and the phone's directory. English placeholders awaiting Khalil's Arabic. -->
-  <data name="Offer_save_alias" xml:space="preserve"><value>TODO-AR: Save {0} as a name for this person next time?</value></data>
+  <data name="Offer_save_alias" xml:space="preserve"><value>TODO-AR: Save {0} as a name for {1} next time?</value></data>
   <data name="Offer_save_alias_button" xml:space="preserve"><value>TODO-AR: Save the name</value></data>
   <data name="Reply_alias_saved" xml:space="preserve"><value>TODO-AR: Saved. Next time just say {0}.</value></data>
   <data name="Reply_alias_deleted" xml:space="preserve"><value>TODO-AR: The name was deleted.</value></data>

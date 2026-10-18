@@ -140,7 +140,7 @@ The conversation turns each reply into a `ConversationMessage` of codes and figu
 | `ConsentScreen` | `Reply_consent`, with the consent button |
 | `CardIssued` | `Card_Title`, with the card under it |
 | `Unsupported(reason)` | `Unsupported_<reason>`, or `Refusal_not_supported` for a reason without a key |
-| The alias offer (`ConversationKind.AliasOffer`, after a Done transfer; milestone 9a) | `Offer_save_alias` with `Conversation.AliasOffer.Text` (the user's own words) as `{0}`, and the Save button (`ChatAction.SaveAlias`, `save-alias`) while it is the open offer (`AliasOfferMessageId`) |
+| The alias offer (`ConversationKind.AliasOffer`, after a Done transfer; milestone 9a) | `Offer_save_alias` with `Conversation.AliasOffer.Text` (the user's own words) as `{0}` and `AliasOffer.RecipientName` (the account's registered name from the wallet, or the tapped option's saved name or alias when the wallet holds none; review R6) as `{1}`, and the Save button (`ChatAction.SaveAlias`, `save-alias`) while it is the open offer (`AliasOfferMessageId`) |
 | The alias saved (`ConversationKind.AliasSaved`) | `Reply_alias_saved` with the saved text as `{0}` |
 | A refused save (`alias_exists`, `alias_invalid`, `alias_shared`, `account_closed`) | `Refusal_alias_exists`, `Refusal_alias_invalid`, `Refusal_alias_shared` (one word that would be a question on several accounts, review R4), `Refusal_account_closed` (a closed target account, review R2), through the same `RefusalText` as every code; the phone's directory shows the key as `data-key` on `directory-result` |
 
@@ -404,7 +404,7 @@ Sixteen keys of milestone 9a are placeholders awaiting Khalil's Arabic (`TODO-AR
 | `Currency_iqd` | IQD | |
 | `Phone_Placeholder` | Write your request | |
 | `Phone_Send` | Send | |
-| `Offer_save_alias` | Save {0} as a name for this person next time? | `TODO-AR`. `{0}` is the recipient as the user typed it (rule 18) |
+| `Offer_save_alias` | Save {0} as a name for {1} next time? | `TODO-AR`. `{0}` is the recipient as the user typed it (rule 18); `{1}` is the account's registered name from the wallet, or the tapped option's saved name or alias when the wallet holds none (review R6) |
 | `Offer_save_alias_button` | Save the name | `TODO-AR`. The button under the offer |
 | `Reply_alias_saved` | Saved. Next time just say {0} | `TODO-AR`. `{0}` is the saved text |
 | `Reply_alias_deleted` | The name was deleted | `TODO-AR`. The directory's result line |
