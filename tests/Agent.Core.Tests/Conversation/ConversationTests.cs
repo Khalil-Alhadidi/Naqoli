@@ -13,6 +13,7 @@ using Agent.Core.Tests.Agent;
 using Agent.Core.Tests.Wallet;
 using Agent.Core.Text;
 using Agent.Core.Trace;
+using Agent.Core.Wallet;
 using AgentWeb::Agent.Web.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -51,7 +52,12 @@ public sealed class ConversationTests(AgentHost host) : IAsyncDisposable
     /// ones (built from the seed through <see cref="SeedFacts"/>, never Arabic literals), over <paramref name="parser"/>
     /// when given.
     /// </summary>
-    private async Task<Session> StartAsync(int userId = SeedFacts.DemoUserId, IParser? parser = null, Action<AgentOptions>? configure = null, params ScriptedSentence[] extra)
+    private Task<Session> StartAsync(int userId = SeedFacts.DemoUserId, IParser? parser = null, Action<AgentOptions>? configure = null, params ScriptedSentence[] extra)
+        => StartCoreAsync(userId, parser, configure, register: null, extra);
+
+    /// <summary><see cref="StartAsync"/>, with <paramref name="register"/> adding services after <c>AddAgentCore</c>.</summary>
+    private async Task<Session> StartCoreAsync(
+        int userId, IParser? parser, Action<AgentOptions>? configure, Action<IServiceCollection>? register, ScriptedSentence[] extra)
     {
         Assert.SkipUnless(host.DatabaseAvailable, host.SkipReason);
         await host.ResetAsync();
@@ -64,6 +70,7 @@ public sealed class ConversationTests(AgentHost host) : IAsyncDisposable
             services.AddAgentCore(configuration);
             if (configure is not null)
                 services.PostConfigure(configure);
+            register?.Invoke(services);
         });
         disposables.Add(provider);
 
@@ -818,6 +825,91 @@ public sealed class ConversationTests(AgentHost host) : IAsyncDisposable
     }
 
     [Fact]
+    public async Task OpenShowsTheConsentScreenOnceToAUserWhoHasNotConsented()
+    {
+        var session = await StartAsync(NoConsentUserId);
+        var conversation = session.Conversation;
+
+        await conversation.OpenAsync();
+
+        var only = Assert.Single(conversation.Messages);
+        Assert.Equal(new ConversationMessage(ConversationRole.Agent, ConversationKind.Consent), only);
+        Assert.Equal(0, conversation.ActionMessageIndex);
+        Assert.True(conversation.ConsentShown);
+        Assert.Equal(1, await ConsentShownRowsAsync(session, NoConsentUserId));
+        Assert.Contains(session.Trace.Entries, e => e.Step == TraceSteps.ConsentChecked && e.Detail == "required");
+        Assert.False(conversation.Busy);
+
+        // A second open adds nothing: no message, no audit row, no trace step.
+        var steps = session.Trace.Entries.Count;
+        await conversation.OpenAsync();
+
+        Assert.Single(conversation.Messages);
+        Assert.Equal(1, await ConsentShownRowsAsync(session, NoConsentUserId));
+        Assert.Equal(steps, session.Trace.Entries.Count);
+
+        // The tap with no pending request records consent and shows nothing more.
+        await conversation.GiveConsentAsync();
+
+        Assert.Single(conversation.Messages);
+        Assert.Null(conversation.ActionMessageIndex);
+        Assert.Contains(session.Trace.Entries, e => e.Step == "consent_given");
+    }
+
+    [Fact]
+    public async Task OpenShowsNothingToAUserWhoHasConsented()
+    {
+        var session = await StartAsync();
+        var conversation = session.Conversation;
+
+        await conversation.OpenAsync();
+
+        Assert.Empty(conversation.Messages);
+        Assert.False(conversation.ConsentShown);
+        Assert.Null(conversation.ActionMessageIndex);
+        Assert.Equal(0, await ConsentShownRowsAsync(session, SeedFacts.DemoUserId));
+        Assert.Contains(session.Trace.Entries, e => e.Step == TraceSteps.ConsentChecked && e.Detail == "given");
+    }
+
+    [Theory]
+    [InlineData(NoConsentUserId)]
+    [InlineData(SeedFacts.DemoUserId)]
+    public async Task OpenWithNoAnswerFromTheWalletShowsNothingAndTheFirstRequestsGateStillRuns(int userId)
+    {
+        var failOnce = new UserReadFailsOnceHandler(userId);
+        var session = await StartCoreAsync(
+            userId,
+            parser: null,
+            configure: null,
+            register: services => services.AddHttpClient<WalletClient>().AddHttpMessageHandler(() => failOnce),
+            extra: []);
+        var conversation = session.Conversation;
+
+        await conversation.OpenAsync();
+
+        Assert.True(failOnce.Failed);
+        Assert.Empty(conversation.Messages);
+        Assert.False(conversation.ConsentShown);
+        Assert.Contains(session.Trace.Entries, e => e.Step == TraceSteps.ConsentChecked && e.Detail == "unavailable");
+        Assert.Equal(0, await ConsentShownRowsAsync(session, userId));
+
+        await conversation.SendAsync(HammoudiSentence);
+
+        if (userId == NoConsentUserId)
+        {
+            Assert.Equal(new ConversationMessage(ConversationRole.Agent, ConversationKind.Consent), LastAgentMessage(conversation));
+            Assert.True(conversation.ConsentShown);
+            Assert.Null(conversation.Card);
+            Assert.Equal(1, await ConsentShownRowsAsync(session, userId));
+        }
+        else
+        {
+            Assert.NotNull(conversation.Card);
+            Assert.Equal(CardStatus.Live, conversation.CardState);
+        }
+    }
+
+    [Fact]
     public async Task ChangedIsRaisedForEveryMessage()
     {
         var session = await StartAsync();
@@ -831,6 +923,30 @@ public sealed class ConversationTests(AgentHost host) : IAsyncDisposable
         Assert.Contains(1, counts);
         Assert.Contains(2, counts);
         Assert.False(conversation.Busy);
+    }
+
+    private static async Task<int> ConsentShownRowsAsync(Session session, int userId)
+    {
+        await using var scope = session.Provider.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<AgentDbContext>();
+        return await db.AuditEntries.AsNoTracking().CountAsync(a => a.UserId == userId && a.Event == AuditEvents.ConsentShown, Token);
+    }
+
+    /// <summary>Drops the first <c>GET users/{id}</c> of <paramref name="userId"/> as a lost connection; every other call passes.</summary>
+    private sealed class UserReadFailsOnceHandler(int userId) : DelegatingHandler
+    {
+        private int failed;
+
+        public bool Failed => Volatile.Read(ref failed) == 1;
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            var isUserRead = request.Method == HttpMethod.Get
+                && request.RequestUri?.AbsolutePath.EndsWith(FormattableString.Invariant($"/users/{userId}"), StringComparison.Ordinal) == true;
+            if (isUserRead && Interlocked.Exchange(ref failed, 1) == 0)
+                throw new HttpRequestException("Stub: the wallet did not answer.");
+            return base.SendAsync(request, cancellationToken);
+        }
     }
 
     /// <summary>A trace sink that keeps every step.</summary>

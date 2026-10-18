@@ -239,6 +239,21 @@ public sealed class ChatSessionTests(AgentHost host) : IAsyncDisposable
     }
 
     [Fact]
+    public async Task TheOpenedSessionOfAUserWhoHasNotConsentedShowsTheConsentMessageWithItsButton()
+    {
+        // U5 has not given consent in the seed.
+        var circuit = await StartAsync(userId: 5);
+        var session = circuit.Session;
+
+        await session.OpenAsync();
+
+        var only = Assert.Single(session.Messages);
+        Assert.Equal(new ChatMessage(1, ChatRole.Agent, circuit.Text["Reply_consent"].Value, ChatMessageKind.Text, null, ChatAction.Consent), only);
+        Assert.Equal(only.Id, session.ActionMessageId);
+        Assert.Contains(circuit.Trace.Entries, e => e.Step == "consent_checked");
+    }
+
+    [Fact]
     public async Task RestartEmptiesTheMessagesAndANewMessageGetsItsCard()
     {
         var circuit = await StartAsync();

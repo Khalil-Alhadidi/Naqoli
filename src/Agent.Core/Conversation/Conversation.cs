@@ -55,6 +55,9 @@ public sealed class Conversation : IDisposable
     private string? lastMaskedText;
     private bool disposed;
 
+    // True once OpenAsync has run its check; a second call returns at once.
+    private bool opened;
+
     // Ruling 3 (milestone 9a): the recipient of lastRequest occurs verbatim in a message the user typed (an answer the
     // code read, or the model's recipient_text found inside the typed text). Only then is an alias offered.
     private bool recipientVerbatim;
@@ -493,6 +496,61 @@ public sealed class Conversation : IDisposable
     }
 
     /// <summary>
+    /// The open check (milestone 7 post-tag; Khalil, 18 Oct 2026): run once when the phone opens, before any typing.
+    /// Reads the user through <see cref="WalletClient.GetUserAsync"/>. Not consented: one <c>consent_shown</c> audit row,
+    /// trace <c>consent_checked</c> <c>required</c>, and the consent message with its button (<see cref="ConsentShown"/>,
+    /// <see cref="ActionMessageIndex"/>). Consented: trace <c>consent_checked</c> <c>given</c>, nothing shown. No usable
+    /// answer: trace <c>consent_checked</c> <c>unavailable</c>, nothing shown, and the first request's consent gate (which
+    /// is unchanged) catches it. A tap on the button with no pending request only records consent
+    /// (<see cref="GiveConsentAsync"/>). A second call returns at once. Takes the turn like every action.
+    /// </summary>
+    public async Task OpenAsync()
+    {
+        if (opened || !await EnterAsync())
+            return;
+        try
+        {
+            if (opened)
+                return;
+            opened = true;
+            SetBusy(true);
+            var token = stopping;
+            await using var scope = scopes.CreateAsyncScope();
+            var read = await scope.ServiceProvider.GetRequiredService<WalletClient>().GetUserAsync(userId, token);
+            switch (read)
+            {
+                case WalletResult<WalletUser>.Ok { Value.ConsentGiven: true }:
+                    trace.Record(TraceZone.Code, TraceSteps.ConsentChecked, ConsentGivenDetail);
+                    break;
+
+                case WalletResult<WalletUser>.Ok:
+                    await scope.ServiceProvider.GetRequiredService<AuditLog>().WriteAsync(
+                        userId, null, AuditEvents.ConsentShown, null, null, null, null, null, token);
+                    trace.Record(TraceZone.Code, TraceSteps.ConsentChecked, ConsentRequiredDetail);
+                    ShowReply(new AgentReply.ConsentScreen());
+                    break;
+
+                default:
+                    trace.Record(TraceZone.Code, TraceSteps.ConsentChecked, ConsentUnavailableDetail);
+                    break;
+            }
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // Nothing is shown: the first request's consent gate still runs.
+            trace.Record(TraceZone.Code, "error", ex.GetType().Name);
+        }
+        catch (OperationCanceledException) when (stopping.IsCancellationRequested)
+        {
+            // The conversation ended before the check finished.
+        }
+        finally
+        {
+            Release();
+        }
+    }
+
+    /// <summary>
     /// The consent button: records consent in the wallet, then answers the pending request again, with what taps have
     /// answered for it. (The consent gate comes before any question, so a pending request normally has no answers here;
     /// they are passed all the same.)
@@ -874,6 +932,13 @@ public sealed class Conversation : IDisposable
 
     /// <summary>The reason of a directory read that the end of the conversation stopped.</summary>
     private const string StoppedReason = "stopped";
+
+    /// <summary>The details of <c>consent_checked</c>: the orchestrator's <c>given</c> and <c>required</c>, and the open check's <c>unavailable</c>.</summary>
+    private const string ConsentGivenDetail = "given";
+
+    private const string ConsentRequiredDetail = "required";
+
+    private const string ConsentUnavailableDetail = "unavailable";
 
     /// <summary>The reason of a directory read that failed for another reason (traced <c>error</c> with the type).</summary>
     private const string ErrorReason = "error";

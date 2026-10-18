@@ -48,13 +48,17 @@
     // The alias directory replaces the chat while open (milestone 9a).
     private bool directoryOpen;
 
-    // True once the circuit is live (OnAfterRender never runs while prerendering), so the journeys know input will land.
+    // True once the circuit is live (OnAfterRender never runs while prerendering) and the open check has run, so the
+    // journeys know input will land after it.
     private bool interactive;
 
-    protected override void OnAfterRender(bool firstRender)
+    protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (firstRender)
         {
+            // The consent screen before any typing (milestone 7 post-tag). Here, never in OnInitialized: the page
+            // prerenders, and the open check must write its audit row once per circuit.
+            await Session.OpenAsync();
             interactive = true;
             StateHasChanged();
         }

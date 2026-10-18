@@ -69,6 +69,8 @@ The side menu sits in the layout outside the `console` element, and it is Englis
 
 It raises `Changed` after every change of the conversation. Components never see a `PendingRecord`, an idempotency key or a quoted balance, and the component contract (`ChatMessage`, the ids, the actions) is the same as in milestone 4.
 
+The phone's lifecycle: the page prerenders, then the circuit connects. `PhoneFrame.OnAfterRenderAsync(firstRender)`, which never runs while prerendering, calls `ChatSession.OpenAsync()` (the open check, below) and then sets `data-interactive` to `true`, so the `consent_shown` audit row is written once per circuit and the journeys type only after the check. Never `OnInitialized`, which runs for the prerender as well.
+
 Every action of the session follows the same pattern:
 
 1. Set `TraceLog.Current` to the circuit's log.
@@ -117,7 +119,8 @@ Each action below is the conversation's action of the same name ([agent-core.md]
 |---|---|---|
 | `SendAsync(text)` | The send button and Enter | D6 first (below), then parse, then `Orchestrator.HandleAsync(DemoUserId, request)`; the reply becomes messages |
 | `TapOptionAsync(value)` | A question option | Checks the value against the open question's options, then sends the request again with the slot filled (below) |
-| `GiveConsentAsync()` | The consent button (`consent-button`) | `WalletClient.GiveConsentAsync(DemoUserId)`, then answers the last request again |
+| `OpenAsync()` | `PhoneFrame.OnAfterRenderAsync(firstRender)`, once per circuit; `RestartAsync` | The open check (milestone 7 post-tag): a user who has not consented sees the consent message (`Reply_consent`, `consent-button`) before any typing, with one `consent_shown` audit row; a consented user, or a wallet that does not answer, sees nothing (the first request's gate still runs) |
+| `GiveConsentAsync()` | The consent button (`consent-button`) | `WalletClient.GiveConsentAsync(DemoUserId)`, then answers the last request again; on the open screen, with no request yet, it only records consent |
 | `ConfirmAsync(pin)` | The card's Confirm button only | `ConfirmHandler.ConfirmAsync(DemoUserId, Card.PendingId, pin)` |
 | `SettleAsync()` | The "check again" button (`check-again`) of a Checking outcome only | `ConfirmHandler.SettleCheckingAsync(DemoUserId, Card.PendingId)`: the same body under the same key (rule 6) |
 | `CancelAsync()` | The card's Cancel button | `PendingStore.CancelAsync` |
@@ -509,7 +512,7 @@ flowchart LR
 
 1. `WalletFaults.ResetAsync`: `POST admin/reset` with no query, so the wallet returns to the seed with every user not consented and its fault switch cleared ([wallet-api.md](wallet-api.md#reset)).
 2. In a fresh scope, `PendingStore.ExpireAllOpenAsync("wallet_reset")`, the runner's reason (`CaseDriver`): the wallet's ids start again, so no open card may reach the new data. Pending records become Expired and Checking ones NotDone `wallet_reset`.
-3. `ChatSession.RestartAsync()` on the circuit's own session: the conversation is unsubscribed and disposed, a new one is built for the same demo user, the messages and their ids are cleared, and `Changed` is raised.
+3. `ChatSession.RestartAsync()` on the circuit's own session: the conversation is unsubscribed and disposed, a new one is built for the same demo user, the messages and their ids are cleared, `Changed` is raised, and the new conversation's open check runs (`OpenAsync`), so a user the reset left not consented sees the consent screen at once.
 
 The result line (`reset-result`) shows `done: <users> users, <accounts> accounts, <transactions> transactions; <n> open cards closed`. A wallet that refuses or does not answer shows `reset-error` with the wallet's code, the HTTP status or `unreachable` / `timeout`, and nothing else is done; a step that throws shows a fixed text. The audit log and the learning log are kept: they are the record (ruling B). The model fault switch and the kill switch are not touched. Other circuits are not told; a page refresh starts them over. Tests: `FaultPanelServicesTests.TheSideDoorResetsTheWalletWithEveryUserNotConsentedAndReportsTheCounts`, `WalletFaultsTests` (a reset with no answer is `unreachable`), `ChatSessionTests.RestartEmptiesTheMessagesAndANewMessageGetsItsCard`.
 
@@ -553,7 +556,7 @@ The journeys locate elements only by these attributes.
 
 | Element | `data-testid` | Other attributes |
 |---|---|---|
-| Phone frame root | `phone-frame` | `dir="rtl"`, `lang="ar"`, `data-interactive` (`true` after the first interactive render) |
+| Phone frame root | `phone-frame` | `dir="rtl"`, `lang="ar"`, `data-interactive` (`true` after the first interactive render and the open check) |
 | Console root | `console` | `dir="ltr"` |
 | Phone input, send button | `phone-input`, `phone-send` | |
 | Chat message | `chat-message` | `data-role` (`user`, `agent`), `data-kind` (`text`, `card`, `question`, `outcome`) |

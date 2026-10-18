@@ -183,6 +183,24 @@ public sealed class ChatSession : IDisposable
         await conversation.DeclineQuestionAsync();
     }
 
+    /// <summary>
+    /// The open check (see <see cref="Conversation.OpenAsync"/>): the consent screen before any typing for a user who has
+    /// not consented. The phone calls it once its circuit is interactive; a second call does nothing.
+    /// </summary>
+    public async Task OpenAsync()
+    {
+        TraceLog.Current.Value = trace;
+        Conversation current;
+        lock (gate)
+        {
+            if (disposed)
+                return;
+            current = conversation;
+        }
+
+        await current.OpenAsync();
+    }
+
     /// <summary>The consent button.</summary>
     public async Task GiveConsentAsync()
     {
@@ -237,15 +255,16 @@ public sealed class ChatSession : IDisposable
     /// <summary>
     /// Starts the phone over (the console's Reset control, after the wallet's reset): the current conversation is
     /// unsubscribed and disposed, so a running action takes its cancellation path; a new one is built for the same demo
-    /// user; the messages and their ids are cleared; and <see cref="Changed"/> is raised.
+    /// user; the messages and their ids are cleared; <see cref="Changed"/> is raised; and the new conversation's open
+    /// check runs (<see cref="OpenAsync"/>), so a user the reset left not consented sees the consent screen at once.
     /// </summary>
-    public Task RestartAsync()
+    public async Task RestartAsync()
     {
         Conversation previous;
         lock (gate)
         {
             if (disposed)
-                return Task.CompletedTask;
+                return;
 
             previous = conversation;
             previous.Changed -= OnConversationChanged;
@@ -257,7 +276,7 @@ public sealed class ChatSession : IDisposable
 
         previous.Dispose();
         Changed?.Invoke();
-        return Task.CompletedTask;
+        await OpenAsync();
     }
 
     /// <summary>Ends the circuit's session: the conversation's running action takes its cancellation path.</summary>
