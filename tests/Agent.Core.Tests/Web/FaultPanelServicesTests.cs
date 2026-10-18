@@ -122,14 +122,31 @@ public sealed class FaultPanelServicesTests(AgentHost host) : IAsyncDisposable
     {
         var scope = await StartAsync(scripted: false);
         var faults = scope.ServiceProvider.GetRequiredService<WalletFaults>();
+        var raised = Record(scope);
 
         var debit = Assert.IsType<WalletDebitResult.Done>(await faults.DebitAsync(SeedFacts.DemoUserId, 5_000, Token));
         Assert.StartsWith("ZC-", debit.Reference, StringComparison.Ordinal);
         Assert.Equal(SeedFacts.DemoBalance - 5_000, debit.BalanceAfterIqd);
         Assert.Equal(SeedFacts.DemoBalance - 5_000, await host.Wallet.AccountBalanceAsync(SeedFacts.DemoPhone));
 
+        // The panels that mirror the wallet hear of the debit (milestone 7 post-tag); a refused one changed nothing.
+        Assert.Equal(new WalletChange(SeedFacts.DemoUserId, WalletChangeKind.Payment), Assert.Single(raised));
+
         var refused = Assert.IsType<WalletDebitResult.Failed>(await faults.DebitAsync(SeedFacts.DemoUserId, SeedFacts.DemoBalance, Token));
         Assert.Equal("insufficient_funds", refused.Problem);
+        Assert.Single(raised);
+    }
+
+    /// <summary>The changes raised on the provider's <see cref="WalletChanges"/> from now on.</summary>
+    private static List<WalletChange> Record(AsyncServiceScope scope)
+    {
+        var raised = new List<WalletChange>();
+        scope.ServiceProvider.GetRequiredService<WalletChanges>().Changed += change =>
+        {
+            lock (raised)
+                raised.Add(change);
+        };
+        return raised;
     }
 
     [Fact]
@@ -141,8 +158,12 @@ public sealed class FaultPanelServicesTests(AgentHost host) : IAsyncDisposable
         {
             Assert.IsType<WalletDebitResult.Done>(await faults.DebitAsync(SeedFacts.DemoUserId, 5_000, Token));
             Assert.IsType<WalletFaultResult.Ok>(await faults.SetAsync("error", null, once: false, Token));
+            var raised = Record(scope);
 
             var reset = Assert.IsType<WalletResetResult.Ok>(await faults.ResetAsync(Token));
+
+            // Every tab's wallet panels hear of the reset, for every user (milestone 7 post-tag).
+            Assert.Equal(new WalletChange(WalletChange.EveryUser, WalletChangeKind.Reset), Assert.Single(raised));
 
             Assert.Equal(new WalletResetCounts(5, 42, 34, 9, 11, 15, 86, 9), reset.Counts);
             Assert.Equal(SeedFacts.DemoBalance, await host.Wallet.AccountBalanceAsync(SeedFacts.DemoPhone));

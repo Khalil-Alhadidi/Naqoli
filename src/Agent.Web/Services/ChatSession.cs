@@ -40,6 +40,7 @@ public sealed class ChatSession : IDisposable
     private readonly IOptionsMonitor<AgentOptions> options;
     private readonly IStringLocalizer<PhoneStrings> text;
     private readonly TraceLog trace;
+    private readonly WalletChanges walletChanges;
     private readonly Lock gate = new();
     private readonly List<ChatMessage> messages = [];
 
@@ -52,17 +53,32 @@ public sealed class ChatSession : IDisposable
     private int nextId;
     private bool disposed;
 
+    /// <summary>The demo user of the current conversation, read from the options when it was built.</summary>
+    private int conversationUserId;
+
+    /// <summary>
+    /// The sum, over the conversations this session replaced, of each one's <see cref="Conversation.WalletVersion"/> plus
+    /// one, so <see cref="WalletVersion"/> never goes back after <see cref="RestartAsync"/> and a restart is itself a new
+    /// version (the phone's directory reloads the seed's list after the console's Reset).
+    /// </summary>
+    private int versionBase;
+
+    /// <summary>The current conversation's <see cref="Conversation.WalletVersion"/> already announced on <see cref="WalletChanges"/>.</summary>
+    private int announcedVersion;
+
     public ChatSession(
         IServiceScopeFactory scopes,
         IParser parser,
         TimeProvider clock,
         IStringLocalizer<PhoneStrings> text,
         TraceLog trace,
-        IOptionsMonitor<AgentOptions> options)
+        IOptionsMonitor<AgentOptions> options,
+        WalletChanges walletChanges)
     {
         ArgumentNullException.ThrowIfNull(text);
         ArgumentNullException.ThrowIfNull(trace);
         ArgumentNullException.ThrowIfNull(options);
+        ArgumentNullException.ThrowIfNull(walletChanges);
 
         this.scopes = scopes;
         this.parser = parser;
@@ -70,6 +86,7 @@ public sealed class ChatSession : IDisposable
         this.options = options;
         this.text = text;
         this.trace = trace;
+        this.walletChanges = walletChanges;
         conversation = NewConversation();
     }
 
@@ -109,8 +126,20 @@ public sealed class ChatSession : IDisposable
     /// <summary>True while an action runs; the buttons are disabled.</summary>
     public bool Busy => conversation.Busy;
 
-    /// <summary>Goes up after every Done outcome, so the wallet data panel knows to reload.</summary>
-    public int WalletVersion => conversation.WalletVersion;
+    /// <summary>
+    /// Goes up after every Done outcome, every alias saved or deleted, and every <see cref="RestartAsync"/>, so the phone's
+    /// directory knows to reload. Monotonic for the session's life: a restart adds the replaced conversation's version plus
+    /// one to the base, so a view holding an older number never matches a newer change. The console panels follow
+    /// <see cref="WalletChanges"/> instead, which also carries other circuits' changes.
+    /// </summary>
+    public int WalletVersion
+    {
+        get
+        {
+            lock (gate)
+                return versionBase + conversation.WalletVersion;
+        }
+    }
 
     /// <summary>The time the card's countdown measures against.</summary>
     public DateTimeOffset Now => conversation.Now;
@@ -133,7 +162,22 @@ public sealed class ChatSession : IDisposable
     public async Task<WalletResult<WalletContacts>> ListAliasesAsync()
     {
         TraceLog.Current.Value = trace;
-        return await conversation.ListAliasesAsync();
+        Conversation current;
+        lock (gate)
+            current = conversation;
+
+        var result = await current.ListAliasesAsync();
+
+        // A read cut short by RestartAsync (the console's Reset raises its wallet change before the restart, so a panel's
+        // reload can start on the conversation being replaced) is read again from the new conversation, once.
+        lock (gate)
+        {
+            if (disposed || ReferenceEquals(current, conversation) || result is not WalletResult<WalletContacts>.Unavailable)
+                return result;
+            current = conversation;
+        }
+
+        return await current.ListAliasesAsync();
     }
 
     /// <summary>The alias directory: an alias of a contact's account (see <see cref="Conversation.AddAliasAsync"/>).</summary>
@@ -268,6 +312,8 @@ public sealed class ChatSession : IDisposable
 
             previous = conversation;
             previous.Changed -= OnConversationChanged;
+            versionBase += previous.WalletVersion + 1;
+            announcedVersion = 0;
             conversation = NewConversation();
             messages.Clear();
             idOfConversationMessage.Clear();
@@ -298,7 +344,8 @@ public sealed class ChatSession : IDisposable
     /// <summary>A conversation for the configured demo user, subscribed to this adapter.</summary>
     private Conversation NewConversation()
     {
-        var created = new Conversation(scopes, parser, clock, options, trace, options.CurrentValue.DemoUserId);
+        conversationUserId = options.CurrentValue.DemoUserId;
+        var created = new Conversation(scopes, parser, clock, options, trace, conversationUserId);
         created.Changed += OnConversationChanged;
         return created;
     }
@@ -306,7 +353,32 @@ public sealed class ChatSession : IDisposable
     private void OnConversationChanged()
     {
         Sync();
+        AnnounceWalletChange();
         Changed?.Invoke();
+    }
+
+    /// <summary>
+    /// Raises one <see cref="WalletChange"/> for the demo user when the conversation's <see cref="Conversation.WalletVersion"/>
+    /// went up since the last call. The kind comes from <see cref="Conversation.LastWalletChange"/>, which the conversation
+    /// sets beside each rise (a Done outcome is a payment; the offer's Save and the directory's save and delete are
+    /// aliases). The conversation runs one action at a time and raises <see cref="Conversation.Changed"/> at least once
+    /// after each rise, so every rise is announced once.
+    /// </summary>
+    private void AnnounceWalletChange()
+    {
+        WalletChange change;
+        lock (gate)
+        {
+            var version = conversation.WalletVersion;
+            if (disposed || version <= announcedVersion)
+                return;
+
+            announcedVersion = version;
+            var kind = conversation.LastWalletChange == ConversationWalletChange.Payment ? WalletChangeKind.Payment : WalletChangeKind.Alias;
+            change = new WalletChange(conversationUserId, kind);
+        }
+
+        walletChanges.Raise(change);
     }
 
     /// <summary>Localises the conversation's messages added since the last call.</summary>

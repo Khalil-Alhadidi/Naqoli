@@ -155,6 +155,48 @@ public sealed class AliasJourneys(JourneyHost host) : JourneyBase(host)
     }
 
     [Fact]
+    public async Task AnAliasSavedOnThePhoneShowsInTheConsoleDirectory()
+    {
+        // Two tabs on U1's console: two circuits, each with its own session. Only the first one's phone acts; both
+        // aliases panels follow through the process-wide wallet-change notification (milestone 7 post-tag).
+        var page = await OpenAsync(Host.WebAddress);
+        var other = await OpenAsync(Host.WebAddress);
+        var text = DevSet.AliasOffer(Amb19, FirstConfirmStep)!;
+        var before = await Host.AliasesAsync(U1);
+
+        foreach (var tab in new[] { page, other })
+        {
+            await tab.GetByTestId("menu-aliases").ClickAsync();
+            await Expect(tab.GetByTestId("console-alias")).ToHaveCountAsync(before.Count);
+        }
+
+        await OpenDirectoryAsync(page);
+        await AddInDirectoryAsync(page, text, "S08");
+        await Expect(page.GetByTestId("directory-result")).ToHaveAttributeAsync("data-key", "Reply_alias_saved");
+
+        var added = Assert.Single(await Host.AliasesAsync(U1), a => a.Text == text);
+        await Expect(page.Locator($"[data-testid=directory-alias][data-alias-id='{added.AliasId}']")).ToContainTextAsync(text);
+        foreach (var tab in new[] { page, other })
+        {
+            var row = tab.Locator($"[data-testid=console-alias][data-alias-id='{added.AliasId}']");
+            await Expect(row).ToHaveCountAsync(1);
+            await Expect(row).ToContainTextAsync(text);
+            await Expect(tab.GetByTestId("console-alias")).ToHaveCountAsync(before.Count + 1);
+        }
+
+        await page.Locator($"[data-testid=directory-alias][data-alias-id='{added.AliasId}']").GetByTestId("directory-delete").ClickAsync();
+        await Expect(page.GetByTestId("directory-result")).ToHaveAttributeAsync("data-key", "Reply_alias_deleted");
+
+        foreach (var tab in new[] { page, other })
+        {
+            await Expect(tab.Locator($"[data-testid=console-alias][data-alias-id='{added.AliasId}']")).ToHaveCountAsync(0);
+            await Expect(tab.GetByTestId("console-alias")).ToHaveCountAsync(before.Count);
+        }
+
+        Assert.DoesNotContain(await Host.AliasesAsync(U1), a => a.AliasId == added.AliasId);
+    }
+
+    [Fact]
     public async Task ADuplicateAliasIsRefusedInTheDirectory()
     {
         var page = await OpenAsync(Host.WebAddress);

@@ -148,8 +148,14 @@ public sealed class Conversation : IDisposable
     /// <summary>True while an action runs.</summary>
     public bool Busy { get; private set; }
 
-    /// <summary>Goes up after every Done outcome, so a wallet view knows to reload.</summary>
+    /// <summary>
+    /// Goes up after every Done outcome and every alias saved or deleted, so a wallet view knows to reload;
+    /// <see cref="LastWalletChange"/> says which.
+    /// </summary>
     public int WalletVersion { get; private set; }
+
+    /// <summary>What the last rise of <see cref="WalletVersion"/> changed; set together with it (<see cref="WalletChanged"/>).</summary>
+    public ConversationWalletChange LastWalletChange { get; private set; }
 
     /// <summary>
     /// The open offer to save an alias (rule 18, milestone 9a), shown under the Done outcome of a transfer whose recipient
@@ -839,7 +845,7 @@ public sealed class Conversation : IDisposable
             switch (result)
             {
                 case AliasResult.Saved:
-                    WalletVersion++;
+                    WalletChanged(ConversationWalletChange.Alias);
                     Add(new ConversationMessage(ConversationRole.Agent, ConversationKind.AliasSaved));
                     break;
                 case AliasResult.Refused refused:
@@ -959,7 +965,7 @@ public sealed class Conversation : IDisposable
                 result = await action(scope.ServiceProvider.GetRequiredService<AliasDirectory>(), stopping);
 
             if (result is AliasResult.Saved or AliasResult.Deleted)
-                WalletVersion++;
+                WalletChanged(ConversationWalletChange.Alias);
             return result;
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
@@ -989,6 +995,16 @@ public sealed class Conversation : IDisposable
         disposed = true;
         lifetime.Cancel();
         lifetime.Dispose();
+    }
+
+    /// <summary>
+    /// Records a wallet change: <see cref="LastWalletChange"/> first, then <see cref="WalletVersion"/> up, both before the
+    /// <see cref="Changed"/> that follows, so a reader who sees the new version reads its kind.
+    /// </summary>
+    private void WalletChanged(ConversationWalletChange kind)
+    {
+        LastWalletChange = kind;
+        WalletVersion++;
     }
 
     /// <summary>Waits for the conversation's turn; false when the conversation ended while waiting.</summary>
@@ -1365,7 +1381,7 @@ public sealed class Conversation : IDisposable
                 CardState = CardStatus.Done;
                 PinVisible = false;
                 ActionMessageIndex = null;
-                WalletVersion++;
+                WalletChanged(ConversationWalletChange.Payment);
                 AddOutcome(OutcomeCodes.Done, done.BalanceAfterIqd, done.Reference, done.PurchaseCode);
                 OfferAlias();
                 break;

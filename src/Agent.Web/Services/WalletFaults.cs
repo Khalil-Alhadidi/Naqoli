@@ -59,9 +59,12 @@ public abstract record WalletResetResult
 /// (<c>POST admin/reset</c>, milestone 7 post-tag). It names no other route, so it can never execute a payment (rule 1). The typed <see cref="HttpClient"/> carries the wallet's base address,
 /// <c>X-Wallet-Client-Key</c> (the agent's key, or <c>dev</c> in Development, as <see cref="WalletClient"/> decides) and
 /// <c>X-Wallet-Admin-Key</c> (<see cref="ConsoleOptions.WalletAdminKey"/>). Every failure comes back as a result with
-/// the wallet's code or the HTTP status; nothing is thrown to a component, and no key is ever logged or shown.
+/// the wallet's code or the HTTP status; nothing is thrown to a component, and no key is ever logged or shown. A debit
+/// that went through raises a <see cref="WalletChangeKind.Payment"/> change for its user, and a reset that went through a
+/// <see cref="WalletChangeKind.Reset"/> change for every user (<see cref="WalletChange.EveryUser"/>), on
+/// <see cref="WalletChanges"/>, so every console panel that mirrors the wallet reloads (milestone 7 post-tag).
 /// </summary>
-public sealed class WalletFaults(HttpClient http)
+public sealed class WalletFaults(HttpClient http, WalletChanges changes)
 {
     /// <summary>The header the wallet's <c>AdminKeyFilter</c> reads.</summary>
     public const string AdminKeyHeader = "X-Wallet-Admin-Key";
@@ -117,6 +120,8 @@ public sealed class WalletFaults(HttpClient http)
             if (!response.IsSuccessStatusCode)
                 return new WalletDebitResult.Failed(await ProblemAsync(response, cancellationToken));
 
+            // The wallet answered success, so the money left even if the body cannot be read: the panels reload either way.
+            changes.Raise(new WalletChange(userId, WalletChangeKind.Payment));
             var debit = await response.Content.ReadFromJsonAsync<DebitBody>(Json, cancellationToken);
             return debit is { Reference: { } reference }
                 ? new WalletDebitResult.Done(reference, debit.BalanceAfterIqd)
@@ -140,6 +145,9 @@ public sealed class WalletFaults(HttpClient http)
             if (!response.IsSuccessStatusCode)
                 return new WalletResetResult.Failed(await ProblemAsync(response, cancellationToken));
 
+            // The wallet answered success, so it is back at the seed even if the body cannot be read: every user's panels
+            // reload. Raised here, before the reset panel closes the open cards and restarts its phone.
+            changes.Raise(new WalletChange(WalletChange.EveryUser, WalletChangeKind.Reset));
             var counts = await response.Content.ReadFromJsonAsync<WalletResetCounts>(Json, cancellationToken);
             return counts is not null
                 ? new WalletResetResult.Ok(counts)

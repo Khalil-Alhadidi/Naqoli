@@ -1,10 +1,12 @@
 @implements IDisposable
 @using Agent.Core.Wallet
 @inject IServiceScopeFactory Scopes
-@inject ChatSession Session
+@inject WalletChanges WalletChanges
 @inject IOptions<AgentOptions> Options
 
-@* Read only: the demo user's wallet as the mock wallet reports it. Each read goes through a fresh scope's client. *@
+@* Read only: the demo user's wallet as the mock wallet reports it. Each read goes through a fresh scope's client. It
+   reloads on every WalletChanges notification for its user or for every user: a payment or an alias change from any
+   tab's phone or console, the fault panel's external debit, the console's reset. *@
 <MudPaper Class="pa-3" Elevation="1">
     <MudText Typo="Typo.h6">Wallet data, user @userId</MudText>
 
@@ -100,9 +102,10 @@
     /// <summary>How many history rows the panel shows.</summary>
     private const int HistoryRows = 20;
 
+    private readonly CancellationTokenSource disposed = new();
     private int userId;
-    private int seenVersion;
     private bool loading;
+    private bool reloadRequested;
     private WalletResult<WalletBalance>? balance;
     private WalletResult<WalletContacts>? contacts;
     private WalletResult<IReadOnlyList<WalletBill>>? bills;
@@ -111,40 +114,67 @@
     protected override async Task OnInitializedAsync()
     {
         userId = Options.Value.DemoUserId;
-        seenVersion = Session.WalletVersion;
-        Session.Changed += OnSessionChanged;
+        WalletChanges.Changed += OnWalletChanged;
         await LoadAsync();
     }
 
-    public void Dispose() => Session.Changed -= OnSessionChanged;
-
-    private void OnSessionChanged()
+    public void Dispose()
     {
-        // Reload after a payment went through (the session raises a new WalletVersion on Done).
-        if (Session.WalletVersion == seenVersion)
-            return;
-        seenVersion = Session.WalletVersion;
-        _ = InvokeAsync(LoadAsync);
+        WalletChanges.Changed -= OnWalletChanged;
+
+        // A read still running when the component goes away is cancelled, not left to finish for nothing.
+        disposed.Cancel();
+        disposed.Dispose();
+    }
+
+    /// <summary>Called on the raiser's thread (any circuit's): marshalled to this circuit with InvokeAsync.</summary>
+    private void OnWalletChanged(WalletChange change)
+    {
+        if (change.Concerns(userId))
+            _ = InvokeAsync(LoadAsync);
     }
 
     private async Task LoadAsync()
     {
+        // A read queued before the component went away does nothing.
+        if (disposed.IsCancellationRequested)
+            return;
+        var token = disposed.Token;
+
+        // A read already running is followed by one more, so the last change is always shown.
+        if (loading)
+        {
+            reloadRequested = true;
+            return;
+        }
+
         loading = true;
         StateHasChanged();
         try
         {
-            await using var scope = Scopes.CreateAsyncScope();
-            var wallet = scope.ServiceProvider.GetRequiredService<WalletClient>();
-            balance = await wallet.GetBalanceAsync(userId);
-            contacts = await wallet.GetContactsAsync(userId);
-            bills = await wallet.GetBillsAsync(userId);
-            history = await wallet.GetHistoryAsync(userId, since: null, toPhone: null, HistoryRows);
+            do
+            {
+                reloadRequested = false;
+                await using var scope = Scopes.CreateAsyncScope();
+                var wallet = scope.ServiceProvider.GetRequiredService<WalletClient>();
+                balance = await wallet.GetBalanceAsync(userId, token);
+                contacts = await wallet.GetContactsAsync(userId, token);
+                bills = await wallet.GetBillsAsync(userId, token);
+                history = await wallet.GetHistoryAsync(userId, since: null, toPhone: null, HistoryRows, token);
+            }
+            while (reloadRequested);
+        }
+        catch (OperationCanceledException) when (token.IsCancellationRequested)
+        {
+            // The component is gone: nothing to show.
+            return;
         }
         finally
         {
             loading = false;
-            StateHasChanged();
         }
+
+        StateHasChanged();
     }
 
     private static string Unavailable<T>(WalletResult<T> result) => result switch

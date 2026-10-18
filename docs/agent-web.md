@@ -45,7 +45,8 @@ The side menu sits in the layout outside the `console` element, and it is Englis
 | `TraceLog` | scoped (one per circuit) | The circuit's live trace; it implements `ITraceSink` |
 | `ITraceSink` | scoped | `TraceLog.Current.Value ?? sp.GetRequiredService<TraceLog>()` (see "The live trace") |
 | `IParser` | singleton or scoped | `ParserFactory.AddAgentParser`: `Agent:Parser` `scripted` (the default) gives the singleton `new ScriptedParser()`; `claude` (set in user secrets with `Anthropic:ApiKey`, see README) gives a scoped `ClaudeParser`, resolved in the circuit's scope so it writes `more_than_one_request` to the circuit's trace. The settings component shows `Agent:Parser` and the `Model` section read-only, never a key. The journeys pin `scripted` |
-| `ChatSession` | scoped (one per circuit) | The phone's adapter over a `Conversation`: localised messages, the circuit's trace, `Changed` |
+| `ChatSession` | scoped (one per circuit) | The phone's adapter over a `Conversation`: localised messages, the circuit's trace, `Changed`; raises its conversation's wallet changes on `WalletChanges` |
+| `WalletChanges` | singleton | The process-wide wallet-change notification: `event Action<WalletChange>? Changed`, `Raise(WalletChange)`, `WalletChange(UserId, Kind)` with `WalletChangeKind` `Payment`, `Alias` or `Reset` (user 0, `WalletChange.EveryUser`, is every user). Raised by every circuit's `ChatSession` and by `WalletFaults`; the wallet data, aliases and log panels of every tab subscribe. See "Wallet changes" |
 | `AgentOptions` post-configuration | options | `YesWords` and `NoWords` (D6) from the resource values `Word_yes` and `Word_no`, so `Agent.Core` holds no phone text |
 | `ConsoleNavigation` | scoped | The side menu's selection |
 | `RuntimeSettings` | singleton | Saves an agent setting live (D8) through `RuntimeSettingsProvider`, the last configuration source (`Program.cs`); see "The settings component" |
@@ -53,7 +54,7 @@ The side menu sits in the layout outside the `console` element, and it is Englis
 | `FaultingParser` (`AddFaultingParser`) | as the parser it wraps | Replaces the last `IParser` registration with one of the same lifetime that builds the original (its instance, factory or type) and wraps it; see "The fault panel" |
 | `ModelFaultSwitch` | singleton | The console's model fault: none, `unreachable` or `invalid_reply`, once or every call; `Changed` for the panels |
 | `ConsoleOptions` | options, validated at start | Section `Console`: `WalletAdminKey` (required, default `dev`), the `X-Wallet-Admin-Key` the fault panel sends; shown as `set`, never the value. Outside Development the console refuses to start unless it is set, not `dev`, and at least 16 characters; the message names `Console:WalletAdminKey`, never a value (review R2, Khalil, 16 Oct 2026; `ConsoleOptionsTests`) |
-| `WalletFaults` | typed `HttpClient` (transient) | The fault panel's and the reset panel's side door: `GET` and `POST admin/faults`, `POST admin/debit` and `POST admin/reset` (no query: consent cleared) only; the wallet's base address, the client key (as `WalletClient` decides it) and the admin key |
+| `WalletFaults` | typed `HttpClient` (transient) | The fault panel's and the reset panel's side door: `GET` and `POST admin/faults`, `POST admin/debit` and `POST admin/reset` (no query: consent cleared) only; the wallet's base address, the client key (as `WalletClient` decides it) and the admin key. A debit the wallet accepted raises a `Payment` change for its user, a reset it accepted a `Reset` change for every user |
 
 ## The session flow
 
@@ -65,7 +66,7 @@ The side menu sits in the layout outside the `console` element, and it is Englis
 - the PIN-field flag;
 - the messages the card, the question's options and the live button are shown under (`CardMessageId`, `QuestionMessageId`, `ActionMessageId`, mapped from the conversation's positions);
 - `Busy`;
-- `WalletVersion`.
+- `WalletVersion`: up after every Done outcome, every alias saved or deleted, and every restart (see "Wallet changes").
 
 It raises `Changed` after every change of the conversation. Components never see a `PendingRecord`, an idempotency key or a quoted balance, and the component contract (`ChatMessage`, the ids, the actions) is the same as in milestone 4.
 
@@ -104,12 +105,32 @@ sequenceDiagram
     C->>W: balance and history recheck, then POST /transactions under the record's key
     W-->>C: 201 Done
     C-->>V: ConfirmOutcome.Done(reference, balance after, code)
-    V->>V: WalletVersion + 1
+    V->>V: WalletVersion + 1, LastWalletChange Payment
     V-->>S: Changed (Outcome done, reference, balance after, code)
     S-->>U: outcome message (data-outcome done)
-    S-->>D: Changed
+    S-->>D: WalletChanges: Payment for DemoUserId (every tab)
     D->>W: balance, contacts, bills, history (fresh scope)
 ```
+
+### Wallet changes
+
+Since 18 Oct 2026 (milestone 7, post-tag; Khalil) every console panel that mirrors wallet state follows one process-wide notification, the singleton `WalletChanges` (`Services/WalletChanges.cs`). Each browser tab is its own circuit with its own `ChatSession`, so a per-session signal cannot reach a second tab; the singleton can.
+
+- **Who raises.** `ChatSession` raises `Payment` or `Alias` for its demo user whenever its conversation's `WalletVersion` went up since the last change it announced (`OnConversationChanged`, once per rise). The kind comes from `Conversation.LastWalletChange` (`ConversationWalletChange` in `Agent.Core`, which cannot reference `Agent.Web`), set beside each rise: a Done outcome is `Payment`; the offer's Save and the directory's save and delete are `Alias`. `WalletFaults` raises `Payment` for the user of an external debit the wallet accepted, and `Reset` for user 0 (every user) when the wallet accepted a reset, so the reset panel's change is raised before the open cards are closed and its phone restarts. The console's own aliases panel acts through `ChatSession`, so it is covered.
+- **Who listens.** `WalletDataPanel`, `AliasesPanel` and `LogPanel` subscribe in `OnInitializedAsync` and unsubscribe in `Dispose`. On a change for their user or for user 0 they reload through `InvokeAsync(LoadAsync)`, since a handler runs on the raiser's thread, which may be another circuit's. A reload asked for while one runs is followed by one more, never dropped, and a read still running when the panel goes away is cancelled.
+- **Errors.** `Raise` calls every handler; one that throws is logged at Warning with its exception type only and stops neither the next handler nor the caller.
+- **The phone's directory** keeps following `ChatSession.WalletVersion`, which is monotonic for the session's life: `RestartAsync` adds the replaced conversation's version plus one to a base, so a restart is itself a new version and the directory reloads the seed's list after a Reset. A list read cut short by the restart (a panel's reload that started on the replaced conversation) is read once more from the new one.
+
+```mermaid
+flowchart LR
+    s1["ChatSession, tab 1<br/>(WalletVersion up: Payment or Alias)"] --> wc["WalletChanges (singleton)"]
+    s2["ChatSession, tab 2"] --> wc
+    wf["WalletFaults<br/>(debit: Payment; reset: Reset, user 0)"] --> wc
+    wc -- "InvokeAsync(LoadAsync), coalesced" --> p1["Tab 1: wallet data, aliases, log"]
+    wc -- "InvokeAsync(LoadAsync), coalesced" --> p2["Tab 2: wallet data, aliases, log"]
+```
+
+Tests: `WalletChangesTests` (every handler called, a throwing one stops neither the next nor the caller, an unsubscribed one not called); `ChatSessionTests.AConfirmedTransferRaisesOnePaymentChangeForTheDemoUser`, `AnAliasSavedFromTheOfferAndOneDeletedThroughTheDirectoryRaiseOneAliasChangeEach`, `RestartMakesTheWalletVersionLargerThanBefore`; `FaultPanelServicesTests` (a debit raises `Payment`, a reset raises `Reset` for user 0); the journey `AnAliasSavedOnThePhoneShowsInTheConsoleDirectory` (two tabs).
 
 ### Actions
 
@@ -287,9 +308,9 @@ The phone's header has a button (`phone-directory`, `Directory_Open`) that shows
 - Save (`directory-save`), disabled while the text is blank or neither a contact nor a number is given;
 - the result line (`directory-result`, `data-key` the resource key shown): `Reply_alias_saved`, `Reply_alias_deleted`, or the refusal's `Refusal_<code>`.
 
-The agent's `AliasDirectory` does every check. The list reloads when `WalletVersion` changes.
+The agent's `AliasDirectory` does every check. The list reloads when `WalletVersion` changes (also after a restart, see "Wallet changes").
 
-The console's Aliases panel (`menu-aliases`, `AliasesPanel`, English) is the same list as a table (`console-alias`, `data-alias-id`; alias, phone, registered name, `console-alias-delete`). It has the same add form (`console-alias-text`, `console-alias-target` with items `console-alias-target-option`, `console-alias-phone`, `console-alias-save`) and a result line (`console-alias-result`, `data-result` `saved`, `deleted`, the refusal's code, or `unavailable`). Both act through the circuit's `ChatSession` on the demo user.
+The console's Aliases panel (`menu-aliases`, `AliasesPanel`, English) is the same list as a table (`console-alias`, `data-alias-id`; alias, phone, registered name, `console-alias-delete`). It has the same add form (`console-alias-text`, `console-alias-target` with items `console-alias-target-option`, `console-alias-phone`, `console-alias-save`) and a result line (`console-alias-result`, `data-result` `saved`, `deleted`, the refusal's code, or `unavailable`). Both act through the circuit's `ChatSession` on the demo user. The console's list reloads on every `WalletChanges` notification for the demo user or for every user, so an alias saved or deleted from any tab's phone or console, and the reset, show in every tab without a click; the session's `Changed` only re-renders its buttons while an action runs.
 
 ```mermaid
 flowchart TD
@@ -305,6 +326,8 @@ flowchart TD
     agent --> result["directory-result: Reply_alias_saved, Reply_alias_deleted or Refusal_code"]
     result --> reload["WalletVersion up: the list reloads"]
     reload --> dir
+    result --> notify["WalletChanges: Alias"]
+    notify --> console["Every tab's console Aliases panel reloads"]
 ```
 
 ## The phone strings, for Khalil
@@ -515,7 +538,7 @@ flowchart LR
 2. In a fresh scope, `PendingStore.ExpireAllOpenAsync("wallet_reset")`, the runner's reason (`CaseDriver`): the wallet's ids start again, so no open card may reach the new data. Pending records become Expired and Checking ones NotDone `wallet_reset`.
 3. `ChatSession.RestartAsync()` on the circuit's own session: the conversation is unsubscribed and disposed, a new one is built for the same demo user, the messages and their ids are cleared, `Changed` is raised, and the new conversation's open check runs (`OpenAsync`), so a user the reset left not consented sees the consent screen at once.
 
-The result line (`reset-result`) shows `done: <users> users, <accounts> accounts, <transactions> transactions; <n> open cards closed`. A wallet that refuses or does not answer shows `reset-error` with the wallet's code, the HTTP status or `unreachable` / `timeout`, and nothing else is done; a step that throws shows a fixed text. The audit log and the learning log are kept: they are the record (ruling B). The model fault switch and the kill switch are not touched. Other circuits are not told; a page refresh starts them over. Tests: `FaultPanelServicesTests.TheSideDoorResetsTheWalletWithEveryUserNotConsentedAndReportsTheCounts`, `WalletFaultsTests` (a reset with no answer is `unreachable`), `ChatSessionTests.RestartEmptiesTheMessagesAndANewMessageGetsItsCard`, and the journey `ResetClearsConsentAndThePhoneStartsAgain`.
+The result line (`reset-result`) shows `done: <users> users, <accounts> accounts, <transactions> transactions; <n> open cards closed`. A wallet that refuses or does not answer shows `reset-error` with the wallet's code, the HTTP status or `unreachable` / `timeout`, and nothing else is done; a step that throws shows a fixed text. The audit log and the learning log are kept: they are the record (ruling B). The model fault switch and the kill switch are not touched. A reset the wallet accepted raises `Reset` for every user on `WalletChanges` (see "Wallet changes"), so every tab's wallet data, aliases and log panels reload; other tabs' phones are not started over, a page refresh does that. Tests: `FaultPanelServicesTests.TheSideDoorResetsTheWalletWithEveryUserNotConsentedAndReportsTheCounts`, `WalletFaultsTests` (a reset with no answer is `unreachable`), `ChatSessionTests.RestartEmptiesTheMessagesAndANewMessageGetsItsCard`, and the journey `ResetClearsConsentAndThePhoneStartsAgain`.
 
 ```mermaid
 sequenceDiagram
@@ -538,7 +561,7 @@ sequenceDiagram
 
 ## The log component
 
-`LogPanel` (`Components/Console/LogPanel.razor`, the side menu's Log) lists the latest `LogPageSize` (100, a setting) audit rows, newest first, through `AuditLog.ReadLatestAsync` in a fresh scope (the `WalletDataPanel` pattern). It reads when it opens, when the session raises `Changed` with no action running (so once per action, not once per message), and on its Refresh button (`log-refresh`). A read that arrives while one runs is followed by one more read. Columns, English and left to right: At (UTC, `yyyy-MM-dd HH:mm:ss`), User, Event, Pending (the first 8 characters of the ID), From → To, Reason, Reference, Amount (`PhoneFormat.Console`, blank when null), Detail. No PIN, balance figure or purchase code can appear, because an audit row never holds one (`AuditLogTests`).
+`LogPanel` (`Components/Console/LogPanel.razor`, the side menu's Log) lists the latest `LogPageSize` (100, a setting) audit rows, newest first, through `AuditLog.ReadLatestAsync` in a fresh scope (the `WalletDataPanel` pattern). It reads when it opens, when the session raises `Changed` with no action running (so once per action, not once per message), on every `WalletChanges` notification for the demo user or for every user (another tab's actions, the fault panel's debit, the reset), and on its Refresh button (`log-refresh`). A read that arrives while one runs is followed by one more read. Columns, English and left to right: At (UTC, `yyyy-MM-dd HH:mm:ss`), User, Event, Pending (the first 8 characters of the ID), From → To, Reason, Reference, Amount (`PhoneFormat.Console`, blank when null), Detail. No PIN, balance figure or purchase code can appear, because an audit row never holds one (`AuditLogTests`).
 
 ```mermaid
 sequenceDiagram
@@ -608,7 +631,7 @@ The journeys locate elements only by these attributes.
 - Before each journey it resets the wallet (`POST /admin/reset`, which also clears the wallet's fault switch), empties the agent tables (audit, pending, learning), turns every console's kill switch off, clears every console's model fault (`ModelFaultSwitch`) and clears every saved setting.
 - Each journey opens a new browser context and page, and waits for `data-interactive="true"` before typing.
 - Each journey types development-set messages by case id (`DevSet.Say(id, step)`), so the oracle returns that case's parse. It builds every expected text through the console's `IStringLocalizer<PhoneStrings>` and `PhoneFormat`, never as a literal. The PIN journey reads U3's PIN from `data/seed/users.json` (`SeedPins`) and never prints it.
-- The files: `Journeys.cs` holds the three journeys of milestone 4. `RequestJourneys.cs`, `CardJourneys.cs` and `ConsoleJourneys.cs` hold the milestone 7 journeys, on the shared base `JourneyBase`; `ConsoleJourneys.cs` also holds the two of the consent and reset change (milestone 7 post-tag, 18 Oct 2026), `AFreshUserSeesTheConsentScreenBeforeTyping` and `ResetClearsConsentAndThePhoneStartsAgain`. The journeys' per-test reset asks the wallet for the seed's consent values (`?consent=seed`), so U1 to U4 start consented and U5 not. `BillJourneys.cs` and `FaultJourneys.cs` hold the twelve of milestone 8. `AliasJourneys.cs` holds the seven of milestone 9a, one per alias behaviour; they read the alias texts from the dev set (`DevSet.AliasOffer(id, step)`, the step's `expect.alias_offer`) and the wallet's aliases through `JourneyHost.AliasesAsync(userId)`, and pick a contact in the `MudSelect` by opening it and clicking the item with its `data-code`. Every fault journey sets its fault through the fault panel of the console under test (`SetWalletFaultAsync`, `ArmModelFaultAsync`, `DebitAsync` in `JourneyBase`, by `data-testid`), never through the host's own client, and ends by checking that the wallet's switch is `none` and that the panel's Clear all reads both switches back as `none` (`AssertFaultsClearedAsync`). The host reads bills with `BillsAsync(userId)` and the wallet's switch with `WalletFaultModeAsync()`. The two timeout journeys wait with explicit Playwright timeouts (20 s until Checking, 15 s until the automatic settle), never a sleep.
+- The files: `Journeys.cs` holds the three journeys of milestone 4. `RequestJourneys.cs`, `CardJourneys.cs` and `ConsoleJourneys.cs` hold the milestone 7 journeys, on the shared base `JourneyBase`; `ConsoleJourneys.cs` also holds the two of the consent and reset change (milestone 7 post-tag, 18 Oct 2026), `AFreshUserSeesTheConsentScreenBeforeTyping` and `ResetClearsConsentAndThePhoneStartsAgain`. The journeys' per-test reset asks the wallet for the seed's consent values (`?consent=seed`), so U1 to U4 start consented and U5 not. `BillJourneys.cs` and `FaultJourneys.cs` hold the twelve of milestone 8. `AliasJourneys.cs` holds the seven of milestone 9a, one per alias behaviour, and `AnAliasSavedOnThePhoneShowsInTheConsoleDirectory` (milestone 7 post-tag, two pages on one console); they read the alias texts from the dev set (`DevSet.AliasOffer(id, step)`, the step's `expect.alias_offer`) and the wallet's aliases through `JourneyHost.AliasesAsync(userId)`, and pick a contact in the `MudSelect` by opening it and clicking the item with its `data-code`. Every fault journey sets its fault through the fault panel of the console under test (`SetWalletFaultAsync`, `ArmModelFaultAsync`, `DebitAsync` in `JourneyBase`, by `data-testid`), never through the host's own client, and ends by checking that the wallet's switch is `none` and that the panel's Clear all reads both switches back as `none` (`AssertFaultsClearedAsync`). The host reads bills with `BillsAsync(userId)` and the wallet's switch with `WalletFaultModeAsync()`. The two timeout journeys wait with explicit Playwright timeouts (20 s until Checking, 15 s until the automatic settle), never a sleep.
 
 | Journey | Asserts |
 |---|---|
@@ -650,16 +673,17 @@ The journeys locate elements only by these attributes.
 | `WalletErrorEndsTheCardNotDone` | U3's console, the panel sets `error` once; FLT-03, Confirm: the `not_done` outcome is `Outcome_not_done` with `Refusal_nothing_taken_short`, the card `notdone` with `card-try-again`; no history row, balance unchanged; the switches end `none` |
 | `ModelUnreachableShowsTheHandoverMessage` | The panel arms `unreachable` once; CLN-01: `Refusal_model_unavailable`, no card, the model state reads `none` again; CLN-01 again: a live card; nothing moved |
 | `ModelInvalidReplyIsNotUnderstood` | The panel arms `invalid_reply` once; CLN-01: `Refusal_not_understood`, no card, one learning row `model_invalid_reply` with detail `injected`; nothing moved |
-| `ExternalDebitWhileTheCardWaitsIsCaughtByTheRecheck` | FLT-08 on U2's console: a live card for 15,000; the panel takes 5,000 (`fault-debit-result` done); Confirm: `Outcome_not_done` with `Refusal_insufficient_balance` and 2,500; balance 13,500; the wallet's history (`Host.HistoryAsync`, since the wallet panel does not reload after a panel debit) has exactly one new row, of type `externalDebit` for 5,000, and no payment |
+| `ExternalDebitWhileTheCardWaitsIsCaughtByTheRecheck` | FLT-08 on U2's console: a live card for 15,000; the panel takes 5,000 (`fault-debit-result` done); Confirm: `Outcome_not_done` with `Refusal_insufficient_balance` and 2,500; balance 13,500; the wallet's history (`Host.HistoryAsync`) has exactly one new row, of type `externalDebit` for 5,000, and no payment |
 | `APaymentThatNeededAQuestionOffersTheAliasAndNothingIsSavedWithoutTheTap` | AMB-19 steps 0 to 2 (say, tap S08, Confirm): `save-alias` shows and the last agent message holds `Offer_save_alias` filled with AMB-19's step 2 `alias_offer`; step 3's sentence gives two `question-option` again and no `save-alias`; the wallet's alias count for U1 is unchanged |
 | `SaveOnTheOfferMakesTheNextRequestGoStraightToTheCard` | AMB-19 steps 0 to 2, then `save-alias`: `Reply_alias_saved` with the text, the button goes, the wallet has one more alias, on S08's account, and the audit log one `alias_saved` row; step 3's sentence gives a live card with no new question, `card-display` the alias text and `card-registered` S08's registered name from the wallet |
 | `APaymentWithoutAQuestionOffersNoAlias` | CLN-01, Confirm: one done outcome and no `save-alias` |
 | `ANearSpellingOfASavedAliasShowsItAsAnOption` | The directory saves AMB-19-v1's step 2 `alias_offer` for S08 (`directory-result` `data-key` `Reply_alias_saved`); back to the chat; AMB-19's step 3 sentence gives exactly one `question-option` holding that alias; the tap gives a live card with that alias as `card-display` |
 | `ThePhoneDirectoryListsAddsAndDeletes` | The directory's `directory-alias` rows equal the wallet's alias count for U1, and the compose row is gone; S03's saved name plus " x" saved for S03 adds a row and an alias on S03's account in the wallet; its `directory-delete` gives `Reply_alias_deleted` and removes it on screen and in the wallet |
 | `TheConsoleAliasesPanelListsAddsAndDeletes` | The same through `menu-aliases`: `console-alias` rows equal the wallet's count; save gives `console-alias-result` `saved` and one more row on S03's account; `console-alias-delete` gives `deleted` and the row and the wallet's alias go |
+| `AnAliasSavedOnThePhoneShowsInTheConsoleDirectory` | Milestone 7 post-tag (18 Oct 2026): two pages on U1's console, both with `menu-aliases` open; the first page's phone directory saves AMB-19's step 2 `alias_offer` for S08; both pages' `console-alias` rows gain it (`data-alias-id` of the wallet's new alias) without a click, and the phone's list shows it; the directory's delete removes the row on both pages and the alias in the wallet |
 | `ADuplicateAliasIsRefusedInTheDirectory` | S04's saved name saved for S03 in the directory: `directory-result` is `Refusal_alias_exists` (key and text), the rows and the wallet's alias count are unchanged |
 
-- **Run:** `dotnet test tests/Agent.Web.Journeys`. The 49 journeys take about two and a half minutes (2 min 31 s on 18 Oct 2026; 1 min 57 s and 1 min 52 s in two runs of the 32 of 16 Oct 2026; the two timeout journeys take about 20 s each). The 20 of milestone 7 took about a minute.
+- **Run:** `dotnet test tests/Agent.Web.Journeys`. The 50 journeys take about two minutes (2 min 6 s on 19 Oct 2026, 49 in 2 min 31 s on 18 Oct 2026; 1 min 57 s and 1 min 52 s in two runs of the 32 of 16 Oct 2026; the two timeout journeys take about 20 s each). The 20 of milestone 7 took about a minute.
 - **Install Chromium once,** after the first build: `pwsh tests/Agent.Web.Journeys/bin/Debug/net10.0/playwright.ps1 install chromium`.
 - **Skips:** the journeys skip when SQL Server does not answer a 3-second probe on `master`, and when Chromium cannot be launched. The skip message gives the install command.
 - **Database names:** both databases must end in `_Test`; the host refuses any other name, because it drops them.
@@ -673,7 +697,6 @@ The journeys locate elements only by these attributes.
 | Text typed before the circuit is interactive is lost | The `data-interactive` marker tells the journeys; a person types again |
 | A Checking record whose circuit is gone has no "check again" button in a new circuit | Still open after milestone 8: the Checking card and its automatic settle live in the card's own circuit. The record stays Checking and is never shown as failed |
 | The live trace keeps every entry for the life of the circuit | A cap would be a new setting |
-| The wallet data component does not reload after an external debit from the fault panel or after the reset control (it reloads after a payment) | Reopen the component; the phone's card recheck reads the wallet itself |
 | The reset control starts over only its own circuit's phone; another open console keeps its conversation, whose cards were closed by the reset | Refresh that page |
 | The live trace's height does not allow for the fault panel above it, so the trace column can be taller than the window | The page scrolls and the panel stays at the top; a layout change if it matters in the demo |
 | The model fault is per console process, the wallet's fault switch is shared by every console | Shown as read back on each panel; the demo runs one console |

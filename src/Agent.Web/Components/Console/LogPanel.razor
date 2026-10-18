@@ -3,10 +3,13 @@
 @using Agent.Core.Audit
 @inject IServiceScopeFactory Scopes
 @inject ChatSession Session
+@inject WalletChanges WalletChanges
 @inject IOptionsMonitor<AgentOptions> Options
 
 @* Read only: the latest audit rows, newest first. The rows hold no PIN, balance figure or purchase code, so none can be
-   shown. Each read goes through a fresh scope's AuditLog. *@
+   shown. Each read goes through a fresh scope's AuditLog. It reloads after each action of this circuit's session (the
+   audit log is the agent's), and on every WalletChanges notification for its user or for every user (another tab's
+   actions, the reset). *@
 <MudPaper Class="pa-3" Elevation="1">
     <div class="d-flex align-center">
         <MudText Typo="Typo.h6">Log (latest @pageSize)</MudText>
@@ -66,12 +69,14 @@
     protected override async Task OnInitializedAsync()
     {
         Session.Changed += OnSessionChanged;
+        WalletChanges.Changed += OnWalletChanged;
         await LoadAsync();
     }
 
     public void Dispose()
     {
         Session.Changed -= OnSessionChanged;
+        WalletChanges.Changed -= OnWalletChanged;
 
         // A read still running when the component goes away is cancelled, not left to finish for nothing.
         disposed.Cancel();
@@ -84,6 +89,13 @@
         if (Session.Busy)
             return;
         _ = InvokeAsync(LoadAsync);
+    }
+
+    /// <summary>Called on the raiser's thread (any circuit's): marshalled to this circuit with InvokeAsync.</summary>
+    private void OnWalletChanged(WalletChange change)
+    {
+        if (change.Concerns(Options.CurrentValue.DemoUserId))
+            _ = InvokeAsync(LoadAsync);
     }
 
     private async Task LoadAsync()

@@ -2,6 +2,7 @@ extern alias AgentWeb;
 
 using System.Net;
 using AgentWeb::Agent.Web.Services;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Agent.Core.Tests.Web;
 
@@ -54,7 +55,7 @@ public class WalletFaultsTests
     }
 
     private static WalletFaults Faults(HttpMessageHandler handler)
-        => new(new HttpClient(handler) { BaseAddress = new Uri("http://localhost/") });
+        => new(new HttpClient(handler) { BaseAddress = new Uri("http://localhost/") }, new WalletChanges(NullLogger<WalletChanges>.Instance));
 
     [Fact]
     public async Task AConnectionDroppedWhileTheBodyIsReadIsUnreachable()

@@ -2,6 +2,23 @@ using Agent.Core.Pipeline;
 
 namespace Agent.Core.Conversation;
 
+/// <summary>
+/// What the last rise of <see cref="Conversation.WalletVersion"/> changed in the wallet. The web console's session reads
+/// it beside the version to say which kind of wallet change to announce (<c>Agent.Core</c> does not reference the web
+/// project, so the kind is named here and mapped there).
+/// </summary>
+public enum ConversationWalletChange
+{
+    /// <summary>The version has not gone up yet.</summary>
+    None,
+
+    /// <summary>A Done outcome: money moved.</summary>
+    Payment,
+
+    /// <summary>An alias was saved (the offer's Save, the directory) or deleted (the directory).</summary>
+    Alias,
+}
+
 /// <summary>Who a conversation message is from.</summary>
 public enum ConversationRole
 {

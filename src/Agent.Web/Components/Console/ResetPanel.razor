@@ -7,7 +7,9 @@
 @* The reset control (milestone 7, post-tag; Khalil, 18 Oct 2026): above the fault panel, behind the admin key. It
    returns the wallet to the seed with every user not consented (POST admin/reset, no query, through WalletFaults),
    closes the agent's open pending records (the wallet's ids start again) and starts this circuit's phone over. The
-   audit log and the learning log are kept: they are the record. Other circuits are not told; a page refresh starts
+   audit log and the learning log are kept: they are the record. A reset that went through raises a Reset change for
+   every user on WalletChanges (WalletFaults raises it, before the open cards are closed and the phone restarts), so
+   every tab's wallet data, aliases and log panels reload; other tabs' phones are not restarted, a page refresh starts
    them over. No key is shown. *@
 <MudPaper Class="pa-3 console-reset" Elevation="1" data-testid="reset-panel">
     <div class="console-faults-head">

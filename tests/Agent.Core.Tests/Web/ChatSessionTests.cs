@@ -15,6 +15,7 @@ using AgentWeb::Agent.Web.Services;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Localization;
 using Wallet.MockApi.Contracts;
+using ContactsOk = Agent.Core.Wallet.WalletResult<Agent.Core.Wallet.WalletContacts>.Ok;
 
 namespace Agent.Core.Tests.Web;
 
@@ -323,6 +324,76 @@ public sealed class ChatSessionTests(AgentHost host) : IAsyncDisposable
         Assert.Equal(new ChatMessage(1, ChatRole.User, HammoudiSentence, ChatMessageKind.Text), session.Messages[0]);
         Assert.Equal(LastAgentMessage(session).Id, session.CardMessageId);
         Assert.IsType<ConfirmOutcome.Done>(await session.ConfirmAsync(null));
+    }
+
+    /// <summary>The changes raised on the circuit's <see cref="WalletChanges"/> from now on (the handler may run on any thread).</summary>
+    private static List<WalletChange> Record(Circuit circuit)
+    {
+        var raised = new List<WalletChange>();
+        circuit.Provider.GetRequiredService<WalletChanges>().Changed += change =>
+        {
+            lock (raised)
+                raised.Add(change);
+        };
+        return raised;
+    }
+
+    [Fact]
+    public async Task AConfirmedTransferRaisesOnePaymentChangeForTheDemoUser()
+    {
+        var circuit = await StartAsync();
+        var session = circuit.Session;
+        var raised = Record(circuit);
+
+        await session.SendAsync(HammoudiSentence);
+        Assert.Empty(raised);
+        Assert.IsType<ConfirmOutcome.Done>(await session.ConfirmAsync(null));
+
+        Assert.Equal(new WalletChange(SeedFacts.DemoUserId, WalletChangeKind.Payment), Assert.Single(raised));
+    }
+
+    [Fact]
+    public async Task AnAliasSavedFromTheOfferAndOneDeletedThroughTheDirectoryRaiseOneAliasChangeEach()
+    {
+        var circuit = await StartAsync(SeedFacts.DemoUserId, Amb19Sentence());
+        var session = circuit.Session;
+        await PayS08Async(session);
+        var text = session.AliasOffer!.Text;
+        var raised = Record(circuit);
+
+        Assert.IsType<AliasResult.Saved>(await session.SaveAliasAsync());
+        Assert.Equal(new WalletChange(SeedFacts.DemoUserId, WalletChangeKind.Alias), Assert.Single(raised));
+
+        var listed = Assert.IsType<ContactsOk>(await session.ListAliasesAsync());
+        var saved = Assert.Single(listed.Value.Aliases, a => a.Text == text);
+        Assert.Single(raised);
+
+        Assert.IsType<AliasResult.Deleted>(await session.DeleteAliasAsync(saved.AliasId));
+
+        Assert.Equal(
+            [new WalletChange(SeedFacts.DemoUserId, WalletChangeKind.Alias), new WalletChange(SeedFacts.DemoUserId, WalletChangeKind.Alias)],
+            raised);
+    }
+
+    [Fact]
+    public async Task RestartMakesTheWalletVersionLargerThanBefore()
+    {
+        var circuit = await StartAsync();
+        var session = circuit.Session;
+        var start = session.WalletVersion;
+
+        await session.RestartAsync();
+        var afterEmptyRestart = session.WalletVersion;
+        Assert.True(afterEmptyRestart > start);
+
+        await session.SendAsync(HammoudiSentence);
+        Assert.IsType<ConfirmOutcome.Done>(await session.ConfirmAsync(null));
+        var afterPayment = session.WalletVersion;
+        Assert.True(afterPayment > afterEmptyRestart);
+
+        // The new conversation starts again at 0; the session's version does not go back to any number it showed.
+        await session.RestartAsync();
+        Assert.True(session.WalletVersion > afterPayment);
     }
 
     private const string SharedNameSentence = "send fifty thousand to a shared name";
