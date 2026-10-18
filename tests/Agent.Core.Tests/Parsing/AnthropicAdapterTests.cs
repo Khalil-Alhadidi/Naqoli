@@ -25,7 +25,7 @@ public class AnthropicAdapterTests
 
     private static CancellationToken Token => TestContext.Current.CancellationToken;
 
-    private static (ClaudeParser Parser, StubHandler Handler) Start()
+    private static (ClaudeParser Parser, StubHandler Handler) Start(string promptCacheTtl = ModelOptions.CacheTtl5m)
     {
         var handler = new StubHandler();
         var client = new AnthropicClient
@@ -34,7 +34,7 @@ public class AnthropicAdapterTests
             HttpClient = new HttpClient(handler),
             MaxRetries = 0,
         };
-        var options = ClaudeParserTests.Options();
+        var options = ClaudeParserTests.Options(promptCacheTtl: promptCacheTtl);
         var parser = new ClaudeParser(
             ParserFactory.CreateChatClient(client, options.Candidates["haiku"]),
             Microsoft.Extensions.Options.Options.Create(options),
@@ -44,17 +44,33 @@ public class AnthropicAdapterTests
         return (parser, handler);
     }
 
-    private static HttpResponseMessage Message(string text) => Json(HttpStatusCode.OK, JsonSerializer.Serialize(new
-    {
-        id = "msg_test",
-        type = "message",
-        role = "assistant",
-        model = "claude-haiku-5-5",
-        content = new[] { new { type = "text", text } },
-        stop_reason = "end_turn",
-        stop_sequence = (string?)null,
-        usage = new { input_tokens = 1200, output_tokens = 80 },
-    }));
+    /// <summary>
+    /// A reply with <paramref name="text"/>; its usage carries the two cache counts as the API sends them (null when
+    /// the call touched no cache).
+    /// </summary>
+    private static HttpResponseMessage Message(
+        string text, int inputTokens = 1200, int outputTokens = 80, int? cacheWriteTokens = null, int? cacheReadTokens = null)
+        => Json(HttpStatusCode.OK, JsonSerializer.Serialize(new
+        {
+            id = "msg_test",
+            type = "message",
+            role = "assistant",
+            model = "claude-haiku-5-5",
+            content = new[] { new { type = "text", text } },
+            stop_reason = "end_turn",
+            stop_sequence = (string?)null,
+            usage = new
+            {
+                input_tokens = inputTokens,
+                output_tokens = outputTokens,
+                cache_creation_input_tokens = cacheWriteTokens,
+                cache_read_input_tokens = cacheReadTokens,
+            },
+        }));
+
+    private static string Reply => "{" + Quoted("requests") + ":[" + Item + "]}";
+
+    private static string Quoted(string name) => JsonSerializer.Serialize(name);
 
     private static HttpResponseMessage Json(HttpStatusCode status, string body)
         => new(status) { Content = new StringContent(body, Encoding.UTF8, "application/json") };
@@ -87,7 +103,105 @@ public class AnthropicAdapterTests
         Assert.Contains("pay the water", bodyText, StringComparison.Ordinal);
 
         var usage = Assert.IsType<ParseUsage>(parser.LastUsage);
-        Assert.Equal((1200, 80), (usage.InputTokens, usage.OutputTokens));
+        Assert.Equal((1200, 80, 0, 0), (usage.InputTokens, usage.OutputTokens, usage.CacheWriteTokens, usage.CacheReadTokens));
+    }
+
+    [Theory]
+    [InlineData(ModelOptions.CacheTtl5m)]
+    [InlineData(ModelOptions.CacheTtl1h)]
+    public async Task TheSystemPromptIsOneTextBlockMarkedCacheableAndTheUserMessageIsNot(string ttl)
+    {
+        var (parser, handler) = Start(ttl);
+        handler.Answer = () => Message(Reply);
+
+        await parser.ParseAsync("pay the water", new ParseContext("open_question which_bill", MaskMap.Empty), Token);
+
+        var body = Assert.Single(handler.Bodies);
+        var block = Assert.Single(body.GetProperty("system").EnumerateArray());
+        Assert.Equal("text", block.GetProperty("type").GetString());
+        Assert.Equal(ClaudeParser.Prompt, block.GetProperty("text").GetString());
+        var cacheControl = block.GetProperty("cache_control");
+        Assert.Equal("ephemeral", cacheControl.GetProperty("type").GetString());
+        Assert.Equal(ttl, cacheControl.GetProperty("ttl").GetString());
+
+        // The user's text and the pending note are never cached.
+        var messages = body.GetProperty("messages");
+        Assert.Contains("pay the water", messages.GetRawText(), StringComparison.Ordinal);
+        Assert.DoesNotContain("cache_control", messages.GetRawText(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task AUsageWithoutTheCacheFieldsCountsNoCache()
+    {
+        // An older answer shape: the usage has no cache fields at all.
+        var (parser, handler) = Start();
+        handler.Answer = () => Json(HttpStatusCode.OK, JsonSerializer.Serialize(new
+        {
+            id = "msg_test",
+            type = "message",
+            role = "assistant",
+            model = "claude-haiku-5-5",
+            content = new[] { new { type = "text", text = Reply } },
+            stop_reason = "end_turn",
+            stop_sequence = (string?)null,
+            usage = new { input_tokens = 1200, output_tokens = 80 },
+        }));
+
+        await parser.ParseAsync("pay the water", new ParseContext(null, MaskMap.Empty), Token);
+
+        var usage = Assert.IsType<ParseUsage>(parser.LastUsage);
+        Assert.Equal((1200, 80, 0, 0), (usage.InputTokens, usage.OutputTokens, usage.CacheWriteTokens, usage.CacheReadTokens));
+    }
+
+    [Fact]
+    public async Task NoneSendsNoCacheControl()
+    {
+        var (parser, handler) = Start(ModelOptions.CacheTtlNone);
+        handler.Answer = () => Message(Reply);
+
+        await parser.ParseAsync("pay the water", new ParseContext(null, MaskMap.Empty), Token);
+
+        var body = Assert.Single(handler.Bodies);
+        Assert.DoesNotContain("cache_control", body.GetRawText(), StringComparison.Ordinal);
+        var system = body.GetProperty("system");
+        var prompt = system.ValueKind == JsonValueKind.String ? system.GetString() : Assert.Single(system.EnumerateArray()).GetProperty("text").GetString();
+        Assert.Equal(ClaudeParser.Prompt, prompt);
+    }
+
+    [Fact]
+    public async Task TheCacheCountsAreReadAndPricedFromAllFour()
+    {
+        var (parser, handler) = Start();
+        handler.Answer = () => Message(Reply, inputTokens: 200, outputTokens: 80, cacheWriteTokens: 1_000, cacheReadTokens: 3_000);
+
+        await parser.ParseAsync("pay the water", new ParseContext(null, MaskMap.Empty), Token);
+
+        var usage = Assert.IsType<ParseUsage>(parser.LastUsage);
+        Assert.Equal((200, 80, 1_000, 3_000), (usage.InputTokens, usage.OutputTokens, usage.CacheWriteTokens, usage.CacheReadTokens));
+        // 200 x 0.10 + 80 x 0.50 + 1,000 x 0.125 + 3,000 x 0.01, per million.
+        Assert.Equal(0.000215m, usage.CostUsd);
+    }
+
+    [Fact]
+    public async Task TheAdaptersUsageDetailsForACachedCall()
+    {
+        // What the adapter itself reports in UsageDetails for a call that wrote and read the cache, read without the
+        // parser: the parser prefers the SDK's message, so this pins the fallback's assumptions about the adapter.
+        var handler = new StubHandler { Answer = () => Message(Reply, inputTokens: 200, outputTokens: 80, cacheWriteTokens: 1_000, cacheReadTokens: 3_000) };
+        var client = new AnthropicClient { ApiKey = FakeKey, HttpClient = new HttpClient(handler), MaxRetries = 0 };
+        var chat = ParserFactory.CreateChatClient(client, ClaudeParserTests.Options().Candidates["haiku"]);
+
+        var response = await chat.GetResponseAsync([new ChatMessage(ChatRole.User, "x")], new ChatOptions { ModelId = "claude-haiku-5-5", MaxOutputTokens = 100 }, Token);
+
+        // Found with this stub (Anthropic 12.56.0): the adapter keeps the SDK's message as the raw representation, and its
+        // InputTokenCount is the whole input (input_tokens + cache writes + cache reads), the reads are
+        // CachedInputTokenCount, and the writes are in AdditionalCounts under the SDK's property name.
+        Assert.IsType<Anthropic.Models.Messages.Message>(response.RawRepresentation);
+        var usage = Assert.IsType<UsageDetails>(response.Usage);
+        Assert.Equal(200 + 1_000 + 3_000, usage.InputTokenCount);
+        Assert.Equal(80, usage.OutputTokenCount);
+        Assert.Equal(3_000, usage.CachedInputTokenCount);
+        Assert.Equal(1_000, Assert.Single(usage.AdditionalCounts!, kv => kv.Key == "CacheCreationInputTokens").Value);
     }
 
     [Theory]

@@ -21,7 +21,7 @@ public class ClaudeParserTests
 
     private static CancellationToken Token => TestContext.Current.CancellationToken;
 
-    internal static ModelOptions Options(float? temperature = null, int timeoutSeconds = 20) => new()
+    internal static ModelOptions Options(float? temperature = null, int timeoutSeconds = 20, string promptCacheTtl = ModelOptions.CacheTtl5m) => new()
     {
         Candidate = "haiku",
         Candidates =
@@ -36,6 +36,9 @@ public class ClaudeParserTests
                 TimeoutSeconds = timeoutSeconds,
                 InputPricePerMTok = 0.10m,
                 OutputPricePerMTok = 0.50m,
+                CacheWritePricePerMTok = 0.125m,
+                CacheReadPricePerMTok = 0.01m,
+                PromptCacheTtl = promptCacheTtl,
             },
         },
     };
@@ -205,6 +208,46 @@ public class ClaudeParserTests
         // 1,500 x 0.10 / 1M + 150 x 0.50 / 1M.
         Assert.Equal(0.000225m, usage.CostUsd);
         Assert.True(usage.Duration >= TimeSpan.Zero);
+    }
+
+    [Fact]
+    public async Task AWrappedClientsUsageDetailsGiveTheCacheCounts()
+    {
+        // No SDK message behind the response: the counts come from UsageDetails as the Anthropic adapter fills it
+        // (AnthropicAdapterTests.TheAdaptersUsageDetailsForACachedCall): the whole input in InputTokenCount, the reads in
+        // CachedInputTokenCount, the writes in AdditionalCounts. The uncached input is what is left of the whole.
+        var (parser, client, _) = Start();
+        client.Reply = (_, _, _) =>
+        {
+            var response = FakeChatClient.Json(Transfer, inputTokens: 4_200, outputTokens: 80);
+            response.Usage!.CachedInputTokenCount = 3_000;
+            response.Usage.AdditionalCounts = new AdditionalPropertiesDictionary<long> { ["CacheCreationInputTokens"] = 1_000 };
+            return Task.FromResult(response);
+        };
+
+        await parser.ParseAsync("x", new ParseContext(null, MaskMap.Empty), Token);
+
+        var usage = Assert.IsType<ParseUsage>(parser.LastUsage);
+        Assert.Equal((200, 80, 1_000, 3_000), (usage.InputTokens, usage.OutputTokens, usage.CacheWriteTokens, usage.CacheReadTokens));
+        // 200 x 0.10 + 80 x 0.50 + 1,000 x 0.125 + 3,000 x 0.01, per million.
+        Assert.Equal(0.000215m, usage.CostUsd);
+    }
+
+    [Fact]
+    public async Task TheApisFieldNameForCacheWritesIsReadToo()
+    {
+        var (parser, client, _) = Start();
+        client.Reply = (_, _, _) =>
+        {
+            var response = FakeChatClient.Json(Transfer, inputTokens: 1_200, outputTokens: 80);
+            response.Usage!.AdditionalCounts = new AdditionalPropertiesDictionary<long> { ["cache_creation_input_tokens"] = 1_000 };
+            return Task.FromResult(response);
+        };
+
+        await parser.ParseAsync("x", new ParseContext(null, MaskMap.Empty), Token);
+
+        var usage = Assert.IsType<ParseUsage>(parser.LastUsage);
+        Assert.Equal((200, 80, 1_000, 0), (usage.InputTokens, usage.OutputTokens, usage.CacheWriteTokens, usage.CacheReadTokens));
     }
 
     [Fact]

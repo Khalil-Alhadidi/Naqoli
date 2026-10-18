@@ -19,16 +19,16 @@ sequenceDiagram
     C->>M: Mask(text)
     M-->>C: masked text (NUM_1, NUM_2 ...) and the map
     C->>P: ParseAsync(masked text, ParseContext(pending note, map))
-    P->>L: system: parse-prompt.md (version 4)<br/>user: "Pending: note" + "Message: masked text"<br/>JSON schema, effort, output limit, timeout
+    P->>L: system: parse-prompt.md (version 4), one block with cache_control (PromptCacheTtl)<br/>user: "Pending: note" + "Message: masked text" (never cached)<br/>JSON schema, effort, output limit, timeout
     alt timeout, HTTP status, connection failure
         L--xP: no answer
         P-->>C: ParserUnavailableException
         C-->>U: model_unavailable (template)
     else a reply
-        L-->>P: text and usage
+        L-->>P: text and usage (input, output, cache writes, cache reads)
         P->>V: Validate(ParsedRequestsDto, map)
         V-->>P: ParsedRequest, or Unclear with Problem
-        P-->>C: ParsedRequest (LastUsage: tokens, cost, time)
+        P-->>C: ParsedRequest (LastUsage: four token counts, cost, time)
         C->>C: un-mask a recipient that is exactly a token of this map
         C->>O: HandleAsync(request)
         O-->>C: reply (card, question, refusal, balance)
@@ -131,22 +131,25 @@ Its examples are the full-request sentences of the Example column of [matching-r
 | `...:Temperature` | Unset. Haiku 5.5 and Sonnet 5.5 answer a non-default temperature with HTTP 400, and Opus 5.5 answers any temperature with 400. Probed again on 15 Oct 2026 with temperature 0: HTTP 400 on all three, so run-to-run variance is measured with `--repeat` instead. The report header records `Model:Temperature` (`not sent`) and `Model:Effort` |
 | `...:TimeoutSeconds` | 20. The Anthropic client never retries (`MaxRetries = 0`): one message is one request, and a 429 or 529 shows the handover message at once |
 | `...:InputPricePerMTok`, `...:OutputPricePerMTok` | USD per million tokens: haiku 0.10 and 0.50, sonnet 2 and 10, opus 4 and 20 |
+| `...:CacheWritePricePerMTok`, `...:CacheReadPricePerMTok` | USD per million tokens written to and read from the prompt cache, from the API's price list of 18 Oct 2026 (a five-minute write is 1.25 times the input price; a read is 0.1 times on Haiku 5.5, 0.05 times on Sonnet 5.5 and Opus 5.5): haiku 0.125 and 0.01, sonnet 2.50 and 0.10, opus 5.00 and 0.20. Not below 0 |
+| `...:PromptCacheTtl` | `5m` (the default, all three candidates), `1h` or `none`. The lifetime of the cached system prompt; `none` sends no `cache_control`. Any other value fails the start. A `1h` write is priced at the API's higher one-hour rate, which `CacheWritePricePerMTok` must then be set to |
 
-The defaults are in `src/Agent.Web/appsettings.json` and `src/Agent.Eval/appsettings.json`. With `claude`, the start checks the candidate (it exists, the provider is `anthropic`, the model id is set, the limits are above 0, the effort is a known level, the prices are not below 0) and the key. The console shows `Agent:Parser` and the `Model` section read-only. The screen journeys pin `scripted`.
+The defaults are in `src/Agent.Web/appsettings.json` and `src/Agent.Eval/appsettings.json`. With `claude`, the start checks the candidate (it exists, the provider is `anthropic`, the model id is set, the limits are above 0, the effort is a known level, the four prices are not below 0, the prompt cache lifetime is `5m`, `1h` or `none`) and the key. The console shows `Agent:Parser` and the `Model` section read-only. The screen journeys pin `scripted`.
 
 The call goes through `Microsoft.Extensions.AI`'s `IChatClient`, from the official `Anthropic` SDK (`AnthropicClient.AsIChatClient(modelId)`), so another candidate is a configuration change.
 
 - The JSON schema is `ChatOptions.ResponseFormat`, which the adapter maps to `output_config.format`.
 - The effort travels in the SDK's own parameters (`ChatOptions.RawRepresentationFactory`, `MessageCreateParams.OutputConfig.Effort`), and the adapter merges the format into the same `output_config`.
 - `AnthropicAdapterTests` proves both offline by reading the request body the real adapter sends.
+- Prompt caching (Khalil, 18 Oct 2026). The system message is the frozen prompt as one `TextContent` marked with the SDK's `Microsoft.Extensions.AI` extension, `WithCacheControl(Ttl.Ttl5m)` or `WithCacheControl(Ttl.Ttl1h)` (`AIContentCacheExtensions`, effective only with the client from `AsIChatClient`); with `PromptCacheTtl` `none` it is the plain prompt. On the wire `system` is `[{"type":"text","text":"<the prompt>","cache_control":{"type":"ephemeral","ttl":"5m"}}]` (`"1h"` for one hour). The user message, which holds the user's text and the pending note, carries no cache control, so only the frozen prompt is ever cached. The prompt (791 words) is above the 512-token minimum the 5.5 models cache. `AnthropicAdapterTests.TheSystemPromptIsOneTextBlockMarkedCacheableAndTheUserMessageIsNot` and `NoneSendsNoCacheControl` read the body.
 
 ## Cost accounting
 
-- **Per call.** `ClaudeParser.LastUsage` (`IParserUsage`) holds the input and output tokens of `ChatResponse.Usage`, the cost at the candidate's prices, and the time. Thinking is billed as output.
+- **Per call.** `ClaudeParser.LastUsage` (`IParserUsage`) is a `ParseUsage(InputTokens, OutputTokens, CacheWriteTokens, CacheReadTokens, CostUsd, Duration)`. `InputTokens` is the API's `input_tokens`, the uncached part only; `CacheWriteTokens` is `cache_creation_input_tokens` and `CacheReadTokens` is `cache_read_input_tokens`, so the call's whole input is the sum of the three. The counts are read from the SDK's own usage on `ChatResponse.RawRepresentation` (an `Anthropic.Models.Messages.Message`), else from `UsageDetails`. The adapter's `UsageDetails` (found with the test stub, Anthropic 12.56.0) has `InputTokenCount` as the whole input (the sum of the three), the reads in `CachedInputTokenCount` and the writes in `AdditionalCounts["CacheCreationInputTokens"]`; the fallback reads it that way (`cache_creation_input_tokens` is accepted as the key too) and takes the uncached input as what is left of the whole. `ModelCandidate.CostUsd(input, output, cacheWrite, cacheRead)` prices the four counts. Thinking is billed as output. Before 18 Oct 2026 the input count was `UsageDetails.InputTokenCount`; with no caching that was the same number.
 - **Per case.** The runner's `RecordingParser` collects every call's usage, and each case's tokens and cost go into the report.
 - **Before a model run.** `Agent.Eval dev --parser claude:<candidate>` prints the estimate: cases × (1,500 input + 400 output tokens) at the candidate's prices. For the 72 development cases that is about 0.03 USD on Haiku, 0.50 USD on Sonnet and 1 USD on Opus. Real runs may cost up to two or three times the estimate: questions and taps make several calls per case, and effort changes how much the model thinks.
-- **After the run.** It prints the real cost and tokens. The report header carries `Model:Candidate`, `Model:ModelId`, `Model:PromptVersion`, `Model:Temperature` (`not sent` when unset), `Model:Effort`, `Model:EstimatedCostUsd`, `Model:CostUsd`, `Model:InputTokens` and `Model:OutputTokens`.
-- **Logging.** The parser logs the model id, duration, tokens, cost and finish reason of each call, never the text.
+- **After the run.** It prints the real cost, tokens and prompt cache figures (`Model cost: <usd> USD (<n> tokens in, <n> out; cache <n> written, <n> read, hit rate <rate>).`). The report header carries `Model:Candidate`, `Model:ModelId`, `Model:PromptVersion`, `Model:Temperature` (`not sent` when unset), `Model:Effort`, `Model:EstimatedCostUsd`, `Model:CostUsd`, `Model:InputTokens` (uncached input), `Model:OutputTokens`, `Model:CacheWriteTokens`, `Model:CacheReadTokens` and `Model:CacheHitRate` (the cache reads as a share of all input, reads / (input + writes + reads), formatted `nn.n %`, or `n/a` when there was no input). The estimate before the run ignores the cache.
+- **Logging.** The parser logs the model id, duration, tokens (the cache writes and reads apart), cost and finish reason of each call, never the text.
 
 ## The learning log
 

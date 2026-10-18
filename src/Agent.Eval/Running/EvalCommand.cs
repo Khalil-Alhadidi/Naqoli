@@ -64,11 +64,23 @@ public static class EvalCommand
         yield return new("Model:Effort", candidate.Effort);
     }
 
+    /// <summary>
+    /// The prompt cache's hit rate over a run: the cache reads as a share of all input (uncached input, cache writes and
+    /// cache reads), formatted <c>nn.n %</c>, or <c>n/a</c> when the run read no input at all (the oracle).
+    /// </summary>
+    public static string CacheHitRate(long inputTokens, long cacheWriteTokens, long cacheReadTokens)
+    {
+        var all = inputTokens + cacheWriteTokens + cacheReadTokens;
+        return all <= 0
+            ? "n/a"
+            : (100m * cacheReadTokens / all).ToString("0.0", CultureInfo.InvariantCulture) + " %";
+    }
+
     /// <summary>The cost estimated before a run: <paramref name="cases"/> × (1,500 input + 400 output tokens) at the candidate's prices.</summary>
     public static decimal EstimatedCostUsd(int cases, ModelCandidate candidate)
     {
         ArgumentNullException.ThrowIfNull(candidate);
-        return cases * candidate.CostUsd(EstimatedInputTokensPerCase, EstimatedOutputTokensPerCase);
+        return cases * candidate.CostUsd(EstimatedInputTokensPerCase, EstimatedOutputTokensPerCase, 0, 0);
     }
 
     /// <summary>Runs the command of <paramref name="args"/>; returns the exit code.</summary>
@@ -217,6 +229,8 @@ public static class EvalCommand
             var results = new List<CaseResult>(cases.Count);
             long inputTokens = 0;
             long outputTokens = 0;
+            long cacheWriteTokens = 0;
+            long cacheReadTokens = 0;
             foreach (var evalCase in cases)
             {
                 CaseObservation observation;
@@ -232,6 +246,8 @@ public static class EvalCommand
 
                 inputTokens += observation.Usage.InputTokens;
                 outputTokens += observation.Usage.OutputTokens;
+                cacheWriteTokens += observation.Usage.CacheWriteTokens;
+                cacheReadTokens += observation.Usage.CacheReadTokens;
                 var result = grader.Grade(evalCase, observation);
                 results.Add(result);
                 await output.WriteLineAsync(evalCase.Id + " " + (result.Passed ? "passed" : "failed" + (result.FirstFailing is { } f ? " at " + f.Field : string.Empty)));
@@ -243,8 +259,13 @@ public static class EvalCommand
                 runSettings["Model:CostUsd"] = Usd(cost);
                 runSettings["Model:InputTokens"] = inputTokens.ToString(CultureInfo.InvariantCulture);
                 runSettings["Model:OutputTokens"] = outputTokens.ToString(CultureInfo.InvariantCulture);
+                runSettings["Model:CacheWriteTokens"] = cacheWriteTokens.ToString(CultureInfo.InvariantCulture);
+                runSettings["Model:CacheReadTokens"] = cacheReadTokens.ToString(CultureInfo.InvariantCulture);
+                var hitRate = CacheHitRate(inputTokens, cacheWriteTokens, cacheReadTokens);
+                runSettings["Model:CacheHitRate"] = hitRate;
                 await output.WriteLineAsync(string.Create(
-                    CultureInfo.InvariantCulture, $"Model cost: {Usd(cost)} USD ({inputTokens} tokens in, {outputTokens} out)."));
+                    CultureInfo.InvariantCulture,
+                    $"Model cost: {Usd(cost)} USD ({inputTokens} tokens in, {outputTokens} out; cache {cacheWriteTokens} written, {cacheReadTokens} read, hit rate {hitRate})."));
             }
 
             var summary = new RunSummary(

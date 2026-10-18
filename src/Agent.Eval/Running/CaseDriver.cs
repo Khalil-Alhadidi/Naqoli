@@ -213,6 +213,8 @@ public sealed class CaseDriver
         var usage = new ParseUsage(
             usages.Sum(u => u.InputTokens),
             usages.Sum(u => u.OutputTokens),
+            usages.Sum(u => u.CacheWriteTokens),
+            usages.Sum(u => u.CacheReadTokens),
             usages.Sum(u => u.CostUsd),
             TimeSpan.FromTicks(usages.Sum(u => u.Duration.Ticks)));
         stopwatch.Stop();

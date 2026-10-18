@@ -72,7 +72,7 @@ public class CaseGraderTests
         var after = new WalletSnapshot(balanceAfter, added, new Dictionary<string, long>(), 0);
         return new CaseObservation(
             "T-01", SeedFacts.DemoUserId, steps ?? [], cards ?? [], questions ?? [], replies ?? [], false, learning,
-            texts ?? [Sentence], new ParseUsage(0, 0, 0m, TimeSpan.Zero), 12, before, after,
+            texts ?? [Sentence], new ParseUsage(0, 0, 0, 0, 0m, TimeSpan.Zero), 12, before, after,
             WalletSnapshot.Diff(before, after), null, null, []);
     }
 

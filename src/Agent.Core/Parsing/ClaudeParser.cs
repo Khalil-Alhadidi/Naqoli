@@ -24,7 +24,8 @@ namespace Agent.Core.Parsing;
 /// with the message's mask map. It never throws for a bad reply (that is <see cref="RequestIntent.Unclear"/> with a
 /// <see cref="ParsedRequest.Problem"/>: the validator's field name, or one of the parser's own problems,
 /// <see cref="JsonProblem"/>, <see cref="TruncatedProblem"/> and <see cref="RefusalProblem"/>); a call that fails or outlasts the candidate's timeout throws
-/// <see cref="ParserUnavailableException"/>. Logs hold the model id, the time, the tokens and the cost, never the text.
+/// <see cref="ParserUnavailableException"/>. Logs hold the model id, the time, the tokens (the cache writes and reads
+/// apart) and the cost, never the text. The frozen prompt is marked cacheable (<see cref="ModelCandidate.PromptCacheTtl"/>).
 /// </summary>
 /// <remarks>
 /// Structured output: the Anthropic adapter (<c>AnthropicClientExtensions.AsIChatClient</c>, package <c>Anthropic</c>
@@ -54,6 +55,12 @@ public sealed partial class ClaudeParser : IParser, IParserUsage
     private const string VersionPrefix = "version: ";
     private const string MessagePrefix = "Message: ";
     private const string AnswerPrefix = "Answer: ";
+
+    /// <summary>The key under which the Anthropic adapter puts the cache writes in <see cref="UsageDetails.AdditionalCounts"/>.</summary>
+    private const string CacheCreationProperty = "CacheCreationInputTokens";
+
+    /// <summary>The API's own field name for the cache writes, read from <see cref="UsageDetails.AdditionalCounts"/> too.</summary>
+    private const string CacheCreationField = "cache_creation_input_tokens";
 
     private static readonly JsonSerializerOptions StrictJson = new(JsonSerializerDefaults.General)
     {
@@ -135,9 +142,11 @@ public sealed partial class ClaudeParser : IParser, IParserUsage
             map = masked.Map;
         }
 
+        // Prompt caching (Khalil, 18 Oct 2026): only the frozen prompt is marked cacheable, at the end of its one block; the
+        // user message, which holds the user's text and the pending note, never carries a cache control.
         List<ChatMessage> messages =
         [
-            new(ChatRole.System, Prompt),
+            SystemMessage(candidate.PromptCacheTtl),
             new(ChatRole.User, "Pending: " + (context.PendingNote ?? "none") + "\nMessage: " + text),
         ];
         var options = new ChatOptions
@@ -178,11 +187,20 @@ public sealed partial class ClaudeParser : IParser, IParserUsage
         }
 
         var duration = clock.GetElapsedTime(started);
-        var inputTokens = response.Usage?.InputTokenCount ?? 0;
-        var outputTokens = response.Usage?.OutputTokenCount ?? 0;
-        var cost = candidate.CostUsd(inputTokens, outputTokens);
-        Volatile.Write(ref lastUsage, new ParseUsage(ToInt(inputTokens), ToInt(outputTokens), cost, duration));
-        LogParsed(candidate.ModelId, (long)duration.TotalMilliseconds, inputTokens, outputTokens, cost, response.FinishReason?.Value ?? "none");
+        var (inputTokens, outputTokens, cacheWriteTokens, cacheReadTokens) = TokensOf(response);
+        var cost = candidate.CostUsd(inputTokens, outputTokens, cacheWriteTokens, cacheReadTokens);
+        Volatile.Write(
+            ref lastUsage,
+            new ParseUsage(ToInt(inputTokens), ToInt(outputTokens), ToInt(cacheWriteTokens), ToInt(cacheReadTokens), cost, duration));
+        LogParsed(
+            candidate.ModelId,
+            (long)duration.TotalMilliseconds,
+            inputTokens,
+            outputTokens,
+            cacheWriteTokens,
+            cacheReadTokens,
+            cost,
+            response.FinishReason?.Value ?? "none");
 
         // Cut off at MaxOutputTokens (thinking counts against it): whatever text came is incomplete.
         if (response.FinishReason == ChatFinishReason.Length)
@@ -202,6 +220,48 @@ public sealed partial class ClaudeParser : IParser, IParserUsage
             trace.Record(TraceZone.Model, MoreThanOneRequestStep, several.Count.ToString(CultureInfo.InvariantCulture));
 
         return ParsedRequestValidator.Validate(reply, map).Request;
+    }
+
+    /// <summary>
+    /// The system message: the frozen prompt as one text block, marked cacheable with the candidate's lifetime
+    /// (<c>5m</c> or <c>1h</c>), or the plain prompt when the lifetime is <c>none</c>.
+    /// </summary>
+    private static ChatMessage SystemMessage(string promptCacheTtl) => promptCacheTtl switch
+    {
+        ModelOptions.CacheTtl5m => new ChatMessage(ChatRole.System, [new TextContent(Prompt).WithCacheControl(Ttl.Ttl5m)]),
+        ModelOptions.CacheTtl1h => new ChatMessage(ChatRole.System, [new TextContent(Prompt).WithCacheControl(Ttl.Ttl1h)]),
+        ModelOptions.CacheTtlNone => new ChatMessage(ChatRole.System, Prompt),
+        _ => throw new InvalidOperationException("Unknown prompt cache lifetime; the start-up validation lists the accepted ones."),
+    };
+
+    /// <summary>
+    /// The call's four token counts: the uncached input (the API's <c>input_tokens</c>), the output, the cache writes
+    /// (<c>cache_creation_input_tokens</c>) and the cache reads (<c>cache_read_input_tokens</c>). Read from the SDK's own
+    /// usage when the response carries the API's message, else from <see cref="UsageDetails"/>, so a client that does not
+    /// pass the message on still reports. <see cref="UsageDetails"/> counts as the Anthropic adapter fills it
+    /// (<c>AnthropicAdapterTests</c>): <see cref="UsageDetails.InputTokenCount"/> is the whole input, the reads are
+    /// <see cref="UsageDetails.CachedInputTokenCount"/>, the writes are in <see cref="UsageDetails.AdditionalCounts"/>
+    /// (the SDK's property name, or the API's field name); the uncached input is what is left of the whole.
+    /// </summary>
+    private static (long Input, long Output, long CacheWrite, long CacheRead) TokensOf(ChatResponse response)
+    {
+        if (response.RawRepresentation is Message { Usage: { } usage })
+        {
+            return (
+                usage.InputTokens,
+                usage.OutputTokens,
+                usage.CacheCreationInputTokens ?? 0,
+                usage.CacheReadInputTokens ?? 0);
+        }
+
+        var details = response.Usage;
+        long cacheWrite = 0;
+        if (details?.AdditionalCounts is { } counts
+            && (counts.TryGetValue(CacheCreationProperty, out var written) || counts.TryGetValue(CacheCreationField, out written)))
+            cacheWrite = Math.Max(0, written);
+        var cacheRead = Math.Max(0, details?.CachedInputTokenCount ?? 0);
+        var input = Math.Max(0, (details?.InputTokenCount ?? 0) - cacheWrite - cacheRead);
+        return (input, details?.OutputTokenCount ?? 0, cacheWrite, cacheRead);
     }
 
     private static bool TryRead(string? text, [NotNullWhen(true)] out ParsedRequestsDto? reply)
@@ -323,8 +383,9 @@ public sealed partial class ClaudeParser : IParser, IParserUsage
         _ => null,
     };
 
-    [LoggerMessage(Level = LogLevel.Information, Message = "Parse call to {ModelId}: {DurationMs} ms, {InputTokens} tokens in, {OutputTokens} out, {CostUsd} USD, finish {FinishReason}")]
-    private partial void LogParsed(string modelId, long durationMs, long inputTokens, long outputTokens, decimal costUsd, string finishReason);
+    [LoggerMessage(Level = LogLevel.Information, Message = "Parse call to {ModelId}: {DurationMs} ms, {InputTokens} tokens in, {OutputTokens} out, cache {CacheWriteTokens} written and {CacheReadTokens} read, {CostUsd} USD, finish {FinishReason}")]
+    private partial void LogParsed(
+        string modelId, long durationMs, long inputTokens, long outputTokens, long cacheWriteTokens, long cacheReadTokens, decimal costUsd, string finishReason);
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Parse call to {ModelId} unavailable ({Reason}) after {DurationMs} ms")]
     private partial void LogUnavailable(string modelId, string reason, long durationMs);

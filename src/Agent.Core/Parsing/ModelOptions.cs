@@ -17,6 +17,18 @@ public sealed class ModelOptions
     /// <summary>The effort levels the API accepts in <c>output_config.effort</c>.</summary>
     public static IReadOnlyList<string> EffortLevels { get; } = ["low", "medium", "high", "xhigh", "max"];
 
+    /// <summary>The prompt cache lifetime that marks the system prompt cacheable for five minutes (the default).</summary>
+    public const string CacheTtl5m = "5m";
+
+    /// <summary>The prompt cache lifetime that marks the system prompt cacheable for one hour.</summary>
+    public const string CacheTtl1h = "1h";
+
+    /// <summary>The prompt cache setting that sends no cache control at all.</summary>
+    public const string CacheTtlNone = "none";
+
+    /// <summary>The values <see cref="ModelCandidate.PromptCacheTtl"/> accepts.</summary>
+    public static IReadOnlyList<string> PromptCacheTtls { get; } = [CacheTtl5m, CacheTtl1h, CacheTtlNone];
+
     /// <summary>The name of the candidate in use (a key of <see cref="Candidates"/>).</summary>
     public string? Candidate { get; set; }
 
@@ -47,8 +59,11 @@ public sealed class ModelOptions
             problems.Add(prefix + "Effort must be one of " + string.Join(", ", EffortLevels) + ".");
         if (candidate.Temperature is < 0f or > 1f)
             problems.Add(prefix + "Temperature must be from 0 to 1, or unset.");
-        if (candidate.InputPricePerMTok < 0 || candidate.OutputPricePerMTok < 0)
-            problems.Add(prefix + "InputPricePerMTok and OutputPricePerMTok must not be below 0.");
+        if (candidate.InputPricePerMTok < 0 || candidate.OutputPricePerMTok < 0
+            || candidate.CacheWritePricePerMTok < 0 || candidate.CacheReadPricePerMTok < 0)
+            problems.Add(prefix + "InputPricePerMTok, OutputPricePerMTok, CacheWritePricePerMTok and CacheReadPricePerMTok must not be below 0.");
+        if (!PromptCacheTtls.Contains(candidate.PromptCacheTtl, StringComparer.Ordinal))
+            problems.Add(prefix + "PromptCacheTtl must be one of " + string.Join(", ", PromptCacheTtls) + ".");
         return problems;
     }
 }
@@ -87,9 +102,32 @@ public sealed class ModelCandidate
     /// <summary>US dollars per million output tokens.</summary>
     public decimal OutputPricePerMTok { get; set; }
 
-    /// <summary>The cost, in US dollars, of a call with these token counts.</summary>
-    public decimal CostUsd(long inputTokens, long outputTokens)
-        => ((inputTokens * InputPricePerMTok) + (outputTokens * OutputPricePerMTok)) / 1_000_000m;
+    /// <summary>
+    /// US dollars per million input tokens written to the prompt cache (the API's <c>cache_creation_input_tokens</c>);
+    /// for a five-minute write, 1.25 times <see cref="InputPricePerMTok"/> on the price list of 18 Oct 2026.
+    /// </summary>
+    public decimal CacheWritePricePerMTok { get; set; }
+
+    /// <summary>
+    /// US dollars per million input tokens read from the prompt cache (the API's <c>cache_read_input_tokens</c>).
+    /// </summary>
+    public decimal CacheReadPricePerMTok { get; set; }
+
+    /// <summary>
+    /// How long the cached system prompt lives: <c>5m</c> (the default), <c>1h</c>, or <c>none</c> to send no cache
+    /// control. Only the frozen prompt is ever marked cacheable, never the user's message.
+    /// </summary>
+    public string PromptCacheTtl { get; set; } = ModelOptions.CacheTtl5m;
+
+    /// <summary>
+    /// The cost, in US dollars, of a call with these token counts. <paramref name="inputTokens"/> is the API's
+    /// <c>input_tokens</c>, the uncached part only; the cache writes and reads are counted and priced apart.
+    /// </summary>
+    public decimal CostUsd(long inputTokens, long outputTokens, long cacheWriteTokens, long cacheReadTokens)
+        => ((inputTokens * InputPricePerMTok)
+            + (outputTokens * OutputPricePerMTok)
+            + (cacheWriteTokens * CacheWritePricePerMTok)
+            + (cacheReadTokens * CacheReadPricePerMTok)) / 1_000_000m;
 
     /// <summary>A short invariant description for logs and reports (no key).</summary>
     public override string ToString()

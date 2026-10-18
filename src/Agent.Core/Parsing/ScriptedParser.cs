@@ -161,7 +161,7 @@ public sealed class ScriptedParser : IParser, IParserUsage
         var parsed = sentences.TryGetValue(ArabicText.Normalize(text), out var request)
             ? request
             : new ParsedRequest { Intent = RequestIntent.Unclear };
-        Volatile.Write(ref lastUsage, new ParseUsage(0, 0, 0m, Stopwatch.GetElapsedTime(started)));
+        Volatile.Write(ref lastUsage, new ParseUsage(0, 0, 0, 0, 0m, Stopwatch.GetElapsedTime(started)));
         return Task.FromResult(parsed);
     }
 

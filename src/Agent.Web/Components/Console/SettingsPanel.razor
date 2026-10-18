@@ -232,7 +232,7 @@
         yield return (nameof(AgentOptions.FillerWords), o.FillerWords.Length == 0 ? "none" : Number(o.FillerWords.Length));
     }
 
-    /// <summary>The Model section: the candidate in use and each candidate's model, limits and prices.</summary>
+    /// <summary>The Model section: the candidate in use and each candidate's model, limits, prices and prompt cache lifetime.</summary>
     private IEnumerable<(string Name, string Value)> ModelRows()
     {
         var m = Model.Value;
@@ -245,7 +245,12 @@
             yield return (prefix + nameof(ModelCandidate.Effort), c.Effort);
             yield return (prefix + nameof(ModelCandidate.Temperature), c.Temperature?.ToString(CultureInfo.InvariantCulture) ?? "not sent");
             yield return (prefix + nameof(ModelCandidate.TimeoutSeconds), Number(c.TimeoutSeconds));
-            yield return (prefix + "PricePerMTok", c.InputPricePerMTok.ToString(CultureInfo.InvariantCulture) + " in, " + c.OutputPricePerMTok.ToString(CultureInfo.InvariantCulture) + " out (USD)");
+            yield return (prefix + "PricePerMTok",
+                c.InputPricePerMTok.ToString(CultureInfo.InvariantCulture) + " in, "
+                + c.OutputPricePerMTok.ToString(CultureInfo.InvariantCulture) + " out, "
+                + c.CacheWritePricePerMTok.ToString(CultureInfo.InvariantCulture) + " cache write, "
+                + c.CacheReadPricePerMTok.ToString(CultureInfo.InvariantCulture) + " cache read (USD)");
+            yield return (prefix + nameof(ModelCandidate.PromptCacheTtl), c.PromptCacheTtl);
         }
     }
 

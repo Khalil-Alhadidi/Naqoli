@@ -47,6 +47,38 @@ public class EvalSettingsTests
     }
 
     [Fact]
+    public void TheModelCandidatesMatchTheWebConsole()
+    {
+        // The candidates, their prices (the cache prices included) and the prompt cache lifetime: the runner prices and
+        // calls the model exactly as the console does.
+        using var eval = JsonDocument.Parse(File.ReadAllText(Path.Combine(Root, "src", "Agent.Eval", "appsettings.json")));
+        using var web = JsonDocument.Parse(File.ReadAllText(Path.Combine(Root, "src", "Agent.Web", "appsettings.json")));
+        var evalCandidates = eval.RootElement.GetProperty("Model").GetProperty("Candidates");
+        var webCandidates = web.RootElement.GetProperty("Model").GetProperty("Candidates");
+
+        Assert.Equal(
+            webCandidates.EnumerateObject().Select(c => c.Name),
+            evalCandidates.EnumerateObject().Select(c => c.Name));
+        foreach (var candidate in webCandidates.EnumerateObject())
+        {
+            Assert.True(candidate.Value.TryGetProperty("CacheWritePricePerMTok", out _), candidate.Name);
+            Assert.True(candidate.Value.TryGetProperty("CacheReadPricePerMTok", out _), candidate.Name);
+            Assert.True(candidate.Value.TryGetProperty("PromptCacheTtl", out _), candidate.Name);
+            foreach (var setting in candidate.Value.EnumerateObject())
+                Assert.Equal(setting.Value.GetRawText(), evalCandidates.GetProperty(candidate.Name).GetProperty(setting.Name).GetRawText());
+        }
+    }
+
+    [Theory]
+    [InlineData(0, 0, 0, "n/a")]
+    [InlineData(1_000, 0, 0, "0.0 %")]
+    [InlineData(200, 1_000, 3_000, "71.4 %")]
+    [InlineData(0, 0, 5_000, "100.0 %")]
+    [InlineData(1, 0, 2, "66.7 %")]
+    public void TheCacheHitRateIsTheReadsShareOfAllInput(long input, long writes, long reads, string expected)
+        => Assert.Equal(expected, EvalCommand.CacheHitRate(input, writes, reads));
+
+    [Fact]
     public void TheReportHeaderShowsKeysOnlyAsSetAndWordsOnlyAsACount()
     {
         var agent = new AgentOptions
