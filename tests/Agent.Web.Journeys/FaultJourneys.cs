@@ -81,8 +81,9 @@ public sealed class FaultJourneys(JourneyHost host) : JourneyBase(host)
         await Expect(page.GetByTestId("card")).ToHaveAttributeAsync("data-state", "live");
         await page.GetByTestId("card-confirm").ClickAsync();
 
-        // The wallet's injected error wrote nothing: a refusal, not an unknown outcome.
-        var expected = Text["Outcome_not_done", Text["Refusal_" + ReasonCodes.NotDoneNothingTaken].Value].Value;
+        // The wallet's injected error wrote nothing: a refusal, not an unknown outcome. The outcome already says it did not
+        // go through, so the nested text is the short "nothing taken" one (Khalil, 18 Oct 2026).
+        var expected = Text["Outcome_not_done", Text["Refusal_nothing_taken_short"].Value].Value;
         await Expect(Outcomes(page, "not_done")).ToHaveTextAsync(expected);
         await Expect(page.GetByTestId("card")).ToHaveAttributeAsync("data-state", "notdone");
         await Expect(page.GetByTestId("card-try-again")).ToBeVisibleAsync();

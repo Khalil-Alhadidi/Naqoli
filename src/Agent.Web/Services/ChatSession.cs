@@ -416,7 +416,7 @@ public sealed class ChatSession : IDisposable
                 break;
 
             case OutcomeCodes.NotDone:
-                yield return Out(Text("Outcome_not_done", RefusalText(message.Reason, message.AmountIqd)), "not_done");
+                yield return Out(Text("Outcome_not_done", NotDoneReasonText(message.Reason, message.AmountIqd)), "not_done");
                 break;
 
             case OutcomeCodes.Checking:
@@ -485,6 +485,18 @@ public sealed class ChatSession : IDisposable
         if (code is null || text[key].ResourceNotFound)
             key = "Refusal_" + ReasonCodes.NotDoneNothingTaken;
         return amountIqd is { } amount ? Text(key, PhoneFormat.Amount(amount, text)) : Text(key);
+    }
+
+    /// <summary>
+    /// The reason nested in <c>Outcome_not_done</c>: the short "nothing taken" text wherever <see cref="RefusalText"/> would
+    /// give <c>Refusal_not_done_nothing_taken</c> (that reason, none, or one with no text), since the outcome already says
+    /// it did not go through; any other reason as <see cref="RefusalText"/> gives it, with its figure (Khalil, 18 Oct 2026).
+    /// </summary>
+    private string NotDoneReasonText(string? code, long? amountIqd)
+    {
+        if (code is null || code == ReasonCodes.NotDoneNothingTaken || text["Refusal_" + code].ResourceNotFound)
+            return Text("Refusal_nothing_taken_short");
+        return RefusalText(code, amountIqd);
     }
 
     private string Amount(long? amountIqd) => PhoneFormat.Amount(amountIqd ?? 0, text);

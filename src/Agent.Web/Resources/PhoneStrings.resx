@@ -74,6 +74,8 @@
   <data name="Refusal_code_entered_by_user" xml:space="preserve"><value>الكود إنت تكتبه بنفسك</value></data>
   <data name="Refusal_max_three_requests" xml:space="preserve"><value>أقصى شي ثلاث طلبات بالرسالة الوحدة</value></data>
   <data name="Refusal_not_done_nothing_taken" xml:space="preserve"><value>ما مشت، بس ما انسحب شي من رصيدك</value></data>
+  <!-- Nested in Outcome_not_done, which already says it did not go through. Khalil's wording, 18 Oct 2026. -->
+  <data name="Refusal_nothing_taken_short" xml:space="preserve"><value>ما انسحب شي من رصيدك</value></data>
   <data name="Refusal_amount_below_minimum" xml:space="preserve"><value>أقل مبلغ هو {0}</value></data>
   <data name="Refusal_pin_locked" xml:space="preserve"><value>الرقم السري انقفل</value></data>
   <data name="Refusal_caller_cancelled" xml:space="preserve"><value>وقف قبل الإرسال. ما انسحب شي</value></data>

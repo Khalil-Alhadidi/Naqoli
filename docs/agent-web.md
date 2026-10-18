@@ -152,7 +152,7 @@ The conversation turns each reply into a `ConversationMessage` of codes and figu
 | Outcome | `data-outcome` | Text |
 |---|---|---|
 | `Done` | `done` | `Outcome_done` with the reference and balance after, plus `Purchase_code` for a purchase (the full code on screen only) |
-| `NotDone` | `not_done` | `Outcome_not_done` with the reason's `Refusal_` text and its figure |
+| `NotDone` | `not_done` | `Outcome_not_done` with `Refusal_nothing_taken_short` when the reason is `not_done_nothing_taken`, none or one with no text (the outcome already says it did not go through; Khalil, 18 Oct 2026); any other reason's `Refusal_` text with its figure (`ChatSessionTests.NotDoneNothingTakenNestsTheShortText`, `NotDoneWithAnotherReasonNestsItsRefusalAndFigure`) |
 | `Checking` | `checking` | `Outcome_checking`, with the "check again" button |
 | `Expired` | `expired` | `Card_Expired` |
 | `AlreadyHandled`, `NotFound` (`not_found`) | `already_handled` | `Outcome_already_handled` |
@@ -384,6 +384,7 @@ The seventeen keys of milestone 9a (`Offer_save_alias`, `Offer_save_alias_button
 | `Refusal_code_entered_by_user` | The code is entered by you | |
 | `Refusal_max_three_requests` | At most three requests in one message | |
 | `Refusal_not_done_nothing_taken` | Not done. Nothing was taken from your balance | |
+| `Refusal_nothing_taken_short` | Nothing was taken from your balance | Nested in `Outcome_not_done` only (18 Oct 2026) |
 | `Refusal_amount_below_minimum` | The smallest amount is {0} | |
 | `Refusal_pin_locked` | Your PIN is locked | |
 | `Refusal_caller_cancelled` | Stopped before sending. Nothing was taken | |
@@ -637,7 +638,7 @@ The journeys locate elements only by these attributes.
 | `ResetClearsConsentAndThePhoneStartsAgain` | Milestone 7 post-tag, the reset control: CLN-01 gives a live card; `reset-wallet`; `reset-result` shows and no `reset-error`; the wallet reports U1 not consented; the phone shows no card and exactly one chat message, `Reply_consent` with `consent-button`; the tap gives consent and CLN-01 gives a live card again |
 | `AChangedCapTakesEffectWithoutARestart` | `PerTransactionCapIqd` saved as 40,000: CLN-01 is refused with 40,000 and no card; after `setting-reset` CLN-01 gives a live card; `Wallet:PinRequiredAboveIqd` shows 1,000,000 |
 | `PinFieldShowsForALargeAmountAndThePinIsNeverLogged` | RED-09 on U3's console: `card-pin` shows; a wrong PIN gives `Outcome_pin_wrong` with 2 left, the card stays live, nothing moved; U3's seed PIN gives done (1,501,000 taken); neither PIN, in either digit form, is in any chat message, trace entry, audit row or learning row |
-| `KillSwitchStopsEverything` | CLN-01 live, kill switch on: Confirm gives `not_done`, nothing moved; CLN-02 gives `Refusal_not_done_nothing_taken` and no new card; CLN-31 still answers; switch off: CLN-02 gives a live card for 100,000; the log has two `kill_switch` rows |
+| `KillSwitchStopsEverything` | CLN-01 live, kill switch on: Confirm gives `not_done` (`Outcome_not_done` with `Refusal_nothing_taken_short`), nothing moved; CLN-02 gives `Refusal_not_done_nothing_taken` and no new card; CLN-31 still answers; switch off: CLN-02 gives a live card for 100,000; the log has two `kill_switch` rows |
 | `NamedProviderGoesStraightToTheBillCard` | CLN-09 (milestone 8, the bill-or-store rule): a live card, no question; `card-display` is BS4's label or biller name and `card-amount`, `card-fee`, `card-total` are BS4's amount due, the wallet's bill fee and their sum, all read from the wallet (35,000, 500, 35,500); Confirm gives one done outcome, BS4 is at 0, balance 714,500 |
 | `TwoAccountsAtOneBillerBecomeOptions` | AMB-07: one question message `Question_which_bill` with exactly two options, BS1 and BS2, and no card; the tap on BS1 gives a live card for 43,750 with BS1's name; Confirm gives done, BS1 at 0, balance 705,750 |
 | `InternetWithoutAProviderAsksBillOrStore` | CLN-25 on U3's console: `Question_bill_or_store` with options BT3 and `store:internet` (shown as `Option_store_internet`), no card; the tap on BT3 gives a live card for 65,000; Confirm gives done, BT3 at 0, balance down by 65,500 |
@@ -646,7 +647,7 @@ The journeys locate elements only by these attributes.
 | `RepeatedRequestCarriesTheDuplicateWarning` | FLT-05: say, Confirm, done; the second say gives a live card with `card-warning` `Card_Warning_repeat`; Cancel; exactly one new history row, balance 724,000 |
 | `TimeoutAfterExecuteShowsCheckingThenDone` | The panel sets `timeoutAfterExecute` 12,000 ms once (state read back); CLN-23, Confirm: within 20 s the `checking` outcome, the card `data-state` `checking` with `card-check-again` and no `card-checking` line, no `not_done`; within 15 s more, with no tap, one done outcome, the card `done`, a `lookup_by_key` trace entry and one `settle_outcome:done`; one new history row, balance 740,250, one `done` audit row; the switches end `none` |
 | `TimeoutBeforeExecuteShowsCheckingThenResolves` | As above with `timeoutBeforeExecute`: Checking first, then done by the automatic resend under the same key; the money moved once (one history row, one `done` audit row, balance 740,250) |
-| `WalletErrorEndsTheCardNotDone` | U3's console, the panel sets `error` once; FLT-03, Confirm: the `not_done` outcome is `Outcome_not_done` with `Refusal_not_done_nothing_taken`, the card `notdone` with `card-try-again`; no history row, balance unchanged; the switches end `none` |
+| `WalletErrorEndsTheCardNotDone` | U3's console, the panel sets `error` once; FLT-03, Confirm: the `not_done` outcome is `Outcome_not_done` with `Refusal_nothing_taken_short`, the card `notdone` with `card-try-again`; no history row, balance unchanged; the switches end `none` |
 | `ModelUnreachableShowsTheHandoverMessage` | The panel arms `unreachable` once; CLN-01: `Refusal_model_unavailable`, no card, the model state reads `none` again; CLN-01 again: a live card; nothing moved |
 | `ModelInvalidReplyIsNotUnderstood` | The panel arms `invalid_reply` once; CLN-01: `Refusal_not_understood`, no card, one learning row `model_invalid_reply` with detail `injected`; nothing moved |
 | `ExternalDebitWhileTheCardWaitsIsCaughtByTheRecheck` | FLT-08 on U2's console: a live card for 15,000; the panel takes 5,000 (`fault-debit-result` done); Confirm: `Outcome_not_done` with `Refusal_insufficient_balance` and 2,500; balance 13,500; the wallet's history (`Host.HistoryAsync`, since the wallet panel does not reload after a panel debit) has exactly one new row, of type `externalDebit` for 5,000, and no payment |

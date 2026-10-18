@@ -1,5 +1,6 @@
 extern alias AgentWeb;
 
+using System.Net.Http.Json;
 using Agent.Core.Aliases;
 using Agent.Core.Confirm;
 using Agent.Core.Conversation;
@@ -13,6 +14,7 @@ using AgentWeb::Agent.Web.Resources;
 using AgentWeb::Agent.Web.Services;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Localization;
+using Wallet.MockApi.Contracts;
 
 namespace Agent.Core.Tests.Web;
 
@@ -184,6 +186,47 @@ public sealed class ChatSessionTests(AgentHost host) : IAsyncDisposable
         Assert.Equal(699_000, await host.Wallet.AccountBalanceAsync(SeedFacts.DemoPhone));
         Assert.Equal(1, session.WalletVersion);
         Assert.Equal(session.Messages.Select(m => m.Id), Enumerable.Range(1, session.Messages.Count));
+    }
+
+    [Fact]
+    public async Task NotDoneNothingTakenNestsTheShortText()
+    {
+        // FLT-03: the wallet answers 500 injected_error before writing anything. The outcome already says it did not go
+        // through, so the nested text is the short "nothing taken" one, not the standalone refusal (Khalil, 18 Oct 2026).
+        var circuit = await StartAsync();
+        var session = circuit.Session;
+        await session.SendAsync(HammoudiSentence);
+        using (var fault = await host.Wallet.Client.PostAsJsonAsync("/admin/faults", new FaultRequest("error", null, Once: true), TestContext.Current.CancellationToken))
+            Assert.True(fault.IsSuccessStatusCode, fault.StatusCode.ToString());
+
+        var notDone = Assert.IsType<ConfirmOutcome.NotDone>(await session.ConfirmAsync(null));
+
+        Assert.Equal(ReasonCodes.NotDoneNothingTaken, notDone.Reason);
+        var message = LastAgentMessage(session);
+        Assert.Equal("not_done", message.Outcome);
+        Assert.Equal(circuit.Text["Outcome_not_done", circuit.Text["Refusal_nothing_taken_short"].Value].Value, message.Text);
+        Assert.NotEqual(circuit.Text["Outcome_not_done", circuit.Text["Refusal_" + ReasonCodes.NotDoneNothingTaken].Value].Value, message.Text);
+    }
+
+    [Fact]
+    public async Task NotDoneWithAnotherReasonNestsItsRefusalAndFigure()
+    {
+        // Money leaves the wallet from outside while the card waits: the recheck ends it insufficient_balance with the
+        // shortfall, nested as before.
+        var circuit = await StartAsync();
+        var session = circuit.Session;
+        await session.SendAsync(HammoudiSentence);
+        using (var debit = await host.Wallet.Client.PostAsJsonAsync("/admin/debit", new DebitRequest(SeedFacts.DemoUserId, SeedFacts.DemoBalance - 20_000), TestContext.Current.CancellationToken))
+            Assert.True(debit.IsSuccessStatusCode, debit.StatusCode.ToString());
+
+        var notDone = Assert.IsType<ConfirmOutcome.NotDone>(await session.ConfirmAsync(null));
+
+        Assert.Equal(ReasonCodes.InsufficientBalance, notDone.Reason);
+        var shortfall = Assert.IsType<long>(notDone.AmountIqd);
+        var refusal = circuit.Text["Refusal_" + ReasonCodes.InsufficientBalance, PhoneFormat.Amount(shortfall, circuit.Text)].Value;
+        var message = LastAgentMessage(session);
+        Assert.Equal("not_done", message.Outcome);
+        Assert.Equal(circuit.Text["Outcome_not_done", refusal].Value, message.Text);
     }
 
     [Fact]

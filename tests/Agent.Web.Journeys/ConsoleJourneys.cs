@@ -198,6 +198,7 @@ public sealed class ConsoleJourneys(JourneyHost host) : JourneyBase(host)
         // Confirm on the live card: not done, nothing taken.
         await page.GetByTestId("card-confirm").ClickAsync();
         await Expect(Outcomes(page, "not_done")).ToHaveCountAsync(1);
+        await Expect(Outcomes(page, "not_done")).ToHaveTextAsync(Text["Outcome_not_done", Text["Refusal_nothing_taken_short"].Value].Value);
         Assert.Equal(U1Balance, await Host.BalanceAsync(U1));
 
         // A new request gets no card; the balance question still answers.
