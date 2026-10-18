@@ -36,6 +36,10 @@ public sealed class ConsoleJourneys(JourneyHost host) : JourneyBase(host)
         Assert.All(await TextsAsync(page, "trace-entry"), entry => Assert.DoesNotContain("750", DigitsOf(entry), StringComparison.Ordinal));
     }
 
+    /// <summary>
+    /// The first request's consent gate, kept as the fallback (milestone 7, post-tag): the balance typed under the open
+    /// screen's button shows the gate's consent screen again, and the tap then answers the balance.
+    /// </summary>
     [Fact]
     public async Task ConsentScreenComesBeforeTheBalance()
     {
@@ -55,6 +59,63 @@ public sealed class ConsoleJourneys(JourneyHost host) : JourneyBase(host)
         await Expect(LastAgentMessage(page)).ToHaveTextAsync(WithAmount("Reply_balance", balance));
         await Expect(page.GetByTestId("consent-button")).ToHaveCountAsync(0);
         Assert.True((await Host.UserAsync(U5)).ConsentGiven);
+    }
+
+    /// <summary>The open check (milestone 7, post-tag; Khalil, 18 Oct 2026): the consent screen before any typing.</summary>
+    [Fact]
+    public async Task AFreshUserSeesTheConsentScreenBeforeTyping()
+    {
+        var page = await OpenAsync(Host.UserWebAddress(U5));
+        var balance = await Host.BalanceAsync(U5);
+
+        // Nothing typed: the phone already shows the consent message with its button.
+        await Expect(page.Locator("[data-testid=chat-message][data-role=user]")).ToHaveCountAsync(0);
+        await Expect(LastAgentMessage(page)).ToContainTextAsync(Text["Reply_consent"].Value);
+        await Expect(page.GetByTestId("consent-button")).ToBeVisibleAsync();
+        Assert.False((await Host.UserAsync(U5)).ConsentGiven);
+
+        await page.GetByTestId("consent-button").ClickAsync();
+
+        await Expect(page.GetByTestId("consent-button")).ToHaveCountAsync(0);
+        Assert.True((await Host.UserAsync(U5)).ConsentGiven);
+
+        // The balance is answered straight away; the consent screen was shown, and recorded, once.
+        await SayAsync(page, DevSet.Say("CLN-31"));
+
+        await Expect(LastAgentMessage(page)).ToHaveTextAsync(WithAmount("Reply_balance", balance));
+        await Expect(page.GetByTestId("consent-button")).ToHaveCountAsync(0);
+        Assert.Equal(1, await AuditCountAsync(AuditEvents.ConsentShown));
+    }
+
+    /// <summary>
+    /// The console's Reset control (milestone 7, post-tag; Khalil, 18 Oct 2026): the wallet back to the seed with every
+    /// user not consented, the open card closed, and the phone started over on the consent screen.
+    /// </summary>
+    [Fact]
+    public async Task ResetClearsConsentAndThePhoneStartsAgain()
+    {
+        var page = await OpenAsync(Host.WebAddress);
+        await SayAsync(page, DevSet.Say("CLN-01"));
+        await Expect(page.GetByTestId("card")).ToHaveAttributeAsync("data-state", "live");
+
+        await page.GetByTestId("reset-wallet").ClickAsync();
+
+        await Expect(page.GetByTestId("reset-result")).ToBeVisibleAsync();
+        await Expect(page.GetByTestId("reset-error")).ToHaveCountAsync(0);
+        Assert.False((await Host.UserAsync(U1)).ConsentGiven);
+        await Expect(page.GetByTestId("card")).ToHaveCountAsync(0);
+        await Expect(page.GetByTestId("chat-message")).ToHaveCountAsync(1);
+        await Expect(LastAgentMessage(page)).ToContainTextAsync(Text["Reply_consent"].Value);
+        await Expect(page.GetByTestId("consent-button")).ToBeVisibleAsync();
+
+        await page.GetByTestId("consent-button").ClickAsync();
+
+        await Expect(page.GetByTestId("consent-button")).ToHaveCountAsync(0);
+        Assert.True((await Host.UserAsync(U1)).ConsentGiven);
+
+        await SayAsync(page, DevSet.Say("CLN-01"));
+
+        await Expect(page.GetByTestId("card")).ToHaveAttributeAsync("data-state", "live");
     }
 
     [Fact]
