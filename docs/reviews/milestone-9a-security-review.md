@@ -75,3 +75,5 @@ M1, M3 and M5 are small code changes with one test each; M2 and M4 are one line 
 ## Controller's disposition (17 Oct 2026)
 
 Fix wave through the implementer in the same milestone: M1 to M5, R1, R5, and the documentation half of R4 (the known-limits line and the failure-modes row). For Khalil: R2 (closed target in the directory), R3 (a second account of the same user, a wallet contract change), R4 (refuse or warn on a bare shared first name in the directory), R6 (the registered name in the offer wording).
+
+**Khalil's decisions, 18 Oct 2026** (`docs/plans/milestone-9a-close.md`): R2 refused at save with `account_closed`, in both save paths; R4 refused at save with the new code `alias_shared` and his string `Refusal_alias_shared` (a one-word text that resolves to several of the user's accounts); R6 done, the offer shows the registered name as `{1}` in his wording; R3 stays as documented, inside the D10 known gap (no wallet contract change).
