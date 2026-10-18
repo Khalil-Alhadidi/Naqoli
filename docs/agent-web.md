@@ -69,7 +69,7 @@ The side menu sits in the layout outside the `console` element, and it is Englis
 
 It raises `Changed` after every change of the conversation. Components never see a `PendingRecord`, an idempotency key or a quoted balance, and the component contract (`ChatMessage`, the ids, the actions) is the same as in milestone 4.
 
-The phone's lifecycle: the page prerenders, then the circuit connects. `PhoneFrame.OnAfterRenderAsync(firstRender)`, which never runs while prerendering, calls `ChatSession.OpenAsync()` (the open check, below) and then sets `data-interactive` to `true`, so the `consent_shown` audit row is written once per circuit and the journeys type only after the check. Never `OnInitialized`, which runs for the prerender as well.
+The phone's lifecycle: the page is not prerendered (`App.razor` uses `new InteractiveServerRenderMode(prerender: false)`, since 18 Oct 2026, so MudBlazor's theme provider never calls JavaScript during a static render and every component initialises once); the circuit connects and renders the page. `PhoneFrame.OnAfterRenderAsync(firstRender)` calls `ChatSession.OpenAsync()` (the open check, below) and then sets `data-interactive` to `true`, so the `consent_shown` audit row is written once per circuit and the journeys type only after the check. The page renders once per circuit, so the panels' `OnInitializedAsync` reads run once per load.
 
 Every action of the session follows the same pattern:
 

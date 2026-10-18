@@ -94,9 +94,12 @@ if (app.Environment.IsDevelopment())
 }
 
 // Only /health is open; every other route needs the client key (ClientKeyFilter), and /admin the admin key as well.
+// The filter is registered by instance (its services are singletons), so the framework does not probe it for a
+// factory constructor at start.
 app.MapGet("/health", () => "ok");
+var clientKeyFilter = new ClientKeyFilter(app.Services.GetRequiredService<IOptionsMonitor<WalletOptions>>(), app.Environment);
 var api = app.MapGroup(string.Empty)
-    .AddEndpointFilter<ClientKeyFilter>()
+    .AddEndpointFilter(clientKeyFilter)
     .ProducesProblem(StatusCodes.Status403Forbidden);
 api.MapReadEndpoints();
 api.MapAliasEndpoints();

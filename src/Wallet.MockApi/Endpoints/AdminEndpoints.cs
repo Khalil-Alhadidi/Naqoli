@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using Wallet.MockApi.Contracts;
 using Wallet.MockApi.Data;
 using Wallet.MockApi.Data.Seed;
@@ -26,8 +27,12 @@ public static class AdminEndpoints
     {
         ArgumentNullException.ThrowIfNull(app);
 
+        // By instance (its services are singletons), so the framework does not probe it for a factory constructor at start.
+        var adminKeyFilter = new AdminKeyFilter(
+            app.ServiceProvider.GetRequiredService<IOptionsMonitor<WalletOptions>>(),
+            app.ServiceProvider.GetRequiredService<IHostEnvironment>());
         var admin = app.MapGroup("/admin")
-            .AddEndpointFilter<AdminKeyFilter>()
+            .AddEndpointFilter(adminKeyFilter)
             .ProducesProblem(StatusCodes.Status403Forbidden);
 
         admin.MapGet("/faults", GetFaults).WithName("GetFaults");

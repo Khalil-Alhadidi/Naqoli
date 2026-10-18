@@ -29,7 +29,10 @@
     private HttpContext HttpContext { get; set; } = default!;
 
     // Global interactive server rendering, so the MudBlazor providers in MainLayout are interactive.
-    // Pages marked [ExcludeFromInteractiveRouting] (the error page) stay static.
+    // Pages marked [ExcludeFromInteractiveRouting] (the error page) stay static. No prerendering: MudBlazor's theme
+    // provider would call JavaScript while the page renders statically, and every component would initialise twice.
+    private static readonly IComponentRenderMode InteractiveServerNoPrerender = new InteractiveServerRenderMode(prerender: false);
+
     private IComponentRenderMode? PageRenderMode =>
-        HttpContext.AcceptsInteractiveRouting() ? InteractiveServer : null;
+        HttpContext.AcceptsInteractiveRouting() ? InteractiveServerNoPrerender : null;
 }
