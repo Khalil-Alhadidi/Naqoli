@@ -13,6 +13,7 @@ public static class AdminErrors
     public const string AdminKeyRequired = "admin_key_required";
     public const string InvalidFaultMode = "invalid_fault_mode";
     public const string InvalidFaultDelay = "invalid_fault_delay";
+    public const string InvalidConsent = "invalid_consent";
 }
 
 /// <summary>
@@ -35,7 +36,9 @@ public static class AdminEndpoints
             .WithName("SetFaults")
             .ProducesProblem(StatusCodes.Status422UnprocessableEntity);
 
-        admin.MapPost("/reset", ResetAsync).WithName("Reset");
+        admin.MapPost("/reset", ResetAsync)
+            .WithName("Reset")
+            .ProducesProblem(StatusCodes.Status422UnprocessableEntity);
 
         admin.MapPost("/debit", DebitAsync)
             .WithName("ExternalDebit")
@@ -72,9 +75,12 @@ public static class AdminEndpoints
 
     /// <summary>
     /// Holds the gate exclusive, so no payment and no other reset runs alongside; restores the seed and clears the
-    /// fault switch; and reports the row counts read back from the database.
+    /// fault switch; and reports the row counts read back from the database. The optional <paramref name="consent"/>
+    /// is <c>cleared</c> (the default: every user not consented) or <c>seed</c> (the seed's values, for the runner and
+    /// the tests); any other value is 422 <c>invalid_consent</c> with nothing changed (Khalil, 18 Oct 2026).
     /// </summary>
-    private static async Task<Ok<ResetResponse>> ResetAsync(
+    private static async Task<Results<Ok<ResetResponse>, ProblemHttpResult>> ResetAsync(
+        string? consent,
         WalletDbContext db,
         SeedSet seed,
         TimeProvider clock,
@@ -82,9 +88,12 @@ public static class AdminEndpoints
         WalletGate gate,
         CancellationToken cancellationToken)
     {
+        if (!TryParseConsent(consent, out var consentReset))
+            return WalletProblems.Create(StatusCodes.Status422UnprocessableEntity, AdminErrors.InvalidConsent);
+
         using (await gate.EnterExclusiveAsync(cancellationToken))
         {
-            await SeedReset.ResetAsync(db, seed, clock.GetUtcNow(), cancellationToken);
+            await SeedReset.ResetAsync(db, seed, clock.GetUtcNow(), consentReset, cancellationToken);
             faults.Set(FaultMode.None, null, once: false);
 
             return TypedResults.Ok(new ResetResponse(
@@ -96,6 +105,23 @@ public static class AdminEndpoints
                 await db.Products.CountAsync(cancellationToken),
                 await db.Transactions.CountAsync(cancellationToken),
                 await db.Orders.CountAsync(cancellationToken)));
+        }
+    }
+
+    // The query values of POST /admin/reset; absent means cleared. Matched exactly, as the fault modes are.
+    private static bool TryParseConsent(string? value, out ConsentReset consent)
+    {
+        switch (value)
+        {
+            case null or "cleared":
+                consent = ConsentReset.Cleared;
+                return true;
+            case "seed":
+                consent = ConsentReset.Seed;
+                return true;
+            default:
+                consent = default;
+                return false;
         }
     }
 }

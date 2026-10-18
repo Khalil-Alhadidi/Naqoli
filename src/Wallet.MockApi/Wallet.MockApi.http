@@ -23,7 +23,7 @@ GET {{Wallet.MockApi_HostAddress}}/health
 GET {{Wallet.MockApi_HostAddress}}/users/1
 X-Wallet-Client-Key: {{clientKey}}
 
-### User 5 gives consent (204; again is also 204; a reset clears it)
+### User 5 gives consent (204; again is also 204; a reset clears it, as it clears everyone's)
 POST {{Wallet.MockApi_HostAddress}}/users/5/consent
 X-Wallet-Client-Key: {{clientKey}}
 
@@ -187,7 +187,12 @@ X-Wallet-Admin-Key: {{adminKey}}
   "amountIqd": 5000
 }
 
-### Reset: restore the seed exactly and clear faults
+### Reset: restore the seed, every user not consented, and clear faults
 POST {{Wallet.MockApi_HostAddress}}/admin/reset
+X-Wallet-Client-Key: {{clientKey}}
+X-Wallet-Admin-Key: {{adminKey}}
+
+### Reset keeping the seed's consent values (U1 to U4 consented, U5 not), as the runner and the tests do; any other consent value is 422 invalid_consent
+POST {{Wallet.MockApi_HostAddress}}/admin/reset?consent=seed
 X-Wallet-Client-Key: {{clientKey}}
 X-Wallet-Admin-Key: {{adminKey}}

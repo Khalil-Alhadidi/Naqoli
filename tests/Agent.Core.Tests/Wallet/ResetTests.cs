@@ -16,6 +16,9 @@ public class ResetTests(WalletApiFixture fixture)
     private const int DemoUserId = SeedFacts.DemoUserId;
     private const int DemoAccountId = SeedFacts.DemoAccountId;
 
+    // U5, the first-use user: not consented in the seed.
+    private const int FirstUseUserId = 5;
+
     // Any PIN that is not U3's.
     private const string WrongPin = "0000";
 
@@ -44,7 +47,7 @@ public class ResetTests(WalletApiFixture fixture)
 
         Assert.NotEqual(before, await SnapshotAsync());
 
-        var response = await fixture.Client.PostAsync("/admin/reset", null, Token);
+        var response = await fixture.Client.PostAsync(WalletApiFixture.SeedResetPath, null, Token);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var counts = await response.Content.ReadFromJsonAsync<ResetResponse>(Token);
 
@@ -67,7 +70,7 @@ public class ResetTests(WalletApiFixture fixture)
         var set = await fixture.Client.PostAsJsonAsync("/admin/faults", new FaultRequest("error", null), Token);
         Assert.Equal(HttpStatusCode.OK, set.StatusCode);
 
-        var reset = await fixture.Client.PostAsync("/admin/reset", null, Token);
+        var reset = await fixture.Client.PostAsync(WalletApiFixture.SeedResetPath, null, Token);
         Assert.Equal(HttpStatusCode.OK, reset.StatusCode);
 
         var state = await fixture.Client.GetFromJsonAsync<FaultState>("/admin/faults", Token);
@@ -76,6 +79,64 @@ public class ResetTests(WalletApiFixture fixture)
             new PaymentRequest(DemoUserId, "transfer", 50_000, HammoudiPhone, null, null, null, null));
         Assert.Equal(HttpStatusCode.Created, payment.StatusCode);
     }
+
+    [Fact]
+    public async Task ResetWithoutConsentParameterLeavesEveryUserNotConsented()
+    {
+        Assert.SkipUnless(fixture.DatabaseAvailable, fixture.SkipReason);
+        try
+        {
+            var reset = await fixture.Client.PostAsync("/admin/reset", null, Token);
+            Assert.Equal(HttpStatusCode.OK, reset.StatusCode);
+            Assert.Equal(new ResetResponse(5, 42, 34, 9, 11, 15, 86, 9), await reset.Content.ReadFromJsonAsync<ResetResponse>(Token));
+
+            foreach (var userId in UserIds)
+                Assert.False((await GetUserAsync(userId)).ConsentGiven, $"user {userId}");
+        }
+        finally
+        {
+            await fixture.ResetAsync();
+        }
+    }
+
+    [Fact]
+    public async Task ResetWithSeedConsentKeepsTheSeedsValues()
+    {
+        Assert.SkipUnless(fixture.DatabaseAvailable, fixture.SkipReason);
+        var cleared = await fixture.Client.PostAsync("/admin/reset?consent=cleared", null, Token);
+        Assert.Equal(HttpStatusCode.OK, cleared.StatusCode);
+        Assert.False((await GetUserAsync(DemoUserId)).ConsentGiven);
+
+        var reset = await fixture.Client.PostAsync("/admin/reset?consent=seed", null, Token);
+        Assert.Equal(HttpStatusCode.OK, reset.StatusCode);
+
+        Assert.True((await GetUserAsync(DemoUserId)).ConsentGiven);
+        Assert.False((await GetUserAsync(FirstUseUserId)).ConsentGiven);
+    }
+
+    [Fact]
+    public async Task ResetWithAnUnknownConsentValueIsRefusedAndChangesNothing()
+    {
+        Assert.SkipUnless(fixture.DatabaseAvailable, fixture.SkipReason);
+        await fixture.ResetAsync();
+        Assert.Equal(HttpStatusCode.Created, (await PostAsync("r-before-refused-reset",
+            new PaymentRequest(DemoUserId, "transfer", 50_000, HammoudiPhone, null, null, null, null))).StatusCode);
+        var before = await SnapshotAsync();
+
+        var refused = await fixture.Client.PostAsync("/admin/reset?consent=other", null, Token);
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, refused.StatusCode);
+        Assert.Equal("invalid_consent", (await refused.ReadProblemAsync(Token)).Code());
+        Assert.Equal(before, await SnapshotAsync());
+        Assert.True((await GetUserAsync(DemoUserId)).ConsentGiven);
+
+        await fixture.ResetAsync();
+    }
+
+    private static readonly int[] UserIds = [1, 2, 3, 4, 5];
+
+    private async Task<UserSummary> GetUserAsync(int userId)
+        => (await fixture.Client.GetFromJsonAsync<UserSummary>($"/users/{userId}", Token))!;
 
     /// <summary>Every table, ordered by Id, as one JSON string. PIN hashes are left out: they are salted per hash.</summary>
     private async Task<string> SnapshotAsync()

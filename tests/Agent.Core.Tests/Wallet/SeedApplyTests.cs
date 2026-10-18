@@ -47,7 +47,7 @@ public class SeedApplyTests(WalletApiFixture fixture)
                 .ExecuteUpdateAsync(s => s.SetProperty(a => a.BalanceIqd, 1L), Token);
             await db.Contacts.Where(c => c.OwnerUserId == SeedFacts.DemoUserId).ExecuteDeleteAsync(Token);
 
-            await SeedReset.ResetAsync(db, seed, now, Token);
+            await SeedReset.ResetAsync(db, seed, now, ConsentReset.Seed, Token);
             db.ChangeTracker.Clear();
 
             var users = await db.Users.AsNoTracking().OrderBy(u => u.Id).ToListAsync(Token);
@@ -91,6 +91,38 @@ public class SeedApplyTests(WalletApiFixture fixture)
         finally
         {
             // Leave the shared database at the seed for the other tests in the collection.
+            await fixture.ResetAsync();
+        }
+    }
+
+    [Fact]
+    public async Task ResetWithConsentClearedLeavesEveryUserNotConsented()
+    {
+        Assert.SkipUnless(fixture.DatabaseAvailable, fixture.SkipReason);
+        await using var scope = fixture.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<WalletDbContext>();
+        var (seed, now) = SeedAndNow(scope);
+        try
+        {
+            await SeedReset.ResetAsync(db, seed, now, ConsentReset.Cleared, Token);
+            db.ChangeTracker.Clear();
+
+            var users = await db.Users.AsNoTracking().OrderBy(u => u.Id).ToListAsync(Token);
+            Assert.Contains(seed.Users, u => u.ConsentGiven);
+            Assert.All(users, u => Assert.False(u.ConsentGiven, u.Code));
+
+            // Everything else is the seed's.
+            Assert.Equal(seed.Users.Select(u => u.Id), users.Select(u => u.Code));
+            Assert.Equal(seed.Users.Select(u => u.Number), users.Select(u => u.Phone));
+            Assert.Equal(seed.Users.Select(u => u.Name), users.Select(u => u.DisplayName));
+            Assert.All(users, u => Assert.Equal((0, false), (u.PinFailedAttempts, u.PinLocked)));
+            Assert.Equal(seed.Accounts.Count, await db.Accounts.CountAsync(Token));
+            Assert.Equal(seed.Contacts.Count, await db.Contacts.CountAsync(Token));
+            Assert.Equal(seed.History.Count, await db.Transactions.CountAsync(Token));
+            Assert.Equal(SeedFacts.DemoBalance, await db.Accounts.Where(a => a.Id == SeedFacts.DemoAccountId).Select(a => a.BalanceIqd).SingleAsync(Token));
+        }
+        finally
+        {
             await fixture.ResetAsync();
         }
     }
@@ -142,7 +174,7 @@ public class SeedApplyTests(WalletApiFixture fixture)
             SeedData.Apply(db, seed, now);
             Assert.Equal(6, await db.Users.CountAsync(Token));
 
-            await SeedReset.ResetAsync(db, seed, now, Token);
+            await SeedReset.ResetAsync(db, seed, now, ConsentReset.Seed, Token);
             db.ChangeTracker.Clear();
 
             Assert.False(await db.Users.AnyAsync(u => u.Code == "OLD", Token));

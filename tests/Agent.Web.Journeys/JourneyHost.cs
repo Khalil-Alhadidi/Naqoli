@@ -171,10 +171,13 @@ public sealed class JourneyHost : IAsyncLifetime
         }
     }
 
-    /// <summary>Returns the wallet to the seed and empties the agent's tables, before each journey.</summary>
+    /// <summary>
+    /// Returns the wallet to the seed, with the seed's consent values (U1 to U4 consented, U5 not), and empties the
+    /// agent's tables, before each journey.
+    /// </summary>
     public async Task ResetAsync()
     {
-        using (var response = await Wallet.PostAsync("/admin/reset", null))
+        using (var response = await Wallet.PostAsync("/admin/reset?consent=seed", null))
             Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
         await using var scope = WebServices.CreateAsyncScope();

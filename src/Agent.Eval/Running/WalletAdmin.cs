@@ -38,10 +38,13 @@ public sealed class WalletAdmin
         this.adminKey = adminKey;
     }
 
-    /// <summary>Returns the wallet to the seed and clears the fault switch (<c>POST /admin/reset</c>).</summary>
+    /// <summary>
+    /// Returns the wallet to the seed and clears the fault switch (<c>POST /admin/reset?consent=seed</c>). The seed's
+    /// consent values are kept, U1 to U4 consented and U5 not, as the answer keys were written for (Khalil, 18 Oct 2026).
+    /// </summary>
     public async Task ResetAsync(CancellationToken cancellationToken)
     {
-        using var request = Admin(HttpMethod.Post, "admin/reset");
+        using var request = Admin(HttpMethod.Post, "admin/reset?consent=seed");
         using var response = await http.SendAsync(request, cancellationToken);
         await EnsureAsync(response, "reset", cancellationToken);
     }

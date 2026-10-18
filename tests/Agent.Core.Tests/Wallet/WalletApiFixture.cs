@@ -24,6 +24,9 @@ public sealed class WalletApiFixture : IAsyncLifetime
     /// <summary>The value <see cref="Client"/> sends in <c>X-Wallet-Admin-Key</c>; any non-empty value opens <c>/admin</c> in Development.</summary>
     public const string DevelopmentAdminHeaderValue = "tests";
 
+    /// <summary>The reset that keeps the seed's consent values (U1 to U4 consented, U5 not).</summary>
+    public const string SeedResetPath = "/admin/reset?consent=seed";
+
     /// <summary>
     /// The value every client of this fixture sends in <c>X-Wallet-Client-Key</c>; with no client key configured, any
     /// non-empty value opens the wallet routes in Development.
@@ -126,10 +129,13 @@ public sealed class WalletApiFixture : IAsyncLifetime
         DatabaseAvailable = true;
     }
 
-    /// <summary>Returns the test database to the seed and clears the fault switch, through <c>POST /admin/reset</c>.</summary>
+    /// <summary>
+    /// Returns the test database to the seed and clears the fault switch, through <c>POST /admin/reset?consent=seed</c>:
+    /// the seed's consent values are kept (U1 to U4 consented, U5 not), as the tests were written for.
+    /// </summary>
     public async Task ResetAsync()
     {
-        using var response = await Client.PostAsync("/admin/reset", null, TestContext.Current.CancellationToken);
+        using var response = await Client.PostAsync(SeedResetPath, null, TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
 

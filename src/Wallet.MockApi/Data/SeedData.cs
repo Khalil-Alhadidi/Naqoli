@@ -48,18 +48,18 @@ public static class SeedData
     }
 
     /// <summary>
-    /// Adds the seed once. Does nothing if any user already exists. Rows are inserted one at a time in a fixed
+    /// Adds the seed once and returns true; does nothing and returns false if any user already exists. Rows are inserted one at a time in a fixed
     /// order (users with their own account, the other accounts, billers, products, contacts, aliases, bill
     /// accounts, transactions, orders), so identity values are the same on every fresh database. Runs in a
     /// database transaction unless the caller already opened one.
     /// </summary>
-    public static void Apply(WalletDbContext db, SeedSet seed, DateTimeOffset now)
+    public static bool Apply(WalletDbContext db, SeedSet seed, DateTimeOffset now)
     {
         ArgumentNullException.ThrowIfNull(db);
         ArgumentNullException.ThrowIfNull(seed);
 
         if (db.Users.Any())
-            return;
+            return false;
 
         var graph = Build(seed, now);
 
@@ -82,6 +82,20 @@ public static class SeedData
         InsertInOrder(db, graph.Orders);
 
         transaction?.Commit();
+        return true;
+    }
+
+    /// <summary>
+    /// Sets every user not consented, in one statement, and drops tracked entities so none holds the old value. Used by
+    /// <see cref="SeedReset.ResetAsync"/> (inside its transaction) and by <c>migrate</c> after a fresh seed
+    /// (Khalil, 18 Oct 2026).
+    /// </summary>
+    public static async Task ClearConsentAsync(WalletDbContext db, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(db);
+
+        await db.Users.ExecuteUpdateAsync(setters => setters.SetProperty(u => u.ConsentGiven, false), cancellationToken);
+        db.ChangeTracker.Clear();
     }
 
     /// <summary>

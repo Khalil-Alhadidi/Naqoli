@@ -40,6 +40,7 @@ internal static class WalletProblems
         [ClientErrors.ClientKeyRequired] = "Client key required",
         [AdminErrors.InvalidFaultMode] = "Unknown fault mode",
         [AdminErrors.InvalidFaultDelay] = "Invalid fault delay",
+        [AdminErrors.InvalidConsent] = "Unknown consent value",
     };
 
     /// <summary>

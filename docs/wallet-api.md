@@ -11,7 +11,7 @@ dotnet run --project src/Wallet.MockApi -- migrate   # create and seed the datab
 dotnet run --project src/Wallet.MockApi              # serve on http://localhost:5276
 ```
 
-`migrate` prints `Database ready: 5 users, 42 accounts, 34 contacts, 86 transactions`. Both commands read the seed files first (see Seed); a missing or invalid file stops them with a message that names the file.
+`migrate` prints `Database ready: 5 users, 42 accounts, 34 contacts, 86 transactions`. On an empty database it seeds and then sets every user not consented (Khalil, 18 Oct 2026), so the demo starts with the consent screen for everyone; on a database that already has users it changes nothing. Both commands read the seed files first (see Seed); a missing or invalid file stops them with a message that names the file.
 
 The API serves plain HTTP on loopback and does not redirect to HTTPS. `GET /health` returns `ok`; it is the only wallet route that needs no client key (see Client key). In Development the OpenAPI document is at `/openapi/v1.json`; it is mapped outside the client-key group, so it needs no key either. The connection string and the database routes are in [README.md](../README.md#database).
 
@@ -48,7 +48,7 @@ The API serves plain HTTP on loopback and does not redirect to HTTPS. `GET /heal
 | `GET /transactions/by-key/{key}?userId=` | Outcome of the user's key, for display after a timeout | 200 `TransactionResponse` | 400 `missing_user_id`, 404 `unknown_key` |
 | `GET /admin/faults` | Current fault switch | 200 `FaultState` | 403 |
 | `POST /admin/faults` | Set the fault switch | 200 `FaultState` | 403, 422 |
-| `POST /admin/reset` | Restore the seed, clear faults | 200 `ResetResponse` | 403 |
+| `POST /admin/reset?consent=` | Restore the seed, clear faults; `consent` is `cleared` (default: every user not consented) or `seed` (the seed's values) | 200 `ResetResponse` | 403, 422 `invalid_consent` |
 | `POST /admin/debit` | Take money from a user's wallet from outside the agent (milestone 8) | 201 `TransactionResponse` | 403, 422 `invalid_amount`, `unknown_user`, `account_closed`, `insufficient_funds` |
 
 Every route in the table except `/health` (and `/openapi/v1.json` in Development) also answers 403 `client_key_required` (see Client key), and the `/admin` routes 403 `admin_key_required` as well (see Admin key).
@@ -75,7 +75,7 @@ Every `/users/...` read route, and `POST /users/{id}/consent`, answers a user th
 | `registeredName` | string | The name the wallet holds, in Arabic |
 | `consentGiven` | bool | Whether the user has given consent (D22). False for U5 in the seed |
 
-`POST /users/{id}/consent` (no body) sets `consentGiven` to true and returns 204. Sending it again changes nothing and also returns 204. It is the one route among the reads that writes; a reset restores the seed's value. Like execute, the write takes the wallet gate shared, so it never interleaves with a reset: a consent sent during a reset waits and then lands on the re-seeded user.
+`POST /users/{id}/consent` (no body) sets `consentGiven` to true and returns 204. Sending it again changes nothing and also returns 204. It is the one route among the reads that writes. A reset sets every user not consented by default, and restores the seed's values (true for U1 to U4, false for U5) with `?consent=seed`; a fresh `migrate` leaves every user not consented (see Reset). Like execute, the write takes the wallet gate shared, so it never interleaves with a reset: a consent sent during a reset waits and then lands on the re-seeded user.
 
 `GET /accounts/by-phone/{phone}` returns `AccountSummary`, for any account: a user's, a contact's or another number's. The match is exact on the stored number (`07805550101` form); the wallet does no normalising. It is the lookup D16 needs for a typed number; the registered name is for code and the card, never for the model (rule 5).
 
@@ -570,13 +570,17 @@ flowchart TB
     cmp -- "no" --> refreeze["Test fails: re-freeze on purpose<br/>or undo the change"]
 ```
 
-`migrate` calls `Apply` with the current clock after applying the migrations; the reset (below) deletes everything first and calls it the same way.
+`migrate` calls `Apply` with the current clock after applying the migrations; the reset (below) deletes everything first and calls it the same way. `Apply` returns true when it seeded and false when the database already had a user. When it seeded, `migrate` then calls `SeedData.ClearConsentAsync`, the same statement the reset uses by default, so a fresh database starts with every user not consented.
 
 ## Reset
 
-`POST /admin/reset` (no body; the admin header, see Admin key) returns the wallet to the frozen seed exactly, and clears the fault switch to `none`.
+`POST /admin/reset` (no body; the admin header, see Admin key) returns the wallet to the frozen seed, and clears the fault switch to `none`.
 
-- In one database transaction it deletes every row, reseeds each identity column so ids start where the seed leaves them (the next transaction after a reset is id 87), and applies the seed from the `SeedSet`, dated from the current clock. PIN failure counts, locks and consent are back to the seed (unlocked; consent false for U5 only).
+- The optional query parameter `consent` says what happens to each user's consent (Khalil, 18 Oct 2026; ruling A of [the consent and reset plan](plans/milestone-7-consent-reset.md)):
+  - `cleared`, the default when the parameter is absent: every user is not consented, so the demo starts with the consent screen for everyone. The console's Reset control and the hand command in `CLAUDE.md` use it.
+  - `seed`: the seed's values, U1 to U4 consented and U5 not, the roles the development and held-out sets were keyed for. The runner (`WalletAdmin.ResetAsync`), the API test fixture (`WalletApiFixture.ResetAsync`) and the journeys' per-test reset (`JourneyHost.ResetAsync`) ask for it.
+  - Any other value is 422 `invalid_consent` (title `Unknown consent value`), checked before the gate, with nothing changed.
+- In one database transaction it deletes every row, reseeds each identity column so ids start where the seed leaves them (the next transaction after a reset is id 87), applies the seed from the `SeedSet`, dated from the current clock, and with `cleared` sets every user not consented (`SeedData.ClearConsentAsync`, one `UPDATE`). PIN failure counts and locks are back to the seed (unlocked).
 - Because the history is dated from the day of the reset, a reset on a later day moves every seeded date with it; two resets either side of midnight Iraq time differ by one day.
 - It is serialised with payments: it waits for payments in progress to finish, holds new ones back until it is done, and never runs alongside another reset (`WalletGate`). Fault delays are outside the gate.
 - It returns `ResetResponse`, the row counts read back from the database. For the seed these are:
@@ -601,12 +605,14 @@ sequenceDiagram
     CK->>K: allowed
     K-->>C: 403 admin_key_required, header missing or key wrong
     K->>A: allowed
+    A-->>C: 422 invalid_consent, consent neither cleared nor seed
     A->>G: EnterExclusiveAsync, waits for payments inside, holds new ones back
     A->>R: ResetAsync
     R->>D: BEGIN TRAN
     R->>D: delete Orders, Transactions, BillAccounts, Aliases, Contacts, Accounts, Users, Products, Billers
     R->>D: DBCC CHECKIDENT RESEED 0 on each table that has held rows
     R->>D: SeedData.Apply with the SeedSet and the clock, rows in insert order
+    R->>D: consent cleared (default): UPDATE Users SET ConsentGiven = 0
     R->>D: COMMIT
     A->>F: Set none
     A->>D: count the rows
@@ -614,7 +620,7 @@ sequenceDiagram
     A-->>C: 200 ResetResponse
 ```
 
-Tests: `ResetTests.ResetRestoresTheSeedExactly` (compares every table before and after, the counts above and the next transaction id), `ResetTests.ResetClearsFaults`, `SeedApplyTests.ResetRestoresIdentitiesFromOne`, `SeedApplyTests.HistoryIsDatedRelativeToToday`.
+Tests: `ResetTests.ResetRestoresTheSeedExactly` (with `?consent=seed`: compares every table before and after, the counts above and the next transaction id), `ResetTests.ResetClearsFaults`, `ResetTests.ResetWithoutConsentParameterLeavesEveryUserNotConsented`, `ResetTests.ResetWithSeedConsentKeepsTheSeedsValues`, `ResetTests.ResetWithAnUnknownConsentValueIsRefusedAndChangesNothing`, `SeedApplyTests.ResetRestoresIdentitiesFromOne` (`ConsentReset.Seed`), `SeedApplyTests.ResetWithConsentClearedLeavesEveryUserNotConsented`, `SeedApplyTests.HistoryIsDatedRelativeToToday`. No test runs `migrate`; the clearing statement it shares with the reset is covered through the reset.
 
 ## Client key
 

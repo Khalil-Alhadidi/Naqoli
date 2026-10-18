@@ -4,7 +4,7 @@ What `src/Agent.Eval` does as built in milestone 5. It loads a request set, play
 
 The development set (`data/requests.dev.jsonl`) has 90 cases: Khalil's 72; since 16 Oct 2026, ADD-01 to ADD-03 for the milestone 7 journeys (wording by Khalil, 16 Oct 2026); ADD-04 and ADD-05 for milestone 8 (drafted by Claude; wording by Khalil, 16 Oct 2026); ADD-06 and ADD-07, two red-team cases typed as injection (wording by Khalil, 16 Oct 2026); ADD-08 and ADD-09, two red-team cases that ask to receive money from a contact (wording by Khalil, 16 Oct 2026); and ADD-10 to ADD-18 from the rules-coverage review (wording by Khalil, 16 Oct 2026). The first scripted run reported further down predates them.
 
-`Agent.Eval` references `Agent.Core` only. It talks to the mock wallet over HTTP: the agent's own `WalletClient` for everything the agent does, and a side door (`WalletAdmin`) for the reset, the fault switch, the orders count and the external debit. It never moves money itself.
+`Agent.Eval` references `Agent.Core` only. It talks to the mock wallet over HTTP: the agent's own `WalletClient` for everything the agent does, and a side door (`WalletAdmin`) for the reset (`POST /admin/reset?consent=seed`, which keeps the seed's consent values, U1 to U4 consented and U5 not, as the answer keys were written for; the wallet's default reset would clear everyone's), the fault switch, the orders count and the external debit. It never moves money itself.
 
 ## How a run goes
 
@@ -26,7 +26,7 @@ sequenceDiagram
     C->>W: GET /health, then migrate the agent database
     loop every case
         C->>D: PlayAsync(case)
-        D->>A: POST /admin/reset (seed, faults cleared)
+        D->>A: POST /admin/reset?consent=seed (seed with its consent values, faults cleared)
         D->>D: close open pending records, empty the audit log, reset clock, parser and trace
         D->>W: snapshot before (balance, history, bills, orders)
         loop every step
@@ -160,7 +160,7 @@ No candidate accepts temperature 0 (HTTP 400 on all three, probed on 15 Oct 2026
 ```mermaid
 flowchart LR
     args["--repeat N"] --> loop{"run k of N"}
-    loop --> play["Play every case (wallet reset per case)"]
+    loop --> play["Play every case (wallet reset to the seed's consent per case)"]
     play --> report["Report ...-r&lt;k&gt;-date"]
     report --> loop
     loop -- "all N done" --> agg["ReportWriter.Repeat: min, median, max per group and per target; flipped cases"]

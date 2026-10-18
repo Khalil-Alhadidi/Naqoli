@@ -9,17 +9,21 @@ public static class SeedReset
 {
     /// <summary>
     /// In one database transaction: deletes every row in dependency order, reseeds each identity column,
-    /// then applies <see cref="SeedData"/> built from <paramref name="seed"/>, with history dated from <paramref name="now"/>.
-    /// Pure data; no HTTP.
+    /// then applies <see cref="SeedData"/> built from <paramref name="seed"/>, with history dated from <paramref name="now"/>;
+    /// with <see cref="ConsentReset.Cleared"/> it then sets every user not consented, and with <see cref="ConsentReset.Seed"/>
+    /// it keeps the seed's values. Pure data; no HTTP.
     /// </summary>
     /// <remarks>
     /// <see cref="SeedData.Apply"/> stays synchronous (it is shared with <c>migrate</c>) and runs inside this
     /// transaction; its PIN hashes are computed once per process, so it does little more than insert rows.
     /// </remarks>
-    public static async Task ResetAsync(WalletDbContext db, SeedSet seed, DateTimeOffset now, CancellationToken cancellationToken)
+    public static async Task ResetAsync(
+        WalletDbContext db, SeedSet seed, DateTimeOffset now, ConsentReset consent, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(db);
         ArgumentNullException.ThrowIfNull(seed);
+        if (!Enum.IsDefined(consent))
+            throw new ArgumentOutOfRangeException(nameof(consent), consent, "Unknown consent reset.");
 
         await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
 
@@ -43,6 +47,8 @@ public static class SeedReset
 
         db.ChangeTracker.Clear();
         SeedData.Apply(db, seed, now);
+        if (consent == ConsentReset.Cleared)
+            await SeedData.ClearConsentAsync(db, cancellationToken);
 
         await transaction.CommitAsync(cancellationToken);
     }

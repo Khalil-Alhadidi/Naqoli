@@ -51,7 +51,8 @@ builder.Services.AddSingleton<WalletGate>();
 
 var app = builder.Build();
 
-// "migrate": apply migrations, add the synthetic seed if the database is empty, report and exit.
+// "migrate": apply migrations, add the synthetic seed if the database is empty with every user not consented
+// (Khalil, 18 Oct 2026), report and exit. A database that already has users is left as it is.
 if (args is ["migrate", ..])
 {
     try
@@ -60,7 +61,8 @@ if (args is ["migrate", ..])
         var db = scope.ServiceProvider.GetRequiredService<WalletDbContext>();
         var seed = scope.ServiceProvider.GetRequiredService<SeedSet>();
         db.Database.Migrate();
-        SeedData.Apply(db, seed, TimeProvider.System.GetUtcNow());
+        if (SeedData.Apply(db, seed, TimeProvider.System.GetUtcNow()))
+            await SeedData.ClearConsentAsync(db, CancellationToken.None);
         Console.WriteLine(
             $"Database ready: {db.Users.Count()} users, {db.Accounts.Count()} accounts, "
             + $"{db.Contacts.Count()} contacts, {db.Transactions.Count()} transactions");
