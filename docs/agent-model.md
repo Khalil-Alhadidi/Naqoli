@@ -19,7 +19,7 @@ sequenceDiagram
     C->>M: Mask(text)
     M-->>C: masked text (NUM_1, NUM_2 ...) and the map
     C->>P: ParseAsync(masked text, ParseContext(pending note, map))
-    P->>L: system: parse-prompt.md (version 4), one block with cache_control (PromptCacheTtl)<br/>user: "Pending: note" + "Message: masked text" (never cached)<br/>JSON schema, effort, output limit, timeout
+    P->>L: system: parse-prompt.md (the version named under The prompt), one block with cache_control (PromptCacheTtl)<br/>user: "Pending: note" + "Message: masked text" (never cached)<br/>JSON schema, effort, output limit, timeout
     alt timeout, HTTP status, connection failure
         L--xP: no answer
         P-->>C: ParserUnavailableException
@@ -102,7 +102,7 @@ stateDiagram-v2
 
 ## The prompt
 
-`src/Agent.Core/Parsing/parse-prompt.md` is an embedded resource, in English. Its first line is its version (`version: 4`, `ClaudeParser.PromptVersion`), which the runner prints and writes in the report header. It holds:
+`src/Agent.Core/Parsing/parse-prompt.md` is an embedded resource, in English. Its first line is its version, which the runner prints and writes in the report header; the current one is `version: 5` (`ClaudeParser.PromptVersion`), and this sentence is the only place in the docs that states it. It holds:
 
 - the task;
 - the two-line input;
@@ -113,7 +113,8 @@ stateDiagram-v2
 - from version 2, the two slang words Khalil gave for dollar amounts (100 and 10,000 dollars, and their duals), which make a request `unsupported` `other_currency` with the recipient, the amount in dollars and the word as `currency_text`;
 - from version 2, the rule that an `unsupported` request still has every slot the message states filled;
 - from version 3, the field `biller_text` (the user's words that name the biller or the service, copied exactly), with `"biller_text": null` in every example;
-- from version 4, the reason `receive_from` (schema version 3) and Khalil's rule that a message asking to receive, collect or pull money from someone else is not a transfer: `unsupported` `receive_from`, with the other person as `recipient_text` and the amount filled if said.
+- from version 4, the reason `receive_from` (schema version 3) and Khalil's rule that a message asking to receive, collect or pull money from someone else is not a transfer: `unsupported` `receive_from`, with the other person as `recipient_text` and the amount filled if said;
+- from version 5, the amount line's parenthesis that code reads a bare number below 1,000 in thousands (rule 9 as Khalil changed it on 16 Oct 2026).
 
 Its examples are the full-request sentences of the Example column of [matching-rules.md](matching-rules.md), rules 1 to 17, copied verbatim with their expected structure. The two whose sentences contain a seed contact's saved name (rules 10 and 16) are left out, so no seed name is ever in the prompt (the rule 5 test checks it). One English example shows the token rule. Khalil's two scripted sentences join the examples once he writes them.
 
