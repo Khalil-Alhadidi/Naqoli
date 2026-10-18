@@ -17,6 +17,7 @@ public abstract record AliasResult
 
     /// <summary>
     /// Nothing written. <see cref="Code"/> is <see cref="Pipeline.ReasonCodes.AliasExists"/>,
+    /// <see cref="Pipeline.ReasonCodes.AliasShared"/> (one word that would be a question on several accounts, review R4),
     /// <see cref="Pipeline.ReasonCodes.AliasInvalid"/>, <see cref="Pipeline.ReasonCodes.NumberHasNoWallet"/>,
     /// <see cref="Pipeline.ReasonCodes.InvalidNumber"/>, <see cref="Pipeline.ReasonCodes.NotSupported"/> (the user's own
     /// number), <see cref="Pipeline.ReasonCodes.AccountClosed"/> (the target account is closed, review R2) or

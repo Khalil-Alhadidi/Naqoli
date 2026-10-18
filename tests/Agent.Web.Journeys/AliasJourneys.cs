@@ -185,6 +185,23 @@ public sealed class AliasJourneys(JourneyHost host) : JourneyBase(host)
         Assert.Equal(0, await AuditCountAsync(AuditEvents.AliasSaved));
     }
 
+    [Fact]
+    public async Task ABareNameSharedBySeveralIsRefusedInTheDirectory()
+    {
+        var page = await OpenAsync(Host.WebAddress);
+        var before = await Host.AliasesAsync(U1);
+
+        // S04's first word alone: a word of S04, S05 and S06, so a question on several accounts (rule 4).
+        await OpenDirectoryAsync(page);
+        await AddInDirectoryAsync(page, (await SavedNameAsync("S04")).Split(' ')[0], "S04");
+
+        await Expect(page.GetByTestId("directory-result")).ToHaveAttributeAsync("data-key", "Refusal_alias_shared");
+        await Expect(page.GetByTestId("directory-result")).ToHaveTextAsync(Text["Refusal_alias_shared"].Value);
+        await Expect(page.GetByTestId("directory-alias")).ToHaveCountAsync(before.Count);
+        Assert.Equal(before, await Host.AliasesAsync(U1));
+        Assert.Equal(0, await AuditCountAsync(AuditEvents.AliasSaved));
+    }
+
     /// <summary>AMB-19's steps 0 to 2: the sentence, the tap on S08, the confirm; ends with the done outcome.</summary>
     private static async Task PayS08Async(IPage page)
     {

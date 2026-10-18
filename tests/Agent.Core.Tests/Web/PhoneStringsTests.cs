@@ -40,6 +40,7 @@ public class PhoneStringsTests
         "Offer_save_alias_button",
         "Refusal_alias_exists",
         "Refusal_alias_invalid",
+        "Refusal_alias_shared",
         "Reply_alias_deleted",
         "Reply_alias_saved",
     ];

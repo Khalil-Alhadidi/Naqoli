@@ -142,7 +142,7 @@ The conversation turns each reply into a `ConversationMessage` of codes and figu
 | `Unsupported(reason)` | `Unsupported_<reason>`, or `Refusal_not_supported` for a reason without a key |
 | The alias offer (`ConversationKind.AliasOffer`, after a Done transfer; milestone 9a) | `Offer_save_alias` with `Conversation.AliasOffer.Text` (the user's own words) as `{0}`, and the Save button (`ChatAction.SaveAlias`, `save-alias`) while it is the open offer (`AliasOfferMessageId`) |
 | The alias saved (`ConversationKind.AliasSaved`) | `Reply_alias_saved` with the saved text as `{0}` |
-| A refused save (`alias_exists`, `alias_invalid`, `account_closed`) | `Refusal_alias_exists`, `Refusal_alias_invalid`, `Refusal_account_closed` (a closed target account, review R2), through the same `RefusalText` as every code; the phone's directory shows the key as `data-key` on `directory-result` |
+| A refused save (`alias_exists`, `alias_invalid`, `alias_shared`, `account_closed`) | `Refusal_alias_exists`, `Refusal_alias_invalid`, `Refusal_alias_shared` (one word that would be a question on several accounts, review R4), `Refusal_account_closed` (a closed target account, review R2), through the same `RefusalText` as every code; the phone's directory shows the key as `data-key` on `directory-result` |
 
 `ConfirmOutcome` becomes an outcome message with `data-outcome` (the conversation's outcome code in brackets where it differs):
 
@@ -410,6 +410,7 @@ Sixteen keys of milestone 9a are placeholders awaiting Khalil's Arabic (`TODO-AR
 | `Reply_alias_deleted` | The name was deleted | `TODO-AR`. The directory's result line |
 | `Refusal_alias_exists` | You already use this name for someone; choose another | `TODO-AR` |
 | `Refusal_alias_invalid` | This name cannot be saved (blank, too long, or a number) | `TODO-AR` |
+| `Refusal_alias_shared` | This name looks like more than one person you have. Use a different name | `TODO-AR`. A one-word name the resolver would ask about on several accounts (review R4) |
 | `Directory_Open` | Names (the header button that opens the directory) | `TODO-AR` |
 | `Directory_Back` | Back | `TODO-AR` |
 | `Directory_Title` | Your saved names | `TODO-AR` |

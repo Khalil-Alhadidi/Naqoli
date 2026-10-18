@@ -11,6 +11,7 @@ using Agent.Core.Trace;
 using Agent.Core.Wallet;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 
 namespace Agent.Core.Tests.Aliases;
 
@@ -112,6 +113,56 @@ public sealed class AliasDirectoryTests(AgentHost host) : IAsyncLifetime
 
         Assert.Equal(ReasonCodes.AliasExists, refused.Code);
         Assert.Equal(before.Aliases, (await ListAsync()).Aliases);
+    }
+
+    [Fact]
+    public async Task ABareFirstNameSharedBySeveralSavedNamesIsRefusedAliasShared()
+    {
+        Assert.SkipUnless(host.DatabaseAvailable, host.SkipReason);
+        var before = await ListAsync();
+        var s04 = Contact(before, "S04");
+        var bare = SeedFacts.Contact("S04").SavedName.Split(' ')[0];
+
+        // The bare word is a question on several accounts (S04, S05 and S06 share it), from the partial step (rule 4).
+        var asked = Assert.IsType<Resolution.Options>(Resolve(bare, before));
+        Assert.Equal(MatchStep.Partial, asked.Step);
+        Assert.True(asked.Candidates.Count > 1);
+
+        var refused = Assert.IsType<AliasResult.Refused>(await SaveAsync(bare, s04.TargetAccountId));
+        Assert.Equal(ReasonCodes.AliasShared, refused.Code);
+
+        var byPhone = Assert.IsType<AliasResult.Refused>(await SaveForPhoneAsync(bare, s04.Phone));
+        Assert.Equal(ReasonCodes.AliasShared, byPhone.Code);
+
+        Assert.Equal(before.Aliases, (await ListAsync()).Aliases);
+        Assert.Empty(await AuditAsync());
+        Assert.Equal(2, trace.Entries.Count(e => e.Step == TraceSteps.AliasRefusedPrefix + ReasonCodes.AliasShared));
+        Assert.DoesNotContain(trace.Entries, e => e.Step == TraceSteps.AliasSaved);
+    }
+
+    [Fact]
+    public async Task TwoWordsThatShareOneWordWithSeveralSavedNamesAreSaved()
+    {
+        Assert.SkipUnless(host.DatabaseAvailable, host.SkipReason);
+        var before = await ListAsync();
+        var s04 = Contact(before, "S04");
+        var s04Words = SeedFacts.Contact("S04").SavedName.Split(' ');
+
+        // S04's bare first word, then the last word of another contact's saved name that holds neither word of S04's
+        // name: two words that no saved name holds together, so the resolver asks on the shared word (rule 15).
+        var text = before.Contacts
+            .Where(c => c.Code != "S04")
+            .Select(c => c.SavedName.Split(' '))
+            .Where(words => words.Length > 1 && !words.Intersect(s04Words, StringComparer.Ordinal).Any())
+            .Select(words => s04Words[0] + " " + words[^1])
+            .FirstOrDefault(t => Resolve(t, before) is Resolution.Options { Step: MatchStep.SharedWord, Candidates.Count: > 1 });
+        Assert.NotNull(text);
+
+        var saved = Assert.IsType<AliasResult.Saved>(await SaveAsync(text, s04.TargetAccountId));
+
+        Assert.Equal(text, saved.Alias.Text);
+        Assert.Equal(s04.TargetAccountId, saved.Alias.TargetAccountId);
+        Assert.DoesNotContain(trace.Entries, e => e.Step == TraceSteps.AliasRefusedPrefix + ReasonCodes.AliasShared);
     }
 
     [Fact]
@@ -296,6 +347,13 @@ public sealed class AliasDirectoryTests(AgentHost host) : IAsyncLifetime
     private WalletClient Wallet => Provider.GetRequiredService<WalletClient>();
 
     private ServiceProvider Provider => provider ?? throw new InvalidOperationException(host.SkipReason);
+
+    /// <summary>The resolver over U1's current candidates, with the settings the directory reads.</summary>
+    private Resolution Resolve(string text, WalletContacts contacts)
+    {
+        var options = Provider.GetRequiredService<IOptionsMonitor<AgentOptions>>().CurrentValue;
+        return ContactResolver.Resolve(text, ContactCandidate.From(contacts), options.MinSubstringWordLength, options.Endearments);
+    }
 
     private static WalletContact Contact(WalletContacts contacts, string code) => Assert.Single(contacts.Contacts, c => c.Code == code);
 

@@ -43,9 +43,10 @@ public sealed class AliasDirectory
     /// <summary>
     /// Saves <paramref name="text"/> (trimmed) as the user's alias of <paramref name="targetAccountId"/>, which must be the
     /// account of one of the user's contacts or aliases. Checked in this order: <see cref="ReasonCodes.AliasInvalid"/>
-    /// (the text), the contacts read, <see cref="ReasonCodes.AliasExists"/>, <see cref="ReasonCodes.RecipientNotFound"/>
-    /// (the account is not among the user's contacts or aliases), then <see cref="ReasonCodes.AccountClosed"/> (the
-    /// account is closed, review R2). Nothing is written on a refusal.
+    /// (the text), the contacts read, <see cref="ReasonCodes.AliasExists"/>, <see cref="ReasonCodes.AliasShared"/> (one
+    /// word that the resolver answers with a question on several accounts, review R4),
+    /// <see cref="ReasonCodes.RecipientNotFound"/> (the account is not among the user's contacts or aliases), then
+    /// <see cref="ReasonCodes.AccountClosed"/> (the account is closed, review R2). Nothing is written on a refusal.
     /// </summary>
     public async Task<AliasResult> SaveAsync(int userId, string text, int targetAccountId, CancellationToken cancellationToken)
     {
@@ -60,6 +61,9 @@ public sealed class AliasDirectory
         var candidates = ContactCandidate.From(contacts);
         if (Exists(candidates, trimmed))
             return Refuse(ReasonCodes.AliasExists);
+
+        if (IsShared(candidates, trimmed))
+            return Refuse(ReasonCodes.AliasShared);
 
         var targets = candidates.Where(c => c.AccountId == targetAccountId).ToList();
         if (targets.Count == 0)
@@ -78,8 +82,8 @@ public sealed class AliasDirectory
     /// (security review M3): <see cref="ReasonCodes.InvalidNumber"/> (not a complete number),
     /// <see cref="ReasonCodes.AliasInvalid"/> (the text), <see cref="ReasonCodes.NotSupported"/> (the user's own number),
     /// <see cref="ReasonCodes.NumberHasNoWallet"/>, <see cref="ReasonCodes.AccountClosed"/> (the account behind the number
-    /// is closed, review R2, before the contacts are read), then <see cref="ReasonCodes.AliasExists"/> as in
-    /// <see cref="SaveAsync"/>.
+    /// is closed, review R2, before the contacts are read), then <see cref="ReasonCodes.AliasExists"/> and
+    /// <see cref="ReasonCodes.AliasShared"/> as in <see cref="SaveAsync"/>.
     /// </summary>
     public async Task<AliasResult> SaveForPhoneAsync(int userId, string text, string phone, CancellationToken cancellationToken)
     {
@@ -127,8 +131,12 @@ public sealed class AliasDirectory
         if (await ContactsAsync(userId, cancellationToken) is not { } contacts)
             return NoList();
 
-        if (Exists(ContactCandidate.From(contacts), trimmed))
+        var candidates = ContactCandidate.From(contacts);
+        if (Exists(candidates, trimmed))
             return Refuse(ReasonCodes.AliasExists);
+
+        if (IsShared(candidates, trimmed))
+            return Refuse(ReasonCodes.AliasShared);
 
         return await WriteAsync(userId, trimmed, account.AccountId, cancellationToken);
     }
@@ -198,6 +206,22 @@ public sealed class AliasDirectory
 
     /// <summary>The wallet's closed status, compared as <see cref="Checks"/> compares it.</summary>
     private static bool IsClosed(string status) => string.Equals(status, Checks.ClosedStatus, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Review R4 (Khalil, 18 Oct 2026): a one-word text that the resolver, over the user's current candidates and with the
+    /// current settings, answers with a question on more than one account (the partial step on several, rule 4; the
+    /// shared-word step, rule 15; or the near step on several). Saved, it would go straight to one account where the
+    /// user would have been asked. A text of two or more words is never refused here, so rule 18's offers still save.
+    /// </summary>
+    private bool IsShared(IReadOnlyList<ContactCandidate> candidates, string text)
+    {
+        if (ArabicText.Words(text).Count != 1)
+            return false;
+
+        var current = options.CurrentValue;
+        return ContactResolver.Resolve(text, candidates, current.MinSubstringWordLength, current.Endearments)
+            is Resolution.Options { Candidates.Count: > 1 };
+    }
 
     private static bool Exists(IReadOnlyList<ContactCandidate> candidates, string text)
     {

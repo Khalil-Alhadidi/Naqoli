@@ -60,6 +60,14 @@ public static class ReasonCodes
     /// </summary>
     public const string AliasInvalid = "alias_invalid";
 
+    /// <summary>
+    /// An alias refused because its text is one word that the resolver, over the user's current saved names and aliases,
+    /// answers with a question on more than one account (a bare name shared by several: the partial step, rule 4; the
+    /// shared-word step, rule 15; or the near step on several), so saving it would skip that question (milestone 9a
+    /// close-out, review R4, Khalil, 18 Oct 2026). Not a logged reason.
+    /// </summary>
+    public const string AliasShared = "alias_shared";
+
     /// <summary>The detail of a <see cref="NotSupported"/> refusal for a transfer to the user's own number.</summary>
     public const string OwnNumberDetail = "own_number";
 
