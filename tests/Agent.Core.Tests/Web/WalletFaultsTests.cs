@@ -63,6 +63,7 @@ public class WalletFaultsTests
 
         Assert.Equal(new WalletFaultResult.Failed("unreachable"), await faults.GetAsync(Token));
         Assert.Equal(new WalletDebitResult.Failed("unreachable"), await faults.DebitAsync(1, 5_000, Token));
+        Assert.Equal(new WalletResetResult.Failed("unreachable"), await faults.ResetAsync(Token));
     }
 
     [Fact]
@@ -80,5 +81,6 @@ public class WalletFaultsTests
         var faults = Faults(new ThrowingHandler(new ObjectDisposedException("HttpMessageHandler")));
 
         Assert.Equal(new WalletFaultResult.Failed("unreachable"), await faults.ClearAsync(Token));
+        Assert.Equal(new WalletResetResult.Failed("unreachable"), await faults.ResetAsync(Token));
     }
 }

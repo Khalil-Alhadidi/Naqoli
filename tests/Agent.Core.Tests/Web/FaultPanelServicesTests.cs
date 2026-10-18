@@ -7,8 +7,10 @@ using Agent.Core.Tests.Agent;
 using Agent.Core.Tests.Wallet;
 using AgentWeb::Agent.Web.Resources;
 using AgentWeb::Agent.Web.Services;
+using System.Net.Http.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Localization;
+using Wallet.MockApi.Contracts;
 
 namespace Agent.Core.Tests.Web;
 
@@ -16,7 +18,8 @@ namespace Agent.Core.Tests.Web;
 /// The fault panel's services (milestone 8) as <c>AddAgentWebServices</c> registers them, over the agent host's
 /// in-process wallet: the parser is wrapped in <see cref="FaultingParser"/>, an armed model fault reaches the phone as
 /// <c>model_unavailable</c> once, and the console's side door sets, reads back and clears the wallet's fault switch and
-/// takes an external debit. The side door names only <c>admin/faults</c> and <c>admin/debit</c>.
+/// takes an external debit, and resets the wallet (the reset panel, milestone 7 post-tag). The side door names only
+/// <c>admin/faults</c>, <c>admin/debit</c> and <c>admin/reset</c>.
 /// </summary>
 [Collection(AgentCollection.Name)]
 public sealed class FaultPanelServicesTests(AgentHost host) : IAsyncDisposable
@@ -127,5 +130,32 @@ public sealed class FaultPanelServicesTests(AgentHost host) : IAsyncDisposable
 
         var refused = Assert.IsType<WalletDebitResult.Failed>(await faults.DebitAsync(SeedFacts.DemoUserId, SeedFacts.DemoBalance, Token));
         Assert.Equal("insufficient_funds", refused.Problem);
+    }
+
+    [Fact]
+    public async Task TheSideDoorResetsTheWalletWithEveryUserNotConsentedAndReportsTheCounts()
+    {
+        var scope = await StartAsync(scripted: false);
+        var faults = scope.ServiceProvider.GetRequiredService<WalletFaults>();
+        try
+        {
+            Assert.IsType<WalletDebitResult.Done>(await faults.DebitAsync(SeedFacts.DemoUserId, 5_000, Token));
+            Assert.IsType<WalletFaultResult.Ok>(await faults.SetAsync("error", null, once: false, Token));
+
+            var reset = Assert.IsType<WalletResetResult.Ok>(await faults.ResetAsync(Token));
+
+            Assert.Equal(new WalletResetCounts(5, 42, 34, 9, 11, 15, 86, 9), reset.Counts);
+            Assert.Equal(SeedFacts.DemoBalance, await host.Wallet.AccountBalanceAsync(SeedFacts.DemoPhone));
+            Assert.Equal("none", Assert.IsType<WalletFaultResult.Ok>(await faults.GetAsync(Token)).State.Mode);
+
+            // No query: the console's reset clears every user's consent (Khalil, 18 Oct 2026).
+            var demo = await host.Wallet.Client.GetFromJsonAsync<UserSummary>($"/users/{SeedFacts.DemoUserId}", Token);
+            Assert.False(demo!.ConsentGiven);
+        }
+        finally
+        {
+            // Back to the seed's consent for the rest of the collection.
+            await host.ResetAsync();
+        }
     }
 }

@@ -4,6 +4,7 @@ using Agent.Core.Aliases;
 using Agent.Core.Confirm;
 using Agent.Core.Conversation;
 using Agent.Core.Parsing;
+using Agent.Core.Pending;
 using Agent.Core.Pipeline;
 using Agent.Core.Requests;
 using Agent.Core.Tests.Agent;
@@ -235,6 +236,35 @@ public sealed class ChatSessionTests(AgentHost host) : IAsyncDisposable
 
         Assert.IsType<ConfirmOutcome.Done>(await session.ConfirmAsync(null));
         Assert.Equal(ReissueKind.SendAgain, session.Reissue);
+    }
+
+    [Fact]
+    public async Task RestartEmptiesTheMessagesAndANewMessageGetsItsCard()
+    {
+        var circuit = await StartAsync();
+        var session = circuit.Session;
+        await session.SendAsync(HammoudiSentence);
+        var first = session.Card!;
+        var raised = 0;
+        session.Changed += () => Interlocked.Increment(ref raised);
+
+        // As the reset panel does: the open records closed, then the phone started over.
+        await using (var scope = circuit.Provider.CreateAsyncScope())
+            Assert.Equal(1, await scope.ServiceProvider.GetRequiredService<PendingStore>().ExpireAllOpenAsync("wallet_reset", TestContext.Current.CancellationToken));
+        await session.RestartAsync();
+
+        Assert.Empty(session.Messages);
+        Assert.Null(session.Card);
+        Assert.Null(session.CardMessageId);
+        Assert.True(raised > 0);
+
+        await session.SendAsync(HammoudiSentence);
+
+        Assert.NotEqual(first.PendingId, session.Card!.PendingId);
+        Assert.Equal(CardStatus.Live, session.CardState);
+        Assert.Equal(new ChatMessage(1, ChatRole.User, HammoudiSentence, ChatMessageKind.Text), session.Messages[0]);
+        Assert.Equal(LastAgentMessage(session).Id, session.CardMessageId);
+        Assert.IsType<ConfirmOutcome.Done>(await session.ConfirmAsync(null));
     }
 
     private const string SharedNameSentence = "send fifty thousand to a shared name";

@@ -36,10 +36,27 @@ public abstract record WalletDebitResult
     public sealed record Failed(string Problem) : WalletDebitResult;
 }
 
+/// <summary>The row counts the wallet reports after a reset, read back from its database.</summary>
+public sealed record WalletResetCounts(
+    int Users, int Accounts, int Contacts, int Aliases, int BillAccounts, int Products, int Transactions, int Orders);
+
+/// <summary>What a wallet reset gave: the row counts read back, or the failure's code or status.</summary>
+public abstract record WalletResetResult
+{
+    private WalletResetResult()
+    {
+    }
+
+    public sealed record Ok(WalletResetCounts Counts) : WalletResetResult;
+
+    /// <param name="Problem">The wallet's <c>code</c>, else the HTTP status, else the reason the call got no answer.</param>
+    public sealed record Failed(string Problem) : WalletResetResult;
+}
+
 /// <summary>
-/// The console's side door into the mock wallet (milestone 8), for the fault panel only: the fault switch
-/// (<c>GET</c> and <c>POST admin/faults</c>) and the external debit (<c>POST admin/debit</c>). It names no other route,
-/// so it can never execute a payment (rule 1). The typed <see cref="HttpClient"/> carries the wallet's base address,
+/// The console's side door into the mock wallet (milestone 8), for the fault panel and the reset panel only: the fault
+/// switch (<c>GET</c> and <c>POST admin/faults</c>), the external debit (<c>POST admin/debit</c>) and the reset
+/// (<c>POST admin/reset</c>, milestone 7 post-tag). It names no other route, so it can never execute a payment (rule 1). The typed <see cref="HttpClient"/> carries the wallet's base address,
 /// <c>X-Wallet-Client-Key</c> (the agent's key, or <c>dev</c> in Development, as <see cref="WalletClient"/> decides) and
 /// <c>X-Wallet-Admin-Key</c> (<see cref="ConsoleOptions.WalletAdminKey"/>). Every failure comes back as a result with
 /// the wallet's code or the HTTP status; nothing is thrown to a component, and no key is ever logged or shown.
@@ -51,6 +68,9 @@ public sealed class WalletFaults(HttpClient http)
 
     private const string FaultsRoute = "admin/faults";
     private const string DebitRoute = "admin/debit";
+
+    /// <summary>The wallet's reset with no query: the seed restored and every user's consent cleared (Khalil, 18 Oct 2026).</summary>
+    private const string ResetRoute = "admin/reset";
 
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
@@ -105,6 +125,29 @@ public sealed class WalletFaults(HttpClient http)
         catch (Exception ex) when (IsNoAnswer(ex, cancellationToken))
         {
             return new WalletDebitResult.Failed(NoAnswer(ex));
+        }
+    }
+
+    /// <summary>
+    /// Returns the wallet to the seed with every user not consented, and clears its fault switch (<c>POST admin/reset</c>,
+    /// no query). The wallet's ids start again, so the caller closes the agent's open pending records after it.
+    /// </summary>
+    public async Task<WalletResetResult> ResetAsync(CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            using var response = await http.PostAsync(ResetRoute, content: null, cancellationToken);
+            if (!response.IsSuccessStatusCode)
+                return new WalletResetResult.Failed(await ProblemAsync(response, cancellationToken));
+
+            var counts = await response.Content.ReadFromJsonAsync<WalletResetCounts>(Json, cancellationToken);
+            return counts is not null
+                ? new WalletResetResult.Ok(counts)
+                : new WalletResetResult.Failed("unreadable_answer");
+        }
+        catch (Exception ex) when (IsNoAnswer(ex, cancellationToken))
+        {
+            return new WalletResetResult.Failed(NoAnswer(ex));
         }
     }
 

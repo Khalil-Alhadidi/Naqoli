@@ -34,7 +34,10 @@ public sealed class ChatSession : IDisposable
     /// </summary>
     private static readonly AsyncLocal<string?> SavingAliasText = new();
 
-    private readonly Conversation conversation;
+    private readonly IServiceScopeFactory scopes;
+    private readonly IParser parser;
+    private readonly TimeProvider clock;
+    private readonly IOptionsMonitor<AgentOptions> options;
     private readonly IStringLocalizer<PhoneStrings> text;
     private readonly TraceLog trace;
     private readonly Lock gate = new();
@@ -42,6 +45,9 @@ public sealed class ChatSession : IDisposable
 
     /// <summary>The id of the first chat message made from each conversation message, by its position.</summary>
     private readonly List<int> idOfConversationMessage = [];
+
+    /// <summary>The circuit's conversation; replaced by <see cref="RestartAsync"/>.</summary>
+    private Conversation conversation;
 
     private int nextId;
     private bool disposed;
@@ -58,10 +64,13 @@ public sealed class ChatSession : IDisposable
         ArgumentNullException.ThrowIfNull(trace);
         ArgumentNullException.ThrowIfNull(options);
 
+        this.scopes = scopes;
+        this.parser = parser;
+        this.clock = clock;
+        this.options = options;
         this.text = text;
         this.trace = trace;
-        conversation = new Conversation(scopes, parser, clock, options, trace, options.CurrentValue.DemoUserId);
-        conversation.Changed += OnConversationChanged;
+        conversation = NewConversation();
     }
 
     /// <summary>Raised after every change of state; handlers must not block (components call <c>InvokeAsync</c>).</summary>
@@ -225,14 +234,54 @@ public sealed class ChatSession : IDisposable
         await conversation.RefreshAsync();
     }
 
+    /// <summary>
+    /// Starts the phone over (the console's Reset control, after the wallet's reset): the current conversation is
+    /// unsubscribed and disposed, so a running action takes its cancellation path; a new one is built for the same demo
+    /// user; the messages and their ids are cleared; and <see cref="Changed"/> is raised.
+    /// </summary>
+    public Task RestartAsync()
+    {
+        Conversation previous;
+        lock (gate)
+        {
+            if (disposed)
+                return Task.CompletedTask;
+
+            previous = conversation;
+            previous.Changed -= OnConversationChanged;
+            conversation = NewConversation();
+            messages.Clear();
+            idOfConversationMessage.Clear();
+            nextId = 0;
+        }
+
+        previous.Dispose();
+        Changed?.Invoke();
+        return Task.CompletedTask;
+    }
+
     /// <summary>Ends the circuit's session: the conversation's running action takes its cancellation path.</summary>
     public void Dispose()
     {
-        if (disposed)
-            return;
-        disposed = true;
-        conversation.Changed -= OnConversationChanged;
-        conversation.Dispose();
+        Conversation current;
+        lock (gate)
+        {
+            if (disposed)
+                return;
+            disposed = true;
+            current = conversation;
+        }
+
+        current.Changed -= OnConversationChanged;
+        current.Dispose();
+    }
+
+    /// <summary>A conversation for the configured demo user, subscribed to this adapter.</summary>
+    private Conversation NewConversation()
+    {
+        var created = new Conversation(scopes, parser, clock, options, trace, options.CurrentValue.DemoUserId);
+        created.Changed += OnConversationChanged;
+        return created;
     }
 
     private void OnConversationChanged()

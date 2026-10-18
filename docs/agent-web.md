@@ -22,7 +22,7 @@ flowchart LR
     subgraph ltr["Console: English, left to right (data-testid console, dir ltr)"]
         menu["Side menu (MudDrawer)<br/>Wallet data, Settings, Log, Learning data"]
         middle["Middle component<br/>WalletDataPanel (default), SettingsPanel,<br/>LogPanel (milestone 7), Placeholder Learning data (milestone 10)"]
-        trace["FaultPanel above LiveTrace<br/>always visible, the trace newest first"]
+        trace["ResetPanel, then FaultPanel, above LiveTrace<br/>always visible, the trace newest first"]
     end
     subgraph rtl["Phone: Iraqi Arabic, right to left (data-testid phone-frame, dir rtl, lang ar)"]
         phone["PhoneFrame 390 x 780<br/>ChatPanel, CardPanel, QuestionPanel, PinField, input"]
@@ -53,7 +53,7 @@ The side menu sits in the layout outside the `console` element, and it is Englis
 | `FaultingParser` (`AddFaultingParser`) | as the parser it wraps | Replaces the last `IParser` registration with one of the same lifetime that builds the original (its instance, factory or type) and wraps it; see "The fault panel" |
 | `ModelFaultSwitch` | singleton | The console's model fault: none, `unreachable` or `invalid_reply`, once or every call; `Changed` for the panels |
 | `ConsoleOptions` | options, validated at start | Section `Console`: `WalletAdminKey` (required, default `dev`), the `X-Wallet-Admin-Key` the fault panel sends; shown as `set`, never the value. Outside Development the console refuses to start unless it is set, not `dev`, and at least 16 characters; the message names `Console:WalletAdminKey`, never a value (review R2, Khalil, 16 Oct 2026; `ConsoleOptionsTests`) |
-| `WalletFaults` | typed `HttpClient` (transient) | The fault panel's side door: `GET` and `POST admin/faults`, `POST admin/debit` only; the wallet's base address, the client key (as `WalletClient` decides it) and the admin key |
+| `WalletFaults` | typed `HttpClient` (transient) | The fault panel's and the reset panel's side door: `GET` and `POST admin/faults`, `POST admin/debit` and `POST admin/reset` (no query: consent cleared) only; the wallet's base address, the client key (as `WalletClient` decides it) and the admin key |
 
 ## The session flow
 
@@ -480,7 +480,7 @@ The gates are described in [agent-core.md](agent-core.md), "The kill switch". `K
 - **External debit.** An amount in IQD. Take calls `POST admin/debit` for the console's `DemoUserId`; the result line shows `done <reference> balance <n>`, or the wallet's code.
 - **Clear all** (`fault-clear`) sets both switches to none and reads the wallet's back.
 
-Outside Development a missing or placeholder `Console:WalletAdminKey` stops the console at start (review R2). A wallet that refuses (403 `admin_key_required`: the console's `Console:WalletAdminKey` does not match the wallet's key) or does not answer shows `fault-error` with the wallet's code, the HTTP status or `unreachable` / `timeout`, never a key. `WalletFaults` names only `admin/faults` and `admin/debit`, so the panel can never execute a payment (rule 1). Each call goes through a fresh scope's client (the `WalletDataPanel` pattern). Tests: `FaultingParserTests` (the decorator and the switch), `FaultPanelServicesTests` (the registered parser is a `FaultingParser` over the scripted parser; an armed `unreachable` fault replies `model_unavailable` once and the next message gets its card; the side door sets, reads back and clears the wallet's switch, and takes a debit).
+Outside Development a missing or placeholder `Console:WalletAdminKey` stops the console at start (review R2). A wallet that refuses (403 `admin_key_required`: the console's `Console:WalletAdminKey` does not match the wallet's key) or does not answer shows `fault-error` with the wallet's code, the HTTP status or `unreachable` / `timeout`, never a key. `WalletFaults` names only `admin/faults`, `admin/debit` and `admin/reset`, so neither panel can execute a payment (rule 1). Each call goes through a fresh scope's client (the `WalletDataPanel` pattern). Tests: `FaultingParserTests` (the decorator and the switch), `FaultPanelServicesTests` (the registered parser is a `FaultingParser` over the scripted parser; an armed `unreachable` fault replies `model_unavailable` once and the next message gets its card; the side door sets, reads back and clears the wallet's switch, and takes a debit).
 
 ```mermaid
 flowchart LR
@@ -501,6 +501,35 @@ flowchart LR
     fp -- unreachable --> mu["ParserUnavailableException: model_unavailable"]
     fp -- invalid_reply --> mi["Unclear, problem injected: model_invalid_reply"]
     fp -- none --> inner["The parser underneath"]
+```
+
+## The reset control
+
+`ResetPanel` (`Components/Console/ResetPanel.razor`, milestone 7 post-tag; Khalil, 18 Oct 2026) sits in the trace column directly above the fault panel, with the fault panel's rules: English and left to right, behind the admin key (`Console:WalletAdminKey`, through `WalletFaults`), a fresh scope's client per call, no key shown, no exception message shown (review M1), the call cancelled when the panel goes away (review R3), and the button disabled while it runs. Its one button, Reset wallet (`reset-wallet`), does three things in order:
+
+1. `WalletFaults.ResetAsync`: `POST admin/reset` with no query, so the wallet returns to the seed with every user not consented and its fault switch cleared ([wallet-api.md](wallet-api.md#reset)).
+2. In a fresh scope, `PendingStore.ExpireAllOpenAsync("wallet_reset")`, the runner's reason (`CaseDriver`): the wallet's ids start again, so no open card may reach the new data. Pending records become Expired and Checking ones NotDone `wallet_reset`.
+3. `ChatSession.RestartAsync()` on the circuit's own session: the conversation is unsubscribed and disposed, a new one is built for the same demo user, the messages and their ids are cleared, and `Changed` is raised.
+
+The result line (`reset-result`) shows `done: <users> users, <accounts> accounts, <transactions> transactions; <n> open cards closed`. A wallet that refuses or does not answer shows `reset-error` with the wallet's code, the HTTP status or `unreachable` / `timeout`, and nothing else is done; a step that throws shows a fixed text. The audit log and the learning log are kept: they are the record (ruling B). The model fault switch and the kill switch are not touched. Other circuits are not told; a page refresh starts them over. Tests: `FaultPanelServicesTests.TheSideDoorResetsTheWalletWithEveryUserNotConsentedAndReportsTheCounts`, `WalletFaultsTests` (a reset with no answer is `unreachable`), `ChatSessionTests.RestartEmptiesTheMessagesAndANewMessageGetsItsCard`.
+
+```mermaid
+sequenceDiagram
+    participant U as Operator
+    participant R as ResetPanel
+    participant F as WalletFaults (new scope)
+    participant W as Mock wallet
+    participant P as PendingStore (new scope)
+    participant S as ChatSession (the circuit's)
+    U->>R: Reset wallet
+    R->>F: ResetAsync
+    F->>W: POST admin/reset (admin key, no query)
+    W-->>F: 200 row counts, every user not consented
+    F-->>R: Ok(counts), or Failed(code): reset-error, stop
+    R->>P: ExpireAllOpenAsync("wallet_reset")
+    R->>S: RestartAsync
+    S->>S: dispose the conversation, build a new one, clear the messages, Changed
+    R-->>U: reset-result
 ```
 
 ## The log component
@@ -551,6 +580,7 @@ The journeys locate elements only by these attributes.
 | Settings value, input, Save, Reset, error (editable agent rows) | `setting-value`, `setting-input`, `setting-save`, `setting-reset`, `setting-error` | `data-name` (the setting's name, as on its row) |
 | Menu items | `menu-wallet`, `menu-settings`, `menu-log`, `menu-aliases`, `menu-learning` | |
 | Kill switch | `kill-switch` | `data-on` (`true`, `false`) |
+| Reset panel root, its button, result line, error line | `reset-panel`, `reset-wallet`, `reset-result`, `reset-error` | the result is `done: <users> users, <accounts> accounts, <transactions> transactions; <n> open cards closed` |
 | Fault panel root, its error line, Clear all | `fault-panel`, `fault-error`, `fault-clear` | |
 | Wallet fault: mode select, delay input, once checkbox, Apply, state | `fault-wallet-mode`, `fault-wallet-delay`, `fault-wallet-once`, `fault-wallet-apply`, `fault-wallet-state` | the state is the text `none` or `<mode> <delayMs> once` / `every call` |
 | Model fault: mode select, once checkbox, Apply, state | `fault-model-mode`, `fault-model-once`, `fault-model-apply`, `fault-model-state` | mode values `none`, `unreachable`, `invalid_reply` |
@@ -637,6 +667,7 @@ The journeys locate elements only by these attributes.
 | Text typed before the circuit is interactive is lost | The `data-interactive` marker tells the journeys; a person types again |
 | A Checking record whose circuit is gone has no "check again" button in a new circuit | Still open after milestone 8: the Checking card and its automatic settle live in the card's own circuit. The record stays Checking and is never shown as failed |
 | The live trace keeps every entry for the life of the circuit | A cap would be a new setting |
-| The wallet data component does not reload after an external debit from the fault panel (it reloads after a payment) | Reopen the component; the phone's card recheck reads the wallet itself |
+| The wallet data component does not reload after an external debit from the fault panel or after the reset control (it reloads after a payment) | Reopen the component; the phone's card recheck reads the wallet itself |
+| The reset control starts over only its own circuit's phone; another open console keeps its conversation, whose cards were closed by the reset | Refresh that page |
 | The live trace's height does not allow for the fault panel above it, so the trace column can be taller than the window | The page scrolls and the panel stays at the top; a layout change if it matters in the demo |
 | The model fault is per console process, the wallet's fault switch is shared by every console | Shown as read back on each panel; the demo runs one console |

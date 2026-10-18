@@ -1,0 +1,102 @@
+@implements IDisposable
+@using System.Globalization
+@using Agent.Core.Pending
+@inject IServiceScopeFactory Scopes
+@inject ChatSession Session
+
+@* The reset control (milestone 7, post-tag; Khalil, 18 Oct 2026): above the fault panel, behind the admin key. It
+   returns the wallet to the seed with every user not consented (POST admin/reset, no query, through WalletFaults),
+   closes the agent's open pending records (the wallet's ids start again) and starts this circuit's phone over. The
+   audit log and the learning log are kept: they are the record. Other circuits are not told; a page refresh starts
+   them over. No key is shown. *@
+<MudPaper Class="pa-3 console-reset" Elevation="1" data-testid="reset-panel">
+    <div class="console-faults-head">
+        <MudText Typo="Typo.h6">Reset</MudText>
+        <MudButton data-testid="reset-wallet" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Error"
+                   Disabled="busy" OnClick="ResetAsync">Reset wallet</MudButton>
+    </div>
+    <MudText Typo="Typo.caption">
+        Restores the wallet's seed data with every user not consented, closes open cards and starts this phone over.
+        The audit and learning logs are kept.
+    </MudText>
+
+    @if (result is not null)
+    {
+        <MudText Typo="Typo.caption" Class="d-block">Result: <span data-testid="reset-result">@result</span></MudText>
+    }
+
+    @if (error is not null)
+    {
+        <MudText data-testid="reset-error" Typo="Typo.caption" Color="Color.Error" Class="d-block">@error</MudText>
+    }
+</MudPaper>
+
+@code {
+    /// <summary>The result code open pending records get after a wallet reset: the runner's reason (CaseDriver).</summary>
+    private const string WalletResetReason = "wallet_reset";
+
+    /// <summary>What the panel shows when a step threw: a fixed text, never the exception's message (review M1).</summary>
+    private const string CallFailed = "The reset could not be completed.";
+
+    /// <summary>Cancelled when the panel goes away, so a call in flight does not run on to the client's timeout (review R3).</summary>
+    private readonly CancellationTokenSource disposed = new();
+
+    private string? result;
+    private string? error;
+    private bool busy;
+
+    public void Dispose()
+    {
+        disposed.Cancel();
+        disposed.Dispose();
+    }
+
+    /// <summary>The wallet's reset, then the agent's open pending records closed, then this circuit's phone started over.</summary>
+    private async Task ResetAsync()
+    {
+        if (busy || disposed.IsCancellationRequested)
+            return;
+
+        busy = true;
+        result = null;
+        error = null;
+        try
+        {
+            WalletResetResult reset;
+            int expired;
+            try
+            {
+                await using (var scope = Scopes.CreateAsyncScope())
+                    reset = await scope.ServiceProvider.GetRequiredService<WalletFaults>().ResetAsync(disposed.Token);
+
+                if (reset is WalletResetResult.Failed failed)
+                {
+                    error = "The wallet refused the reset: " + failed.Problem;
+                    return;
+                }
+
+                // The wallet's ids start again, so no open card may reach the new data.
+                await using (var scope = Scopes.CreateAsyncScope())
+                    expired = await scope.ServiceProvider.GetRequiredService<PendingStore>().ExpireAllOpenAsync(WalletResetReason, disposed.Token);
+
+                await Session.RestartAsync();
+            }
+            catch (Exception)
+            {
+                // Review M1: nothing a side-door call throws (the panel going away included) may end the circuit; the
+                // cause is never shown, since a message could carry a URL.
+                error = CallFailed;
+                return;
+            }
+
+            var counts = ((WalletResetResult.Ok)reset).Counts;
+            result = string.Create(
+                CultureInfo.InvariantCulture,
+                $"done: {counts.Users} users, {counts.Accounts} accounts, {counts.Transactions} transactions; {expired} open cards closed");
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+}
