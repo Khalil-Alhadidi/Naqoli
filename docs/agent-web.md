@@ -658,7 +658,7 @@ The journeys locate elements only by these attributes.
 | `TheConsoleAliasesPanelListsAddsAndDeletes` | The same through `menu-aliases`: `console-alias` rows equal the wallet's count; save gives `console-alias-result` `saved` and one more row on S03's account; `console-alias-delete` gives `deleted` and the row and the wallet's alias go |
 | `ADuplicateAliasIsRefusedInTheDirectory` | S04's saved name saved for S03 in the directory: `directory-result` is `Refusal_alias_exists` (key and text), the rows and the wallet's alias count are unchanged |
 
-- **Run:** `dotnet test tests/Agent.Web.Journeys`. The 34 journeys take about two minutes (1 min 57 s and 1 min 52 s in two runs of the 32 of that day on 16 Oct 2026; the two timeout journeys take about 20 s each). The 20 of milestone 7 took about a minute.
+- **Run:** `dotnet test tests/Agent.Web.Journeys`. The 49 journeys take about two and a half minutes (2 min 31 s on 18 Oct 2026; 1 min 57 s and 1 min 52 s in two runs of the 32 of 16 Oct 2026; the two timeout journeys take about 20 s each). The 20 of milestone 7 took about a minute.
 - **Install Chromium once,** after the first build: `pwsh tests/Agent.Web.Journeys/bin/Debug/net10.0/playwright.ps1 install chromium`.
 - **Skips:** the journeys skip when SQL Server does not answer a 3-second probe on `master`, and when Chromium cannot be launched. The skip message gives the install command.
 - **Database names:** both databases must end in `_Test`; the host refuses any other name, because it drops them.
