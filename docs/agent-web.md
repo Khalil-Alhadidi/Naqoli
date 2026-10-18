@@ -142,7 +142,7 @@ The conversation turns each reply into a `ConversationMessage` of codes and figu
 | `Unsupported(reason)` | `Unsupported_<reason>`, or `Refusal_not_supported` for a reason without a key |
 | The alias offer (`ConversationKind.AliasOffer`, after a Done transfer; milestone 9a) | `Offer_save_alias` with `Conversation.AliasOffer.Text` (the user's own words) as `{0}`, and the Save button (`ChatAction.SaveAlias`, `save-alias`) while it is the open offer (`AliasOfferMessageId`) |
 | The alias saved (`ConversationKind.AliasSaved`) | `Reply_alias_saved` with the saved text as `{0}` |
-| A refused save (`alias_exists`, `alias_invalid`) | `Refusal_alias_exists`, `Refusal_alias_invalid`, through the same `RefusalText` as every code |
+| A refused save (`alias_exists`, `alias_invalid`, `account_closed`) | `Refusal_alias_exists`, `Refusal_alias_invalid`, `Refusal_account_closed` (a closed target account, review R2), through the same `RefusalText` as every code; the phone's directory shows the key as `data-key` on `directory-result` |
 
 `ConfirmOutcome` becomes an outcome message with `data-outcome` (the conversation's outcome code in brackets where it differs):
 

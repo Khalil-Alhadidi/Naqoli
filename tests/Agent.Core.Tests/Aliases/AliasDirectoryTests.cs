@@ -156,6 +156,38 @@ public sealed class AliasDirectoryTests(AgentHost host) : IAsyncLifetime
     }
 
     [Fact]
+    public async Task AnAliasForAContactWhoseAccountIsClosedIsRefusedAccountClosed()
+    {
+        Assert.SkipUnless(host.DatabaseAvailable, host.SkipReason);
+        var before = await ListAsync();
+        var s20 = Contact(before, "S20");
+        Assert.Equal(Checks.ClosedStatus, s20.AccountStatus, ignoreCase: true);
+
+        var refused = Assert.IsType<AliasResult.Refused>(await SaveAsync(s20.SavedName + " x", s20.TargetAccountId));
+
+        Assert.Equal(ReasonCodes.AccountClosed, refused.Code);
+        Assert.Equal(before.Aliases, (await ListAsync()).Aliases);
+        Assert.Empty(await AuditAsync());
+        Assert.Contains(trace.Entries, e => e.Step == TraceSteps.AliasRefusedPrefix + ReasonCodes.AccountClosed);
+        Assert.DoesNotContain(trace.Entries, e => e.Step == TraceSteps.AliasSaved);
+    }
+
+    [Fact]
+    public async Task AnAliasForTheTypedNumberOfAClosedAccountIsRefusedAccountClosed()
+    {
+        Assert.SkipUnless(host.DatabaseAvailable, host.SkipReason);
+        var before = await ListAsync();
+        var s20 = Contact(before, "S20");
+
+        var refused = Assert.IsType<AliasResult.Refused>(await SaveForPhoneAsync(s20.SavedName + " x", s20.Phone));
+
+        Assert.Equal(ReasonCodes.AccountClosed, refused.Code);
+        Assert.Equal(before.Aliases, (await ListAsync()).Aliases);
+        Assert.Empty(await AuditAsync());
+        Assert.Contains(trace.Entries, e => e.Step == TraceSteps.AliasRefusedPrefix + ReasonCodes.AccountClosed);
+    }
+
+    [Fact]
     public async Task AnAliasForANumberWithNoWalletIsRefused()
     {
         Assert.SkipUnless(host.DatabaseAvailable, host.SkipReason);

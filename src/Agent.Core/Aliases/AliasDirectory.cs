@@ -42,8 +42,10 @@ public sealed class AliasDirectory
 
     /// <summary>
     /// Saves <paramref name="text"/> (trimmed) as the user's alias of <paramref name="targetAccountId"/>, which must be the
-    /// account of one of the user's contacts or aliases. Refused <see cref="ReasonCodes.AliasInvalid"/>,
-    /// <see cref="ReasonCodes.AliasExists"/> or <see cref="ReasonCodes.RecipientNotFound"/>.
+    /// account of one of the user's contacts or aliases. Checked in this order: <see cref="ReasonCodes.AliasInvalid"/>
+    /// (the text), the contacts read, <see cref="ReasonCodes.AliasExists"/>, <see cref="ReasonCodes.RecipientNotFound"/>
+    /// (the account is not among the user's contacts or aliases), then <see cref="ReasonCodes.AccountClosed"/> (the
+    /// account is closed, review R2). Nothing is written on a refusal.
     /// </summary>
     public async Task<AliasResult> SaveAsync(int userId, string text, int targetAccountId, CancellationToken cancellationToken)
     {
@@ -59,8 +61,13 @@ public sealed class AliasDirectory
         if (Exists(candidates, trimmed))
             return Refuse(ReasonCodes.AliasExists);
 
-        if (!candidates.Any(c => c.AccountId == targetAccountId))
+        var targets = candidates.Where(c => c.AccountId == targetAccountId).ToList();
+        if (targets.Count == 0)
             return Refuse(ReasonCodes.RecipientNotFound);
+
+        // Review R2: an alias for a closed account could only ever end in a refusal; nothing is written.
+        if (targets.Any(c => IsClosed(c.AccountStatus)))
+            return Refuse(ReasonCodes.AccountClosed);
 
         return await WriteAsync(userId, trimmed, targetAccountId, cancellationToken);
     }
@@ -70,7 +77,9 @@ public sealed class AliasDirectory
     /// <paramref name="phone"/> (D21), contact or not. Checked in this order, pure checks before any wallet read
     /// (security review M3): <see cref="ReasonCodes.InvalidNumber"/> (not a complete number),
     /// <see cref="ReasonCodes.AliasInvalid"/> (the text), <see cref="ReasonCodes.NotSupported"/> (the user's own number),
-    /// <see cref="ReasonCodes.NumberHasNoWallet"/>, then <see cref="ReasonCodes.AliasExists"/> as in <see cref="SaveAsync"/>.
+    /// <see cref="ReasonCodes.NumberHasNoWallet"/>, <see cref="ReasonCodes.AccountClosed"/> (the account behind the number
+    /// is closed, review R2, before the contacts are read), then <see cref="ReasonCodes.AliasExists"/> as in
+    /// <see cref="SaveAsync"/>.
     /// </summary>
     public async Task<AliasResult> SaveForPhoneAsync(int userId, string text, string phone, CancellationToken cancellationToken)
     {
@@ -110,6 +119,10 @@ public sealed class AliasDirectory
             default:
                 return Unavailable(null);
         }
+
+        // Review R2: the account behind the number is closed; checked before the contacts are read.
+        if (IsClosed(account.Status))
+            return Refuse(ReasonCodes.AccountClosed);
 
         if (await ContactsAsync(userId, cancellationToken) is not { } contacts)
             return NoList();
@@ -182,6 +195,9 @@ public sealed class AliasDirectory
             && ArabicText.Key(trimmed).Length > 0
             && !PhoneNumbers.LooksLikeNumber(trimmed);
     }
+
+    /// <summary>The wallet's closed status, compared as <see cref="Checks"/> compares it.</summary>
+    private static bool IsClosed(string status) => string.Equals(status, Checks.ClosedStatus, StringComparison.OrdinalIgnoreCase);
 
     private static bool Exists(IReadOnlyList<ContactCandidate> candidates, string text)
     {

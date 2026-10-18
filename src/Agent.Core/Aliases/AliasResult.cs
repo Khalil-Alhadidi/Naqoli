@@ -19,8 +19,9 @@ public abstract record AliasResult
     /// Nothing written. <see cref="Code"/> is <see cref="Pipeline.ReasonCodes.AliasExists"/>,
     /// <see cref="Pipeline.ReasonCodes.AliasInvalid"/>, <see cref="Pipeline.ReasonCodes.NumberHasNoWallet"/>,
     /// <see cref="Pipeline.ReasonCodes.InvalidNumber"/>, <see cref="Pipeline.ReasonCodes.NotSupported"/> (the user's own
-    /// number) or <see cref="Pipeline.ReasonCodes.RecipientNotFound"/> (the account is not among the user's contacts or
-    /// aliases, or the alias id is not the user's).
+    /// number), <see cref="Pipeline.ReasonCodes.AccountClosed"/> (the target account is closed, review R2) or
+    /// <see cref="Pipeline.ReasonCodes.RecipientNotFound"/> (the account is not among the user's contacts or aliases, or
+    /// the alias id is not the user's).
     /// </summary>
     public sealed record Refused(string Code) : AliasResult;
 

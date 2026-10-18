@@ -167,6 +167,24 @@ public sealed class AliasJourneys(JourneyHost host) : JourneyBase(host)
         Assert.Equal(before.Count, (await Host.AliasesAsync(U1)).Count);
     }
 
+    [Fact]
+    public async Task AnAliasForAClosedContactIsRefusedInTheDirectory()
+    {
+        var page = await OpenAsync(Host.WebAddress);
+        var before = await Host.AliasesAsync(U1);
+        var balanceBefore = await Host.BalanceAsync(U1);
+
+        await OpenDirectoryAsync(page);
+        await AddInDirectoryAsync(page, await SavedNameAsync("S20") + " x", "S20");
+
+        await Expect(page.GetByTestId("directory-result")).ToHaveAttributeAsync("data-key", "Refusal_account_closed");
+        await Expect(page.GetByTestId("directory-result")).ToHaveTextAsync(Text["Refusal_account_closed"].Value);
+        await Expect(page.GetByTestId("directory-alias")).ToHaveCountAsync(before.Count);
+        Assert.Equal(before, await Host.AliasesAsync(U1));
+        Assert.Equal(balanceBefore, await Host.BalanceAsync(U1));
+        Assert.Equal(0, await AuditCountAsync(AuditEvents.AliasSaved));
+    }
+
     /// <summary>AMB-19's steps 0 to 2: the sentence, the tap on S08, the confirm; ends with the done outcome.</summary>
     private static async Task PayS08Async(IPage page)
     {
