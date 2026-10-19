@@ -428,6 +428,7 @@ The seventeen keys of milestone 9a (`Offer_save_alias`, `Offer_save_alias_button
 | `Refusal_product_not_found` | I could not find this product | |
 | `Refusal_not_supported` | I cannot do this | |
 | `Refusal_not_understood` | I did not understand. Please say it again | |
+| `Refusal_message_too_long` | The message is too long. Write one short request | A typed message longer than `Agent:MaxMessageChars`; Khalil, 19 Oct 2026 |
 | `Refusal_not_understood_repeat` | I did not understand. {0} | `{0}` is the open question's text; the question stays open. Khalil's Arabic, 17 Oct 2026 |
 | `Refusal_question_cancelled` | Done. I did nothing | The reply after a question's cancel option; Khalil's Arabic, 17 Oct 2026 |
 | `Refusal_only_own_balance` | I can only show your own balance | |

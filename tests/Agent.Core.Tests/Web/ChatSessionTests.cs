@@ -426,6 +426,20 @@ public sealed class ChatSessionTests(AgentHost host) : IAsyncDisposable
     }
 
     [Fact]
+    public async Task AMessageLongerThanMaxMessageCharsShowsRefusalMessageTooLong()
+    {
+        // Khalil, 19 Oct 2026: the over-long message has its own string, not Refusal_not_understood.
+        var circuit = await StartAsync();
+        var session = circuit.Session;
+        var max = circuit.Scope.ServiceProvider.GetRequiredService<Microsoft.Extensions.Options.IOptionsMonitor<AgentOptions>>().CurrentValue.MaxMessageChars;
+
+        await session.SendAsync(new string('x', max + 1));
+
+        Assert.Equal(circuit.Text["Refusal_" + ReasonCodes.MessageTooLong].Value, LastAgentMessage(session).Text);
+        Assert.False(circuit.Text["Refusal_" + ReasonCodes.MessageTooLong].ResourceNotFound);
+    }
+
+    [Fact]
     public async Task TheFinalOptionOfAContactQuestionIsNoneOfThese()
     {
         var circuit = await StartAsync(SeedFacts.DemoUserId, SharedName());

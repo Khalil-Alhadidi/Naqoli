@@ -26,6 +26,13 @@ public static class ReasonCodes
     public const string DinarsOnly = "dinars_only";
     public const string BillsPaidInFull = "bills_paid_in_full";
 
+    /// <summary>
+    /// A typed message longer than <see cref="AgentOptions.MaxMessageChars"/>: refused before masking, with no parse call
+    /// and no learning row (known gaps row 36; its own string, Khalil, 19 Oct 2026). Not in Khalil's list (data/README.md);
+    /// not a logged reason.
+    /// </summary>
+    public const string MessageTooLong = "message_too_long";
+
     // Informational.
     public const string Balance = "balance";
     public const string PointsToConfirm = "points_to_confirm";

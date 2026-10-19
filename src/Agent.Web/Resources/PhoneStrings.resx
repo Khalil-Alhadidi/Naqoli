@@ -60,6 +60,7 @@
   <data name="Refusal_product_not_found" xml:space="preserve"><value>ما لكيت هذا المنتج</value></data>
   <data name="Refusal_not_supported" xml:space="preserve"><value>هاي ما أكدر أسويها</value></data>
   <data name="Refusal_not_understood" xml:space="preserve"><value>ما فهمت عليك، عيدها بطريقة ثانية</value></data>
+  <data name="Refusal_message_too_long" xml:space="preserve"><value>الرسالة طويلة. اكتب طلب واحد قصير.</value></data>
   <data name="Refusal_not_understood_repeat" xml:space="preserve"><value>ما فهمت. {0}</value></data>
   <data name="Refusal_question_cancelled" xml:space="preserve"><value>خلص. ما سويت شي</value></data>
   <data name="Refusal_only_own_balance" xml:space="preserve"><value>أكدر أكولك رصيدك إنت بس</value></data>

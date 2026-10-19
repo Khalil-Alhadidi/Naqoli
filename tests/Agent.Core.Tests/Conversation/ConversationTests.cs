@@ -852,7 +852,7 @@ public sealed class ConversationTests(AgentHost host) : IAsyncDisposable
     }
 
     [Fact]
-    public async Task AMessageLongerThanMaxMessageCharsIsRefusedNotUnderstoodBeforeMaskingAndWritesNoLearningRow()
+    public async Task AMessageLongerThanMaxMessageCharsIsRefusedMessageTooLongBeforeMaskingAndWritesNoLearningRow()
     {
         // Known gaps row 36 (Khalil, 19 Oct 2026).
         var parser = new CapturingParser(new Dictionary<string, ParsedRequest>(StringComparer.Ordinal));
@@ -864,8 +864,8 @@ public sealed class ConversationTests(AgentHost host) : IAsyncDisposable
 
         Assert.Empty(parser.Calls);
         var refusal = LastAgentMessage(conversation);
-        Assert.Equal((ConversationKind.Refusal, ReasonCodes.NotUnderstood), (refusal.Kind, refusal.Code));
-        Assert.Equal(ReasonCodes.NotUnderstood, Assert.IsType<AgentReply.Refusal>(conversation.LastReply).Code);
+        Assert.Equal((ConversationKind.Refusal, ReasonCodes.MessageTooLong), (refusal.Kind, refusal.Code));
+        Assert.Equal(ReasonCodes.MessageTooLong, Assert.IsType<AgentReply.Refusal>(conversation.LastReply).Code);
         Assert.Null(conversation.LastLearningEntry);
         Assert.Empty(await LearningRowsAsync(session));
         Assert.Contains(session.Trace.Entries, e => e.Step == TraceSteps.MessageTooLong && e.Detail == "21");

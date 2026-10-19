@@ -250,14 +250,15 @@ public sealed class Conversation : IDisposable
             trace.Record(TraceZone.User, "message_received", FormattableString.Invariant($"length {typedText.Length}"));
             Add(new ConversationMessage(ConversationRole.User, ConversationKind.Typed));
 
-            // Known gaps row 36 (Khalil, 19 Oct 2026): a message longer than MaxMessageChars is not read. Nothing is
-            // masked, the parser is not called and no learning row is written; a waiting card stays (unclear, D6).
+            // Known gaps row 36 (Khalil, 19 Oct 2026): a message longer than MaxMessageChars is not read; it is refused
+            // message_too_long. Nothing is masked, the parser is not called and no learning row is written; a waiting
+            // card stays (unclear, D6).
             if (typedText.Length > options.CurrentValue.MaxMessageChars)
             {
                 trace.Record(TraceZone.Code, TraceSteps.MessageTooLong, FormattableString.Invariant($"{typedText.Length}"));
-                LastReply = new AgentReply.Refusal(ReasonCodes.NotUnderstood, null, null);
+                LastReply = new AgentReply.Refusal(ReasonCodes.MessageTooLong, null, null);
                 LastLearningEntry = null;
-                AddRefusal(ReasonCodes.NotUnderstood);
+                AddRefusal(ReasonCodes.MessageTooLong);
                 return;
             }
 
