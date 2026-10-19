@@ -66,4 +66,74 @@ internal static class DevSet
 
         throw new InvalidOperationException("The development set has no case " + id + ".");
     }
+
+    /// <summary>
+    /// The <c>not_prepared</c> text of case <paramref name="id"/>'s expected replies (milestone 9c): the names of the parts
+    /// beyond the cap, in the user's own words.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">The set has no such case, or no reply of the case names one.</exception>
+    public static string NotPrepared(string id)
+    {
+        using var document = Case(id);
+        foreach (var reply in document.RootElement.GetProperty("expect").GetProperty("replies").EnumerateArray())
+        {
+            if (reply.TryGetProperty("not_prepared", out var names) && names.GetString() is { } text)
+                return text;
+        }
+
+        throw new InvalidOperationException(id + " names no part not prepared.");
+    }
+
+    /// <summary>The <c>expect.final.balance</c> of case <paramref name="id"/>: the wallet's balance after the case.</summary>
+    public static long FinalBalance(string id)
+    {
+        using var document = Case(id);
+        return document.RootElement.GetProperty("expect").GetProperty("final").GetProperty("balance").GetInt64();
+    }
+
+    /// <summary>The figure <paramref name="field"/> (<c>amount</c>, <c>balance_after</c>...) of expected card number <paramref name="card"/> of case <paramref name="id"/>.</summary>
+    public static long CardFigure(string id, int card, string field)
+    {
+        using var document = Case(id);
+        return document.RootElement.GetProperty("expect").GetProperty("cards")[card].GetProperty(field).GetInt64();
+    }
+
+    /// <summary>The <c>amount</c> of expected reply number <paramref name="reply"/> of case <paramref name="id"/>.</summary>
+    public static long ReplyAmount(string id, int reply)
+    {
+        using var document = Case(id);
+        return document.RootElement.GetProperty("expect").GetProperty("replies")[reply].GetProperty("amount").GetInt64();
+    }
+
+    /// <summary>The option values of expected question number <paramref name="ask"/> of case <paramref name="id"/>.</summary>
+    public static IReadOnlyList<string> AskOptions(string id, int ask)
+    {
+        using var document = Case(id);
+        return [.. document.RootElement.GetProperty("expect").GetProperty("asks")[ask].GetProperty("options").EnumerateArray().Select(o => o.GetString()!)];
+    }
+
+    /// <summary>The <c>value</c> of step number <paramref name="step"/> of case <paramref name="id"/> (a tap on an option).</summary>
+    public static string TapValue(string id, int step)
+    {
+        using var document = Case(id);
+        return document.RootElement.GetProperty("steps")[step].GetProperty("value").GetString()
+            ?? throw new InvalidOperationException(FormattableString.Invariant($"{id} step {step} has no value."));
+    }
+
+    /// <summary>The line of case <paramref name="id"/>, parsed; the caller disposes it.</summary>
+    private static JsonDocument Case(string id)
+    {
+        var path = Path.Combine(RepositoryRoot.Find(), "data", ScriptedParser.DevSetFileName);
+        foreach (var line in File.ReadLines(path))
+        {
+            if (string.IsNullOrWhiteSpace(line))
+                continue;
+            var document = JsonDocument.Parse(line);
+            if (document.RootElement.GetProperty("id").GetString() == id)
+                return document;
+            document.Dispose();
+        }
+
+        throw new InvalidOperationException("The development set has no case " + id + ".");
+    }
 }
