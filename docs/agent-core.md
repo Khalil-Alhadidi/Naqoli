@@ -1013,3 +1013,5 @@ Still open:
 | A reissued `choose_account` card (GAP-04) does not carry the `account_choice_unavailable` note | Deferred, minor |
 | `Attempts` counts Confirm taps that began an execute, not settle resends | Display only |
 | A biller alias (one word for one biller account) is not built; aliases point to accounts only | A later item of the build plan, after milestone 9a |
+| GAP-06, credit for the user's own number (`credit_to_own_number` with the operator, type and value filled), is still a known gap: no purchase card is built for it | Deferred to milestone 10, with the prompt pass (the brief of 19 Oct 2026; the tuning backlog keeps it) |
+| A Done purchase is assumed to carry its code: the mock wallet returns one for every purchase; a Done without one shows the outcome with no code message and keeps no last four | The wallet contract (`docs/wallet-api.md`, execute step 6) creates an order with a new code for every purchase; nothing to build |

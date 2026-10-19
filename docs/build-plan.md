@@ -403,6 +403,33 @@ The biller alias stays the later item below.
 - Done when: the purchase cases in the development set pass, the code never reaches the model, and logs keep only the last digits of a code.
 - Deferred here from the 15 Oct diagnosis: AMB-23 (a bare value with no operator; decided by Khalil on 16 Oct 2026: rule 12 governs, the question lists the matching products), MAL-09 (Latin spellings of operator names), NOGO-12 (the wording of the learning-log detail) and GAP-06 (`credit_to_own_number` with the operator, type and value kept filled, which needs prompt version 2 and the known-gap path of milestone 7 extended to purchases).
 
+**Status, 19 Oct 2026:** done, one commit per task of the plan (`docs/plans/milestone-9b-purchases.md`, with the controller's seven rulings for Khalil to confirm, below):
+
+- **Rules 11 and 12 and operator spellings (Task 1, d671702).** With no operator named, the fitting products are listed across the operators as one `which_product` question when they number `MaxProductsInOneQuestion` (8) or fewer, even when one fits (AMB-23); above that the operator is asked first (AMB-24). Operator spellings are read from `Agent:ProviderSpellings` by provider code (MAL-09: `asia`; Latin spellings only, Arabic variants are Khalil's). `ProductResolution.NotFound` carries the named provider.
+- **The learning detail and the product type (Task 2, 9512b8f).** `product_not_found` is logged as provider code, type and value (`LearningLogRule.ProductDetail`, NOGO-12: `korek credit 25000`); every product option carries `Option.ProductType`. Oracle report `dev-scripted-m9b-2026-10-19-0916` committed with it.
+- **Orders and the code's path (Task 3, 293ffff).** `WalletClient.GetOrdersAsync`, `OrdersReader` and `Conversation.ListOrdersAsync` read My orders under the conversation's turn; the trace keeps the count only; `WalletOrder` and `PurchaseOrder` print the code as `***`. `OutboundPayloadTests.APurchaseCodeNeverReachesTheModel` shows that no code (the new one, every order's, every seeded one, in both digit forms) reaches the model; the pending record keeps the last four.
+- **The phone (Task 4, 347e5f3).** The code's copy button under a Done purchase, the type word on product options, and the My orders screen behind the header's second button.
+- **Journeys (Task 5, 6fb9cd1).** Eight purchase journeys on the oracle, one per behaviour; 58 in all, green.
+- **Coverage, failure modes and status (Task 6, this record).** Rules 11 and 12 and the 16/10 purchase addition are `yes` in [rules-coverage.md](rules-coverage.md) (47 `yes`, 0 `partial`, 2 `no`: rules 21 and 22, milestone 9c); three purchase rows in [failure-modes.md](failure-modes.md); GAP-06 under "Known limits" in [agent-core.md](agent-core.md).
+
+**The development set on the oracle** (`docs/reports/dev-scripted-m9b-2026-10-19-0916`): 89 of 95, the five 9c cases (CMP-01, CMP-03, CMP-05, CMP-07, CMP-09) and GAP-06 only. Every purchase case other than GAP-06 passes, 11 of 12, AMB-23, MAL-09 and NOGO-12 among them; 0 executions without a tap; 0 masking failures.
+
+Sonnet rerun: see below.
+
+**GAP-06** (`credit_to_own_number` with the operator, type and value filled) stays deferred to milestone 10, with the prompt pass (the brief of 19 Oct 2026); the tuning backlog keeps it.
+
+**Phone strings awaiting Khalil:** seven keys are English `TODO-AR` placeholders, listed in `PhoneStringsTests.AwaitingKhalil`: `Orders_Open`, `Orders_Title`, `Orders_Empty`, `Purchase_code_copy`, `Purchase_code_copied`, `Product_type_credit`, `Product_type_internet`.
+
+**The controller's rulings, for Khalil to confirm** (copied from the head of the plan):
+
+1. **Operator spellings share `Agent:ProviderSpellings`.** The dictionary is keyed by biller code today (`internet`). It gains the provider codes `zain`, `asiacell` and `korek` as keys, so one setting holds every spelling of a provider or operator (the brief: "through the same configured spellings as billers"). Claude writes Latin spellings only (`asia` is the one MAL-09 needs); Arabic variants are Khalil's to add.
+2. **The learning-log detail of `product_not_found`** is the provider code when the typed operator named one, else the typed operator text as the user wrote it, then the product type, then the value in dinars, space-separated, each part dropped when missing: NOGO-12 gives `korek credit 25000`.
+3. **Product options name the type.** Rule 12's own example (a Zain card of ten: `ZN-CR-10` and `ZN-NET-10`) and the cross-operator list of AMB-23 need the credit or internet word on each option, or two options read the same. Two new phone strings, `Product_type_credit` and `Product_type_internet`. The card itself is unchanged (operator name, `Type_purchase`, the price); whether the card should also carry the type word is a suggestion for Khalil.
+4. **The `product_not_found` reply stays one template.** NOGO-12's key lists `available` products; the runner marks that field `not graded` and the phone does not list them. Whether the reply should list what exists, as the case's note says, is Khalil's call (a template with a list built by code would do it).
+5. **My orders** shows every order the wallet returns for the user, newest first (the wallet's order), each with its date in Iraq time, the product's operator name and type, the price, and the full code with a copy button. The list is read from the wallet under the conversation's turn like the alias directory; the trace records the count only. No cap: the seed holds few orders and the architecture names no limit.
+6. **GAP-06** (`credit_to_own_number` with the operator, type and value filled) stays deferred to milestone 10, as the brief says; the tuning backlog's "Not on this list" paragraph already names it and is left as it is.
+7. **Back from the orders screen reuses `Directory_Back`** (the same word); the header's second button is `Orders_Open`.
+
 **9c. Compound requests (D7)**
 
 - Delivers: separate cards in the order spoken, each with its own tap, the next card built only after the previous one is finished, and a cap of three.
