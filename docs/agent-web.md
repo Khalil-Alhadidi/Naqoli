@@ -369,7 +369,7 @@ flowchart TD
 
 The seventeen keys of milestone 9a (`Offer_save_alias`, `Offer_save_alias_button`, `Reply_alias_saved`, `Reply_alias_deleted`, `Refusal_alias_exists`, `Refusal_alias_invalid`, `Refusal_alias_shared`, `Directory_Open`, `Directory_Back`, `Directory_Title`, `Directory_Empty`, `Directory_Text`, `Directory_Target`, `Directory_TargetNone`, `Directory_Phone`, `Directory_Save` and `Directory_Delete`) were English `TODO-AR` placeholders from 17 Oct 2026 until Khalil wrote them on 18 Oct 2026 (the close-out, `docs/plans/milestone-9a-close.md`); the allow-list `PhoneStringsTests.AwaitingKhalil` was then empty until the keys of milestone 9b (below). Before them, `Refusal_question_cancelled` (the reply after a question's cancel option) was written by Khalil on 17 Oct 2026; `Card_TryAgain` and `Card_SendAgain` (milestone 7, D19), and the D21 wording of `Refusal_invalid_number` (it now asks for the full mobile number or a saved name) on 16 Oct 2026. `PhoneStringsTests.NoValueIsAPlaceholderExceptTheKeysAwaitingKhalil` keeps the allow-list: a new key is added there with a `TODO-AR` value until he writes it.
 
-**Awaiting Khalil (milestone 9b, 19 Oct 2026).** Seven keys are English `TODO-AR` placeholders in `PhoneStringsTests.AwaitingKhalil` until he writes their Arabic: `Orders_Open`, `Orders_Title`, `Orders_Empty`, `Purchase_code_copy`, `Purchase_code_copied`, `Product_type_credit`, `Product_type_internet` (meanings in the table below).
+**Milestone 9b (19 Oct 2026).** Seven keys of milestone 9b (`Orders_Open`, `Orders_Title`, `Orders_Empty`, `Purchase_code_copy`, `Purchase_code_copied`, `Product_type_credit`, `Product_type_internet`) were English `TODO-AR` placeholders until Khalil wrote them on 19 Oct 2026 in the close-out (`docs/plans/milestone-9b-close.md`), together with the new `Purchase_code_copy_failed` (security review R3). No key is `TODO-AR`; the allow-list `PhoneStringsTests.AwaitingKhalil` is empty again (meanings in the table below).
 
 | Key | Meaning | Note |
 |---|---|---|
@@ -483,14 +483,14 @@ The seventeen keys of milestone 9a (`Offer_save_alias`, `Offer_save_alias_button
 | `Directory_Phone` | Mobile number | Khalil, 18 Oct 2026 |
 | `Directory_Save` | Save | Khalil, 18 Oct 2026 |
 | `Directory_Delete` | Delete | Khalil, 18 Oct 2026 |
-| `Purchase_code_copy` | Copy: the button under a purchase code | Awaiting Khalil (`TODO-AR`), milestone 9b |
-| `Purchase_code_copied` | Copied: the same button for two seconds after a copy | Awaiting Khalil (`TODO-AR`), milestone 9b |
-| `Purchase_code_copy_failed` | Could not copy, write it down: the same button for two seconds after a failed copy (security review R3) | Awaiting Khalil (`TODO-AR`), milestone 9b close-out |
-| `Product_type_credit` | credit (phone credit): the type word on a product option and an order row | Awaiting Khalil (`TODO-AR`), milestone 9b |
-| `Product_type_internet` | internet: the type word on a product option and an order row | Awaiting Khalil (`TODO-AR`), milestone 9b |
-| `Orders_Open` | My orders: the phone header's button | Awaiting Khalil (`TODO-AR`), milestone 9b |
-| `Orders_Title` | My orders: the orders screen's title | Awaiting Khalil (`TODO-AR`), milestone 9b |
-| `Orders_Empty` | No orders yet | Awaiting Khalil (`TODO-AR`), milestone 9b |
+| `Purchase_code_copy` | Copy: the button under a purchase code | Khalil, 19 Oct 2026 (milestone 9b) |
+| `Purchase_code_copied` | Copied: the same button for two seconds after a copy | Khalil, 19 Oct 2026 (milestone 9b) |
+| `Purchase_code_copy_failed` | Could not copy, write it down: the same button for two seconds after a failed copy (security review R3) | Khalil, 19 Oct 2026 (milestone 9b close-out) |
+| `Product_type_credit` | credit (phone credit): the type word on a product option and an order row | Khalil, 19 Oct 2026 (milestone 9b) |
+| `Product_type_internet` | internet: the type word on a product option and an order row | Khalil, 19 Oct 2026 (milestone 9b) |
+| `Orders_Open` | My orders: the phone header's button | Khalil, 19 Oct 2026 (milestone 9b) |
+| `Orders_Title` | My orders: the orders screen's title | Khalil, 19 Oct 2026 (milestone 9b) |
+| `Orders_Empty` | No orders yet | Khalil, 19 Oct 2026 (milestone 9b) |
 | `Words_1` .. `Words_19`, `Words_20` .. `Words_90` (tens), `Words_100` .. `Words_900` (hundreds), `Words_Thousand`, `Words_TwoThousand`, `Words_Thousands`, `Words_Million`, `Words_TwoMillion`, `Words_Millions`, `Words_Construct_3` .. `Words_Construct_10`, `Words_And` | The number words of the amount in words: units, tens, hundreds, the thousand and million forms (one, two, the plural after a construct form), the short counting forms for 3 to 10, and the joiner | Khalil's list, 17 Oct 2026. `Words_Construct_4` to `Words_Construct_9` were derived from his hundreds' stems and are confirmed by Khalil on 17 Oct 2026 |
 
 ## The oracle

@@ -21,14 +21,10 @@ public class PhoneStringsTests
 
     /// <summary>
     /// Keys added after Khalil wrote the phone's wording and still English placeholders until he writes them (empty from
-    /// 17 Oct 2026; since 19 Oct 2026 the keys of milestone 9b: the copy button, the product type word, My orders); a new
-    /// key goes here until its Arabic is in, and no other key may be a placeholder.
+    /// 17 Oct 2026; the eight keys of milestone 9b had his wording on 19 Oct 2026, so empty again); a new key goes here
+    /// until its Arabic is in, and no other key may be a placeholder.
     /// </summary>
-    private static readonly string[] AwaitingKhalil =
-    [
-        "Orders_Empty", "Orders_Open", "Orders_Title", "Product_type_credit", "Product_type_internet", "Purchase_code_copied",
-        "Purchase_code_copy", "Purchase_code_copy_failed",
-    ];
+    private static readonly string[] AwaitingKhalil = [];
 
     [Fact]
     public void NoValueIsAPlaceholderExceptTheKeysAwaitingKhalil()
