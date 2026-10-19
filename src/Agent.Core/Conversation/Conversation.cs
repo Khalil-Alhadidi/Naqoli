@@ -210,6 +210,9 @@ public sealed class Conversation : IDisposable
     /// </summary>
     public LearningEntry? LastLearningEntry { get; private set; }
 
+    /// <summary>Set for the typed message being handled when it is four to six digits only: no learning row is written.</summary>
+    private bool suppressLearningRow;
+
     /// <summary>True once the consent screen has been shown in this conversation.</summary>
     public bool ConsentShown { get; private set; }
 
@@ -239,6 +242,11 @@ public sealed class Conversation : IDisposable
             SetBusy(true);
             ClearAliasOffer();
             var token = stopping;
+
+            // Known gaps row 34 (Khalil, 19 Oct 2026): a message that is only four to six digits may be a PIN, so it
+            // never writes a learning row, whatever path it takes.
+            var digitsOnly = DigitsOnly(typedText);
+            suppressLearningRow = digitsOnly;
             trace.Record(TraceZone.User, "message_received", FormattableString.Invariant($"length {typedText.Length}"));
             Add(new ConversationMessage(ConversationRole.User, ConversationKind.Typed));
 
@@ -264,6 +272,16 @@ public sealed class Conversation : IDisposable
                 if (isNo)
                 {
                     await CancelCardAsync(token);
+                    return;
+                }
+
+                // Known gaps row 34: a PIN typed into the chat while the PIN field shows never reaches the parse call;
+                // the reply points to the PIN field and the card stays live.
+                if (PinVisible && digitsOnly)
+                {
+                    trace.Record(TraceZone.Code, TraceSteps.PinTypedInChat, null);
+                    AddOutcome(OutcomeCodes.PinRequired);
+                    LastLearningEntry = null;
                     return;
                 }
 
@@ -389,8 +407,23 @@ public sealed class Conversation : IDisposable
         }
         finally
         {
+            suppressLearningRow = false;
             Release();
         }
+    }
+
+    /// <summary>The fewest and the most digits of a message that may be a PIN (known gaps row 34).</summary>
+    private const int PinLikeMinDigits = 4;
+    private const int PinLikeMaxDigits = 6;
+
+    /// <summary>
+    /// True when <paramref name="text"/>, trimmed, is only four to six digits (ASCII, Arabic-Indic or Eastern
+    /// Arabic-Indic) with nothing else: a message that may be a PIN.
+    /// </summary>
+    private static bool DigitsOnly(string text)
+    {
+        var digits = ArabicDigits.ToAscii(text).Trim();
+        return digits.Length is >= PinLikeMinDigits and <= PinLikeMaxDigits && digits.All(char.IsAsciiDigit);
     }
 
     /// <summary>
@@ -1158,6 +1191,13 @@ public sealed class Conversation : IDisposable
     /// </summary>
     private async Task WriteLearningAsync(LearningEntry? entry, CancellationToken token)
     {
+        if (suppressLearningRow)
+        {
+            // A message that may be a PIN is never logged (known gaps row 34), so the runner and the tests see no entry.
+            LastLearningEntry = null;
+            return;
+        }
+
         if (entry is null)
             return;
 

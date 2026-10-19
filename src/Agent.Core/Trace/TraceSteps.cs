@@ -43,6 +43,11 @@ public static class TraceSteps
     /// <summary>The user's orders were read for My orders; the detail is the number of orders.</summary>
     public const string OrdersRead = "orders_read";
 
+    // Code zone: the conversation (milestone 9b close-out, 19 Oct 2026).
+
+    /// <summary>A message of four to six digits typed while a PIN card is live: pin_required, no parse call; no detail.</summary>
+    public const string PinTypedInChat = "pin_typed_in_chat";
+
     // Write zone: the Confirm handler.
     public const string BeginExecute = "begin_execute";
     public const string RecheckOk = "recheck_ok";

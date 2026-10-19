@@ -770,6 +770,87 @@ public sealed class ConversationTests(AgentHost host) : IAsyncDisposable
         }
     }
 
+    private static async Task<List<global::Agent.Core.Learning.LearningEntryRow>> LearningRowsAsync(Session session)
+    {
+        await using var scope = session.Provider.CreateAsyncScope();
+        return await scope.ServiceProvider.GetRequiredService<AgentDbContext>().LearningEntries.AsNoTracking()
+            .OrderBy(r => r.Id)
+            .ToListAsync(Token);
+    }
+
+    [Fact]
+    public async Task APinTypedIntoTheChatWhileAPinCardIsLiveRepliesPinRequiredWithoutAModelCall()
+    {
+        // Known gaps row 34 (Khalil, 19 Oct 2026): four to six digits typed while a PIN card is live never reach the
+        // parse call or the learning log; the card stays live and the PIN field still pays.
+        var parser = new CapturingParser(new Dictionary<string, ParsedRequest>(StringComparer.Ordinal)
+        {
+            ["pay the trader"] = ParsedRequest.Transfer(SeedFacts.Contact("T01").SavedName, 1_100_000, AmountUnit.Dinars),
+        });
+        var session = await StartAsync(SeedFacts.TraderUserId, parser);
+        var conversation = session.Conversation;
+        var pin = SeedFacts.PinOf("U3");
+
+        await conversation.SendAsync("pay the trader");
+        var card = Assert.IsType<CardView>(conversation.Card);
+        Assert.True(conversation.PinVisible);
+        var callsBefore = parser.Calls.Count;
+        var rowsBefore = (await LearningRowsAsync(session)).Count;
+
+        await conversation.SendAsync(" " + ArabicDigits.ToArabicIndic(pin) + " ");
+
+        Assert.Equal(callsBefore, parser.Calls.Count);
+        Assert.Equal(Outcome(OutcomeCodes.PinRequired), LastAgentMessage(conversation));
+        Assert.Equal(CardStatus.Live, conversation.CardState);
+        Assert.Same(card, conversation.Card);
+        Assert.True(conversation.PinVisible);
+        Assert.Null(conversation.LastLearningEntry);
+        Assert.Equal(rowsBefore, (await LearningRowsAsync(session)).Count);
+        Assert.Contains(session.Trace.Entries, e => e.Step == TraceSteps.PinTypedInChat && e.Detail is null);
+        foreach (var entry in session.Trace.Entries)
+        {
+            foreach (var secret in new[] { pin, ArabicDigits.ToArabicIndic(pin) })
+            {
+                Assert.DoesNotContain(secret, entry.Step, StringComparison.Ordinal);
+                Assert.DoesNotContain(secret, entry.Detail ?? string.Empty, StringComparison.Ordinal);
+            }
+        }
+
+        Assert.IsType<ConfirmOutcome.Done>(await conversation.ConfirmAsync(pin));
+    }
+
+    [Fact]
+    public async Task AFourToSixDigitMessageWithNoCardIsParsedButWritesNoLearningRow()
+    {
+        var parser = new CapturingParser(new Dictionary<string, ParsedRequest>(StringComparer.Ordinal));
+        var session = await StartAsync(SeedFacts.DemoUserId, parser);
+        var conversation = session.Conversation;
+
+        await conversation.SendAsync("12345");
+
+        Assert.Single(parser.Calls);
+        Assert.Equal(ReasonCodes.NotUnderstood, LastAgentMessage(conversation).Code);
+        Assert.Null(conversation.LastLearningEntry);
+        Assert.Empty(await LearningRowsAsync(session));
+    }
+
+    [Fact]
+    public async Task AThreeDigitAndASevenDigitMessageKeepTheirLearningRows()
+    {
+        var parser = new CapturingParser(new Dictionary<string, ParsedRequest>(StringComparer.Ordinal));
+        var session = await StartAsync(SeedFacts.DemoUserId, parser);
+        var conversation = session.Conversation;
+
+        await conversation.SendAsync("500");
+        Assert.NotNull(conversation.LastLearningEntry);
+        await conversation.SendAsync("1234567");
+        Assert.NotNull(conversation.LastLearningEntry);
+
+        var rows = await LearningRowsAsync(session);
+        Assert.Equal(["500", "<NUM_1>"], rows.Select(r => r.MaskedText));
+        Assert.All(rows, r => Assert.Equal(ReasonCodes.NotUnderstood, r.Reason));
+    }
+
     [Fact]
     public async Task ListingOrdersJoinsTheCatalogueAndTracesOnlyTheCount()
     {
