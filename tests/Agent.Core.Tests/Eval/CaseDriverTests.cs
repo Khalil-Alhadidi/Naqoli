@@ -34,7 +34,10 @@ public sealed class CaseDriverTests(AgentHost host) : IAsyncDisposable
 
     private sealed record Runner(CaseDriver Driver, EvalClock Clock, RecordingParser Parser);
 
-    private Runner Start()
+    private Runner Start() => Start(null);
+
+    /// <summary>A runner over <paramref name="inner"/>, or over the fixture's scripted sentences when null.</summary>
+    private Runner Start(IParser? inner)
     {
         Assert.SkipUnless(host.DatabaseAvailable, host.SkipReason);
 
@@ -45,7 +48,7 @@ public sealed class CaseDriverTests(AgentHost host) : IAsyncDisposable
 
         var pins = SeedPins.Load(SeedSetTests.SeedDirectory);
         var admin = new WalletAdmin(http, WalletApiFixture.DevelopmentAdminHeaderValue);
-        var parser = new RecordingParser(new ScriptedParser(
+        var parser = new RecordingParser(inner ?? new ScriptedParser(
         [
             new ScriptedSentence(HammoudiSentence, ParsedRequest.Transfer(SeedFacts.Contact("S01").Alias, 50, AmountUnit.Thousand)),
             new ScriptedSentence(TraderSentence, ParsedRequest.Transfer(SeedFacts.Contact("T01").SavedName, 1_100_000, AmountUnit.Dinars)),
@@ -311,6 +314,24 @@ public sealed class CaseDriverTests(AgentHost host) : IAsyncDisposable
         // The first case's card was closed; the second gets a fresh one, and no repeat warning from the first payment.
         Assert.Null(Assert.Single(second.Cards).View.Warning);
     }
+
+    [Fact]
+    public async Task AConfirmThatBringsTheNextCardRecordsTheCardItActedOn()
+    {
+        // CMP-01 on the oracle (milestone 9c, ruling 12): the Confirm step finishes card 1 and brings card 2.
+        var runner = Start(ScriptedParser.Load(DevSetPath));
+        var cmp01 = CaseLoader.Load(DevSetPath).Single(c => c.Id == "CMP-01");
+
+        var seen = await runner.Driver.PlayAsync(cmp01, Token);
+
+        Assert.Null(seen.StepError);
+        Assert.Equal(2, seen.Cards.Count);
+        Assert.Equal(("done", "live"), (seen.Steps[1].ActedCardState, seen.Steps[1].CardState));
+        Assert.Equal(("cancelled", "cancelled"), (seen.Steps[2].ActedCardState, seen.Steps[2].CardState));
+        Assert.Null(seen.Steps[0].ActedCardState);
+    }
+
+    private static string DevSetPath => Path.Combine(SeedHashTests.RepositoryRoot(), "data", ScriptedParser.DevSetFileName);
 
     private sealed class Disposer(Action dispose) : IAsyncDisposable
     {

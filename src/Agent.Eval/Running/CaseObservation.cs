@@ -27,6 +27,12 @@ namespace Agent.Eval.Running;
 /// The text of the alias offer the step opened (milestone 9a): an alias offer message was added during the step and
 /// the offer is still open at its end; null otherwise. Graded against <c>alias_offer</c>, never printed.
 /// </param>
+/// <param name="ActedCardState">
+/// The state at the end of the step of the card that was shown when the step began (milestone 9c, ruling 12), from the
+/// card watcher; null when none was shown. A step that finishes card 1 of a compound message and brings card 2 has
+/// <c>done</c> here and <c>live</c> in <paramref name="CardState"/>; the grader reads a step's <c>card</c> and
+/// <c>card_outcome</c> here first.
+/// </param>
 public sealed record StepObservation(
     int Index,
     string Kind,
@@ -42,7 +48,8 @@ public sealed record StepObservation(
     bool PinSeen,
     IReadOnlyList<string> StatusSequence,
     long ElapsedMs = 0,
-    string? AliasOffered = null);
+    string? AliasOffered = null,
+    string? ActedCardState = null);
 
 /// <summary>
 /// The link from a wallet transaction to the pending record that reached it: the record's ID and the wallet reference its

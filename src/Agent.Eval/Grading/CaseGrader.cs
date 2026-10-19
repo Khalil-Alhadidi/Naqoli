@@ -15,14 +15,24 @@ namespace Agent.Eval.Grading;
 /// </summary>
 /// <remarks>
 /// Fields the key carries for features not built yet, or for people, are recorded with <see cref="FieldVerdict.Graded"/>
-/// false: a card's <c>biller</c> and <c>label</c>, a reply's <c>not_prepared</c> (9c), <c>final.alias_saved</c> (9a), a
-/// refusal's <c>biller</c>, <c>available</c>, <c>what</c> and <c>number_in_reply</c>, and a step's <c>alias_offer</c>,
-/// <c>then_reply</c> and <c>no_card_N</c>.
+/// false: a card's <c>biller</c> and <c>label</c>, and a refusal's <c>biller</c>, <c>available</c>, <c>what</c> and
+/// <c>number_in_reply</c>. From milestone 9c a reply's <c>not_prepared</c> and a step's <c>then_reply</c> and
+/// <c>no_card_N</c> are graded, and a step's <c>card</c> and <c>card_outcome</c> are read on the card the step acted on
+/// (<see cref="StepObservation.ActedCardState"/>).
 /// </remarks>
 public sealed class CaseGrader
 {
     /// <summary>The not-done reasons that make a card <c>closed</c>: the payer's account is closed, or the PIN locked it.</summary>
     public static readonly IReadOnlyList<string> ClosedReasons = [ReasonCodes.AccountClosed, "pin_locked"];
+
+    /// <summary>
+    /// The join of several names in a <c>not_prepared</c> key (milestone 9c): the Arabic comma and a space. A guess until
+    /// a key shows one; every key so far names one part.
+    /// </summary>
+    public const string NotPreparedJoiner = "\u060C ";
+
+    /// <summary>How a not-prepared part with no text of the user's is written for the comparison, before its intent.</summary>
+    public const string NotPreparedTypePrefix = "type:";
 
     private const string Done = "done";
     private const string NotDone = "not_done";
@@ -70,7 +80,7 @@ public sealed class CaseGrader
         if (expect.Final is { } final)
             GradeFinal(final, observation, verdicts);
         GradeAliasSaved(expect.Final?.AliasSaved, observation.WalletDiff, verdicts);
-        GradeSteps(evalCase.Steps, observation.Steps, verdicts);
+        GradeSteps(evalCase.Steps, observation.Steps, observation.Cards.Count, verdicts);
 
         long[] balances = [observation.WalletBefore.BalanceIqd, .. observation.CardsIssued.Select(c => c.BalanceAfterIqd)];
         var outbound = OutboundTextCheck.Check(observation.ParserTexts, seed.AllAccountNumbers, seed.SubscriberNumbers, balances);
@@ -378,9 +388,26 @@ public sealed class CaseGrader
         return items;
     }
 
+    /// <summary><see cref="ReplyItems"/>, each with the message it came from.</summary>
+    private static List<(string Code, long? Amount, ConversationMessage Message)> ReplyMessages(IEnumerable<ConversationMessage> replies)
+        => [.. replies.SelectMany(m => ReplyItems([m]).Select(item => (item.Code, item.Amount, m)))];
+
+    /// <summary>
+    /// The names of a <c>max_three_requests</c> reply as the key writes them: each part's text, or
+    /// <see cref="NotPreparedTypePrefix"/> and its intent when it has none, joined by <see cref="NotPreparedJoiner"/>.
+    /// </summary>
+    public static string? NotPreparedNames(ConversationMessage message)
+    {
+        ArgumentNullException.ThrowIfNull(message);
+        return message.NotPrepared is { } parts
+            ? string.Join(NotPreparedJoiner, parts.Select(p => p.Text ?? NotPreparedTypePrefix + p.Intent.ToString().ToLowerInvariant()))
+            : null;
+    }
+
     private static void GradeReplies(IReadOnlyList<ExpectedReply> expected, IReadOnlyList<ConversationMessage> replies, List<FieldVerdict> verdicts)
     {
-        var observed = ReplyItems(replies);
+        var messages = ReplyMessages(replies);
+        var observed = messages.Select(m => (m.Code, m.Amount)).ToList();
         var next = 0;
         for (var i = 0; i < expected.Count; i++)
         {
@@ -388,6 +415,7 @@ public sealed class CaseGrader
             var reply = expected[i];
             var shownExpected = reply.Amount is { } amount ? reply.Reply + " " + Figure(amount) : reply.Reply;
             var at = observed.FindIndex(next, o => o.Code == reply.Reply && (reply.Amount is null || o.Amount == reply.Amount));
+            var matched = at >= 0 ? messages[at].Message : null;
             if (at >= 0)
             {
                 verdicts.Add(new FieldVerdict(field, shownExpected, shownExpected, true));
@@ -402,8 +430,13 @@ public sealed class CaseGrader
                 verdicts.Add(new FieldVerdict(field, shownExpected, shown, false));
             }
 
+            // Milestone 9c: the names of the matching reply, compared exactly and rendered only as equal or different.
             if (reply.NotPrepared is { } notPrepared)
-                verdicts.Add(new FieldVerdict(field + ".not_prepared", notPrepared, "not graded", true, Graded: false));
+            {
+                verdicts.Add(matched is null
+                    ? new FieldVerdict(field + ".not_prepared", "names", "no reply", false)
+                    : Name(field + ".not_prepared", "names", "names", notPrepared, NotPreparedNames(matched)));
+            }
         }
     }
 
@@ -460,7 +493,7 @@ public sealed class CaseGrader
 
     // ---- steps ----
 
-    private static void GradeSteps(IReadOnlyList<CaseStep> steps, IReadOnlyList<StepObservation> observed, List<FieldVerdict> verdicts)
+    private static void GradeSteps(IReadOnlyList<CaseStep> steps, IReadOnlyList<StepObservation> observed, int cardsIssued, List<FieldVerdict> verdicts)
     {
         for (var i = 0; i < steps.Count; i++)
         {
@@ -475,13 +508,15 @@ public sealed class CaseGrader
                 continue;
             }
 
+            // Ruling 12 (milestone 9c): the card the step acted on, the one shown when it began, when there was one.
+            var actedState = step.ActedCardState ?? step.CardState;
             if (expect.Card is { } card)
             {
-                var shown = step.NewCard ? "reissued" : step.CardIssued ? "issued" : step.CardState ?? "none";
+                var shown = step.NewCard ? "reissued" : step.CardIssued ? "issued" : actedState ?? "none";
                 var ok = card switch
                 {
-                    "unchanged" => !step.CardIssued && step.CardState == "live",
-                    "cancelled" => step.CardState == "cancelled",
+                    "unchanged" => !step.CardIssued && actedState == "live",
+                    "cancelled" => actedState == "cancelled",
                     "reissued" => step.NewCard,
                     _ => false,
                 };
@@ -494,8 +529,8 @@ public sealed class CaseGrader
                     .Where(m => m.Kind == ConversationKind.Outcome && m.Code == OutcomeCodes.NotDone && m.Reason is not null)
                     .Select(m => m.Reason!)
                     .ToList();
-                var shown = step.CardState == NotDone && reasons.Count > 0 ? NotDone + " " + reasons[^1] : step.CardState ?? "none";
-                verdicts.Add(new FieldVerdict(field + ".card_outcome", outcome, shown, OutcomeMatches(outcome, step.CardState, reasons)));
+                var shown = actedState == NotDone && reasons.Count > 0 ? NotDone + " " + reasons[^1] : actedState ?? "none";
+                verdicts.Add(new FieldVerdict(field + ".card_outcome", outcome, shown, OutcomeMatches(outcome, actedState, reasons)));
             }
 
             if (expect.Reply is { } reply)
@@ -515,10 +550,34 @@ public sealed class CaseGrader
             if (expect.AliasOfferSet)
                 verdicts.Add(Name(field + ".alias_offer", "alias", "alias", expect.AliasOffer, step.AliasOffered));
             if (expect.ThenReply is { } thenReply)
-                verdicts.Add(new FieldVerdict(field + ".then_reply", thenReply, "not graded", true, Graded: false));
+                verdicts.Add(ThenReply(field + ".then_reply", thenReply, step.Replies));
             foreach (var (part, noCard) in expect.NoCard)
-                verdicts.Add(new FieldVerdict(field + ".no_card_" + Figure(part), Flag(noCard), "not graded", true, Graded: false));
+            {
+                // no_card_N: true when the case issued fewer than N cards (the Nth part got none), false when it issued N.
+                var fewer = cardsIssued < part;
+                verdicts.Add(new FieldVerdict(field + ".no_card_" + Figure(part), Flag(noCard), Flag(fewer) + " (" + Figure(cardsIssued) + " cards)", fewer == noCard));
+            }
         }
+    }
+
+    /// <summary>
+    /// <c>then_reply</c> (milestone 9c): the step's replies hold an outcome message, and after the last one a reply item
+    /// with <paramref name="code"/> (the reply that follows the outcome of the last prepared part).
+    /// </summary>
+    private static FieldVerdict ThenReply(string field, string code, IReadOnlyList<ConversationMessage> replies)
+    {
+        var lastOutcome = -1;
+        for (var i = 0; i < replies.Count; i++)
+        {
+            if (replies[i].Kind == ConversationKind.Outcome)
+                lastOutcome = i;
+        }
+
+        if (lastOutcome < 0)
+            return new FieldVerdict(field, code, "no outcome", false);
+
+        var after = ReplyItems(replies.Skip(lastOutcome + 1)).Select(r => r.Code).ToList();
+        return new FieldVerdict(field, code, "after the outcome: " + Codes(after), after.Contains(code, StringComparer.Ordinal));
     }
 
     // ---- rendering ----

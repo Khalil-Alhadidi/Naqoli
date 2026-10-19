@@ -3,6 +3,7 @@ using Agent.Core.Conversation;
 using Agent.Core.Learning;
 using Agent.Core.Parsing;
 using Agent.Core.Pipeline;
+using Agent.Core.Requests;
 using Agent.Core.Tests.Wallet;
 using Agent.Eval.Cases;
 using Agent.Eval.Grading;
@@ -702,5 +703,90 @@ public class CaseGraderTests
 
         Assert.Equal(650L, Grader.Grade(evalCase, seen).TimeToFirstCardMs);
         Assert.Null(Grader.Grade(evalCase, Observed(steps: [Step(0, "say", null) with { ElapsedMs = 400 }])).TimeToFirstCardMs);
+    }
+
+    // ---- compound requests (milestone 9c) ----
+
+    private static StepObservation ConfirmStep(string? state, string? acted, params ConversationMessage[] replies)
+        => Step(1, "tap confirm", state, replies: replies) with { ActedCardState = acted };
+
+    private static FieldVerdict StepVerdict(CaseResult result, string field)
+        => Assert.Single(result.Verdicts, v => v.Field == "steps[1]." + field);
+
+    [Fact]
+    public void AStepThatFinishesOneCardAndBringsTheNextGradesTheFirst()
+    {
+        // Ruling 12: card_outcome is read on the card shown when the step began, not on the next card it brought.
+        var evalCase = Case(new Expectation(), Say(), Confirm(new StepExpect(CardOutcome: "done")));
+
+        var acted = Grader.Grade(evalCase, Observed(steps: [Step(0, "say", "live", issued: true), ConfirmStep("live", "done")]));
+        var single = Grader.Grade(evalCase, Observed(steps: [Step(0, "say", "live", issued: true), ConfirmStep("done", null)]));
+        var notActed = Grader.Grade(evalCase, Observed(steps: [Step(0, "say", "live", issued: true), ConfirmStep("live", "live")]));
+
+        Assert.True(StepVerdict(acted, "card_outcome").Ok);
+        Assert.True(StepVerdict(single, "card_outcome").Ok);
+        Assert.False(StepVerdict(notActed, "card_outcome").Ok);
+    }
+
+    [Fact]
+    public void ThenReplyPassesWhenTheCodeFollowsTheOutcome()
+    {
+        var evalCase = Case(new Expectation(), Say(), Confirm(new StepExpect(ThenReply: ReasonCodes.MaxThreeRequests)));
+        var done = Agent(ConversationKind.Outcome, OutcomeCodes.Done);
+        var named = Agent(ConversationKind.Info, ReasonCodes.MaxThreeRequests);
+
+        FieldVerdict Graded(params ConversationMessage[] replies)
+            => StepVerdict(Grader.Grade(evalCase, Observed(steps: [Step(0, "say", "live"), ConfirmStep("done", "done", replies)])), "then_reply");
+
+        var after = Graded(done, named);
+        Assert.True(after.Ok);
+        Assert.True(after.Graded);
+        Assert.False(Graded(named, done).Ok);
+        Assert.False(Graded(named).Ok);
+    }
+
+    [Fact]
+    public void NoCardFourPassesWithThreeCards()
+    {
+        var expect = new StepExpect(CardOutcome: "done") { NoCard = new Dictionary<int, bool> { [4] = true } };
+        var evalCase = Case(new Expectation(), Say(), Confirm(expect));
+        CardResult Done() => new(Card(), "done");
+
+        var three = Grader.Grade(evalCase, Observed(cards: [Done(), Done(), Done()], steps: [Step(0, "say", "live"), ConfirmStep("done", "done")]));
+        var four = Grader.Grade(evalCase, Observed(cards: [Done(), Done(), Done(), Done()], steps: [Step(0, "say", "live"), ConfirmStep("done", "done")]));
+
+        Assert.True(StepVerdict(three, "no_card_4").Ok);
+        Assert.True(StepVerdict(three, "no_card_4").Graded);
+        Assert.False(StepVerdict(four, "no_card_4").Ok);
+    }
+
+    [Fact]
+    public void NotPreparedComparesTheNamesWithoutPrintingThem()
+    {
+        var first = SeedFacts.Contact("S01").SavedName;
+        var second = SeedFacts.Contact("S19").SavedName;
+        ConversationMessage Named(params NotPreparedPart[] parts)
+            => new(ConversationRole.Agent, ConversationKind.Info, ReasonCodes.MaxThreeRequests, NotPrepared: parts);
+        FieldVerdict Grade(string key, ConversationMessage reply)
+            => Assert.Single(
+                Grader.Grade(Case(new Expectation(Replies: [new ExpectedReply(ReasonCodes.MaxThreeRequests, NotPrepared: key)])), Observed(replies: [reply])).Verdicts,
+                v => v.Field == "replies[0].not_prepared");
+
+        var equal = Grade(first, Named(new NotPreparedPart(RequestIntent.Transfer, first)));
+        var both = Grade(first + CaseGrader.NotPreparedJoiner + second,
+            Named(new NotPreparedPart(RequestIntent.Transfer, first), new NotPreparedPart(RequestIntent.Transfer, second)));
+        var different = Grade(first, Named(new NotPreparedPart(RequestIntent.Transfer, second)));
+        var byType = Grade(first, Named(new NotPreparedPart(RequestIntent.Transfer, null)));
+
+        Assert.Equal((true, "names equal"), (equal.Ok, equal.Observed));
+        Assert.True(both.Ok);
+        Assert.Equal((false, "names different"), (different.Ok, different.Observed));
+        Assert.False(byType.Ok);
+        Assert.All([equal, both, different, byType], v =>
+        {
+            Assert.True(v.Graded);
+            Assert.DoesNotContain(first, v.Expected + v.Observed, StringComparison.Ordinal);
+            Assert.DoesNotContain(second, v.Expected + v.Observed, StringComparison.Ordinal);
+        });
     }
 }

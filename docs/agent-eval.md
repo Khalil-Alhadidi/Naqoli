@@ -74,12 +74,7 @@ Only `Conversation.ConfirmAsync` and `Conversation.SettleAsync` reach the Confir
 
 ### Not played yet
 
-These are reported, never faked, so the figures stay honest:
-
-| What | Why | What the runner does |
-|---|---|---|
-| `then_reply`, `no_card_N` (compound requests) | The second and later parts of a compound message are not graded part by part yet | Recorded, not graded |
-| `not_prepared` of a reply | 9c | Recorded, not graded |
+These are reported, never faked, so the figures stay honest. From milestone 9c (19 Oct 2026) nothing is left in this list: `then_reply`, `no_card_N` and a reply's `not_prepared` are graded (below).
 
 A step that throws stops its case with `step_error` (the exception's type only, never its message: the observation keeps `CaseDriver.StepErrorOf`, the type name and a fixed sentence, because a model library's exception may echo the input; review M1); a step that outlasts `CaseTimeoutSeconds` stops it with `timeout`. The run goes on with the next case.
 
@@ -101,7 +96,7 @@ flowchart TD
     learning --> refusal["refusal: reason, no card,<br/>limit, left_today or amount_due figure"]
     refusal --> replies["replies: each expected code (and figure)<br/>in order among the agent's replies"]
     replies --> final["consent_screen, final: balance,<br/>done transactions, codes issued, bills now,<br/>alias saved (every case)"]
-    final --> steps["step expectations: card, card_outcome, reply,<br/>moved, executions, PIN attempts, PIN seen, statuses,<br/>alias offer"]
+    final --> steps["step expectations: card, card_outcome (on the card acted on), reply,<br/>moved, executions, PIN attempts, PIN seen, statuses,<br/>alias offer, then_reply, no_card_N"]
     steps --> outbound["outbound text check"]
     outbound --> passed{"Every graded verdict ok,<br/>outbound ok, learning ok?"}
     passed -- yes --> pass(["Passed"])
@@ -113,12 +108,12 @@ The rules, field by field:
 - **asks**: the number of questions must equal the key's (an extra question fails); each question's `kind`, its `answer` (`tap` or `typed`) when the key gives one, and its `options` as a set (order is not graded).
 - **cards**: in order. A key card with no observed card is `card missing`; an observed card with no key card is `card unexpected`. Every card: `kind`, `amount`, `fee`, `total`, `balance_after`, `pin_required`, `first_time`, `outcome`. Transfers also `to_number`, `display`, `registered_name`, `warning` (null or `repeat`); bills `bill`; purchases `product`. A bill's `biller` and `label` are recorded, not graded.
 - **outcome**: `done`, `cancelled` and `expired` are the card's state of the same name; `failed` and `not_done` are NotDone; `closed` is NotDone with the reason `account_closed` or `pin_locked`.
-- **replies**: each expected reply code appears among the agent's replies in order, with its figure when the key gives one (a balance reply's amount, for example). A reply code is a refusal or note code, `balance`, a not-done outcome's reason, or `card_cancelled`.
+- **replies**: each expected reply code appears among the agent's replies in order, with its figure when the key gives one (a balance reply's amount, for example). A reply code is a refusal or note code, `balance`, a not-done outcome's reason, or `card_cancelled`. A reply's `not_prepared` (milestone 9c, rule 22) is compared with the names the matching `max_three_requests` reply carries (`ConversationMessage.NotPrepared`): each part's text, or `type:<intent>` for a part with no text of the user's (so the mismatch is visible), joined by `CaseGrader.NotPreparedJoiner` (the Arabic comma and a space; a guess until a key names more than one part). Rendered only as `names equal` or `names different`, never the text.
 - **refusal**: a reply with that reason (for `not_supported`, any unsupported reply), and no card. `limit`, `left_today` and `amount_due` (from 16 Oct 2026: a bill's full amount due on `bills_paid_in_full`) must equal the reply's figure; `biller`, `available`, `what` and `number_in_reply` are recorded.
 - **consent_screen**: whether the consent screen was shown.
 - **final**: the balance after the case; the new done transactions in order (type, amount, fee, number, bill and product codes when given); the purchase codes issued; each listed bill's amount due now. A missing tap therefore shows as no new transaction and a balance that did not move, never as a phantom execution.
 - **learning_log**: see the checks below.
-- **step expect**: `card` (`unchanged`: no new card and still live; `cancelled`; `reissued`), `card_outcome`, `reply`, `moved`, `executions`, `pin_attempts_left`, `new_request` (a card was issued in that step), `pin_in_chat_or_logs`, `status_sequence`, and `alias_offer` (milestone 9a, ruling 9): a text passes when the step showed an offer with exactly that text (ordinal); an explicit `null` passes when the step showed none; an absent key grades nothing. The loader keeps the difference between an explicit null and an absent key (`StepExpect.AliasOfferSet`).
+- **step expect**: `card` (`unchanged`: no new card and still live; `cancelled`; `reissued`) and `card_outcome` are read on the card the step acted on, the one shown when the step began (`StepObservation.ActedCardState`, from the card watcher; milestone 9c, ruling 12), or on the card shown at the end when none was shown before, so a Confirm that finishes card 1 of a compound message and brings card 2 grades card 1. `then_reply` (milestone 9c): among the step's replies there is an outcome message, and after the last one a reply with that code. `no_card_N`: `true` passes when the case issued fewer than N cards, `false` when it issued N or more. The others: `reply`, `moved`, `executions`, `pin_attempts_left`, `new_request` (a card was issued in that step), `pin_in_chat_or_logs`, `status_sequence`, and `alias_offer` (milestone 9a, ruling 9): a text passes when the step showed an offer with exactly that text (ordinal); an explicit `null` passes when the step showed none; an absent key grades nothing. The loader keeps the difference between an explicit null and an absent key (`StepExpect.AliasOfferSet`).
 - **final.alias_saved** (milestone 9a, ruling 9): graded on every case, with or without a `final` key. `null` (or no key) passes when the case added no alias to the wallet; a text passes when the case added exactly one alias and its text is that text. Two or more added aliases fail. Rendered as `alias equal`, `alias different`, `null` or a count, never the text.
 - **either** (GAP-08): the case passes when one alternative grades clean on its cards, reply and learning entry; anything else fails `either`.
 

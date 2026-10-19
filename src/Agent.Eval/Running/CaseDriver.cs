@@ -419,7 +419,8 @@ public sealed class CaseDriver
             await PinSeenAsync(conversation.Messages, pin, cancellationToken),
             [.. watcher.Sequence.Skip(statusesBefore)],
             elapsedMs,
-            aliasOffered);
+            aliasOffered,
+            cardBefore is { } acted ? watcher.StateOf(acted) : null);
     }
 
     /// <summary>The reason codes among <paramref name="replies"/>, in order.</summary>
@@ -536,6 +537,13 @@ public sealed class CaseDriver
                 lock (gate)
                     return [.. cards.Select(c => new CardResult(c.View, c.State))];
             }
+        }
+
+        /// <summary>The last state seen of the card <paramref name="pendingId"/>, or null when it was never seen.</summary>
+        public string? StateOf(Guid pendingId)
+        {
+            lock (gate)
+                return cards.FirstOrDefault(c => c.Id == pendingId).State;
         }
 
         public void Observe(CardView? card, CardStatus? status)
