@@ -11,7 +11,7 @@ dotnet run --project src/Wallet.MockApi -- migrate   # create and seed the datab
 dotnet run --project src/Wallet.MockApi              # serve on http://localhost:5276
 ```
 
-`migrate` prints `Database ready: 5 users, 42 accounts, 34 contacts, 88 transactions`. On an empty database it seeds and then sets every user not consented (Khalil, 18 Oct 2026), so the demo starts with the consent screen for everyone; on a database that already has users it changes nothing. Both commands read the seed files first (see Seed); a missing or invalid file stops them with a message that names the file.
+`migrate` prints `Database ready: 5 users, 42 accounts, 34 contacts, 86 transactions`. On an empty database it seeds and then sets every user not consented (Khalil, 18 Oct 2026), so the demo starts with the consent screen for everyone; on a database that already has users it changes nothing. Both commands read the seed files first (see Seed); a missing or invalid file stops them with a message that names the file.
 
 The API serves plain HTTP on loopback and does not redirect to HTTPS. `GET /health` returns `ok`; it is the only wallet route that needs no client key (see Client key). In Development the OpenAPI document is at `/openapi/v1.json`; it is mapped outside the client-key group, so it needs no key either. The connection string and the database routes are in [README.md](../README.md#database).
 
