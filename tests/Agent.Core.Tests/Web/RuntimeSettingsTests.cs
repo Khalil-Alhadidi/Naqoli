@@ -148,6 +148,9 @@ public sealed class RuntimeSettingsTests : IDisposable
     {
         // Milestone 8: the automatic settle's interval is read live by the card panel.
         Assert.Contains(nameof(AgentOptions.CheckingRetrySeconds), RuntimeSettings.EditableNames);
+
+        // Known gaps row 36 (Khalil, 19 Oct 2026): the longest typed message is editable.
+        Assert.Contains(nameof(AgentOptions.MaxMessageChars), RuntimeSettings.EditableNames);
         var current = provider.GetRequiredService<IOptionsMonitor<AgentOptions>>().CurrentValue;
         foreach (var name in RuntimeSettings.EditableNames)
         {

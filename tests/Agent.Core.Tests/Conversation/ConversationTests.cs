@@ -852,6 +852,38 @@ public sealed class ConversationTests(AgentHost host) : IAsyncDisposable
     }
 
     [Fact]
+    public async Task AMessageLongerThanMaxMessageCharsIsRefusedNotUnderstoodBeforeMaskingAndWritesNoLearningRow()
+    {
+        // Known gaps row 36 (Khalil, 19 Oct 2026).
+        var parser = new CapturingParser(new Dictionary<string, ParsedRequest>(StringComparer.Ordinal));
+        var session = await StartAsync(SeedFacts.DemoUserId, parser, o => o.MaxMessageChars = 20);
+        var conversation = session.Conversation;
+        var text = new string('x', 21);
+
+        await conversation.SendAsync(text);
+
+        Assert.Empty(parser.Calls);
+        var refusal = LastAgentMessage(conversation);
+        Assert.Equal((ConversationKind.Refusal, ReasonCodes.NotUnderstood), (refusal.Kind, refusal.Code));
+        Assert.Equal(ReasonCodes.NotUnderstood, Assert.IsType<AgentReply.Refusal>(conversation.LastReply).Code);
+        Assert.Null(conversation.LastLearningEntry);
+        Assert.Empty(await LearningRowsAsync(session));
+        Assert.Contains(session.Trace.Entries, e => e.Step == TraceSteps.MessageTooLong && e.Detail == "21");
+    }
+
+    [Fact]
+    public async Task AMessageOfExactlyMaxMessageCharsIsParsed()
+    {
+        var parser = new CapturingParser(new Dictionary<string, ParsedRequest>(StringComparer.Ordinal));
+        var session = await StartAsync(SeedFacts.DemoUserId, parser, o => o.MaxMessageChars = 20);
+
+        await session.Conversation.SendAsync(new string('x', 20));
+
+        Assert.Single(parser.Calls);
+        Assert.DoesNotContain(session.Trace.Entries, e => e.Step == TraceSteps.MessageTooLong);
+    }
+
+    [Fact]
     public async Task ListingOrdersJoinsTheCatalogueAndTracesOnlyTheCount()
     {
         var session = await StartAsync(

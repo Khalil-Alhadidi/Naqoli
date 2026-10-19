@@ -128,6 +128,13 @@ public sealed class AgentOptions
     public int MaxAliasLength { get; set; } = 100;
 
     /// <summary>
+    /// The longest typed message the agent reads, in characters (known gaps row 36; Khalil, 19 Oct 2026). A longer one
+    /// is refused <c>not_understood</c> before masking, with no parse call and no learning row. Editable live.
+    /// </summary>
+    [Range(1, 32_000)]
+    public int MaxMessageChars { get; set; } = 500;
+
+    /// <summary>
     /// D6: the typed words that mean "yes" while a card is live. A yes never confirms; it points to the Confirm button.
     /// Each entry is a phrase: its words, normalised as a message is (<see cref="Text.ArabicText.Normalize"/>,
     /// punctuation and symbols dropped, Latin lower-cased), kept in order. A message of at most

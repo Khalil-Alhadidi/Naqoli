@@ -48,6 +48,9 @@ public static class TraceSteps
     /// <summary>A message of four to six digits typed while a PIN card is live: pin_required, no parse call; no detail.</summary>
     public const string PinTypedInChat = "pin_typed_in_chat";
 
+    /// <summary>A typed message longer than <c>MaxMessageChars</c>: not_understood, no parse call; the detail is the length.</summary>
+    public const string MessageTooLong = "message_too_long";
+
     // Write zone: the Confirm handler.
     public const string BeginExecute = "begin_execute";
     public const string RecheckOk = "recheck_ok";

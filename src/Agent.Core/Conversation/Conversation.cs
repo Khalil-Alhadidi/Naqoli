@@ -250,6 +250,17 @@ public sealed class Conversation : IDisposable
             trace.Record(TraceZone.User, "message_received", FormattableString.Invariant($"length {typedText.Length}"));
             Add(new ConversationMessage(ConversationRole.User, ConversationKind.Typed));
 
+            // Known gaps row 36 (Khalil, 19 Oct 2026): a message longer than MaxMessageChars is not read. Nothing is
+            // masked, the parser is not called and no learning row is written; a waiting card stays (unclear, D6).
+            if (typedText.Length > options.CurrentValue.MaxMessageChars)
+            {
+                trace.Record(TraceZone.Code, TraceSteps.MessageTooLong, FormattableString.Invariant($"{typedText.Length}"));
+                LastReply = new AgentReply.Refusal(ReasonCodes.NotUnderstood, null, null);
+                LastLearningEntry = null;
+                AddRefusal(ReasonCodes.NotUnderstood);
+                return;
+            }
+
             var pendingNote = PendingNote();
             // D6: a yes or a no is a message of at most MaxYesNoWords words made only of whole yes (or no) entries; a
             // sentence with any other word in it is a request.

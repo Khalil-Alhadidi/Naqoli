@@ -89,6 +89,34 @@ public class AgentOptionsTests
     }
 
     [Theory]
+    [InlineData(null, true)]
+    [InlineData("1", true)]
+    [InlineData("32000", true)]
+    [InlineData("0", false)]
+    [InlineData("32001", false)]
+    public void MaxMessageCharsDefaultsTo500AndStaysInRange(string? value, bool valid)
+    {
+        // Known gaps row 36 (Khalil, 19 Oct 2026).
+        Assert.Equal(500, new AgentOptions().MaxMessageChars);
+        var settings = new Dictionary<string, string?>
+        {
+            ["Agent:WalletBaseUrl"] = "http://localhost",
+            ["Agent:WalletClientKey"] = AgentHost.TestWalletClientKey,
+        };
+        if (value is not null)
+            settings["Agent:MaxMessageChars"] = value;
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(settings).Build();
+        using var provider = new ServiceCollection().AddAgentCore(configuration).BuildServiceProvider();
+
+        var read = () => provider.GetRequiredService<IOptions<AgentOptions>>().Value;
+
+        if (valid)
+            Assert.Equal(value is null ? 500 : int.Parse(value, System.Globalization.CultureInfo.InvariantCulture), read().MaxMessageChars);
+        else
+            Assert.Throws<OptionsValidationException>(read);
+    }
+
+    [Theory]
     [InlineData("40", "10", true)]
     [InlineData("30", "10", false)]
     [InlineData("31", "10", true)]
