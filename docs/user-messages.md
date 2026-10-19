@@ -1,6 +1,6 @@
 # User messages, for Khalil's review
 
-Every text the phone can show, as built on 19 Oct 2026 (after milestone 9b), one row per reason code or outcome. The Arabic is copied as it stands in `src/Agent.Web/Resources/PhoneStrings.resx`; nothing here changes a string. "When shown" is read from the code that maps a code to its key (`ChatSession`, `Orchestrator`, `Checks`, `ConfirmHandler`, `Conversation`, `AliasDirectory`, the phone components). "Next" is what the user is expected to do after reading it. `{0}` and `{1}` are filled by code with figures in Arabic-Indic digits.
+Every text the phone can show, as built on 19 Oct 2026 (after milestone 9c), one row per reason code or outcome. The Arabic is copied as it stands in `src/Agent.Web/Resources/PhoneStrings.resx`; nothing here changes a string. "When shown" is read from the code that maps a code to its key (`ChatSession`, `Orchestrator`, `Checks`, `ConfirmHandler`, `Conversation`, `AliasDirectory`, the phone components). "Next" is what the user is expected to do after reading it. `{0}` and `{1}` are filled by code with figures in Arabic-Indic digits.
 
 The flags in the last column, for Khalil:
 
@@ -48,7 +48,10 @@ Shown as one chat line from the agent. A figure, when the code has one, is forma
 | `Refusal_balance` | رصيدك هو {0} | Never: the balance reply is `Reply_balance`. | | U, F3 (same text as `Reply_balance`) |
 | `Refusal_cannot_change_card` | ما تتغير. الغيها واطلب من جديد | Never: a change to the waiting card is shown as `Unsupported_change_waiting_card`. | | U, F3: two texts for one situation, and they differ |
 | `Refusal_code_entered_by_user` | الكود إنت تكتبه بنفسك | Never: no code path produces `code_entered_by_user`. | | U |
-| `Refusal_max_three_requests` | أقصى شي ثلاث طلبات بالرسالة الوحدة | Not yet: milestone 9c (rule 22). Today a message with several requests gets its first request only, and nothing says there were more. | | U today; F1 for the current behaviour (`docs/known-gaps.md` row 17) |
+| `Refusal_max_three_requests` | أقصى شي ثلاث طلبات بالرسالة الوحدة | After the last prepared card of a message with more requests than `Agent:MaxRequestsPerMessage` (3) is finished (done, not done, cancelled or expired), or its refusal or reply is shown; followed at once by `Refusal_not_prepared` (rule 22, milestone 9c, CMP-07). A new message before then drops the rest, and neither line is shown. | Ask again for the rest, one message at a time. | |
+| `Refusal_not_prepared` | TODO-AR | Right after `Refusal_max_three_requests`: `{0}` the names of the parts not prepared, in the order spoken, each the user's own words (a recipient, a biller or label, an operator) or the request type's word (`Type_transfer`, `Type_bill`, `Type_purchase`, `Type_request`), joined by `List_joiner` (milestone 9c). | Ask again for those parts. | Awaiting Khalil (`TODO-AR`) |
+| `List_joiner` | TODO-AR | Not shown alone: the template that joins two names in `Refusal_not_prepared` (`{0}` the names so far, `{1}` the next), applied in order (milestone 9c). | | Awaiting Khalil (`TODO-AR`) |
+| `Type_request` | TODO-AR | In `Refusal_not_prepared`, the word for a part not prepared that has no type word of its own, such as a balance question (milestone 9c). | | Awaiting Khalil (`TODO-AR`) |
 | `Refusal_caller_cancelled` | وقف قبل الإرسال. ما انسحب شي | Never on screen: `caller_cancelled` is written on the pending record when the browser closes during a Confirm, and the next circuit shows the record's state, not this text. | | U |
 
 ## 2. Unsupported requests (`Unsupported_<reason>`)
@@ -182,7 +185,7 @@ Built by code; the labels below frame figures from the wallet. The card's type w
 
 ## 10. Keys never shown today
 
-`Refusal_consent_required`, `Refusal_biller_unavailable`, `Refusal_balance`, `Refusal_cannot_change_card`, `Refusal_code_entered_by_user`, `Refusal_caller_cancelled`, `Unsupported_other_balance`, `Unsupported_other_currency`, `Unsupported_part_of_bill`; and `Refusal_max_three_requests` until milestone 9c. None is harmful; each is either a duplicate of the key that is shown, a reason the code never produces, or a reserved code.
+`Refusal_consent_required`, `Refusal_biller_unavailable`, `Refusal_balance`, `Refusal_cannot_change_card`, `Refusal_code_entered_by_user`, `Refusal_caller_cancelled`, `Unsupported_other_balance`, `Unsupported_other_currency`, `Unsupported_part_of_bill`. None is harmful; each is either a duplicate of the key that is shown, a reason the code never produces, or a reserved code.
 
 ## Summary of the flags
 
@@ -195,7 +198,7 @@ Built by code; the labels below frame figures from the wallet. The card's type w
 5. `Refusal_bills_paid_in_full`: asking again without an amount gives the card.
 6. `Refusal_account_choice_unavailable`: the card that follows pays from the usual account.
 7. `Refusal_not_done_nothing_taken`: no next step in any of its eight situations.
-8. A message with several requests: the first is handled and nothing says the rest were dropped (until 9c).
+8. (Closed by milestone 9c: a message with several requests now runs every part up to the cap and names the rest.)
 
 **F2, a generic string over a specific situation**
 
@@ -211,7 +214,7 @@ Built by code; the labels below frame figures from the wallet. The card's type w
 15. `Refusal_account_closed`: the user's account, the recipient's account, or an alias target.
 16. `Refusal_card_cancelled`: cancelled by a no word, or cancelled because a new request replaced it.
 17. `Question_which_contact`: "type a name" and "tap one of these".
-18. `Outcome_already_handled`: a double tap and a record not found.
+18. `Outcome_already_handled`: a double tap, a record not found, and (milestone 9c) a tap on a card that has given way to the next one.
 19. `Refusal_recipient_not_found` after `Option_NoneOfThese`: the user typed no name.
 20. Same text, two keys: `Reply_balance` = `Refusal_balance`; `Refusal_only_own_balance` = `Unsupported_other_balance`; `Refusal_dinars_only` = `Unsupported_other_currency`; `Refusal_account_choice_unavailable` = `Unsupported_choose_account`; `Unsupported_refers_back` = `Unsupported_same_as_last_time`; `Card_Cancel` = `Option_CancelQuestion`; `Offer_save_alias_button` = `Directory_Save`; `Directory_Open` = `Directory_Title`; `Orders_Open` = `Orders_Title`.
 21. Two texts for one situation: `Refusal_cannot_change_card` (never shown) and `Unsupported_change_waiting_card` (shown) differ; `Card_Cancelled` on the card and `Refusal_card_cancelled` in the chat.

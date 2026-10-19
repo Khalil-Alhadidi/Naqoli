@@ -24,6 +24,6 @@ Prompt changes made outside the milestone 10 tuning pass, each for a defect foun
 
 ## Not on this list
 
-- The items deferred to milestones 8, 9b and 9c in `docs/build-plan.md` (AMB-23, MAL-09, NOGO-12, GAP-06, the compound cases) are feature work, not tuning.
+- The items deferred to milestones 8, 9b and 9c in `docs/build-plan.md` (AMB-23, MAL-09, NOGO-12, GAP-06, the compound cases) are feature work, not tuning. All are built except GAP-06, which stays for the milestone 10 prompt pass; the compound cases CMP-01, CMP-03, CMP-05, CMP-07 and CMP-09 were built in milestone 9c (19 Oct 2026) and pass on the oracle.
 - Haiku's remaining misses on every clean run of 16 Oct 2026 (CLN-09-v1 and CLN-23-v1, a question where the key sends the bill straight to the card; AMB-03, AMB-19, RED-10) are parse quality at the cheapest candidate; they are measured again in the milestone 10 comparison rather than tuned for. MAL-06 passes on every candidate with prompt version 3.
 - Item 2 (AMB-06) on prompt version 3: it flips on Sonnet (passes 1 of 3 clean runs) and on Opus (1 of 3), and passes on Haiku; still prompt version 4, milestone 10.
