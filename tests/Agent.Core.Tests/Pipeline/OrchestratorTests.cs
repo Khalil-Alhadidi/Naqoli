@@ -613,6 +613,28 @@ public class OrchestratorTests(AgentHost host)
     }
 
     [Fact]
+    public async Task AnUnknownProductIsRefusedWithTheProviderCodeAsDetail()
+    {
+        await StartAsync();
+
+        // NOGO-12: Korek has no 25,000 credit card; the detail is the provider code, type and value (ruling 2).
+        var refusal = Refusal(await HandleAsync(U1, ParsedRequest.Purchase("korek", "credit", 25_000)), ReasonCodes.ProductNotFound);
+        Assert.Equal("korek credit 25000", refusal.Detail);
+    }
+
+    [Fact]
+    public async Task ProductOptionsCarryTheirType()
+    {
+        await StartAsync();
+
+        // AMB-23's parse: three credit cards across the operators, each option naming its type.
+        var question = Question(
+            await HandleAsync(U1, ParsedRequest.Purchase(null, "credit", 5_000)), QuestionKinds.WhichProduct, QuestionAnswer.Tap);
+        Assert.NotEmpty(question.Options);
+        Assert.All(question.Options, o => Assert.Equal("credit", o.ProductType));
+    }
+
+    [Fact]
     public async Task PurchaseWithNothingNamedAsksTheOperator()
     {
         await StartAsync();

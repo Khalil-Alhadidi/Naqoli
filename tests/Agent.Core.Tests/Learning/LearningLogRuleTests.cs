@@ -57,6 +57,32 @@ public class LearningLogRuleTests
         Assert.Equal(new LearningEntry(ReasonCodes.ProductNotFound, "korek credit 25000"), entry);
     }
 
+    [Fact]
+    public void ProductDetailIsTheProviderCodeTypeAndValue()
+        => Assert.Equal("korek credit 25000", LearningLogRule.ProductDetail("korek", "typed", "credit", 25_000));
+
+    [Fact]
+    public void ProductDetailFallsBackToTheTypedOperator()
+        => Assert.Equal("fastlink credit 5000", LearningLogRule.ProductDetail(null, "fastlink", "credit", 5_000));
+
+    [Fact]
+    public void ProductDetailDropsMissingParts()
+    {
+        Assert.Equal("internet", LearningLogRule.ProductDetail(null, null, "internet", null));
+        Assert.Null(LearningLogRule.ProductDetail(null, null, null, null));
+    }
+
+    [Fact]
+    public void AProductNotFoundRefusalWithADetailKeepsIt()
+    {
+        // The orchestrator passes the provider code's detail (ruling 2); the typed operator text does not replace it.
+        var entry = LearningLogRule.EntryFor(
+            new AgentReply.Refusal(ReasonCodes.ProductNotFound, "korek credit 25000", null),
+            ParsedRequest.Purchase("typed", "credit", 25_000));
+
+        Assert.Equal(new LearningEntry(ReasonCodes.ProductNotFound, "korek credit 25000"), entry);
+    }
+
     [Theory]
     [InlineData(LearningLogRule.SameAsLastTime)]
     [InlineData(LearningLogRule.RefersBack)]

@@ -16,6 +16,8 @@ public enum QuestionAnswer
 /// <summary>
 /// One option of a question, built by code from the wallet's data (rule 3). <see cref="Value"/> is what a tap sends
 /// back: a contact code, bill code, product code, operator code, an amount in dinars, or <see cref="StoreInternet"/>.
+/// <see cref="ProductType"/> is the catalogue type of a product option (<c>credit</c> or <c>internet</c>, ruling 3 of
+/// milestone 9b: two products of one operator and one price differ only by it); null on every other option.
 /// </summary>
 public sealed record Option(
     string Value,
@@ -23,7 +25,8 @@ public sealed record Option(
     string? RegisteredName,
     DateTimeOffset? LastSentAt,
     long? LastSentAmountIqd,
-    long? AmountIqd)
+    long? AmountIqd,
+    string? ProductType = null)
 {
     /// <summary>The value of the "a card from the store" option of a <c>bill_or_store</c> question (rule 13).</summary>
     public const string StoreInternet = "store:internet";

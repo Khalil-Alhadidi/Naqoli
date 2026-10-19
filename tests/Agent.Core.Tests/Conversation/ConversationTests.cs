@@ -1180,6 +1180,61 @@ public sealed class ConversationTests(AgentHost host) : IAsyncDisposable
     }
 
     /// <summary>A parser whose model is down.</summary>
+    /// <summary>The oracle: the scripted parser over the development set and its sidecar of parses.</summary>
+    private static ScriptedParser Oracle()
+        => ScriptedParser.Load(Path.Combine(SeedHashTests.RepositoryRoot(), "data", ScriptedParser.DevSetFileName));
+
+    [Fact]
+    public async Task ABareValueListsTheMatchingProductsAndTheTapGivesTheCard()
+    {
+        // AMB-23 on the oracle: rule 12 as decided lists the three credit cards of five across the operators.
+        var session = await StartAsync(SeedFacts.DemoUserId, Oracle());
+        var conversation = session.Conversation;
+
+        await conversation.SendAsync(DevSetText.Say("AMB-23", 0));
+        var question = Assert.IsType<AgentReply.Question>(conversation.Question);
+        Assert.Equal(QuestionKinds.WhichProduct, question.Kind);
+        Assert.Equal(["ZN-CR-5", "AC-CR-5", "KR-CR-5"], question.Options.Select(o => o.Value));
+
+        await conversation.TapOptionAsync("KR-CR-5");
+
+        var card = Assert.IsType<CardView>(conversation.Card);
+        Assert.Equal(("KR-CR-5", 5_000L), (card.ProductCode, card.AmountIqd));
+    }
+
+    [Fact]
+    public async Task ALatinOperatorSpellingGoesStraightToTheCard()
+    {
+        // MAL-09 on the oracle: "asia", configured under the provider code, names Asiacell (U2).
+        var session = await StartAsync(SeedFacts.TightUserId, Oracle(), o => o.ProviderSpellings["asiacell"] = ["asia"]);
+        var conversation = session.Conversation;
+
+        await conversation.SendAsync(DevSetText.Say("MAL-09", 0));
+
+        Assert.Null(conversation.Question);
+        var card = Assert.IsType<CardView>(conversation.Card);
+        Assert.Equal("AC-CR-5", card.ProductCode);
+    }
+
+    [Fact]
+    public async Task AnUnknownProductWritesTheLearningRowWithTheProviderCode()
+    {
+        // NOGO-12 on the oracle: Korek has no 25,000 credit card; the learning row names the provider code (ruling 2).
+        var session = await StartAsync(SeedFacts.DemoUserId, Oracle());
+        var conversation = session.Conversation;
+
+        await conversation.SendAsync(DevSetText.Say("NOGO-12", 0));
+
+        Assert.Null(conversation.Card);
+        var refusal = LastAgentMessage(conversation);
+        Assert.Equal((ConversationKind.Refusal, ReasonCodes.ProductNotFound), (refusal.Kind, refusal.Code));
+
+        await using var scope = session.Provider.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<AgentDbContext>();
+        var row = Assert.Single(await db.LearningEntries.AsNoTracking().ToListAsync(Token));
+        Assert.Equal((ReasonCodes.ProductNotFound, "korek credit 25000"), (row.Reason, row.Detail));
+    }
+
     private sealed class UnavailableParser : IParser
     {
         public string Name => "unavailable";

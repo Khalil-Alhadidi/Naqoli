@@ -168,17 +168,31 @@ public static class LearningLogRule
                 return request.BillerCode;
 
             case ProductNotFound:
-                string?[] parts =
-                [
-                    request.OperatorText,
-                    request.ProductType,
-                    request.ProductValue?.ToString(CultureInfo.InvariantCulture),
-                ];
-                var named = parts.Where(p => !string.IsNullOrWhiteSpace(p)).ToArray();
-                return named.Length == 0 ? null : string.Join(' ', named);
+                return ProductDetail(null, request.OperatorText, request.ProductType, request.ProductValue);
 
             default:
                 return null;
         }
+    }
+
+    /// <summary>
+    /// The learning-log detail of a <c>product_not_found</c> refusal (ruling 2 of milestone 9b, NOGO-12): the provider
+    /// code when the typed operator named one, else the typed operator text as the user wrote it, then the product type,
+    /// then the value in dinars, space-separated, each part dropped when missing. Null when every part is missing.
+    /// </summary>
+    /// <param name="providerCode">The provider the typed operator named (<c>ProductResolution.NotFound.ProviderCode</c>).</param>
+    /// <param name="operatorText">The operator as the user typed it; used only when <paramref name="providerCode"/> is missing.</param>
+    /// <param name="productType">The product type asked for (<c>credit</c>, <c>internet</c>).</param>
+    /// <param name="productValue">The face value asked for, in dinars.</param>
+    public static string? ProductDetail(string? providerCode, string? operatorText, string? productType, long? productValue)
+    {
+        string?[] parts =
+        [
+            string.IsNullOrWhiteSpace(providerCode) ? operatorText : providerCode,
+            productType,
+            productValue?.ToString(CultureInfo.InvariantCulture),
+        ];
+        var named = parts.Where(p => !string.IsNullOrWhiteSpace(p)).ToArray();
+        return named.Length == 0 ? null : string.Join(' ', named);
     }
 }

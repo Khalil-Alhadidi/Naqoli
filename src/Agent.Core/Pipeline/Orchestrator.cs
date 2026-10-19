@@ -571,8 +571,11 @@ public sealed class Orchestrator
                         null, null, null, null))
                     .ToList();
                 return await AskAsync(userId, QuestionKinds.WhichOperator, operatorOptions, cancellationToken);
-            case ProductResolution.NotFound:
-                return await RefuseAsync(userId, ReasonCodes.ProductNotFound, null, null, cancellationToken);
+            case ProductResolution.NotFound notFound:
+                // Ruling 2 of milestone 9b (NOGO-12): the learning-log detail names the provider, the type and the value.
+                var detail = LearningLogRule.ProductDetail(
+                    notFound.ProviderCode, request.OperatorText, request.ProductType, request.ProductValue);
+                return await RefuseAsync(userId, ReasonCodes.ProductNotFound, detail, null, cancellationToken);
             default:
                 throw new InvalidOperationException("Unknown product resolution.");
         }
@@ -634,7 +637,7 @@ public sealed class Orchestrator
     private List<Option> ProductOptions(IReadOnlyList<WalletProduct> products)
         => products
             .Take(options.MaxProductsInOneQuestion)
-            .Select(p => new Option(p.Code, p.ProviderNameAr, null, null, null, p.PriceIqd))
+            .Select(p => new Option(p.Code, p.ProviderNameAr, null, null, null, p.PriceIqd, p.Type))
             .ToList();
 
     private async Task<AgentReply> AskAsync(int userId, string kind, IReadOnlyList<Option> choices, CancellationToken cancellationToken)
