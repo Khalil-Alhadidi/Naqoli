@@ -41,7 +41,7 @@ public class CaseGraderTests
 
     private static CardView Card(long fee = 1_000, string? display = null) => new(
         Guid.NewGuid(), "transfer", 50_000, fee, 50_000 + fee, Balance - 50_000 - fee, display ?? Display, Registered,
-        SeedFacts.HammoudiPhone, null, null, false, false, null, DateTimeOffset.UtcNow.AddSeconds(45));
+        SeedFacts.HammoudiPhone, null, null, null, false, false, null, DateTimeOffset.UtcNow.AddSeconds(45));
 
     private static SnapshotTransaction Transfer(long fee = 1_000)
         => new(1_000, "transfer", "done", 50_000, fee, 50_000 + fee, SeedFacts.HammoudiPhone, null, null);

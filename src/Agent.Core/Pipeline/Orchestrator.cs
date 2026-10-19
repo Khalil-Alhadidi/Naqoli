@@ -255,7 +255,8 @@ public sealed class Orchestrator
             previous.BillAccountId,
             previous.BillCode,
             previous.ProductId,
-            previous.ProductCode);
+            previous.ProductCode,
+            previous.ProductType);
         var repeat = kind == ReissueKind.SendAgain;
 
         switch (previous.Type)
@@ -300,7 +301,7 @@ public sealed class Orchestrator
                     return await RefuseAsync(userId, ReasonCodes.ProductNotFound, null, null, cancellationToken);
                 trace.Record(TraceZone.Code, TraceSteps.AmountResolved, product.PriceIqd.ToString(CultureInfo.InvariantCulture));
                 var purchase = new CheckInput(userId, PurchaseType, product.PriceIqd, null, null, null, null, product.ProductId, SkipFormat: true);
-                return await CheckAndIssueAsync(userId, purchase, subject with { ProductId = product.ProductId }, repeat, cancellationToken);
+                return await CheckAndIssueAsync(userId, purchase, subject with { ProductId = product.ProductId, ProductType = product.Type }, repeat, cancellationToken);
 
             default:
                 throw new InvalidOperationException("The pending record has no card to rebuild.");
@@ -345,7 +346,7 @@ public sealed class Orchestrator
             switch (await wallet.GetAccountByPhoneAsync(phone, cancellationToken))
             {
                 case WalletResult<WalletAccount>.Ok { Value: var account }:
-                    subject = new CardSubject(TransferType, account.Phone, account.AccountId, phone, account.RegisteredName, null, null, null, null);
+                    subject = new CardSubject(TransferType, account.Phone, account.AccountId, phone, account.RegisteredName, null, null, null, null, null);
                     accountStatus = account.Status;
                     trace.Record(TraceZone.Code, TraceSteps.RecipientResolved, RecipientByNumber);
                     break;
@@ -399,7 +400,7 @@ public sealed class Orchestrator
                         ? new AliasOffer(typedText, chosen.AccountId, chosen.RegisteredName ?? chosen.Text)
                         : null;
                     subject = new CardSubject(
-                        TransferType, chosen.Phone, chosen.AccountId, chosen.Text, chosen.RegisteredName, null, null, null, null, alias);
+                        TransferType, chosen.Phone, chosen.AccountId, chosen.Text, chosen.RegisteredName, null, null, null, null, null, alias);
                     accountStatus = chosen.AccountStatus;
                     trace.Record(
                         TraceZone.Code,
@@ -533,7 +534,7 @@ public sealed class Orchestrator
 
         trace.Record(TraceZone.Code, TraceSteps.RecipientResolved, BillType);
         trace.Record(TraceZone.Code, TraceSteps.AmountResolved, bill.AmountDueIqd.ToString(CultureInfo.InvariantCulture));
-        var subject = new CardSubject(BillType, null, null, bill.Label ?? bill.BillerName, null, bill.BillAccountId, bill.Code, null, null);
+        var subject = new CardSubject(BillType, null, null, bill.Label ?? bill.BillerName, null, bill.BillAccountId, bill.Code, null, null, null);
         var input = new CheckInput(userId, BillType, bill.AmountDueIqd, null, null, null, bill.BillAccountId, null, SkipFormat: true);
         return await CheckAndIssueAsync(userId, input, subject, repeatWarning: false, cancellationToken);
     }
@@ -582,7 +583,7 @@ public sealed class Orchestrator
 
         trace.Record(TraceZone.Code, TraceSteps.RecipientResolved, PurchaseType);
         trace.Record(TraceZone.Code, TraceSteps.AmountResolved, product.PriceIqd.ToString(CultureInfo.InvariantCulture));
-        var subject = new CardSubject(PurchaseType, null, null, product.ProviderNameAr, null, null, null, product.ProductId, product.Code);
+        var subject = new CardSubject(PurchaseType, null, null, product.ProviderNameAr, null, null, null, product.ProductId, product.Code, product.Type);
         var input = new CheckInput(userId, PurchaseType, product.PriceIqd, null, null, null, null, product.ProductId, SkipFormat: true);
         return await CheckAndIssueAsync(userId, input, subject, repeatWarning: false, cancellationToken);
     }

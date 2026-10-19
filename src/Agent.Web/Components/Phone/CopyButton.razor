@@ -3,9 +3,10 @@
 @inject IStringLocalizer<PhoneStrings> Strings
 
 @* The copy button (milestone 9b): copies a purchase code through the browser's clipboard. The copied text is never
-   logged or traced; on success the label reads Purchase_code_copied for two seconds. *@
-<MudButton data-testid="@TestId" data-copied="@(copied ? "true" : "false")" Variant="Variant.Outlined" Size="Size.Small"
-           Disabled="@copying" OnClick="CopyAsync">@(copied ? Strings["Purchase_code_copied"] : Strings["Purchase_code_copy"])</MudButton>
+   logged or traced; on success the label reads Purchase_code_copied for two seconds, on failure Purchase_code_copy_failed
+   for the same two seconds (security review R3). *@
+<MudButton data-testid="@TestId" data-copied="@CopiedState" Variant="Variant.Outlined" Size="Size.Small"
+           Disabled="@copying" OnClick="CopyAsync">@Label</MudButton>
 
 @code {
     private static readonly TimeSpan CopiedFor = TimeSpan.FromSeconds(2);
@@ -14,6 +15,7 @@
     // Security review M1: the import task is cached, not its result, so taps before the import resolves share one import.
     private Task<IJSObjectReference>? moduleTask;
     private bool copied;
+    private bool failed;
     private bool copying;
     private bool disposed;
     private int copies;
@@ -25,6 +27,10 @@
     /// <summary>The button's <c>data-testid</c>.</summary>
     [Parameter, EditorRequired]
     public string TestId { get; set; } = string.Empty;
+
+    private string CopiedState => copied ? "true" : failed ? "failed" : "false";
+
+    private string Label => Strings[copied ? "Purchase_code_copied" : failed ? "Purchase_code_copy_failed" : "Purchase_code_copy"];
 
     private async Task CopyAsync()
     {
@@ -42,8 +48,8 @@
         }
         catch (Exception ex) when (ex is JSException or JSDisconnectedException or OperationCanceledException)
         {
-            // The clipboard or the circuit failed: the label stays as it is. Nothing about the text is logged. A failed
-            // import is not cached, so the next tap tries again.
+            // The clipboard or the circuit failed: the label says so for two seconds. Nothing about the text is logged. A
+            // failed import is not cached, so the next tap tries again.
             if (moduleTask is { IsFaulted: true } or { IsCanceled: true })
                 moduleTask = null;
             ok = false;
@@ -53,14 +59,12 @@
             copying = false;
         }
 
-        if (!ok || disposed)
-        {
-            if (!disposed)
-                StateHasChanged();
+        if (disposed)
             return;
-        }
 
-        copied = true;
+        // The clipboard needs HTTPS or localhost and a user gesture; without them copyText returns false.
+        copied = ok;
+        failed = !ok;
         var copy = ++copies;
         StateHasChanged();
         try
@@ -76,6 +80,7 @@
         if (copy == copies && !disposed)
         {
             copied = false;
+            failed = false;
             StateHasChanged();
         }
     }

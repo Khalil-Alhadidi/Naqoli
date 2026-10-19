@@ -171,6 +171,7 @@
   <!-- Milestone 9b: the copy button, the product type word on options, My orders. English placeholders awaiting Khalil's Arabic. -->
   <data name="Purchase_code_copy" xml:space="preserve"><value>TODO-AR Copy</value></data>
   <data name="Purchase_code_copied" xml:space="preserve"><value>TODO-AR Copied</value></data>
+  <data name="Purchase_code_copy_failed" xml:space="preserve"><value>TODO-AR Could not copy. Write it down</value></data>
   <data name="Product_type_credit" xml:space="preserve"><value>TODO-AR credit</value></data>
   <data name="Product_type_internet" xml:space="preserve"><value>TODO-AR internet</value></data>
   <data name="Orders_Open" xml:space="preserve"><value>TODO-AR My orders</value></data>

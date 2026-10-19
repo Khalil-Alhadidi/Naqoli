@@ -27,7 +27,7 @@ public class PhoneStringsTests
     private static readonly string[] AwaitingKhalil =
     [
         "Orders_Empty", "Orders_Open", "Orders_Title", "Product_type_credit", "Product_type_internet", "Purchase_code_copied",
-        "Purchase_code_copy",
+        "Purchase_code_copy", "Purchase_code_copy_failed",
     ];
 
     [Fact]

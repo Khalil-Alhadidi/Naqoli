@@ -14,6 +14,7 @@ public class PhoneFormatTests
         // 23:30 UTC is 02:30 the next day in Iraq (UTC+3).
         var instant = new DateTimeOffset(2026, 10, 18, 23, 30, 0, TimeSpan.Zero);
 
-        Assert.Equal(ArabicDigits.ToArabicIndic("2026/10/19"), PhoneFormat.Date(instant));
+        // dd/MM/yyyy (security review R2 of milestone 9b).
+        Assert.Equal(ArabicDigits.ToArabicIndic("19/10/2026"), PhoneFormat.Date(instant));
     }
 }

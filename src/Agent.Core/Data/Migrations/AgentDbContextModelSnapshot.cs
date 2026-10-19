@@ -173,6 +173,10 @@ namespace Agent.Core.Data.Migrations
                     b.Property<int?>("ProductId")
                         .HasColumnType("int");
 
+                    b.Property<string>("ProductType")
+                        .HasMaxLength(16)
+                        .HasColumnType("nvarchar(16)");
+
                     b.Property<string>("PurchaseCodeLast4")
                         .HasMaxLength(4)
                         .HasColumnType("nvarchar(4)");

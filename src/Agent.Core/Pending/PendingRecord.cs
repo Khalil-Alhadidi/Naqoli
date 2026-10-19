@@ -44,6 +44,9 @@ public sealed class PendingRecord
 
     public string? ProductCode { get; set; }
 
+    /// <summary>The catalogue product's type (<c>credit</c>, <c>internet</c>), for the card's type word (security review R4 of milestone 9b).</summary>
+    public string? ProductType { get; set; }
+
     public bool PinRequired { get; set; }
 
     public bool FirstTime { get; set; }

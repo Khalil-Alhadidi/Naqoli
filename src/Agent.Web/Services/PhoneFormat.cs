@@ -30,9 +30,9 @@ public static class PhoneFormat
     /// <summary>Any text with its ASCII digits as Arabic-Indic digits (a reference, a code, a phone).</summary>
     public static string Digits(string value) => ArabicDigits.ToArabicIndic(value);
 
-    /// <summary>The Iraq date of <paramref name="instant"/> (<see cref="AgentClock.IraqOffset"/>), <c>yyyy/MM/dd</c>, with Arabic-Indic digits.</summary>
+    /// <summary>The Iraq date of <paramref name="instant"/> (<see cref="AgentClock.IraqOffset"/>), <c>dd/MM/yyyy</c> (security review R2 of milestone 9b), with Arabic-Indic digits.</summary>
     public static string Date(DateTimeOffset instant)
-        => ArabicDigits.ToArabicIndic(instant.ToOffset(AgentClock.IraqOffset).ToString("yyyy/MM/dd", CultureInfo.InvariantCulture));
+        => ArabicDigits.ToArabicIndic(instant.ToOffset(AgentClock.IraqOffset).ToString("dd/MM/yyyy", CultureInfo.InvariantCulture));
 
     /// <summary>
     /// The label of a question option: the store option's string; else the display name, then the product type's word
@@ -48,14 +48,24 @@ public static class PhoneFormat
             return text["Option_store_internet"].Value;
         if (option.Display is { } display)
         {
-            // Security review M3: the key is built from a wallet value; a type without a resource gets no word.
             var label = display;
-            if (option.ProductType is { } type && text["Product_type_" + type] is { ResourceNotFound: false } word)
-                label += " " + word.Value;
+            if (ProductTypeWord(option.ProductType, text) is { } word)
+                label += " " + word;
             return option.AmountIqd is { } price ? label + " " + Amount(price, text) : label;
         }
 
         return option.AmountIqd is { } amount ? Amount(amount, text) : option.Value;
+    }
+
+    /// <summary>
+    /// The type word of a product type (<c>Product_type_credit</c>, <c>Product_type_internet</c>), or null when there is
+    /// no type or no resource for it: the key is built from a wallet value (security review M3 of milestone 9b).
+    /// </summary>
+    public static string? ProductTypeWord(string? type, IStringLocalizer<PhoneStrings> text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+
+        return type is not null && text["Product_type_" + type] is { ResourceNotFound: false } word ? word.Value : null;
     }
 
     /// <summary>A figure in the console: ASCII digits with a comma, invariant.</summary>

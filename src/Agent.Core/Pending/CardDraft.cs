@@ -19,6 +19,7 @@ public sealed record CardDraft(
     string? BillCode,
     int? ProductId,
     string? ProductCode,
+    string? ProductType,
     bool PinRequired,
     bool FirstTime,
     string? Warning);

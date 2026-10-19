@@ -11,7 +11,14 @@
             <div class="phone-card-title">@Text["Card_Title"] <small>@Text["Type_" + card.Type]</small></div>
             <div class="phone-card-row">
                 <span>@Text["Card_To"]</span>
-                <span data-testid="card-display"><bdi>@PhoneFormat.Digits(card.DisplayName ?? string.Empty)</bdi></span>
+                <span>
+                    <span data-testid="card-display"><bdi>@PhoneFormat.Digits(card.DisplayName ?? string.Empty)</bdi></span>
+                    @* A purchase's type word beside the operator (security review R4), only when its key exists. *@
+                    @if (PhoneFormat.ProductTypeWord(card.ProductType, Text) is { } typeWord)
+                    {
+                        <span data-testid="card-product-type">@typeWord</span>
+                    }
+                </span>
             </div>
             @if (card.RegisteredName is not null)
             {

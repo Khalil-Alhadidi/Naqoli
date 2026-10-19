@@ -40,6 +40,7 @@ public class AgentDbContext(DbContextOptions<AgentDbContext> options) : DbContex
             e.Property(p => p.RegisteredName).HasMaxLength(TextLength);
             e.Property(p => p.BillCode).HasMaxLength(TextLength);
             e.Property(p => p.ProductCode).HasMaxLength(TextLength);
+            e.Property(p => p.ProductType).HasMaxLength(16);
             e.Property(p => p.Warning).HasMaxLength(TextLength);
             e.Property(p => p.Reference).HasMaxLength(TextLength);
             e.Property(p => p.ResultCode).HasMaxLength(TextLength);

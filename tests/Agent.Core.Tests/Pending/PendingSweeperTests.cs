@@ -36,6 +36,7 @@ public class PendingSweeperTests(AgentHost host)
         BillCode: null,
         ProductId: null,
         ProductCode: null,
+        ProductType: null,
         PinRequired: false,
         FirstTime: false,
         Warning: null);

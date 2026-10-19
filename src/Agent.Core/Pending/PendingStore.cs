@@ -47,6 +47,7 @@ public sealed class PendingStore(AgentDbContext db, AuditLog audit, IOptionsSnap
             BillCode = draft.BillCode,
             ProductId = draft.ProductId,
             ProductCode = draft.ProductCode,
+            ProductType = draft.ProductType,
             PinRequired = draft.PinRequired,
             FirstTime = draft.FirstTime,
             Warning = draft.Warning,

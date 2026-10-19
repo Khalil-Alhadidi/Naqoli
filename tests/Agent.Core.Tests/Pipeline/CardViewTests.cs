@@ -25,6 +25,7 @@ public class CardViewTests
         RegisteredName = "registered",
         BillCode = "BS1",
         ProductCode = "ZN-CR-5",
+        ProductType = "credit",
         PinRequired = true,
         FirstTime = true,
         Warning = "repeat",
@@ -42,7 +43,7 @@ public class CardViewTests
 
         Assert.Equal(
             new CardView(
-                record.Id, "purchase", 5_000, 0, 5_000, 745_000, "display", "registered", "07700000002", "BS1", "ZN-CR-5",
+                record.Id, "purchase", 5_000, 0, 5_000, 745_000, "display", "registered", "07700000002", "BS1", "ZN-CR-5", "credit",
                 PinRequired: true, FirstTime: true, Warning: "repeat", record.ExpiresAt),
             view);
     }

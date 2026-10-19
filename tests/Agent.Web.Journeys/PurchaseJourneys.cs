@@ -37,6 +37,8 @@ public sealed class PurchaseJourneys(JourneyHost host) : JourneyBase(host)
     {
         await Expect(page.GetByTestId("card")).ToHaveAttributeAsync("data-state", "live");
         await Expect(page.GetByTestId("card-display")).ToHaveTextAsync(PhoneFormat.Digits(product.ProviderNameAr));
+        // Security review R4 of milestone 9b: the type word beside the operator, from the catalogue product's type.
+        await Expect(page.GetByTestId("card-product-type")).ToHaveTextAsync(Text["Product_type_" + product.Type].Value);
         await Expect(page.GetByTestId("card-amount")).ToHaveTextAsync(PhoneFormat.Amount(product.PriceIqd, Text));
     }
 

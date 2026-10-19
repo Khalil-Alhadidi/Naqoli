@@ -221,7 +221,7 @@ A product option (`Option.ProductType` set, milestone 9b, ruling 3) is labelled 
 
 ### The card, the countdown and the PIN
 
-`CardPanel` shows the `CardView` fields with the resource labels. Names from the wallet render through Razor encoding inside `<bdi>`.
+`CardPanel` shows the `CardView` fields with the resource labels. Names from the wallet render through Razor encoding inside `<bdi>`. A purchase card shows its type word beside the operator's name (`card-product-type`, `Product_type_<type>` from `CardView.ProductType`, through `PhoneFormat.ProductTypeWord`), only when the key exists, as on an option (security review R4 of milestone 9b, 19 Oct 2026).
 
 - **Amount in words.** Under the amount, every card shows the amount in words (`card-amount-words`, `Card_AmountWords` with the words as `{0}`), the second guard Khalil named; the words are his Iraqi number words (17 Oct 2026). `AmountWords.Compose` (`Agent.Core.Text`) composes them from an `AmountWordParts` table, so `Agent.Core` holds no Arabic; `AddAgentWebServices` builds the table once from the resource file (`AmountWordParts.FromResources`, a C# 14 static extension in `Agent.Web.Services.AmountWordResources`) and registers it as a singleton. The words are computed at render from `CardView.AmountIqd` and are never stored: not on `CardView`, not in the trace, not in an audit row. From 1,000 to 99,999,999 dinars; outside that range `Compose` returns null and the card shows no words line. The rules, from Khalil's list and examples: below 1,000, the hundreds word, then the rest (1 to 19 a unit word; 20 to 99 the unit, then the tens, or the tens alone), joined with `Words_And`; thousands: 1,000 `Words_Thousand`, 2,000 `Words_TwoThousand`, 3,000 to 10,000 the construct form and `Words_Thousands`, from 11,000 the group's words and `Words_Thousand`; millions likewise with `Words_Million`, `Words_TwoMillion` and `Words_Millions`; the millions, the thousands and the rest joined with `Words_And`. One space between words; the joiner is written against the word after it. `AmountWordsTests` checks the structure with an English table; `AmountWordsResourceTests` checks Khalil's examples (50,000; 2,500; 150,000; 1,200,000) and the other amounts by composing the expected text from the same resource values.
 
@@ -269,7 +269,7 @@ A product option (`Option.ProductType` set, milestone 9b, ruling 3) is labelled 
 - `Number(long)`: Arabic-Indic digits with U+066C (ARABIC THOUSANDS SEPARATOR).
 - `Amount(long, IStringLocalizer<PhoneStrings>)`: `Number` plus `Currency_iqd`.
 - `Digits(string)`: references, codes and phones with Arabic-Indic digits.
-- `Date(DateTimeOffset)`: the Iraq date (`AgentClock.IraqOffset`, UTC+3), `yyyy/MM/dd`, with Arabic-Indic digits (milestone 9b, the orders screen). 23:30 UTC is the next day.
+- `Date(DateTimeOffset)`: the Iraq date (`AgentClock.IraqOffset`, UTC+3), `dd/MM/yyyy`, day first, with Arabic-Indic digits (milestone 9b, the orders screen; day first from 19 Oct 2026, security review R2). 23:30 UTC is the next day.
 - `OptionLabel(Option, IStringLocalizer<PhoneStrings>)`: a question option's label (see "Option taps").
 - `Console(long)`: ASCII `N0`, invariant, for everything outside the phone.
 
@@ -339,7 +339,7 @@ flowchart TD
 
 ## Store purchases (milestone 9b)
 
-After a Done purchase the chat shows the outcome and, under it, the code message (`Purchase_code`, the code in Arabic-Indic digits). The code message has a copy button (`purchase-code-copy`, `CopyButton`). Its label is `Purchase_code_copy`. On a tap it copies the code through the browser's clipboard: a collocated module, `Components/Phone/CopyButton.razor.js`, whose `copyText` calls `navigator.clipboard.writeText`. There is one import per button: the import task is cached, so taps before it resolves share it, and a failed import is tried again on the next tap. The module is disposed with the button, and the button is disabled while a copy runs (security review M1). On success the button sets `data-copied="true"` and reads `Purchase_code_copied` for two seconds, then goes back. On failure (no clipboard permission, a lost circuit) it stays as it was. The copied text is never logged or traced (`ChatMessage.ToString()` prints `CopyText` as `***` and leaves out the phone text, security review M2), and the 2-second revert is a `Task.Delay` cancelled when the button is disposed. The type word on an option or an order row is shown only when its `Product_type_<type>` key exists (security review M3); `PhoneStringsTests.EveryProductTypeOfTheSeedHasItsTypeWord` pins the seed's types to the keys.
+After a Done purchase the chat shows the outcome and, under it, the code message (`Purchase_code`, the code in Arabic-Indic digits). The code message has a copy button (`purchase-code-copy`, `CopyButton`). Its label is `Purchase_code_copy`. On a tap it copies the code through the browser's clipboard: a collocated module, `Components/Phone/CopyButton.razor.js`, whose `copyText` calls `navigator.clipboard.writeText`. There is one import per button: the import task is cached, so taps before it resolves share it, and a failed import is tried again on the next tap. The module is disposed with the button, and the button is disabled while a copy runs (security review M1). On success the button sets `data-copied="true"` and reads `Purchase_code_copied` for two seconds, then goes back. On failure (no clipboard permission, a lost circuit) it sets `data-copied="failed"` and reads `Purchase_code_copy_failed` for the same two seconds, then goes back (security review R3, 19 Oct 2026). The browser's clipboard works only on HTTPS or localhost and only from a user gesture (the tap); anywhere else `copyText` returns false and the button shows the failed label. The copied text is never logged or traced (`ChatMessage.ToString()` prints `CopyText` as `***` and leaves out the phone text, security review M2), and the 2-second revert is a `Task.Delay` cancelled when the button is disposed. The type word on an option or an order row is shown only when its `Product_type_<type>` key exists (security review M3); `PhoneStringsTests.EveryProductTypeOfTheSeedHasItsTypeWord` pins the seed's types to the keys.
 
 The phone's header has a second button (`phone-orders`, `Orders_Open`) that shows My orders (`OrdersPanel`, `phone-orders-screen`) in place of the chat; `phone-orders-back` (`Directory_Back`, the same word) returns. `PhoneFrame` holds one screen value (`Chat`, `Directory`, `Orders`); the compose row is rendered on `Chat` only. The screen lists every order the wallet returns for the user, newest first (ruling 5), one row each (`order-row`, `data-order-id`):
 - the product line (`order-product`): the operator name, the type's word and the price, each left out when the catalogue no longer has the product;
@@ -353,7 +353,7 @@ flowchart TD
     chat["Chat"] -- "purchase confirmed" --> done["Outcome_done, then Purchase_code with the code"]
     done -- "purchase-code-copy" --> copy["CopyButton: copyText(code) through navigator.clipboard"]
     copy -- "true" --> copied["data-copied true, Purchase_code_copied for 2 s"]
-    copy -- "false" --> same["label unchanged"]
+    copy -- "false" --> same["data-copied failed, Purchase_code_copy_failed for 2 s"]
     chat -- "phone-orders" --> orders["OrdersPanel: ChatSession.ListOrdersAsync"]
     orders -- "Ok" --> rows["order-row each: product, date, code, order-copy"]
     orders -- "none" --> empty["Orders_Empty"]
@@ -485,6 +485,7 @@ The seventeen keys of milestone 9a (`Offer_save_alias`, `Offer_save_alias_button
 | `Directory_Delete` | Delete | Khalil, 18 Oct 2026 |
 | `Purchase_code_copy` | Copy: the button under a purchase code | Awaiting Khalil (`TODO-AR`), milestone 9b |
 | `Purchase_code_copied` | Copied: the same button for two seconds after a copy | Awaiting Khalil (`TODO-AR`), milestone 9b |
+| `Purchase_code_copy_failed` | Could not copy, write it down: the same button for two seconds after a failed copy (security review R3) | Awaiting Khalil (`TODO-AR`), milestone 9b close-out |
 | `Product_type_credit` | credit (phone credit): the type word on a product option and an order row | Awaiting Khalil (`TODO-AR`), milestone 9b |
 | `Product_type_internet` | internet: the type word on a product option and an order row | Awaiting Khalil (`TODO-AR`), milestone 9b |
 | `Orders_Open` | My orders: the phone header's button | Awaiting Khalil (`TODO-AR`), milestone 9b |
@@ -628,7 +629,7 @@ The journeys locate elements only by these attributes.
 | Chat message | `chat-message` | `data-role` (`user`, `agent`), `data-kind` (`text`, `card`, `question`, `outcome`) |
 | Outcome text inside a message | `outcome` | `data-outcome` (`done`, `checking`, `not_done`, `expired`, `cancelled`, `pin`, `already_handled`) |
 | Card root | `card` | `data-state` (`live`, `done`, `notdone`, `checking`, `expired`, `cancelled`) |
-| Card fields | `card-display`, `card-registered`, `card-amount`, `card-amount-words`, `card-fee`, `card-total`, `card-balance-after`, `card-first-time`, `card-warning`, `card-timer` | |
+| Card fields | `card-display`, `card-product-type` (a purchase's type word), `card-registered`, `card-amount`, `card-amount-words`, `card-fee`, `card-total`, `card-balance-after`, `card-first-time`, `card-warning`, `card-timer` | |
 | Card buttons and PIN | `card-confirm`, `card-cancel`, `card-pin` | |
 | Card reissue buttons (D19) | `card-try-again` (state `expired`, `cancelled` or `notdone`), `card-send-again` (state `done`); neither while live or checking | |
 | Question option | `question-option` | `data-value` |
@@ -638,7 +639,7 @@ The journeys locate elements only by these attributes.
 | Alias offer's Save button (milestone 9a) | `save-alias` (under the open offer only) | |
 | Phone header: open the directory, back to the chat | `phone-directory`, `phone-directory-back` | |
 | Phone header: open My orders, back to the chat (milestone 9b) | `phone-orders`, `phone-orders-back` | |
-| Purchase code's copy button in the chat (milestone 9b) | `purchase-code-copy` | `data-copied` (`true` for two seconds after a copy, else `false`) |
+| Purchase code's copy button in the chat (milestone 9b) | `purchase-code-copy` | `data-copied` (`true` for two seconds after a copy, `failed` for two seconds after a failed copy, else `false`) |
 | My orders: screen, row, product line, date, code, copy button, empty line | `phone-orders-screen`, `order-row`, `order-product`, `order-date`, `order-code`, `order-copy`, `orders-empty` | `order-row`: `data-order-id`; `order-copy`: `data-copied` |
 | Phone directory: screen, row, delete, empty line | `phone-directory-screen`, `directory-alias`, `directory-delete`, `directory-empty` | `directory-alias` and `directory-delete`: `data-alias-id` |
 | Phone directory form: text, contact select and its items, phone, Save, result | `directory-text`, `directory-target`, `directory-target-option`, `directory-phone`, `directory-save`, `directory-result` | items: `data-code`; result: `data-key` (the resource key shown) |
@@ -726,7 +727,7 @@ The journeys locate elements only by these attributes.
 | `ThePhoneDirectoryListsAddsAndDeletes` | The directory's `directory-alias` rows equal the wallet's alias count for U1, and the compose row is gone; S03's saved name plus " x" saved for S03 adds a row and an alias on S03's account in the wallet; its `directory-delete` gives `Reply_alias_deleted` and removes it on screen and in the wallet |
 | `TheConsoleAliasesPanelListsAddsAndDeletes` | The same through `menu-aliases`: `console-alias` rows equal the wallet's count; save gives `console-alias-result` `saved` and one more row on S03's account; `console-alias-delete` gives `deleted` and the row and the wallet's alias go |
 | `AnAliasSavedOnThePhoneShowsInTheConsoleDirectory` | Milestone 7 post-tag (18 Oct 2026): two pages on U1's console, both with `menu-aliases` open; the first page's phone directory saves AMB-19's step 2 `alias_offer` for S08; both pages' `console-alias` rows gain it (`data-alias-id` of the wallet's new alias) without a click, and the phone's list shows it; the directory's delete removes the row on both pages and the alias in the wallet |
-| `ANamedProductGoesStraightToTheCardAndTheCodeShowsWithACopyButton` | CLN-13 (milestone 9b): a live card, no question; `card-display` is ZN-NET-25's operator name from the catalogue and `card-amount` 25,000; Confirm gives two done outcomes, the second holding the digits of the new order's code (the wallet's newest order, one more than before); `purchase-code-copy` shows with `data-copied` `false`, the click sets it `true` and the clipboard holds the code |
+| `ANamedProductGoesStraightToTheCardAndTheCodeShowsWithACopyButton` | CLN-13 (milestone 9b): a live card, no question; `card-display` is ZN-NET-25's operator name from the catalogue, `card-product-type` its type word (`Product_type_internet`) and `card-amount` 25,000; Confirm gives two done outcomes, the second holding the digits of the new order's code (the wallet's newest order, one more than before); `purchase-code-copy` shows with `data-copied` `false`, the click sets it `true` and the clipboard holds the code |
 | `TheCodeIsKeptOnlyByItsLastFourDigitsInTheLogs` | CLN-13 confirmed: a pending record keeps the code's last four characters (`PurchaseCodeLast4`); no audit, learning or pending row holds the whole code, as typed or in Arabic-Indic digits; no `trace-entry` holds it |
 | `ABareValueListsTheMatchingProductsAcrossOperators` | AMB-23: one `Question_which_product` message with options ZN-CR-5, AC-CR-5 and KR-CR-5, each labelled with `Product_type_credit`, and no card; the tap on KR-CR-5 gives a live card for 5,000; Confirm: balance 745,000 |
 | `NothingNamedAsksTheOperatorFirstThenTheProducts` | AMB-24: `Question_which_operator` with zain, asiacell, korek in that order; the tap on korek gives `Question_which_product` with the four Korek products of the catalogue; the tap on KR-NET-30 gives a live card for 30,000 |

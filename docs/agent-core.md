@@ -355,6 +355,7 @@ flowchart TD
 | `RegisteredName` | The recipient account's registered name, else the quote's recipient name |
 | `BillAccountId`, `BillCode` | A bill |
 | `ProductId`, `ProductCode` | A purchase |
+| `ProductType` | A purchase: the catalogue product's type (`credit`, `internet`), for the card's type word (security review R4 of milestone 9b, 19 Oct 2026; column `ProductType`, at most 16 characters, migration `ProductType`). A reissued purchase card (D19) takes it from the product re-read from the catalogue |
 | `PinRequired` | The quote |
 | `FirstTime` | A transfer with no `done` transfer to the same phone in the last `HistoryDays` (90) days. Bills and purchases are never first time (D16) |
 | `Warning` | `repeat` when a `done` transfer of the same amount to the same phone was made within `RepeatWarningWindowMinutes` (10) before now (FLT-05); otherwise null |
@@ -363,7 +364,7 @@ Every figure on the card comes from the quote, so the card shows what the wallet
 
 ### The card view
 
-`CardView.From(record)` (`src/Agent.Core/Pipeline/CardView.cs`) is the only shape of a card a component receives; `AgentReply.CardIssued.View` computes it from the record. It carries `PendingId`, `Type`, `AmountIqd`, `FeeIqd`, `TotalIqd`, `BalanceAfterIqd` (the quoted balance less the total), `DisplayName`, `RegisteredName`, `ToPhone`, `BillCode`, `ProductCode`, `PinRequired`, `FirstTime`, `Warning` and `ExpiresAt`. It has no idempotency key, no quoted balance, no row version and no user ID (`CardViewTests`).
+`CardView.From(record)` (`src/Agent.Core/Pipeline/CardView.cs`) is the only shape of a card a component receives; `AgentReply.CardIssued.View` computes it from the record. It carries `PendingId`, `Type`, `AmountIqd`, `FeeIqd`, `TotalIqd`, `BalanceAfterIqd` (the quoted balance less the total), `DisplayName`, `RegisteredName`, `ToPhone`, `BillCode`, `ProductCode`, `ProductType`, `PinRequired`, `FirstTime`, `Warning` and `ExpiresAt`. It has no idempotency key, no quoted balance, no row version and no user ID (`CardViewTests`).
 
 ## The pending record and its states
 

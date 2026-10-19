@@ -654,6 +654,8 @@ public class OrchestratorTests(AgentHost host)
 
         Assert.Equal("purchase", card.Type);
         Assert.Equal("ZN-NET-40", card.ProductCode);
+        // Security review R4 of milestone 9b: the card carries the catalogue product's type, for its type word.
+        Assert.Equal("internet", card.ProductType);
         Assert.Equal(40_000, card.AmountIqd);
         Assert.Equal(0, card.FeeIqd);
         Assert.Equal(40_000, card.TotalIqd);
@@ -898,10 +900,14 @@ public class OrchestratorTests(AgentHost host)
     {
         await StartAsync();
         var first = Card(await HandleAsync(U1, ParsedRequest.Purchase("zain", "internet", 40_000)));
+        Assert.Equal("internet", first.ProductType);
 
+        // The type is re-read from the catalogue with the product (D19), not copied from the record.
+        first.ProductType = null;
         var again = Card(await ReissueAsync(U1, first, ReissueKind.SendAgain));
 
         Assert.Equal((first.ProductId, first.ProductCode, first.AmountIqd), (again.ProductId, again.ProductCode, again.AmountIqd));
+        Assert.Equal("internet", again.ProductType);
         Assert.Equal(CardBuilder.RepeatWarning, again.Warning);
     }
 
