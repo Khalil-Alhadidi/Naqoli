@@ -6,6 +6,7 @@ using Agent.Core.Confirm;
 using Agent.Core.Audit;
 using Agent.Core.Conversation;
 using Agent.Core.Data;
+using Agent.Core.Masking;
 using Agent.Core.Parsing;
 using Agent.Core.Pending;
 using Agent.Core.Pipeline;
@@ -665,5 +666,27 @@ public sealed class ChatSessionTests(AgentHost host) : IAsyncDisposable
 
         await session.CancelAsync(second);
         Assert.Equal(CardStatus.Cancelled, session.CardState);
+    }
+
+    [Fact]
+    public async Task ANotPreparedNameThatIsATypedNumberIsShownInArabicIndicDigits()
+    {
+        // Security review R3 of milestone 9c: the phone frame keeps Arabic-Indic digits, a typed number in a name too.
+        var number = SeedFacts.Contact("S19").Number;
+        var sentence = "send ten thousand to my brother and ten thousand to " + number;
+        var parser = new CapturingParser(new Dictionary<string, ParsedMessage>(StringComparer.Ordinal)
+        {
+            [Masker.Mask(sentence).Text] = new([
+                ParsedRequest.Transfer(SeedFacts.Contact("S01").Alias, 10, AmountUnit.Thousand),
+                ParsedRequest.Transfer(Masker.Mask(sentence).Map.Tokenize(number), 10, AmountUnit.Thousand),
+            ]),
+        });
+        var circuit = await StartAsync(parser, configure: o => o.MaxRequestsPerMessage = 1);
+        var session = circuit.Session;
+
+        await session.SendAsync(sentence);
+        Assert.IsType<ConfirmOutcome.Done>(await session.ConfirmShownAsync());
+
+        Assert.Equal(circuit.Text["Refusal_not_prepared", PhoneFormat.Digits(number)].Value, LastAgentMessage(session).Text);
     }
 }

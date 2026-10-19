@@ -71,6 +71,28 @@ public class PhoneStringsTests
         }
     }
 
+    /// <summary>
+    /// Security review M3 of milestone 9c: every value that holds a placeholder formats with as many arguments as its
+    /// highest index plus one, so a slip in a template (a stray brace, a skipped index) fails here, not on the phone.
+    /// </summary>
+    [Fact]
+    public void EveryTemplateFormatsWithItsOwnPlaceholders()
+    {
+        foreach (var (key, value) in Values().Where(v => v.Value.Contains('{', StringComparison.Ordinal)))
+        {
+            var indexes = System.Text.RegularExpressions.Regex.Matches(value, @"\{(\d+)\}")
+                .Select(m => int.Parse(m.Groups[1].Value, CultureInfo.InvariantCulture))
+                .ToList();
+            Assert.True(indexes.Count > 0, key + " holds a brace that is no placeholder");
+            var arguments = Enumerable.Range(0, indexes.Max() + 1).Select(i => (object)("arg" + i.ToString(CultureInfo.InvariantCulture))).ToArray();
+
+            var formatted = string.Format(CultureInfo.InvariantCulture, value, arguments);
+
+            Assert.DoesNotContain('{', formatted);
+            Assert.DoesNotContain('}', formatted);
+        }
+    }
+
     [Fact]
     public void TheYesAndNoListsSplitIntoWordsThatDoNotOverlap()
     {

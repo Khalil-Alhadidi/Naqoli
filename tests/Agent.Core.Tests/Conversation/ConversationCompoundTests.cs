@@ -601,4 +601,77 @@ public sealed class ConversationCompoundTests(AgentHost host)
         Assert.Equal(QuestionKinds.WhichBill, Assert.IsType<AgentReply.Question>(conversation.Question).Kind);
         Assert.True(Traced(harness, "reissue_rejected", "question_open"));
     }
+
+    // ---- security review of milestone 9c ----
+
+    /// <summary>A <see cref="AgentConversation.Changed"/> handler that throws once, on the first message <paramref name="when"/> accepts.</summary>
+    private static void ThrowOnceWhen(AgentConversation conversation, Func<ConversationMessage, bool> when)
+    {
+        var thrown = 0;
+        conversation.Changed += () =>
+        {
+            if (conversation.Messages.Count > 0 && when(conversation.Messages[^1]) && Interlocked.Exchange(ref thrown, 1) == 0)
+                throw new InvalidOperationException("Test: a handler failed.");
+        };
+    }
+
+    [Fact]
+    public async Task AnExceptionOnThePartRunningEndsItsMessage()
+    {
+        // M1: part 1 throws while its card is shown; the message is over, so part 2 is dropped and never runs later.
+        await using var harness = await StartAsync();
+        var conversation = harness.Conversation;
+        ThrowOnceWhen(conversation, m => m.Kind == ConversationKind.Card);
+
+        await conversation.SendAsync(DevSetText.Say("CMP-01"));
+
+        Assert.Equal(ReasonCodes.NotDoneNothingTaken, conversation.Messages[^1].Code);
+        Assert.Equal(0, conversation.QueuedRequests);
+        Assert.True(Traced(harness, TraceSteps.RequestsDropped, "1"));
+    }
+
+    [Fact]
+    public async Task APinLikeAnswerDoesNotSuppressTheRowsOfTheNextPart()
+    {
+        // M2: a six-digit answer writes no row of its own (it may be a PIN), but the next part's row is written under the
+        // compound message's masked text.
+        const string sentence = "send to my brother and twenty five thousand to zzyzx";
+        var parser = Says((sentence,
+        [
+            ParsedRequest.Transfer(HammoudiAlias, null, AmountUnit.None),
+            ParsedRequest.Transfer("zzyzx", 25, AmountUnit.Thousand),
+        ]));
+        await using var harness = await StartAsync(parser);
+        var conversation = harness.Conversation;
+
+        await conversation.SendAsync(sentence);
+        Assert.Equal(QuestionKinds.WhichAmount, Assert.IsType<AgentReply.Question>(conversation.Question).Kind);
+        await conversation.SendAsync("900000");
+
+        Assert.Equal(1, CountOf(conversation, ConversationKind.Refusal, ReasonCodes.InsufficientBalance));
+        Assert.Equal(1, CountOf(conversation, ConversationKind.Refusal, ReasonCodes.RecipientNotFound));
+        var rows = await harness.LearningRowsAsync();
+        Assert.DoesNotContain(rows, r => r.Reason == ReasonCodes.InsufficientBalance);
+        var row = Assert.Single(rows, r => r.Reason == ReasonCodes.RecipientNotFound);
+        Assert.Equal(Masker.Mask(sentence).Text, row.MaskedText);
+        Assert.Equal(ReasonCodes.RecipientNotFound, conversation.LastLearningEntry?.Reason);
+    }
+
+    [Fact]
+    public async Task AConfirmWhoseFollowingReplyThrowsReturnsNoOutcomeAndKeepsThePayment()
+    {
+        // M3: the outcome is shown and the payment done; a throw while the "not prepared" reply is added is the action's
+        // failure, never an exception out of the Confirm (it would end the phone's circuit).
+        await using var harness = await StartAsync(configure: o => o.MaxRequestsPerMessage = 1);
+        var conversation = harness.Conversation;
+        await conversation.SendAsync(DevSetText.Say("CMP-01"));
+        ThrowOnceWhen(conversation, m => m.Code == ReasonCodes.MaxThreeRequests);
+
+        var outcome = await conversation.ConfirmShownAsync();
+
+        Assert.Null(outcome);
+        Assert.Equal(CardStatus.Done, conversation.CardState);
+        Assert.Equal(ReasonCodes.NotDoneNothingTaken, conversation.Messages[^1].Code);
+        Assert.Equal(724_000, await BalanceAsync());
+    }
 }

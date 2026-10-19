@@ -277,6 +277,10 @@ public sealed class Conversation : IDisposable
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             Failed(ex);
+
+            // Security review M1 of milestone 9c: an exception on the part running ends its message, so the parts still
+            // queued are dropped (requests_dropped) and can never run later under another card.
+            DropQueue();
         }
         catch (OperationCanceledException) when (stopping.IsCancellationRequested)
         {
@@ -527,6 +531,10 @@ public sealed class Conversation : IDisposable
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             Failed(ex);
+
+            // Security review M1 of milestone 9c: an exception on the part running ends its message, so the parts still
+            // queued are dropped (requests_dropped) and can never run later under another card.
+            DropQueue();
         }
         catch (OperationCanceledException) when (stopping.IsCancellationRequested)
         {
@@ -594,6 +602,10 @@ public sealed class Conversation : IDisposable
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             Failed(ex);
+
+            // Security review M1 of milestone 9c: an exception on the part running ends its message, so the parts still
+            // queued are dropped (requests_dropped) and can never run later under another card.
+            DropQueue();
         }
         catch (OperationCanceledException) when (stopping.IsCancellationRequested)
         {
@@ -692,6 +704,10 @@ public sealed class Conversation : IDisposable
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             Failed(ex);
+
+            // Security review M1 of milestone 9c: an exception on the part running ends its message, so the parts still
+            // queued are dropped (requests_dropped) and can never run later under another card.
+            DropQueue();
         }
         catch (OperationCanceledException) when (stopping.IsCancellationRequested)
         {
@@ -739,6 +755,13 @@ public sealed class Conversation : IDisposable
             await AdvanceAsync(stopping);
             return outcome;
         }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // Security review M3 of milestone 9c: after the outcome, the next part and the "not prepared" reply run here
+            // too; a throw among them is this action's failure, never an exception out of the tap (the outcome stands).
+            Failed(ex);
+            return null;
+        }
         catch (OperationCanceledException) when (stopping.IsCancellationRequested)
         {
             // Ended mid-call: the handler has taken its cancellation path (back to Pending or Checking).
@@ -781,6 +804,13 @@ public sealed class Conversation : IDisposable
             ShowOutcome(outcome);
             await AdvanceAsync(stopping);
             return outcome;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // Security review M3 of milestone 9c: after the outcome, the next part and the "not prepared" reply run here
+            // too; a throw among them is this action's failure, never an exception out of the tap (the outcome stands).
+            Failed(ex);
+            return null;
         }
         catch (OperationCanceledException) when (stopping.IsCancellationRequested)
         {
@@ -833,7 +863,9 @@ public sealed class Conversation : IDisposable
     /// failed; Send again for a done one. With no card, a live card or a payment still checking it does nothing (traced
     /// as <c>reissue_rejected</c>), and so it does while a question is open (detail <c>question_open</c>, milestone 9c):
     /// the question belongs to a later request, or to a queued part waiting on it, and is never dropped by the tap. It
-    /// never reaches the Confirm handler: the new card waits for its own Confirm.
+    /// leaves the queue as it is: a part is queued only while an earlier part of its message waits, and an exception on a
+    /// part drops the queue (security review M1 of milestone 9c). It never reaches the Confirm handler: the new card
+    /// waits for its own Confirm.
     /// </summary>
     public async Task ReissueAsync()
     {
@@ -1324,6 +1356,10 @@ public sealed class Conversation : IDisposable
             partNumber++;
             trace.Record(TraceZone.Code, TraceSteps.NextRequest, FormattableString.Invariant($"{partNumber} of {partsKept}"));
             lastMaskedText = queuedMaskedText;
+
+            // Security review M2 of milestone 9c: the row is written under the compound message's masked text, never a
+            // PIN-like answer typed to an earlier part, so that answer's suppression does not reach this part.
+            suppressLearningRow = false;
             try
             {
                 await HandleCoreAsync(next.Request, SlotAnswers.None, token, verbatim: next.Verbatim);
@@ -1351,6 +1387,7 @@ public sealed class Conversation : IDisposable
         var entry = new LearningEntry(LearningLogRule.MoreThanThreeRequests, requestsInMessage.ToString(CultureInfo.InvariantCulture));
         notPrepared.Clear();
         lastMaskedText = queuedMaskedText;
+        suppressLearningRow = false;
         LastLearningEntry = entry;
         await WriteLearningAsync(entry, token);
     }

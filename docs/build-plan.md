@@ -476,7 +476,9 @@ The biller alias stays the later item below.
 11. **`MaxRequestsPerMessage` becomes editable** in the settings component (range 1 to 20, as the attribute says), as every other limit is; a value saved applies to the next message. A new value never changes a queue already running.
 12. **The runner grades the three keys** it only recorded until now: `then_reply` (after the step's last outcome message there is a reply with that code), `no_card_N` (the case issued fewer than N cards), `not_prepared` (the names of the reply, joined by `، ` for several, equal the key's text; rendered only as "names equal" or "names different"). A step's `card` and `card_outcome` are read on the card that was shown when the step began, so a step that finishes card 1 and brings card 2 grades card 1 (`StepObservation.ActedCardState`). The join form for several names is a guess until a key shows one.
 
-Sonnet reruns and the security review follow in the close-out commit.
+**Security review** (`docs/reviews/milestone-9c-security-review.md`): pass with changes, 0 Critical, 0 Important, 3 Minor, 6 Recommendations. The fix wave commit closed M1 (an exception on the part running drops the queue), M2 (a PIN-like answer's learning-row suppression never reaches the next part or the `more_than_three_requests` row), M3 (`ConfirmAsync` and `SettleAsync` have the general catch, and `PhoneStringsTests.EveryTemplateFormatsWithItsOwnPlaceholders` checks every template) and R3 (the not-prepared names in Arabic-Indic digits); R4 is left as it is, R1, R2 and R5 are for Khalil, R6 is a note.
+
+The Sonnet reruns follow in the close-out commit.
 
 **If a piece is cut:** the agent gives a safe reply and no card for those requests, the piece is listed under known gaps, and its held-out cases are reported as unsupported. They are not removed from the held-out set.
 

@@ -604,13 +604,14 @@ public sealed class ChatSession : IDisposable
 
     /// <summary>
     /// The names of the parts not prepared (ruling 2 of milestone 9c), in the order spoken: each part's text, which is the
-    /// user's own words (the conversation keeps no other), or its request type's word (<c>Type_transfer</c>,
+    /// user's own words (the conversation keeps no other), its digits in Arabic-Indic form, or its request type's word (<c>Type_transfer</c>,
     /// <c>Type_bill</c>, <c>Type_purchase</c>, else <c>Type_request</c>). Two names are joined by the template
     /// <c>List_joiner</c> (<c>{0}</c> the names so far, <c>{1}</c> the next), so Khalil's joiner needs no edge space.
     /// </summary>
     private string NotPreparedNames(IReadOnlyList<NotPreparedPart> parts)
     {
-        var names = parts.Select(p => p.Text ?? Text(TypeKey(p.Intent))).ToList();
+        // Security review R3 of milestone 9c: a typed number in a name shows in Arabic-Indic digits, as every figure does.
+        var names = parts.Select(p => p.Text is { } text ? PhoneFormat.Digits(text) : Text(TypeKey(p.Intent))).ToList();
         var joined = names[0];
         foreach (var name in names.Skip(1))
             joined = Text("List_joiner", joined, name);
