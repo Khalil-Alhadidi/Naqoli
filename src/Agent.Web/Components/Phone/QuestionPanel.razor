@@ -43,12 +43,5 @@
             ? Text["Option_LastSent", PhoneFormat.Amount(last, Text)]
             : Text["Option_NoPreviousTransfer"];
 
-    private string Label(Option option)
-    {
-        if (option.Value == Option.StoreInternet)
-            return Text["Option_store_internet"];
-        if (option.Display is { } display)
-            return option.AmountIqd is { } price ? display + " " + PhoneFormat.Amount(price, Text) : display;
-        return option.AmountIqd is { } amount ? PhoneFormat.Amount(amount, Text) : option.Value;
-    }
+    private string Label(Option option) => PhoneFormat.OptionLabel(option, Text);
 }

@@ -4,6 +4,7 @@ using Agent.Core.Confirm;
 using Agent.Core.Conversation;
 using Agent.Core.Parsing;
 using Agent.Core.Pipeline;
+using Agent.Core.Store;
 using Agent.Core.Wallet;
 using Agent.Web.Resources;
 using Microsoft.Extensions.Localization;
@@ -178,6 +179,27 @@ public sealed class ChatSession : IDisposable
         }
 
         return await current.ListAliasesAsync();
+    }
+
+    /// <summary>My orders (milestone 9b): the user's purchases with their codes (see <see cref="Conversation.ListOrdersAsync"/>).</summary>
+    public async Task<WalletResult<IReadOnlyList<PurchaseOrder>>> ListOrdersAsync()
+    {
+        TraceLog.Current.Value = trace;
+        Conversation current;
+        lock (gate)
+            current = conversation;
+
+        var result = await current.ListOrdersAsync();
+
+        // As ListAliasesAsync: a read cut short by RestartAsync is read again from the new conversation, once.
+        lock (gate)
+        {
+            if (disposed || ReferenceEquals(current, conversation) || result is not WalletResult<IReadOnlyList<PurchaseOrder>>.Unavailable)
+                return result;
+            current = conversation;
+        }
+
+        return await current.ListOrdersAsync();
     }
 
     /// <summary>The alias directory: an alias of a contact's account (see <see cref="Conversation.AddAliasAsync"/>).</summary>
@@ -391,7 +413,11 @@ public sealed class ChatSession : IDisposable
             {
                 idOfConversationMessage.Add(nextId + 1);
                 foreach (var (role, body, kind, outcome, action) in Localise(all[i]))
-                    messages.Add(new ChatMessage(++nextId, role, body, kind, outcome, action));
+                {
+                    // The copy button's text is the code as the wallet gave it; it lives on this message only.
+                    var copyText = action == ChatAction.CopyCode ? all[i].PurchaseCode : null;
+                    messages.Add(new ChatMessage(++nextId, role, body, kind, outcome, action, copyText));
+                }
             }
         }
     }
@@ -484,7 +510,7 @@ public sealed class ChatSession : IDisposable
             case OutcomeCodes.Done:
                 yield return Out(Text("Outcome_done", PhoneFormat.Digits(message.Reference ?? string.Empty), Amount(message.AmountIqd)), "done");
                 if (message.PurchaseCode is { } code)
-                    yield return Out(Text("Purchase_code", PhoneFormat.Digits(code)), "done");
+                    yield return Out(Text("Purchase_code", PhoneFormat.Digits(code)), "done", ChatAction.CopyCode);
                 break;
 
             case OutcomeCodes.NotDone:
@@ -543,6 +569,8 @@ public sealed class ChatSession : IDisposable
             return Text("Option_NoneOfThese");
         if (value == Option.CancelQuestion)
             return Text("Option_CancelQuestion");
+        if (option is { ProductType: not null })
+            return PhoneFormat.OptionLabel(option, text);
         if (option?.Display is { } display)
             return display;
         if (option?.AmountIqd is { } amount)

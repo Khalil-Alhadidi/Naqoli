@@ -450,4 +450,60 @@ public sealed class ChatSessionTests(AgentHost host) : IAsyncDisposable
         Assert.Equal(circuit.Text["Refusal_" + ReasonCodes.QuestionCancelled].Value, LastAgentMessage(session).Text);
         Assert.Null(session.Question);
     }
+    private const string ZainCreditSentence = "zain credit five";
+
+    private static ScriptedSentence ZainCredit() => new(ZainCreditSentence, ParsedRequest.Purchase("zain", "credit", 5_000));
+
+    [Fact]
+    public async Task TheDonePurchaseOutcomeCarriesTheCodeMessageWithTheCopyAction()
+    {
+        var circuit = await StartAsync(SeedFacts.DemoUserId, ZainCredit());
+        var session = circuit.Session;
+
+        await session.SendAsync(ZainCreditSentence);
+        var bought = Assert.IsType<ConfirmOutcome.Done>(await session.ConfirmAsync(null));
+        Assert.NotNull(bought.PurchaseCode);
+
+        var done = session.Messages.Where(m => m.Outcome == "done").ToList();
+        Assert.Equal(2, done.Count);
+        Assert.Equal(ChatAction.None, done[0].Action);
+        Assert.Null(done[0].CopyText);
+        Assert.Equal(circuit.Text["Purchase_code", PhoneFormat.Digits(bought.PurchaseCode)].Value, done[1].Text);
+        Assert.Equal(ChatAction.CopyCode, done[1].Action);
+        Assert.Equal(bought.PurchaseCode, done[1].CopyText);
+    }
+
+    [Fact]
+    public async Task ProductOptionsAreLabelledWithTheTypeWord()
+    {
+        // AMB-23's parse: three credit cards across the operators; each label names the type (ruling 3 of milestone 9b).
+        var circuit = await StartAsync(SeedFacts.DemoUserId, new ScriptedSentence("credit five", ParsedRequest.Purchase(null, "credit", 5_000)));
+        var session = circuit.Session;
+        var typeWord = circuit.Text["Product_type_credit"].Value;
+
+        await session.SendAsync("credit five");
+        var question = Assert.IsType<AgentReply.Question>(session.Question);
+        Assert.Equal(QuestionKinds.WhichProduct, question.Kind);
+        Assert.All(question.Options, o => Assert.Contains(typeWord, PhoneFormat.OptionLabel(o, circuit.Text), StringComparison.Ordinal));
+
+        // The tap's echo is the same label.
+        var tapped = question.Options[^1];
+        var label = PhoneFormat.OptionLabel(tapped, circuit.Text);
+        await session.TapOptionAsync(tapped.Value);
+        Assert.Equal(label, session.Messages.Last(m => m.Role == ChatRole.User).Text);
+    }
+
+    [Fact]
+    public async Task ListOrdersReturnsTheConversationsOrders()
+    {
+        var circuit = await StartAsync(SeedFacts.DemoUserId, ZainCredit());
+        var session = circuit.Session;
+        await session.SendAsync(ZainCreditSentence);
+        var bought = Assert.IsType<ConfirmOutcome.Done>(await session.ConfirmAsync(null));
+
+        var orders = Assert.IsType<global::Agent.Core.Wallet.WalletResult<IReadOnlyList<global::Agent.Core.Store.PurchaseOrder>>.Ok>(await session.ListOrdersAsync()).Value;
+
+        Assert.Equal(bought.PurchaseCode, orders[0].Code);
+        Assert.True(orders.Count > 1); // the seed's orders of U1 follow
+    }
 }

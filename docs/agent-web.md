@@ -68,6 +68,8 @@ The side menu sits in the layout outside the `console` element, and it is Englis
 - `Busy`;
 - `WalletVersion`: up after every Done outcome, every alias saved or deleted, and every restart (see "Wallet changes").
 
+Milestone 9b adds two things to the flow. A Done purchase's code message (`Purchase_code`) carries the action `ChatAction.CopyCode`, and `ChatMessage.CopyText` holds the code as the wallet gave it, in memory only; the chat shows a copy button under it (`purchase-code-copy`). `ListOrdersAsync()` reads My orders for the phone's orders screen through the conversation's turn, with the same restart re-read as `ListAliasesAsync` (see "Store purchases (milestone 9b)").
+
 It raises `Changed` after every change of the conversation. Components never see a `PendingRecord`, an idempotency key or a quoted balance, and the component contract (`ChatMessage`, the ids, the actions) is the same as in milestone 4.
 
 The phone's lifecycle: the page is not prerendered (`App.razor` uses `new InteractiveServerRenderMode(prerender: false)`, since 18 Oct 2026, so MudBlazor's theme provider never calls JavaScript during a static render and every component initialises once); the circuit connects and renders the page. `PhoneFrame.OnAfterRenderAsync(firstRender)` calls `ChatSession.OpenAsync()` (the open check, below) and then sets `data-interactive` to `true`, so the `consent_shown` audit row is written once per circuit and the journeys type only after the check. The page renders once per circuit, so the panels' `OnInitializedAsync` reads run once per load.
@@ -149,6 +151,7 @@ Each action below is the conversation's action of the same name ([agent-core.md]
 | `RefreshAsync()` | The card's countdown at zero | Reads the record; marks the card expired when it is Pending past `ExpiresAt`, Expired, or gone |
 | `SaveAliasAsync()` | The Save button under the alias offer (`save-alias`) | `AliasDirectory.SaveAsync` with the offer's text and account (rule 18, milestone 9a); never the Confirm handler |
 | `ListAliasesAsync()`, `AddAliasAsync(text, accountId)`, `AddAliasForPhoneAsync(text, phone)`, `DeleteAliasAsync(aliasId)` | The phone's directory and the console's Aliases panel | The alias directory through `AliasDirectory` (milestone 9a); no chat message |
+| `ListOrdersAsync()` | The phone's orders screen (`OrdersPanel`) | My orders through `Conversation.ListOrdersAsync` and `OrdersReader` (milestone 9b); a read, no chat message; a read cut short by a restart is read again once |
 
 Rule 1: nothing in `Agent.Web` calls the Confirm handler, and only `ChatSession.ConfirmAsync` and `ChatSession.SettleAsync` call `Conversation.ConfirmAsync` and `Conversation.SettleAsync`, which are the handler's only callers in `Agent.Core`. `NoTapNoMoneyTests.NothingInAgentWebCallsTheConfirmHandler` and `OnlyTheSessionsConfirmAndSettleCallTheConversationsFromTheWeb` check this on the IL, and `NothingInAgentWebInvokesByReflection` checks the web assembly for reflection calls.
 
@@ -212,7 +215,9 @@ A tap is accepted only for a value that the open question offered. Anything else
 | `which_amount` | `AmountValue` = the option's dinars, `AmountUnit.Dinars` |
 | `which_operator` | `OperatorText` = the provider code |
 | `which_product` | The same purchase, or `Purchase(null, "internet", null)` after a bill request (rule 17); `SlotAnswers.ProductCode` = the product code |
-| `which_bill`, `bill_or_store` | The same bill request, or `Bill(null, null, null)`; `SlotAnswers.BillCode` = the bill code. `store:internet` is `Purchase(null, "internet", null)` with no answers, which asks the operator (rule 11) |
+| `which_bill`, `bill_or_store` | The same bill request, or `Bill(null, null, null)`; `SlotAnswers.BillCode` = the bill code. `store:internet` is `Purchase(null, "internet", null)` with no answers, which lists the seven internet cards across the operators (rules 11 and 12 as decided, milestone 9b) |
+
+A product option (`Option.ProductType` set, milestone 9b, ruling 3) is labelled with the display name, the type's word (`Product_type_credit` or `Product_type_internet`) and the price: `PhoneFormat.OptionLabel`, used by both `QuestionPanel` and the tap's echo (`ChatSession.OptionText`), so the user's message after a tap reads exactly as the option did. Two products of one operator and one price (`ZN-CR-10`, `ZN-NET-10`) are told apart by the type word. Other options are labelled as before.
 
 ### The card, the countdown and the PIN
 
@@ -264,6 +269,8 @@ A tap is accepted only for a value that the open question offered. Anything else
 - `Number(long)`: Arabic-Indic digits with U+066C (ARABIC THOUSANDS SEPARATOR).
 - `Amount(long, IStringLocalizer<PhoneStrings>)`: `Number` plus `Currency_iqd`.
 - `Digits(string)`: references, codes and phones with Arabic-Indic digits.
+- `Date(DateTimeOffset)`: the Iraq date (`AgentClock.IraqOffset`, UTC+3), `yyyy/MM/dd`, with Arabic-Indic digits (milestone 9b, the orders screen). 23:30 UTC is the next day.
+- `OptionLabel(Option, IStringLocalizer<PhoneStrings>)`: a question option's label (see "Option taps").
 - `Console(long)`: ASCII `N0`, invariant, for everything outside the phone.
 
 ## The live trace
@@ -330,11 +337,39 @@ flowchart TD
     notify --> console["Every tab's console Aliases panel reloads"]
 ```
 
+## Store purchases (milestone 9b)
+
+After a Done purchase the chat shows the outcome and, under it, the code message (`Purchase_code`, the code in Arabic-Indic digits). The code message has a copy button (`purchase-code-copy`, `CopyButton`). Its label is `Purchase_code_copy`. On a tap it copies the code through the browser's clipboard: a collocated module, `Components/Phone/CopyButton.razor.js`, loaded once per button with `IJSRuntime` `import` and disposed with the button, whose `copyText` calls `navigator.clipboard.writeText`. On success the button sets `data-copied="true"` and reads `Purchase_code_copied` for two seconds, then goes back. On failure (no clipboard permission, a lost circuit) it stays as it was. The copied text is never logged or traced, and the 2-second revert is a `Task.Delay` cancelled when the button is disposed.
+
+The phone's header has a second button (`phone-orders`, `Orders_Open`) that shows My orders (`OrdersPanel`, `phone-orders-screen`) in place of the chat; `phone-orders-back` (`Directory_Back`, the same word) returns. `PhoneFrame` holds one screen value (`Chat`, `Directory`, `Orders`); the compose row is rendered on `Chat` only. The screen lists every order the wallet returns for the user, newest first (ruling 5), one row each (`order-row`, `data-order-id`):
+- the product line (`order-product`): the operator name, the type's word and the price, each left out when the catalogue no longer has the product;
+- the Iraq date (`order-date`, `PhoneFormat.Date`);
+- the full code (`order-code`, Arabic-Indic digits) with a copy button (`order-copy`).
+
+With no orders the screen shows `Orders_Empty` (`orders-empty`); a failed read shows `Refusal_not_done_nothing_taken`, as the directory does, and the circuit stays up. The list reloads when `WalletVersion` changes. The trace records `orders_read` with the count only.
+
+```mermaid
+flowchart TD
+    chat["Chat"] -- "purchase confirmed" --> done["Outcome_done, then Purchase_code with the code"]
+    done -- "purchase-code-copy" --> copy["CopyButton: copyText(code) through navigator.clipboard"]
+    copy -- "true" --> copied["data-copied true, Purchase_code_copied for 2 s"]
+    copy -- "false" --> same["label unchanged"]
+    chat -- "phone-orders" --> orders["OrdersPanel: ChatSession.ListOrdersAsync"]
+    orders -- "Ok" --> rows["order-row each: product, date, code, order-copy"]
+    orders -- "none" --> empty["Orders_Empty"]
+    orders -- "Unavailable" --> unavailable["Refusal_not_done_nothing_taken"]
+    rows -- "order-copy" --> copy
+    orders -- "phone-orders-back" --> chat
+    done -- "WalletVersion up" --> reload["an open orders screen reloads"]
+```
+
 ## The phone strings, for Khalil
 
 `src/Agent.Web/Resources/PhoneStrings.resx` (neutral culture, read through `IStringLocalizer<PhoneStrings>`) holds every text the phone shows (rule 4). Khalil wrote the values in Iraqi Arabic on 15 Oct 2026 (commit a32ac1d); nothing else writes or changes them. `{0}` and `{1}` are filled by code, with figures in Arabic-Indic digits. `Word_yes` and `Word_no` are comma-separated lists (`PhoneWords.Split`), compared after `ArabicText.Normalize`. The table gives each key's meaning in English, not its Arabic value.
 
-The seventeen keys of milestone 9a (`Offer_save_alias`, `Offer_save_alias_button`, `Reply_alias_saved`, `Reply_alias_deleted`, `Refusal_alias_exists`, `Refusal_alias_invalid`, `Refusal_alias_shared`, `Directory_Open`, `Directory_Back`, `Directory_Title`, `Directory_Empty`, `Directory_Text`, `Directory_Target`, `Directory_TargetNone`, `Directory_Phone`, `Directory_Save` and `Directory_Delete`) were English `TODO-AR` placeholders from 17 Oct 2026 until Khalil wrote them on 18 Oct 2026 (the close-out, `docs/plans/milestone-9a-close.md`); no key is a placeholder now, and the allow-list `PhoneStringsTests.AwaitingKhalil` is empty again. Before them, `Refusal_question_cancelled` (the reply after a question's cancel option) was written by Khalil on 17 Oct 2026; `Card_TryAgain` and `Card_SendAgain` (milestone 7, D19), and the D21 wording of `Refusal_invalid_number` (it now asks for the full mobile number or a saved name) on 16 Oct 2026. `PhoneStringsTests.NoValueIsAPlaceholderExceptTheKeysAwaitingKhalil` keeps the allow-list: a new key is added there with a `TODO-AR` value until he writes it.
+The seventeen keys of milestone 9a (`Offer_save_alias`, `Offer_save_alias_button`, `Reply_alias_saved`, `Reply_alias_deleted`, `Refusal_alias_exists`, `Refusal_alias_invalid`, `Refusal_alias_shared`, `Directory_Open`, `Directory_Back`, `Directory_Title`, `Directory_Empty`, `Directory_Text`, `Directory_Target`, `Directory_TargetNone`, `Directory_Phone`, `Directory_Save` and `Directory_Delete`) were English `TODO-AR` placeholders from 17 Oct 2026 until Khalil wrote them on 18 Oct 2026 (the close-out, `docs/plans/milestone-9a-close.md`); the allow-list `PhoneStringsTests.AwaitingKhalil` was then empty until the keys of milestone 9b (below). Before them, `Refusal_question_cancelled` (the reply after a question's cancel option) was written by Khalil on 17 Oct 2026; `Card_TryAgain` and `Card_SendAgain` (milestone 7, D19), and the D21 wording of `Refusal_invalid_number` (it now asks for the full mobile number or a saved name) on 16 Oct 2026. `PhoneStringsTests.NoValueIsAPlaceholderExceptTheKeysAwaitingKhalil` keeps the allow-list: a new key is added there with a `TODO-AR` value until he writes it.
+
+**Awaiting Khalil (milestone 9b, 19 Oct 2026).** Seven keys are English `TODO-AR` placeholders in `PhoneStringsTests.AwaitingKhalil` until he writes their Arabic: `Orders_Open`, `Orders_Title`, `Orders_Empty`, `Purchase_code_copy`, `Purchase_code_copied`, `Product_type_credit`, `Product_type_internet` (meanings in the table below).
 
 | Key | Meaning | Note |
 |---|---|---|
@@ -448,6 +483,13 @@ The seventeen keys of milestone 9a (`Offer_save_alias`, `Offer_save_alias_button
 | `Directory_Phone` | Mobile number | Khalil, 18 Oct 2026 |
 | `Directory_Save` | Save | Khalil, 18 Oct 2026 |
 | `Directory_Delete` | Delete | Khalil, 18 Oct 2026 |
+| `Purchase_code_copy` | Copy: the button under a purchase code | Awaiting Khalil (`TODO-AR`), milestone 9b |
+| `Purchase_code_copied` | Copied: the same button for two seconds after a copy | Awaiting Khalil (`TODO-AR`), milestone 9b |
+| `Product_type_credit` | credit (phone credit): the type word on a product option and an order row | Awaiting Khalil (`TODO-AR`), milestone 9b |
+| `Product_type_internet` | internet: the type word on a product option and an order row | Awaiting Khalil (`TODO-AR`), milestone 9b |
+| `Orders_Open` | My orders: the phone header's button | Awaiting Khalil (`TODO-AR`), milestone 9b |
+| `Orders_Title` | My orders: the orders screen's title | Awaiting Khalil (`TODO-AR`), milestone 9b |
+| `Orders_Empty` | No orders yet | Awaiting Khalil (`TODO-AR`), milestone 9b |
 | `Words_1` .. `Words_19`, `Words_20` .. `Words_90` (tens), `Words_100` .. `Words_900` (hundreds), `Words_Thousand`, `Words_TwoThousand`, `Words_Thousands`, `Words_Million`, `Words_TwoMillion`, `Words_Millions`, `Words_Construct_3` .. `Words_Construct_10`, `Words_And` | The number words of the amount in words: units, tens, hundreds, the thousand and million forms (one, two, the plural after a construct form), the short counting forms for 3 to 10, and the joiner | Khalil's list, 17 Oct 2026. `Words_Construct_4` to `Words_Construct_9` were derived from his hundreds' stems and are confirmed by Khalil on 17 Oct 2026 |
 
 ## The oracle
@@ -595,6 +637,9 @@ The journeys locate elements only by these attributes.
 | Consent and settle buttons | `consent-button`, `check-again` (in the chat), `card-check-again` (on the card while Checking) | |
 | Alias offer's Save button (milestone 9a) | `save-alias` (under the open offer only) | |
 | Phone header: open the directory, back to the chat | `phone-directory`, `phone-directory-back` | |
+| Phone header: open My orders, back to the chat (milestone 9b) | `phone-orders`, `phone-orders-back` | |
+| Purchase code's copy button in the chat (milestone 9b) | `purchase-code-copy` | `data-copied` (`true` for two seconds after a copy, else `false`) |
+| My orders: screen, row, product line, date, code, copy button, empty line | `phone-orders-screen`, `order-row`, `order-product`, `order-date`, `order-code`, `order-copy`, `orders-empty` | `order-row`: `data-order-id`; `order-copy`: `data-copied` |
 | Phone directory: screen, row, delete, empty line | `phone-directory-screen`, `directory-alias`, `directory-delete`, `directory-empty` | `directory-alias` and `directory-delete`: `data-alias-id` |
 | Phone directory form: text, contact select and its items, phone, Save, result | `directory-text`, `directory-target`, `directory-target-option`, `directory-phone`, `directory-save`, `directory-result` | items: `data-code`; result: `data-key` (the resource key shown) |
 | Console Aliases panel: root, row, delete | `aliases-panel`, `console-alias`, `console-alias-delete` | `data-alias-id` |

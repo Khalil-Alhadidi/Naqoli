@@ -1,0 +1,89 @@
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+@inject IStringLocalizer<PhoneStrings> Strings
+
+@* The copy button (milestone 9b): copies a purchase code through the browser's clipboard. The copied text is never
+   logged or traced; on success the label reads Purchase_code_copied for two seconds. *@
+<MudButton data-testid="@TestId" data-copied="@(copied ? "true" : "false")" Variant="Variant.Outlined" Size="Size.Small"
+           OnClick="CopyAsync">@(copied ? Strings["Purchase_code_copied"] : Strings["Purchase_code_copy"])</MudButton>
+
+@code {
+    private static readonly TimeSpan CopiedFor = TimeSpan.FromSeconds(2);
+
+    private readonly CancellationTokenSource disposing = new();
+    private IJSObjectReference? module;
+    private bool copied;
+    private bool disposed;
+    private int copies;
+
+    /// <summary>What to copy (the purchase code as the wallet gave it).</summary>
+    [Parameter, EditorRequired]
+    public string Text { get; set; } = string.Empty;
+
+    /// <summary>The button's <c>data-testid</c>.</summary>
+    [Parameter, EditorRequired]
+    public string TestId { get; set; } = string.Empty;
+
+    private async Task CopyAsync()
+    {
+        if (disposed)
+            return;
+
+        bool ok;
+        try
+        {
+            module ??= await JS.InvokeAsync<IJSObjectReference>("import", disposing.Token, "./Components/Phone/CopyButton.razor.js");
+            ok = await module.InvokeAsync<bool>("copyText", disposing.Token, Text);
+        }
+        catch (Exception ex) when (ex is JSException or JSDisconnectedException or OperationCanceledException or TaskCanceledException)
+        {
+            // The clipboard or the circuit failed: the label stays as it is. Nothing about the text is logged.
+            ok = false;
+        }
+
+        if (!ok || disposed)
+            return;
+
+        copied = true;
+        var copy = ++copies;
+        StateHasChanged();
+        try
+        {
+            await Task.Delay(CopiedFor, disposing.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+
+        // A later copy restarts the two seconds; only the latest one reverts the label.
+        if (copy == copies && !disposed)
+        {
+            copied = false;
+            StateHasChanged();
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (disposed)
+            return;
+
+        // The flag first: a copy in flight sees it and does not touch the component again.
+        disposed = true;
+        await disposing.CancelAsync();
+        if (module is not null)
+        {
+            try
+            {
+                await module.DisposeAsync();
+            }
+            catch (JSDisconnectedException)
+            {
+                // The circuit is gone; the browser dropped the module with it.
+            }
+        }
+
+        disposing.Dispose();
+    }
+}

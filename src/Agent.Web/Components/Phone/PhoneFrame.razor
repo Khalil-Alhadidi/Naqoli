@@ -3,31 +3,43 @@
 @* The phone (D20): right to left, Arabic, Arabic-Indic digits. Every text comes from the resource file (rule 4). *@
 <MudRTLProvider RightToLeft="true">
     <div class="phone-frame" data-testid="phone-frame" dir="rtl" lang="ar" data-interactive="@(interactive ? "true" : "false")">
-        @* Milestone 9a: the header's button opens the alias directory in place of the chat; Back returns. *@
+        @* The header's buttons open the alias directory (milestone 9a) or My orders (milestone 9b) in place of the chat;
+           Back returns to the chat. *@
         <div class="phone-header">
-            @if (directoryOpen)
+            @switch (screen)
             {
-                <MudButton data-testid="phone-directory-back" Variant="Variant.Text" Size="Size.Small"
-                           OnClick="@(() => directoryOpen = false)">@Text["Directory_Back"]</MudButton>
-            }
-            else
-            {
-                <MudButton data-testid="phone-directory" Variant="Variant.Text" Size="Size.Small"
-                           OnClick="@(() => directoryOpen = true)">@Text["Directory_Open"]</MudButton>
+                case PhoneScreen.Directory:
+                    <MudButton data-testid="phone-directory-back" Variant="Variant.Text" Size="Size.Small"
+                               OnClick="@(() => screen = PhoneScreen.Chat)">@Text["Directory_Back"]</MudButton>
+                    break;
+                case PhoneScreen.Orders:
+                    <MudButton data-testid="phone-orders-back" Variant="Variant.Text" Size="Size.Small"
+                               OnClick="@(() => screen = PhoneScreen.Chat)">@Text["Directory_Back"]</MudButton>
+                    break;
+                default:
+                    <MudButton data-testid="phone-directory" Variant="Variant.Text" Size="Size.Small"
+                               OnClick="@(() => screen = PhoneScreen.Directory)">@Text["Directory_Open"]</MudButton>
+                    <MudButton data-testid="phone-orders" Variant="Variant.Text" Size="Size.Small"
+                               OnClick="@(() => screen = PhoneScreen.Orders)">@Text["Orders_Open"]</MudButton>
+                    break;
             }
         </div>
         <div class="phone-screen">
-            @if (directoryOpen)
+            @switch (screen)
             {
-                <DirectoryPanel />
-            }
-            else
-            {
-                <ChatPanel />
+                case PhoneScreen.Directory:
+                    <DirectoryPanel />
+                    break;
+                case PhoneScreen.Orders:
+                    <OrdersPanel />
+                    break;
+                default:
+                    <ChatPanel />
+                    break;
             }
         </div>
-        @* The compose row is hidden while the directory is open, so nothing is typed into a chat that is not shown. *@
-        @if (!directoryOpen)
+        @* The compose row shows on the chat only, so nothing is typed into a chat that is not shown. *@
+        @if (screen == PhoneScreen.Chat)
         {
         <div class="phone-compose">
             <input class="phone-input" data-testid="phone-input" type="text" autocomplete="off"
@@ -45,8 +57,15 @@
 @code {
     private string typed = string.Empty;
 
-    // The alias directory replaces the chat while open (milestone 9a).
-    private bool directoryOpen;
+    // What the phone shows: the chat, the alias directory (milestone 9a) or My orders (milestone 9b).
+    private enum PhoneScreen
+    {
+        Chat,
+        Directory,
+        Orders,
+    }
+
+    private PhoneScreen screen = PhoneScreen.Chat;
 
     // True once the circuit is live (OnAfterRender runs only in the browser) and the open check has run, so the
     // journeys know input will land after it.

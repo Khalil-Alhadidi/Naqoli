@@ -1,4 +1,6 @@
 using System.Globalization;
+using Agent.Core;
+using Agent.Core.Pipeline;
 using Agent.Core.Text;
 using Agent.Web.Resources;
 using Microsoft.Extensions.Localization;
@@ -27,6 +29,31 @@ public static class PhoneFormat
 
     /// <summary>Any text with its ASCII digits as Arabic-Indic digits (a reference, a code, a phone).</summary>
     public static string Digits(string value) => ArabicDigits.ToArabicIndic(value);
+
+    /// <summary>The Iraq date of <paramref name="instant"/> (<see cref="AgentClock.IraqOffset"/>), <c>yyyy/MM/dd</c>, with Arabic-Indic digits.</summary>
+    public static string Date(DateTimeOffset instant)
+        => ArabicDigits.ToArabicIndic(instant.ToOffset(AgentClock.IraqOffset).ToString("yyyy/MM/dd", CultureInfo.InvariantCulture));
+
+    /// <summary>
+    /// The label of a question option: the store option's string; else the display name, then the product type's word
+    /// (<c>Product_type_credit</c>, <c>Product_type_internet</c>) when the option is a product (ruling 3 of milestone 9b),
+    /// then the amount when it has one; else the amount, or the value.
+    /// </summary>
+    public static string OptionLabel(Option option, IStringLocalizer<PhoneStrings> text)
+    {
+        ArgumentNullException.ThrowIfNull(option);
+        ArgumentNullException.ThrowIfNull(text);
+
+        if (option.Value == Option.StoreInternet)
+            return text["Option_store_internet"].Value;
+        if (option.Display is { } display)
+        {
+            var label = option.ProductType is { } type ? display + " " + text["Product_type_" + type].Value : display;
+            return option.AmountIqd is { } price ? label + " " + Amount(price, text) : label;
+        }
+
+        return option.AmountIqd is { } amount ? Amount(amount, text) : option.Value;
+    }
 
     /// <summary>A figure in the console: ASCII digits with a comma, invariant.</summary>
     public static string Console(long value) => value.ToString("N0", CultureInfo.InvariantCulture);

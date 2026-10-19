@@ -29,11 +29,17 @@ public enum ChatAction
 
     /// <summary>The Save button of the alias offer under a Done outcome (rule 18, milestone 9a).</summary>
     SaveAlias,
+
+    /// <summary>The copy button under a Done purchase's code (milestone 9b); copies <see cref="ChatMessage.CopyText"/>.</summary>
+    CopyCode,
 }
 
 /// <summary>
 /// One message in the phone. <see cref="Text"/> is the user's own words, or an agent text already filled from the
 /// resource file (rule 4); <see cref="Outcome"/> is the outcome code of an outcome message (<c>done</c>, <c>checking</c>,
-/// <c>not_done</c>, <c>expired</c>, <c>cancelled</c>, <c>pin</c>, <c>already_handled</c>).
+/// <c>not_done</c>, <c>expired</c>, <c>cancelled</c>, <c>pin</c>, <c>already_handled</c>). <see cref="CopyText"/> is what
+/// the <see cref="ChatAction.CopyCode"/> button copies: the purchase code as the wallet gave it, in memory only, never
+/// logged or traced; null on every other message.
 /// </summary>
-public sealed record ChatMessage(int Id, ChatRole Role, string Text, ChatMessageKind Kind, string? Outcome = null, ChatAction Action = ChatAction.None);
+public sealed record ChatMessage(
+    int Id, ChatRole Role, string Text, ChatMessageKind Kind, string? Outcome = null, ChatAction Action = ChatAction.None, string? CopyText = null);

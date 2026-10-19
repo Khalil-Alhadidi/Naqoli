@@ -29,6 +29,13 @@
                                Disabled="@Session.Busy" OnClick="Session.SaveAliasAsync">@Text["Offer_save_alias_button"]</MudButton>
                 </div>
             }
+            @if (message.Action == ChatAction.CopyCode && message.CopyText is { } copyText)
+            {
+                @* Milestone 9b: the purchase code's copy button; the code is copied as the wallet gave it. *@
+                <div class="phone-message-action">
+                    <CopyButton Text="@copyText" TestId="purchase-code-copy" />
+                </div>
+            }
             @if (message.Action == ChatAction.Consent && message.Id == Session.ActionMessageId)
             {
                 <div class="phone-message-action">

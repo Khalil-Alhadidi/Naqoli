@@ -1,0 +1,88 @@
+@inherits SessionComponent
+@using Agent.Core.Store
+@using Agent.Core.Wallet
+
+@* The phone's My orders screen (milestone 9b, ruling 5): every order the wallet returns for the user, newest first, with
+   the product's operator name, type and price, the Iraq date, and the full code with a copy button. Every text is a
+   resource key or a figure from the wallet (rules 3 and 4). The codes are shown here only; nothing is traced but a count. *@
+<div class="phone-orders" data-testid="phone-orders-screen">
+    <div class="phone-directory-title">@Text["Orders_Title"]</div>
+
+    @if (orders is WalletResult<IReadOnlyList<PurchaseOrder>>.Ok { Value: var list })
+    {
+        @if (list.Count == 0)
+        {
+            <div class="phone-directory-empty" data-testid="orders-empty">@Text["Orders_Empty"]</div>
+        }
+        @foreach (var order in list)
+        {
+            <div class="phone-order-row" data-testid="order-row" data-order-id="@order.OrderId">
+                <div class="phone-order-product" data-testid="order-product"><bdi>@ProductLine(order)</bdi></div>
+                <div class="phone-order-date" data-testid="order-date"><bdi>@PhoneFormat.Date(order.CreatedAt)</bdi></div>
+                <div class="phone-order-code">
+                    <span data-testid="order-code"><bdi>@PhoneFormat.Digits(order.Code)</bdi></span>
+                    <CopyButton Text="@order.Code" TestId="order-copy" />
+                </div>
+            </div>
+        }
+    }
+    else if (orders is not null)
+    {
+        <div class="phone-directory-empty">@Text["Refusal_" + ReasonCodes.NotDoneNothingTaken]</div>
+    }
+</div>
+
+@code {
+    private WalletResult<IReadOnlyList<PurchaseOrder>>? orders;
+    private int seenVersion;
+
+    protected override async Task OnInitializedAsync()
+    {
+        seenVersion = Session.WalletVersion;
+        Session.Changed += OnWalletMaybeChanged;
+        await LoadAsync();
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+            Session.Changed -= OnWalletMaybeChanged;
+    }
+
+    private void OnWalletMaybeChanged()
+    {
+        // Reload after a payment (the session raises a new WalletVersion), as the directory does.
+        if (Session.WalletVersion == seenVersion)
+            return;
+        seenVersion = Session.WalletVersion;
+        _ = InvokeAsync(LoadAsync);
+    }
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            orders = await Session.ListOrdersAsync();
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // As the directory: a failed read shows the unavailable line and never ends the circuit.
+            orders = new WalletResult<IReadOnlyList<PurchaseOrder>>.Unavailable(ex.GetType().Name);
+        }
+
+        StateHasChanged();
+    }
+
+    // The operator name, the type word and the price; a part is left out when the catalogue no longer has the product.
+    private string ProductLine(PurchaseOrder order)
+    {
+        var parts = new List<string>();
+        if (order.ProviderNameAr is { } name)
+            parts.Add(name);
+        if (order.ProductType is { } type)
+            parts.Add(Text["Product_type_" + type]);
+        if (order.PriceIqd is { } price)
+            parts.Add(PhoneFormat.Amount(price, Text));
+        return string.Join(" ", parts);
+    }
+}
