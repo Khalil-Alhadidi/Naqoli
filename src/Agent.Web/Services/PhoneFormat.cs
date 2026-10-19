@@ -48,7 +48,10 @@ public static class PhoneFormat
             return text["Option_store_internet"].Value;
         if (option.Display is { } display)
         {
-            var label = option.ProductType is { } type ? display + " " + text["Product_type_" + type].Value : display;
+            // Security review M3: the key is built from a wallet value; a type without a resource gets no word.
+            var label = display;
+            if (option.ProductType is { } type && text["Product_type_" + type] is { ResourceNotFound: false } word)
+                label += " " + word.Value;
             return option.AmountIqd is { } price ? label + " " + Amount(price, text) : label;
         }
 

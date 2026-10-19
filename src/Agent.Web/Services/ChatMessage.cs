@@ -42,4 +42,13 @@ public enum ChatAction
 /// logged or traced; null on every other message.
 /// </summary>
 public sealed record ChatMessage(
-    int Id, ChatRole Role, string Text, ChatMessageKind Kind, string? Outcome = null, ChatAction Action = ChatAction.None, string? CopyText = null);
+    int Id, ChatRole Role, string Text, ChatMessageKind Kind, string? Outcome = null, ChatAction Action = ChatAction.None, string? CopyText = null)
+{
+    /// <summary>
+    /// Keeps the copied code out of any string form of the message, and leaves out <see cref="Text"/>, which is phone text
+    /// (the code message holds the code too) (security review M2 of milestone 9b).
+    /// </summary>
+    public override string ToString()
+        => FormattableString.Invariant(
+            $"ChatMessage {{ Id = {Id}, Role = {Role}, Kind = {Kind}, Outcome = {Outcome}, Action = {Action}, CopyText = {(CopyText is null ? "none" : "***")} }}");
+}

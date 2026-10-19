@@ -113,7 +113,13 @@ public sealed record ConversationMessage(
     string? PurchaseCode = null,
     int? AttemptsLeft = null,
     string? Reason = null,
-    string? QuestionKind = null);
+    string? QuestionKind = null)
+{
+    /// <summary>Keeps the purchase code out of any string form of the message (security review M2 of milestone 9b).</summary>
+    public override string ToString()
+        => FormattableString.Invariant(
+            $"ConversationMessage {{ Role = {Role}, Kind = {Kind}, Code = {Code}, AmountIqd = {AmountIqd}, Reference = {Reference}, PurchaseCode = {(PurchaseCode is null ? "none" : "***")}, AttemptsLeft = {AttemptsLeft}, Reason = {Reason}, QuestionKind = {QuestionKind} }}");
+}
 
 /// <summary>A question the conversation asked, for the grader: its kind, how it is answered, and the values offered.</summary>
 public sealed record ConversationQuestion(string Kind, QuestionAnswer Answer, IReadOnlyList<string> OptionValues);

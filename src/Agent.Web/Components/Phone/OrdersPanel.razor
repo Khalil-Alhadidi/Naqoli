@@ -79,8 +79,9 @@
         var parts = new List<string>();
         if (order.ProviderNameAr is { } name)
             parts.Add(name);
-        if (order.ProductType is { } type)
-            parts.Add(Text["Product_type_" + type]);
+        // Security review M3: the key is built from a wallet value; a type without a resource gets no word.
+        if (order.ProductType is { } type && Text["Product_type_" + type] is { ResourceNotFound: false } word)
+            parts.Add(word.Value);
         if (order.PriceIqd is { } price)
             parts.Add(PhoneFormat.Amount(price, Text));
         return string.Join(" ", parts);

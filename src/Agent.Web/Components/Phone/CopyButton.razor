@@ -5,14 +5,16 @@
 @* The copy button (milestone 9b): copies a purchase code through the browser's clipboard. The copied text is never
    logged or traced; on success the label reads Purchase_code_copied for two seconds. *@
 <MudButton data-testid="@TestId" data-copied="@(copied ? "true" : "false")" Variant="Variant.Outlined" Size="Size.Small"
-           OnClick="CopyAsync">@(copied ? Strings["Purchase_code_copied"] : Strings["Purchase_code_copy"])</MudButton>
+           Disabled="@copying" OnClick="CopyAsync">@(copied ? Strings["Purchase_code_copied"] : Strings["Purchase_code_copy"])</MudButton>
 
 @code {
     private static readonly TimeSpan CopiedFor = TimeSpan.FromSeconds(2);
 
     private readonly CancellationTokenSource disposing = new();
-    private IJSObjectReference? module;
+    // Security review M1: the import task is cached, not its result, so taps before the import resolves share one import.
+    private Task<IJSObjectReference>? moduleTask;
     private bool copied;
+    private bool copying;
     private bool disposed;
     private int copies;
 
@@ -26,23 +28,37 @@
 
     private async Task CopyAsync()
     {
-        if (disposed)
+        if (disposed || copying)
             return;
 
+        // The button is disabled while a copy runs, which also closes the double-tap window.
+        copying = true;
         bool ok;
         try
         {
-            module ??= await JS.InvokeAsync<IJSObjectReference>("import", disposing.Token, "./Components/Phone/CopyButton.razor.js");
+            moduleTask ??= JS.InvokeAsync<IJSObjectReference>("import", disposing.Token, "./Components/Phone/CopyButton.razor.js").AsTask();
+            var module = await moduleTask;
             ok = await module.InvokeAsync<bool>("copyText", disposing.Token, Text);
         }
-        catch (Exception ex) when (ex is JSException or JSDisconnectedException or OperationCanceledException or TaskCanceledException)
+        catch (Exception ex) when (ex is JSException or JSDisconnectedException or OperationCanceledException)
         {
-            // The clipboard or the circuit failed: the label stays as it is. Nothing about the text is logged.
+            // The clipboard or the circuit failed: the label stays as it is. Nothing about the text is logged. A failed
+            // import is not cached, so the next tap tries again.
+            if (moduleTask is { IsFaulted: true } or { IsCanceled: true })
+                moduleTask = null;
             ok = false;
+        }
+        finally
+        {
+            copying = false;
         }
 
         if (!ok || disposed)
+        {
+            if (!disposed)
+                StateHasChanged();
             return;
+        }
 
         copied = true;
         var copy = ++copies;
@@ -72,11 +88,11 @@
         // The flag first: a copy in flight sees it and does not touch the component again.
         disposed = true;
         await disposing.CancelAsync();
-        if (module is not null)
+        if (moduleTask is { IsCompletedSuccessfully: true })
         {
             try
             {
-                await module.DisposeAsync();
+                await (await moduleTask).DisposeAsync();
             }
             catch (JSDisconnectedException)
             {

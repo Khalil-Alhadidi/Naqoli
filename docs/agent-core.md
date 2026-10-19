@@ -906,7 +906,7 @@ D11. A purchase goes through the same pipeline as a transfer or a bill: one pars
 - The audit row holds the state change and the reference, never the code.
 - The trace step `outcome:done` carries the state name only.
 - The learning log is not written for a done purchase.
-- `ConfirmOutcome.Done.ToString()`, `WalletOrder.ToString()` and `PurchaseOrder.ToString()` print the code as `***`, so a formatted log line cannot leak it.
+- `ConfirmOutcome.Done.ToString()`, `WalletOrder.ToString()`, `PurchaseOrder.ToString()` and `ConversationMessage.ToString()` print the code as `***` (the web's `ChatMessage.ToString()` likewise prints `CopyText` as `***`; security review M2), so a formatted log line cannot leak it.
 - The model never sees a code: the parser receives the user's own words and the pending note, which names a card's type and nothing fetched from the wallet. `OutboundPayloadTests.APurchaseCodeNeverReachesTheModel` checks the new code, every order code returned and every seeded purchase code, in both digit forms.
 
 ```mermaid

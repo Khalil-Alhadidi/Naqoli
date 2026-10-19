@@ -42,6 +42,17 @@ public class PhoneStringsTests
     }
 
     [Fact]
+    public void EveryProductTypeOfTheSeedHasItsTypeWord()
+    {
+        // Security review M3 of milestone 9b: the type word's key is built from the wallet's product type.
+        var keys = Values();
+        var types = global::Agent.Core.Tests.Wallet.SeedFacts.Seed.Products.Select(p => p.Type).Distinct(StringComparer.Ordinal).ToList();
+
+        Assert.NotEmpty(types);
+        Assert.All(types, type => Assert.True(keys.ContainsKey("Product_type_" + type), "Product_type_" + type + " is missing"));
+    }
+
+    [Fact]
     public void NoValueIsBlankOrHasAnEdgeSpace()
     {
         foreach (var (key, value) in Values())
