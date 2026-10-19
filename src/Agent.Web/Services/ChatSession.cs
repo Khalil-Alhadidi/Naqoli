@@ -4,6 +4,7 @@ using Agent.Core.Confirm;
 using Agent.Core.Conversation;
 using Agent.Core.Parsing;
 using Agent.Core.Pipeline;
+using Agent.Core.Requests;
 using Agent.Core.Store;
 using Agent.Core.Wallet;
 using Agent.Web.Resources;
@@ -313,7 +314,10 @@ public sealed class ChatSession : IDisposable
         await conversation.ReissueAsync();
     }
 
-    /// <summary>The card's Cancel button for the card <paramref name="pendingId"/> names (ruling 8 of milestone 9c).</summary>
+    /// <summary>
+    /// The card's Cancel button for the card <paramref name="pendingId"/> names (ruling 8 of milestone 9c): the card panel
+    /// passes the id it captured when it first rendered.
+    /// </summary>
     public async Task CancelAsync(Guid pendingId)
     {
         TraceLog.Current.Value = trace;
@@ -466,6 +470,12 @@ public sealed class ChatSession : IDisposable
                 yield return (ChatRole.Agent, RefusalText(message.Code, message.AmountIqd), ChatMessageKind.Text, null, ChatAction.None);
                 break;
 
+            case ConversationKind.Info when message.NotPrepared is { Count: > 0 } parts:
+                // Rule 22 (milestone 9c): Khalil's line as it is, then the line that names the parts not prepared.
+                yield return (ChatRole.Agent, Text("Refusal_" + message.Code), ChatMessageKind.Text, null, ChatAction.None);
+                yield return (ChatRole.Agent, Text("Refusal_not_prepared", NotPreparedNames(parts)), ChatMessageKind.Text, null, ChatAction.None);
+                break;
+
             case ConversationKind.Info:
                 yield return (ChatRole.Agent, Text("Refusal_" + message.Code), ChatMessageKind.Text, null, ChatAction.None);
                 break;
@@ -591,6 +601,30 @@ public sealed class ChatSession : IDisposable
             return PhoneFormat.Amount(amount, text);
         return value ?? string.Empty;
     }
+
+    /// <summary>
+    /// The names of the parts not prepared (ruling 2 of milestone 9c), in the order spoken: each part's text, which is the
+    /// user's own words (the conversation keeps no other), or its request type's word (<c>Type_transfer</c>,
+    /// <c>Type_bill</c>, <c>Type_purchase</c>, else <c>Type_request</c>). Two names are joined by the template
+    /// <c>List_joiner</c> (<c>{0}</c> the names so far, <c>{1}</c> the next), so Khalil's joiner needs no edge space.
+    /// </summary>
+    private string NotPreparedNames(IReadOnlyList<NotPreparedPart> parts)
+    {
+        var names = parts.Select(p => p.Text ?? Text(TypeKey(p.Intent))).ToList();
+        var joined = names[0];
+        foreach (var name in names.Skip(1))
+            joined = Text("List_joiner", joined, name);
+        return joined;
+    }
+
+    /// <summary>The key of a request type's word.</summary>
+    private static string TypeKey(RequestIntent intent) => intent switch
+    {
+        RequestIntent.Transfer => "Type_transfer",
+        RequestIntent.Bill => "Type_bill",
+        RequestIntent.Purchase => "Type_purchase",
+        _ => "Type_request",
+    };
 
     /// <summary>A reason code's text, with its figure (the minimum, a cap, what is left, the shortfall) when it has one.</summary>
     private string RefusalText(string? code, long? amountIqd)

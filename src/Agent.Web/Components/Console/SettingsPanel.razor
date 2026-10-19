@@ -119,6 +119,7 @@
         nameof(AgentOptions.CheckingRetrySeconds) => o => o.CheckingRetrySeconds,
         nameof(AgentOptions.MaxAliasLength) => o => o.MaxAliasLength,
         nameof(AgentOptions.MaxMessageChars) => o => o.MaxMessageChars,
+        nameof(AgentOptions.MaxRequestsPerMessage) => o => o.MaxRequestsPerMessage,
         _ => throw new InvalidOperationException("No reader for the editable setting " + name + "."),
     };
 
@@ -215,8 +216,6 @@
         yield return (nameof(AgentOptions.Parser), o.Parser);
         yield return (nameof(AgentOptions.DevSetPath), o.DevSetPath);
         yield return (nameof(AgentOptions.DemoUserId), Number(o.DemoUserId));
-        // Nothing reads it yet (compound requests, milestone 9c), so it is shown, not edited.
-        yield return (nameof(AgentOptions.MaxRequestsPerMessage), Number(o.MaxRequestsPerMessage));
         yield return (nameof(AgentOptions.WalletBaseUrl), o.WalletBaseUrl?.ToString() ?? "-");
         yield return (nameof(AgentOptions.WalletTimeoutSeconds), Number(o.WalletTimeoutSeconds));
         yield return (nameof(AgentOptions.SettleWindowSeconds), Number(o.SettleWindowSeconds));

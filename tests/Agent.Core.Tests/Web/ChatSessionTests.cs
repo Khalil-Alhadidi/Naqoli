@@ -11,6 +11,7 @@ using Agent.Core.Pending;
 using Agent.Core.Pipeline;
 using Agent.Core.Requests;
 using Agent.Core.Tests.Agent;
+using Agent.Core.Tests.Conversation;
 using Agent.Core.Tests.Wallet;
 using Agent.Core.Text;
 using AgentWeb::Agent.Web.Resources;
@@ -20,7 +21,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Localization;
 using Wallet.MockApi.Contracts;
 using ContactsOk = Agent.Core.Wallet.WalletResult<Agent.Core.Wallet.WalletContacts>.Ok;
-using Agent.Core.Tests.Conversation;
 
 namespace Agent.Core.Tests.Web;
 
@@ -51,7 +51,18 @@ public sealed class ChatSessionTests(AgentHost host) : IAsyncDisposable
     /// A circuit for <paramref name="userId"/>, with a scripted parser of the Hammoudi sentence plus <paramref name="extra"/>
     /// ones (built from the seed through <see cref="SeedFacts"/>, never Arabic literals).
     /// </summary>
-    private async Task<Circuit> StartAsync(int userId = SeedFacts.DemoUserId, params ScriptedSentence[] extra)
+    private Task<Circuit> StartAsync(int userId = SeedFacts.DemoUserId, params ScriptedSentence[] extra)
+    {
+        var sentences = new List<ScriptedSentence>
+        {
+            new(HammoudiSentence, ParsedRequest.Transfer(SeedFacts.Contact("S01").Alias, 50, AmountUnit.Thousand)),
+        };
+        sentences.AddRange(extra);
+        return StartAsync(new ScriptedParser(sentences), userId);
+    }
+
+    /// <summary>A circuit for <paramref name="userId"/> over <paramref name="parser"/>, with <paramref name="configure"/> applied to the agent's options.</summary>
+    private async Task<Circuit> StartAsync(IParser parser, int userId = SeedFacts.DemoUserId, Action<AgentOptions>? configure = null)
     {
         Assert.SkipUnless(host.DatabaseAvailable, host.SkipReason);
         await host.ResetAsync();
@@ -60,12 +71,9 @@ public sealed class ChatSessionTests(AgentHost host) : IAsyncDisposable
         {
             services.AddAgentWebServices(configuration);
             services.Configure<AgentOptions>(o => o.DemoUserId = userId);
-            var sentences = new List<ScriptedSentence>
-            {
-                new(HammoudiSentence, ParsedRequest.Transfer(SeedFacts.Contact("S01").Alias, 50, AmountUnit.Thousand)),
-            };
-            sentences.AddRange(extra);
-            services.AddSingleton<IParser>(new ScriptedParser(sentences));
+            if (configure is not null)
+                services.PostConfigure(configure);
+            services.AddSingleton<IParser>(parser);
 
             // As the console does: the parser in use is wrapped in the fault decorator (review M6 of milestone 8).
             services.AddFaultingParser();
@@ -586,5 +594,76 @@ public sealed class ChatSessionTests(AgentHost host) : IAsyncDisposable
 
         Assert.Equal(bought.PurchaseCode, orders[0].Code);
         Assert.True(orders.Count > 1); // the seed's orders of U1 follow
+    }
+
+    // ---- compound requests (milestone 9c) ----
+
+    private static ScriptedParser Oracle()
+        => ScriptedParser.Load(Path.Combine(SeedHashTests.RepositoryRoot(), "data", ScriptedParser.DevSetFileName));
+
+    [Fact]
+    public async Task TheMaxThreeReplyIsTwoLinesAndNamesTheRestWithTheUsersWords()
+    {
+        // CMP-07: after the third Done, Khalil's line as it is, then the line that names the fourth part in the user's words.
+        var circuit = await StartAsync(Oracle());
+        var session = circuit.Session;
+
+        await session.SendAsync(DevSetText.Say("CMP-07"));
+        for (var card = 0; card < 3; card++)
+            Assert.IsType<ConfirmOutcome.Done>(await session.ConfirmShownAsync());
+
+        var agent = session.Messages.Where(m => m.Role == ChatRole.Agent).ToList();
+        Assert.Equal(circuit.Text["Refusal_" + ReasonCodes.MaxThreeRequests].Value, agent[^2].Text);
+        Assert.Equal(circuit.Text["Refusal_not_prepared", DevSetText.NotPrepared("CMP-07")].Value, agent[^1].Text);
+    }
+
+    [Fact]
+    public async Task ANotPreparedPartWithNoTextIsNamedByItsType()
+    {
+        // The parser's recipient for the second part is not in the typed text, so the type word names it (rules 3 and 4).
+        const string sentence = "send ten thousand to my brother and the rest to the other one";
+        var parser = new CapturingParser(new Dictionary<string, ParsedMessage>(StringComparer.Ordinal)
+        {
+            [sentence] = new([
+                ParsedRequest.Transfer(SeedFacts.Contact("S01").Alias, 10, AmountUnit.Thousand),
+                ParsedRequest.Transfer("omar", 10, AmountUnit.Thousand),
+                ParsedRequest.Balance(),
+            ]),
+        });
+        var circuit = await StartAsync(parser, configure: o => o.MaxRequestsPerMessage = 1);
+        var session = circuit.Session;
+
+        await session.SendAsync(sentence);
+        Assert.IsType<ConfirmOutcome.Done>(await session.ConfirmShownAsync());
+
+        // Two parts beyond the cap: a transfer with no text of the user's, and a balance question (Type_request).
+        var names = circuit.Text["List_joiner", circuit.Text["Type_transfer"].Value, circuit.Text["Type_request"].Value].Value;
+        Assert.Equal(circuit.Text["Refusal_not_prepared", names].Value, LastAgentMessage(session).Text);
+        Assert.DoesNotContain("omar", LastAgentMessage(session).Text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ConfirmAndCancelPassTheCardId()
+    {
+        // Ruling 8: a tap for card 1 after card 2 is shown is already handled, and nothing moves.
+        var circuit = await StartAsync(Oracle());
+        var session = circuit.Session;
+
+        await session.SendAsync(DevSetText.Say("CMP-01"));
+        var first = session.Card!.PendingId;
+        Assert.IsType<ConfirmOutcome.Done>(await session.ConfirmAsync(first, null));
+        var second = session.Card!.PendingId;
+        Assert.NotEqual(first, second);
+
+        Assert.Null(await session.ConfirmAsync(first, null));
+        Assert.Equal(circuit.Text["Outcome_already_handled"].Value, LastAgentMessage(session).Text);
+        await session.CancelAsync(first);
+        Assert.Equal(circuit.Text["Outcome_already_handled"].Value, LastAgentMessage(session).Text);
+
+        Assert.Equal((second, CardStatus.Live), (session.Card!.PendingId, session.CardState));
+        Assert.Equal(724_000, await host.Wallet.AccountBalanceAsync(SeedFacts.DemoPhone));
+
+        await session.CancelAsync(second);
+        Assert.Equal(CardStatus.Cancelled, session.CardState);
     }
 }

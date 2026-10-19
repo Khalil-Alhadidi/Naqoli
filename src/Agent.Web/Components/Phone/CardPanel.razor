@@ -120,6 +120,13 @@
     /// <summary>When the card was first seen Checking, or last settled; null while it is not Checking.</summary>
     private DateTimeOffset? lastSettle;
 
+    /// <summary>
+    /// The id of the card this panel shows, captured once when it initialises (ruling 8 of milestone 9c). The chat panel
+    /// keys the panel by the id, so a new card is a new panel; Confirm and Cancel name this id, so a tap on this card
+    /// never reaches the next one.
+    /// </summary>
+    private Guid cardId;
+
     private bool IsLive => Session.CardState == CardStatus.Live && remaining > 0;
 
     private bool IsChecking => Session.CardState == CardStatus.Checking;
@@ -135,6 +142,7 @@
     protected override void OnInitialized()
     {
         base.OnInitialized();
+        cardId = Session.Card?.PendingId ?? Guid.Empty;
         Tick();
         total = Math.Max(1, remaining);
 
@@ -232,8 +240,7 @@
         pin = null;
         try
         {
-            // Ruling 8 of milestone 9c: the tap names its card. Task 5 captures the id when the panel renders.
-            await Session.ConfirmAsync(Session.Card!.PendingId, typedPin);
+            await Session.ConfirmAsync(cardId, typedPin);
         }
         finally
         {
@@ -246,7 +253,7 @@
         acting = true;
         try
         {
-            await Session.CancelAsync(Session.Card!.PendingId);
+            await Session.CancelAsync(cardId);
         }
         finally
         {

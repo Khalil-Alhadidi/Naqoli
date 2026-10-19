@@ -178,4 +178,8 @@
   <data name="Orders_Open" xml:space="preserve"><value>مشترياتي</value></data>
   <data name="Orders_Title" xml:space="preserve"><value>مشترياتي</value></data>
   <data name="Orders_Empty" xml:space="preserve"><value>ماكو مشتريات بعد</value></data>
+  <!-- Milestone 9c: the line under max_three_requests that names the parts not prepared ({0}: the names), the joiner of two names ({0}: the names so far, {1}: the next), and the word for a request with no type word. English placeholders awaiting Khalil's Arabic. -->
+  <data name="Refusal_not_prepared" xml:space="preserve"><value>TODO-AR Not prepared: {0}</value></data>
+  <data name="List_joiner" xml:space="preserve"><value>TODO-AR {0}, {1}</value></data>
+  <data name="Type_request" xml:space="preserve"><value>TODO-AR request</value></data>
 </root>

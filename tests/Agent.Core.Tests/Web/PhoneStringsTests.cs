@@ -21,10 +21,11 @@ public class PhoneStringsTests
 
     /// <summary>
     /// Keys added after Khalil wrote the phone's wording and still English placeholders until he writes them (empty from
-    /// 17 Oct 2026; the eight keys of milestone 9b had his wording on 19 Oct 2026, so empty again); a new key goes here
-    /// until its Arabic is in, and no other key may be a placeholder.
+    /// 17 Oct 2026; the eight keys of milestone 9b had his wording on 19 Oct 2026, so empty again; milestone 9c adds the
+    /// three of the "not prepared" line); a new key goes here until its Arabic is in, and no other key may be a
+    /// placeholder. In ordinal order.
     /// </summary>
-    private static readonly string[] AwaitingKhalil = [];
+    private static readonly string[] AwaitingKhalil = ["List_joiner", "Refusal_not_prepared", "Type_request"];
 
     [Fact]
     public void NoValueIsAPlaceholderExceptTheKeysAwaitingKhalil()

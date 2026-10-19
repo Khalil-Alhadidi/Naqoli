@@ -134,12 +134,32 @@ public sealed class RuntimeSettingsTests : IDisposable
     [InlineData("Agent:DevSetPath")]
     [InlineData("Agent:Parser")]
     [InlineData("Agent:DemoUserId")]
-    [InlineData("Agent:MaxRequestsPerMessage")]
     public void AKeyThatIsNotEditableIsRefused(string key)
     {
         Assert.Throws<ArgumentException>(() => Settings.TrySet(key, "1", out _));
         Assert.Throws<ArgumentException>(() => Settings.Reset(key));
         Assert.Empty(Settings.Overrides);
+    }
+
+    /// <summary>
+    /// Milestone 9c (ruling 11): the most requests of a message that are prepared is editable within its range, 1 to 20;
+    /// the conversation reads it at the next split.
+    /// </summary>
+    [Theory]
+    [InlineData("1", true)]
+    [InlineData("20", true)]
+    [InlineData("0", false)]
+    [InlineData("21", false)]
+    public void MaxRequestsPerMessageIsEditableWithinItsRange(string value, bool accepted)
+    {
+        const string key = "Agent:" + nameof(AgentOptions.MaxRequestsPerMessage);
+        Assert.Contains(nameof(AgentOptions.MaxRequestsPerMessage), RuntimeSettings.EditableNames);
+
+        Assert.Equal(accepted, Settings.TrySet(key, value, out var error));
+
+        Assert.Equal(accepted, error is null);
+        var current = provider.GetRequiredService<IOptionsMonitor<AgentOptions>>().CurrentValue.MaxRequestsPerMessage;
+        Assert.Equal(accepted ? int.Parse(value, System.Globalization.CultureInfo.InvariantCulture) : 3, current);
     }
 
     /// <summary>Security review M2: the keys the runtime store accepts are exactly the editable names.</summary>
