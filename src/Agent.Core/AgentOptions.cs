@@ -141,10 +141,12 @@ public sealed class AgentOptions
     public string[] NoWords { get; set; } = [];
 
     /// <summary>
-    /// The bill resolver's provider spellings, by biller code (Khalil, 16 Oct 2026): besides the first word of the
-    /// wallet's biller name, the spellings users type (taken from the development set and the matching rules),
-    /// compared as contact names are. Configuration, not code: <c>Agent.Core</c> holds no Arabic. Empty by default;
-    /// shown read only in the settings component.
+    /// Provider spellings, by biller code or provider code: under a biller code (<c>internet</c>, Khalil, 16 Oct 2026)
+    /// the bill resolver's spellings besides the first word of the wallet's biller name; under a provider code
+    /// (<c>zain</c>, <c>asiacell</c>, <c>korek</c>; milestone 9b, MAL-09) the product resolver's operator spellings
+    /// besides the catalogue's code and names. The spellings users type (taken from the development set and the
+    /// matching rules), compared as contact names are. Configuration, not code: <c>Agent.Core</c> holds no Arabic.
+    /// Empty by default; shown read only in the settings component.
     /// </summary>
     public Dictionary<string, List<string>> ProviderSpellings { get; set; } = new(StringComparer.Ordinal);
 

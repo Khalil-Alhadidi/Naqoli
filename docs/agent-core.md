@@ -286,22 +286,30 @@ flowchart TD
         bOr -- "part of a bill: the bill, not the store" --> bPartFull
         bStore -- "part of a bill" --> bNF
     end
-
-    subgraph productPath["ProductResolver"]
-        pt{"OperatorText named?"} -- no --> p1["Filter the catalogue by provider, ProductType and ProductValue"]
-        pt -- yes --> p0{"Providers whose code, English name, Arabic name or other name has its key"}
-        p0 -- "none" --> pNF
-        p0 -- "several" --> pOpNamed["AskOperator: which_operator, those providers"]
-        p0 -- "one" --> p1
-        p1 --> p2{"Fitting products"}
-        p2 -- "0" --> pNF["NotFound: product_not_found"]
-        p2 -- "1 or more, no operator named" --> pOp["AskOperator: which_operator"]
-        p2 -- "1, operator named" --> pCard["Card: catalogue price"]
-        p2 -- "2 or more, operator named" --> pWhich["Options: which_product, cheapest MaxProductsInOneQuestion"]
-    end
 ```
 
-Rule 11: when the user named no operator, the agent asks for it, even when one product fits. Rule 12 (more products than fit one question: operator first) then gives the same answer. An operator text that names no provider is refused `product_not_found`, so the learning log sees it; one that names several providers (a shared other name) asks `which_operator` among those (Khalil, 14 Oct 2026). With no biller named, a user whose bills all have nothing due gets `nothing_due` (the first bill in wallet order), and only a user with no bills gets `bill_not_found` (Khalil, 14 Oct 2026).
+`ProductResolver.Resolve(request, catalogue, options)`, rules 11 and 12 as Khalil decided them (milestone 9b, 19 Oct 2026):
+
+```mermaid
+flowchart TD
+    pt{"OperatorText named?"} -- no --> p1["Filter the catalogue by ProductType and ProductValue"]
+    pt -- yes --> p0{"Providers whose code, English name, Arabic name, other name or configured spelling has its key"}
+    p0 -- "none" --> pNFNone["NotFound(null): product_not_found"]
+    p0 -- "several" --> pOpNamed["AskOperator: which_operator, those providers"]
+    p0 -- "one" --> p1o["Filter by that provider, ProductType and ProductValue"]
+    p1 --> p2{"Fitting products"}
+    p2 -- "0" --> pNFNone
+    p2 -- "1 to MaxProductsInOneQuestion" --> pList["Options: which_product across the operators, by price"]
+    p2 -- "more than MaxProductsInOneQuestion" --> pOp["AskOperator: which_operator, providers of the fitting products"]
+    p1o --> p3{"Fitting products"}
+    p3 -- "0" --> pNFProv["NotFound(provider): product_not_found"]
+    p3 -- "1" --> pCard["Card: catalogue price"]
+    p3 -- "2 or more" --> pWhich["Options: which_product, cheapest MaxProductsInOneQuestion"]
+```
+
+Rule 11 as built: when the user named no operator and names a type and a value, the fitting products are listed as one `which_product` question across the operators, even when only one fits (internet 40,000 gives the single option `ZN-NET-40`, never a card: the user has not chosen an operator). Rule 12 as built: with no operator, the fitting products (type and value filters, either may be missing) are listed when they number `MaxProductsInOneQuestion` (8) or fewer (credit 5,000 gives `ZN-CR-5`, `AC-CR-5`, `KR-CR-5`, AMB-23; an internet card with no value gives the seven internet cards); above that the operator is asked first, among the providers of the fitting products in catalogue order (nothing named: fifteen fit, so `which_operator` with `zain`, `asiacell`, `korek`, AMB-24). Options are ordered by price, catalogue order within a price. With an operator named nothing changed: one fit is the card, several are `which_product` (the cheapest `MaxProductsInOneQuestion`).
+
+Operator names: the typed `OperatorText`, lower-cased, is compared as a whole by its `ArabicText.Key` (spaces ignored) with the key of each provider's code, English name, Arabic name, other name (`also_called`) and the spellings configured under the provider code in `Agent:ProviderSpellings` (MAL-09: `asia` names Asiacell). An operator text that names no provider is refused `product_not_found` with `NotFound.ProviderCode` null, so the learning log sees it; a named provider with no fitting product is `product_not_found` with that provider's code (NOGO-12, `korek` credit 25,000); one that names several providers (a shared other name) asks `which_operator` among those (Khalil, 14 Oct 2026). With no biller named, a user whose bills all have nothing due gets `nothing_due` (the first bill in wallet order), and only a user with no bills gets `bill_not_found` (Khalil, 14 Oct 2026).
 
 The provider-name branch (the bill-or-store rule, Khalil, 16 Oct 2026): where rule 13 applies (one bill of the internet biller with an amount due), `BillResolver.NamesProvider` reads `ParsedRequest.BillerText` (schema version 2, the user's words for the biller). When a word of it is a provider name of the bill, the bill goes straight to the card; otherwise the agent asks `bill_or_store` as before. The provider names are `ProviderNames.Of(bill)`: the first word inside the parentheses of the wallet's Arabic and English biller names (`Internet (Earthlink subscription)` gives `Earthlink`); a name without parentheses gives none (ruling 1 of the milestone 8 plan). Besides these, the spellings configured for the bill's biller code in `Agent:ProviderSpellings` count as provider names (Khalil, 16 Oct 2026; configuration, so `Agent.Core` holds no Arabic): for `internet`, the spellings of the development set's bill messages and of the matching rules, and the spaced form Khalil named. Names are compared as contact names are (rule 1, `ArabicText.Key`: the normalising, a leading `al` dropped, spaces inside a name ignored): `ProviderNames.AnyNamed` compares the key of every run of one to three consecutive words of `BillerText` with each name's key, ignoring case for English, so a name typed with a space inside it matches the name written as one word; a part of a word does not match. `BillResolver.NamesProvider(billerText, bill, options)`. The other branches are unchanged, and `BillerText` is read only here: it is never on the card, the trace or the audit log. So "pay the Earthlink subscription" (CLN-09, CLN-09-v1) is the card, and "pay the internet subscription" (CLN-25) or "pay the internet" (AMB-09, AMB-21) asks.
 
@@ -915,7 +923,7 @@ A saved alias never reaches the model: the parse call sees the user's masked wor
 | `LogPageSize` | 100; 1 to 1,000 | The console's log component: how many audit rows, newest first, it shows (`AuditLog.ReadLatestAsync`) |
 | `MaxAliasLength` | 100; 1 to 100 | `AliasDirectory` (milestone 9a, ruling 8): the longest alias text, in characters after trimming, it saves; a longer one is refused `alias_invalid`. The wallet's column holds 100 and refuses a longer text as `alias_text_invalid` anyway |
 | `CheckingRetrySeconds` | 5; 1 to 600 | The phone's card panel (milestone 8, ruling 5): while a card is Checking it settles it by itself every this many seconds through `ChatSession.SettleAsync`, the same settle as "check again", under the same key. Read on every tick, so a saved value applies at once |
-| `ProviderSpellings` | empty in code; `internet` has 3 spellings in both `appsettings.json` files | `BillResolver.NamesProvider`: by biller code, the provider spellings that count besides the first word of the wallet's biller name (Khalil, 16 Oct 2026). Phone text, so read only: the settings component and the runner's report header show the count per biller |
+| `ProviderSpellings` | empty in code; in both `appsettings.json` files `internet` has 3 spellings, `zain` 1, `asiacell` 3, `korek` 1 | By biller code or provider code. Under a biller code, `BillResolver.NamesProvider`: the provider spellings that count besides the first word of the wallet's biller name (Khalil, 16 Oct 2026). Under a provider code (`zain`, `asiacell`, `korek`), `ProductResolver`: the operator spellings that count besides the catalogue's code and names (milestone 9b, MAL-09; Latin spellings written by Claude, Arabic variants are Khalil's). Phone text, so read only: the settings component and the runner's report header show the count per key |
 | `Parser` | `scripted` | `ParserFactory.AddAgentParser`: `scripted` (the oracle) or `claude` |
 | `DevSetPath` | `data/requests.dev.jsonl` | The oracle: the development set, relative to the repository root unless rooted; its file name must be `requests.dev.jsonl` (rule 7) |
 | `YesWords`, `NoWords` | empty | `Conversation`, D6. Phone text, so not set in `Agent.Core`: the console post-configures them from `Word_yes` and `Word_no` in its resource file, and the test host sets `yes` and `no` |

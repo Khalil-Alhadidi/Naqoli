@@ -585,7 +585,7 @@ public class OrchestratorTests(AgentHost host)
 
         Question(
             await HandleAsync(U1, ParsedRequest.Purchase(null, "internet", 40_000), new SlotAnswers(ProductCode: "NO-SUCH-1")),
-            QuestionKinds.WhichOperator,
+            QuestionKinds.WhichProduct,
             QuestionAnswer.Tap);
         Assert.Equal("ZN-NET-40", Card(await HandleAsync(U1, ParsedRequest.Purchase(null, "internet", 40_000), new SlotAnswers(ProductCode: "ZN-NET-40"))).ProductCode);
     }
@@ -606,9 +606,21 @@ public class OrchestratorTests(AgentHost host)
     {
         await StartAsync();
 
+        // AMB-23: rule 12 as decided, three fitting products across the operators are one which_product question.
         var question = Question(
-            await HandleAsync(U1, ParsedRequest.Purchase(null, "internet", 40_000)), QuestionKinds.WhichOperator, QuestionAnswer.Tap);
-        Assert.Equal(["zain"], question.Options.Select(o => o.Value));
+            await HandleAsync(U1, ParsedRequest.Purchase(null, "credit", 5_000)), QuestionKinds.WhichProduct, QuestionAnswer.Tap);
+        Assert.Equal(["ZN-CR-5", "AC-CR-5", "KR-CR-5"], question.Options.Select(o => o.Value));
+    }
+
+    [Fact]
+    public async Task PurchaseWithNothingNamedAsksTheOperator()
+    {
+        await StartAsync();
+
+        // AMB-24: all fifteen products fit, more than one question holds, so the operator is asked first.
+        var question = Question(
+            await HandleAsync(U1, ParsedRequest.Purchase(null, null, null)), QuestionKinds.WhichOperator, QuestionAnswer.Tap);
+        Assert.Equal(["zain", "asiacell", "korek"], question.Options.Select(o => o.Value));
     }
 
     [Fact]

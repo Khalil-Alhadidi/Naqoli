@@ -18,18 +18,77 @@ public class ProductResolverTests
     private static string ArabicNameOf(string provider) => SeedFacts.Seed.Products.First(p => p.Provider == provider).ProviderNameAr;
 
     [Fact]
-    public void InternetFortyWithNoOperatorAsksTheOperatorEvenWithOneFit()
+    public void InternetFortyWithNoOperatorListsTheOneFittingProductAsAnOption()
     {
-        // Rule 11: only Zain has a 40,000 internet card, and the agent still asks.
-        var ask = Assert.IsType<ProductResolution.AskOperator>(Resolve(null, "internet", 40_000));
-        Assert.Equal(["zain"], ask.ProviderCodes);
+        // Rule 11 as decided: only Zain has a 40,000 internet card; it is offered as one option, never a card.
+        var options = Assert.IsType<ProductResolution.Options>(Resolve(null, "internet", 40_000));
+        Assert.Equal(["ZN-NET-40"], options.Products.Select(p => p.Code));
     }
 
     [Fact]
-    public void CreditTenWithNoOperatorAsksAmongThree()
+    public void CreditTenWithNoOperatorListsThreeProductsAcrossOperators()
     {
-        var ask = Assert.IsType<ProductResolution.AskOperator>(Resolve(null, "credit", 10_000));
+        var options = Assert.IsType<ProductResolution.Options>(Resolve(null, "credit", 10_000));
+        Assert.Equal(["ZN-CR-10", "AC-CR-10", "KR-CR-10"], options.Products.Select(p => p.Code));
+    }
+
+    [Fact]
+    public void CreditFiveWithNoOperatorListsThreeProducts()
+    {
+        // AMB-23.
+        var options = Assert.IsType<ProductResolution.Options>(Resolve(null, "credit", 5_000));
+        Assert.Equal(["ZN-CR-5", "AC-CR-5", "KR-CR-5"], options.Products.Select(p => p.Code));
+    }
+
+    [Fact]
+    public void InternetWithNoOperatorAndNoValueListsSevenProducts()
+    {
+        // Seven fit, within one question: ordered by price, catalogue order within a price.
+        var options = Assert.IsType<ProductResolution.Options>(Resolve(null, "internet", null));
+        Assert.Equal(
+            ["ZN-NET-10", "AC-NET-10", "KR-NET-15", "ZN-NET-25", "AC-NET-25", "KR-NET-30", "ZN-NET-40"],
+            options.Products.Select(p => p.Code));
+    }
+
+    [Fact]
+    public void WithACapOfTwoCreditTenAsksTheOperator()
+    {
+        var ask = Assert.IsType<ProductResolution.AskOperator>(
+            Resolve(null, "credit", 10_000, new AgentOptions { MaxProductsInOneQuestion = 2 }));
         Assert.Equal(["zain", "asiacell", "korek"], ask.ProviderCodes);
+    }
+
+    [Fact]
+    public void AConfiguredLatinSpellingNamesTheOperator()
+    {
+        // MAL-09.
+        var options = new AgentOptions { ProviderSpellings = { ["asiacell"] = ["asia"] } };
+        var card = Assert.IsType<ProductResolution.Card>(Resolve("asia", "credit", 5_000, options));
+        Assert.Equal("AC-CR-5", card.Product.Code);
+    }
+
+    [Theory]
+    [InlineData("asia cell")]
+    [InlineData("asiacell")]
+    public void AConfiguredSpellingWithASpaceMatches(string typed)
+    {
+        var options = new AgentOptions { ProviderSpellings = { ["asiacell"] = ["asia cell"] } };
+        var card = Assert.IsType<ProductResolution.Card>(Resolve(typed, "credit", 5_000, options));
+        Assert.Equal("AC-CR-5", card.Product.Code);
+    }
+
+    [Fact]
+    public void AnUnconfiguredLatinSpellingIsNotFoundWithNoProvider()
+    {
+        var notFound = Assert.IsType<ProductResolution.NotFound>(Resolve("fastlink", "credit", 5_000));
+        Assert.Null(notFound.ProviderCode);
+    }
+
+    [Fact]
+    public void NotFoundCarriesTheProviderCode()
+    {
+        var notFound = Assert.IsType<ProductResolution.NotFound>(Resolve("korek", "credit", 25_000));
+        Assert.Equal("korek", notFound.ProviderCode);
     }
 
     [Fact]
