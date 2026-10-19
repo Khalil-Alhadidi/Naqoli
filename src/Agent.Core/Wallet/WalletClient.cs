@@ -84,6 +84,10 @@ public sealed partial class WalletClient
             FormattableString.Invariant($"users/{userId}/history?") + string.Join('&', query), cancellationToken);
     }
 
+    /// <summary>The store purchases of <paramref name="userId"/>, newest first, each with its purchase code (D11).</summary>
+    public Task<WalletResult<IReadOnlyList<WalletOrder>>> GetOrdersAsync(int userId, CancellationToken cancellationToken = default)
+        => GetAsync<IReadOnlyList<WalletOrder>>("orders", FormattableString.Invariant($"users/{userId}/orders"), cancellationToken);
+
     /// <summary>The wallet's own fees and PIN limits, as configured in the wallet.</summary>
     public Task<WalletResult<WalletSettings>> GetSettingsAsync(CancellationToken cancellationToken = default)
         => GetAsync<WalletSettings>("settings", "settings", cancellationToken);

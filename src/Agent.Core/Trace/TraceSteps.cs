@@ -38,6 +38,11 @@ public static class TraceSteps
     /// <summary>An alias save or delete was refused; the step ends with the reason code (<c>alias_refused:alias_exists</c>).</summary>
     public const string AliasRefusedPrefix = "alias_refused:";
 
+    // Code zone: store purchases (milestone 9b). The detail is a count, never a purchase code.
+
+    /// <summary>The user's orders were read for My orders; the detail is the number of orders.</summary>
+    public const string OrdersRead = "orders_read";
+
     // Write zone: the Confirm handler.
     public const string BeginExecute = "begin_execute";
     public const string RecheckOk = "recheck_ok";

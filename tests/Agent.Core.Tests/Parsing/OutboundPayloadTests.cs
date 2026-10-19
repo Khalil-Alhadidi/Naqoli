@@ -1,7 +1,9 @@
 using System.Text.Json;
 using Agent.Core.Aliases;
+using Agent.Core.Confirm;
 using Agent.Core.Parsing;
 using Agent.Core.Pipeline;
+using Agent.Core.Store;
 using Agent.Core.Tests.Agent;
 using Agent.Core.Tests.Conversation;
 using Agent.Core.Tests.Wallet;
@@ -10,6 +12,7 @@ using Agent.Core.Wallet;
 using Agent.Eval.Checks;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging.Abstractions;
+using Wallet.MockApi.Data;
 
 namespace Agent.Core.Tests.Parsing;
 
@@ -77,7 +80,14 @@ public sealed class OutboundPayloadTests(AgentHost host)
     [Fact]
     public Task ASavedAliasNeverReachesTheModel() => PlayAndCheckAsync(saveAlias: true);
 
-    private async Task PlayAndCheckAsync(bool saveAlias)
+    /// <summary>
+    /// Milestone 9b: with the purchase confirmed and My orders read before the balance question, neither the new purchase
+    /// code, nor any order code the wallet returns, nor any seeded purchase code reaches the model, in either digit form.
+    /// </summary>
+    [Fact]
+    public Task APurchaseCodeNeverReachesTheModel() => PlayAndCheckAsync(saveAlias: false, confirmPurchase: true);
+
+    private async Task PlayAndCheckAsync(bool saveAlias, bool confirmPurchase = false)
     {
         Assert.SkipUnless(host.DatabaseAvailable, host.SkipReason);
         var client = new FakeChatClient
@@ -106,6 +116,17 @@ public sealed class OutboundPayloadTests(AgentHost host)
         var billCard = Assert.IsType<CardView>(conversation.Card);
         await conversation.SendAsync("zain credit five");
         var purchaseCard = Assert.IsType<CardView>(conversation.Card);
+        List<string> purchaseCodes = [];
+        if (confirmPurchase)
+        {
+            var bought = Assert.IsType<ConfirmOutcome.Done>(await conversation.ConfirmAsync(null));
+            Assert.NotNull(bought.PurchaseCode);
+            var orders = Assert.IsType<WalletResult<IReadOnlyList<PurchaseOrder>>.Ok>(await conversation.ListOrdersAsync()).Value;
+            Assert.Equal(bought.PurchaseCode, orders[0].Code);
+            purchaseCodes = [bought.PurchaseCode, .. orders.Select(o => o.Code)];
+        }
+
+        var callsBeforeBalance = client.Calls.Count;
         await conversation.SendAsync("how much do I have");
         Assert.IsType<AgentReply.BalanceReply>(conversation.LastReply);
         if (saveAlias)
@@ -151,5 +172,21 @@ public sealed class OutboundPayloadTests(AgentHost host)
             Assert.DoesNotContain(ArabicText.Normalize(name!), normalizedPayload, StringComparison.Ordinal));
         Assert.All(seed.Users, u => Assert.DoesNotContain(u.Pin, payload, StringComparison.Ordinal));
         Assert.DoesNotContain(ArabicText.Normalize(SavedAliasText), normalizedPayload, StringComparison.Ordinal);
+
+        // Absent: the purchase code, every order code returned and every seeded purchase code, as typed and in
+        // Arabic-Indic digits; in particular the text sent with the message after the purchase (its pending note).
+        if (confirmPurchase)
+        {
+            string[] codes =
+            [
+                .. purchaseCodes,
+                .. seed.History.Where(h => h.Type == "purchase").Select(h => SeedData.OrderCodeFor(h.Id)),
+            ];
+            string[] forms = [.. codes.SelectMany(c => new[] { c, ArabicDigits.ToArabicIndic(c) }).Distinct(StringComparer.Ordinal)];
+            Assert.All(forms, form => Assert.DoesNotContain(form, payload, StringComparison.Ordinal));
+
+            var afterPurchase = string.Join('\n', client.Calls[callsBeforeBalance].Messages.Select(m => m.Text));
+            Assert.All(forms, form => Assert.DoesNotContain(form, afterPurchase, StringComparison.Ordinal));
+        }
     }
 }

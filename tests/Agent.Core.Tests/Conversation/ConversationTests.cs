@@ -9,6 +9,7 @@ using Agent.Core.Parsing;
 using Agent.Core.Pending;
 using Agent.Core.Pipeline;
 using Agent.Core.Requests;
+using Agent.Core.Store;
 using Agent.Core.Tests.Agent;
 using Agent.Core.Tests.Wallet;
 using Agent.Core.Text;
@@ -742,6 +743,22 @@ public sealed class ConversationTests(AgentHost host) : IAsyncDisposable
         Assert.Contains(session.Trace.Entries, e => e.Step == "card_created");
         Assert.Contains(session.Trace.Entries, e => e.Step == "outcome:done");
 
+        // The pending record keeps only the code's last four characters; no audit row of the purchase holds the code.
+        var purchaseRecord = await RecordAsync(session, purchaseCard.PendingId, SeedFacts.TraderUserId);
+        Assert.Equal(bought.PurchaseCode[^4..], purchaseRecord.PurchaseCodeLast4);
+        await using (var scope = session.Provider.CreateAsyncScope())
+        {
+            var audit = await scope.ServiceProvider.GetRequiredService<AgentDbContext>().AuditEntries.AsNoTracking()
+                .Where(a => a.PendingId == purchaseCard.PendingId)
+                .ToListAsync(Token);
+            Assert.Contains(audit, a => a.ToState == nameof(PendingState.Done));
+            Assert.All(audit, a =>
+            {
+                foreach (var field in new[] { a.Detail, a.Reference, a.Reason })
+                    Assert.DoesNotContain(bought.PurchaseCode, field ?? string.Empty, StringComparison.Ordinal);
+            });
+        }
+
         string[] secrets = [pin, ArabicDigits.ToArabicIndic(pin), pinKey, purchaseKey, bought.PurchaseCode];
         foreach (var entry in session.Trace.Entries)
         {
@@ -751,6 +768,58 @@ public sealed class ConversationTests(AgentHost host) : IAsyncDisposable
                 Assert.DoesNotContain(secret, entry.Detail ?? string.Empty, StringComparison.Ordinal);
             }
         }
+    }
+
+    [Fact]
+    public async Task ListingOrdersJoinsTheCatalogueAndTracesOnlyTheCount()
+    {
+        var session = await StartAsync(
+            SeedFacts.TraderUserId,
+            null,
+            null,
+            new ScriptedSentence("zain credit five", ParsedRequest.Purchase("zain", "credit", 5_000)));
+        var conversation = session.Conversation;
+
+        await conversation.SendAsync("zain credit five");
+        var purchaseCard = Assert.IsType<CardView>(conversation.Card);
+        var bought = Assert.IsType<ConfirmOutcome.Done>(await conversation.ConfirmAsync(null));
+        Assert.NotNull(bought.PurchaseCode);
+        var messages = conversation.Messages.Count;
+
+        var orders = Assert.IsType<WalletResult<IReadOnlyList<PurchaseOrder>>.Ok>(await conversation.ListOrdersAsync()).Value;
+
+        var product = global::Agent.Core.Tests.Resolver.SeedWallet.Products().Single(p => p.Code == purchaseCard.ProductCode);
+        var first = orders[0];
+        Assert.Equal(bought.PurchaseCode, first.Code);
+        Assert.Equal((product.ProviderNameAr, product.Type, (long?)product.PriceIqd), (first.ProviderNameAr, first.ProductType, first.PriceIqd));
+        Assert.DoesNotContain(first.Code, first.ToString(), StringComparison.Ordinal);
+
+        var read = Assert.Single(session.Trace.Entries, e => e.Step == TraceSteps.OrdersRead);
+        Assert.Equal(orders.Count.ToString(System.Globalization.CultureInfo.InvariantCulture), read.Detail);
+        foreach (var entry in session.Trace.Entries)
+        {
+            foreach (var order in orders)
+            {
+                Assert.DoesNotContain(order.Code, entry.Step, StringComparison.Ordinal);
+                Assert.DoesNotContain(order.Code, entry.Detail ?? string.Empty, StringComparison.Ordinal);
+            }
+        }
+
+        Assert.Equal(messages, conversation.Messages.Count);
+        Assert.False(conversation.Busy);
+    }
+
+    [Fact]
+    public async Task ListingOrdersWhileStoppedIsUnavailable()
+    {
+        var session = await StartAsync();
+        var conversation = session.Conversation;
+        conversation.Dispose();
+
+        var read = Assert.IsType<WalletResult<IReadOnlyList<PurchaseOrder>>.Unavailable>(await conversation.ListOrdersAsync());
+
+        Assert.Equal("stopped", read.Reason);
+        Assert.DoesNotContain(session.Trace.Entries, e => e.Step == TraceSteps.OrdersRead);
     }
 
     [Fact]

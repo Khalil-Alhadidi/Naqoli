@@ -123,8 +123,21 @@ public class TraceSinkTests(AgentHost host)
         var bought = Assert.IsType<ConfirmOutcome.Done>(await ConfirmAsync(sink, purchaseCard));
         Assert.NotNull(bought.PurchaseCode);
 
+        // Then My orders for U1 (milestone 9b): the read traces orders_read with the count, never a code.
+        IReadOnlyList<global::Agent.Core.Store.PurchaseOrder> orders;
+        await using (var scope = host.Services.CreateAsyncScope())
+        {
+            var reader = ActivatorUtilities.CreateInstance<global::Agent.Core.Store.OrdersReader>(scope.ServiceProvider, sink);
+            orders = Assert.IsType<global::Agent.Core.Wallet.WalletResult<IReadOnlyList<global::Agent.Core.Store.PurchaseOrder>>.Ok>(
+                await reader.ListAsync(U1, Token)).Value;
+        }
+
+        Assert.Equal(bought.PurchaseCode, orders[0].Code);
+        Assert.Contains(sink.Steps, s => s.Step == TraceSteps.OrdersRead);
+
         string[] secrets =
         [
+            .. orders.Select(o => o.Code),
             pin,
             global::Agent.Core.Text.ArabicDigits.ToArabicIndic(pin),
             pinCard.IdempotencyKey,

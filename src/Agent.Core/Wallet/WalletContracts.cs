@@ -82,6 +82,24 @@ public sealed record WalletProduct(
     long PriceIqd);
 
 /// <summary>
+/// A completed store purchase of the user (<c>GET /users/{id}/orders</c>, newest first): the product bought and its
+/// purchase code (D11). <see cref="Code"/> is shown on the phone only; it never goes to the model, the trace or a log.
+/// </summary>
+public sealed record WalletOrder(
+    int OrderId,
+    int TransactionId,
+    int ProductId,
+    string ProductCode,
+    string Code,
+    DateTimeOffset CreatedAt)
+{
+    /// <summary>Keeps the purchase code out of any string form of the order.</summary>
+    public override string ToString()
+        => FormattableString.Invariant(
+            $"WalletOrder {{ OrderId = {OrderId}, TransactionId = {TransactionId}, ProductId = {ProductId}, ProductCode = {ProductCode}, Code = ***, CreatedAt = {CreatedAt:O} }}");
+}
+
+/// <summary>
 /// The body of <c>POST /quotes</c> and <c>POST /transactions</c>. <see cref="Type"/> is <c>transfer</c>, <c>bill</c>
 /// or <c>purchase</c>. <see cref="Pin"/> travels only in this body, on execute.
 /// </summary>

@@ -896,6 +896,39 @@ sequenceDiagram
 
 A saved alias never reaches the model: the parse call sees the user's masked words and the pending note, and the note carries no offer (`OutboundPayloadTests.ASavedAliasNeverReachesTheModel`, `ConversationAliasTests.ASavedAliasNeverReachesTheParser`). A biller alias (one word for one biller account) is a later item of the build plan and is not built; `AliasDirectory` takes an account only.
 
+## Store purchases (milestone 9b)
+
+D11. A purchase goes through the same pipeline as a transfer or a bill: one parse, `ProductResolver`, the checks, a card built by code at the catalogue price, one tap, the Confirm handler. Nothing new can move money.
+
+**The resolver's rules.** As built in "Bill and product" above. With no operator named, a bare value lists the fitting products across the operators, up to `MaxProductsInOneQuestion` (8), as one `which_product` question, even when only one fits (rules 11 and 12, AMB-23). Above that number the operator is asked first (AMB-24). An operator is matched by its code, its names, its other name and the spellings under its provider code in `Agent:ProviderSpellings` (MAL-09). A named operator with no fitting product is `product_not_found`, and the learning-log detail is the provider code, the type and the value (`LearningLogRule.ProductDetail`, NOGO-12: `korek credit 25000`). Each product option carries `Option.ProductType` (`credit` or `internet`) so that two options of one operator and one price can be told apart.
+
+**The purchase code's path.** The wallet returns the code in the execute response (`WalletTransaction.Code`). `ConfirmHandler.CompleteDoneAsync` keeps its last four characters on the pending record (`PurchaseCodeLast4`, `PendingStore.PurchaseCodeDigitsKept` = 4; a shorter code is kept whole) and returns `ConfirmOutcome.Done(Reference, BalanceAfterIqd, PurchaseCode)`. The conversation adds the `done` outcome message with the code, and the phone shows it under the outcome. That is the only place the whole code appears.
+- The audit row holds the state change and the reference, never the code.
+- The trace step `outcome:done` carries the state name only.
+- The learning log is not written for a done purchase.
+- `ConfirmOutcome.Done.ToString()`, `WalletOrder.ToString()` and `PurchaseOrder.ToString()` print the code as `***`, so a formatted log line cannot leak it.
+- The model never sees a code: the parser receives the user's own words and the pending note, which names a card's type and nothing fetched from the wallet. `OutboundPayloadTests.APurchaseCodeNeverReachesTheModel` checks the new code, every order code returned and every seeded purchase code, in both digit forms.
+
+```mermaid
+sequenceDiagram
+    participant Phone
+    participant Conv as Conversation
+    participant CH as ConfirmHandler
+    participant Wallet
+    participant Store as PendingStore
+    Phone->>Conv: tap Confirm (pending id)
+    Conv->>CH: ConfirmAsync(user, id, null)
+    CH->>Wallet: POST /transactions (idempotency key, product id)
+    Wallet-->>CH: done, reference, balance after, code
+    CH->>Store: CompleteAsync(Done, reference, last four of the code)
+    Note over Store: pending record keeps PurchaseCodeLast4 only
+    Note over CH: audit row: state change and reference, no code<br/>trace outcome:done: state name, no code
+    CH-->>Conv: Done(Reference, BalanceAfterIqd, PurchaseCode)
+    Conv-->>Phone: done message with the code (shown, never sent to the model)
+```
+
+**My orders.** `Conversation.ListOrdersAsync()` reads the user's purchases under the conversation's turn and in its own scope, as `ListAliasesAsync` does. It returns the same `Unavailable` answers: `stopped` for a stopped conversation, and `error` (with a traced error type) for an exception. It adds no message and does not change `WalletVersion`. `OrdersReader.ListAsync(userId, ct)` (scoped) makes two calls in order: the catalogue (`GET /store/products`), then the orders (`WalletClient.GetOrdersAsync`, `GET /users/{id}/orders`, route name `orders`, newest first). It joins them by product id into `PurchaseOrder(OrderId, Code, CreatedAt, ProviderNameAr, ProductType, PriceIqd)`; the product fields are null when the catalogue no longer has the product. It keeps the wallet's order and traces `orders_read` with the count as its detail. The first wallet read that fails is returned as it came (its refusal problem or unavailable reason), and nothing is traced. The orders screen itself is the web console's (Task 4).
+
 ## Settings
 
 `AgentOptions` (section `Agent`, validated at start). The limit defaults equal `data/seed/settings.json`; `AgentOptionsTests.DefaultsMatchTheSettingsFile` keeps them equal. `src/Agent.Web/appsettings.json` sets the same values.

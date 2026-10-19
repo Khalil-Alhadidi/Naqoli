@@ -5,6 +5,7 @@ using Agent.Core.Data;
 using Agent.Core.Learning;
 using Agent.Core.Pending;
 using Agent.Core.Pipeline;
+using Agent.Core.Store;
 using Agent.Core.Trace;
 using Agent.Core.Wallet;
 using Microsoft.EntityFrameworkCore;
@@ -76,6 +77,7 @@ public static class AgentCoreServiceCollectionExtensions
         services.AddScoped<Orchestrator>();
         services.AddScoped<ConfirmHandler>();
         services.AddScoped<AliasDirectory>();
+        services.AddScoped<OrdersReader>();
         services.TryAddScoped<ITraceSink, NullTraceSink>();
 
         // The sweep runs in the host only when it has an interval; the test hosts set 0 and sweep by hand.

@@ -7,6 +7,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
 using Wallet.MockApi.Contracts;
+using Wallet.MockApi.Data;
 
 namespace Agent.Core.Tests.Agent;
 
@@ -56,6 +57,31 @@ public class WalletClientTests(AgentHost host)
 
         var unknown = Assert.IsType<WalletResult<WalletUser>.Refused>(await Client.GetUserAsync(9_999, Token));
         Assert.Equal(new WalletProblem(404, "unknown_user", null, null), unknown.Problem);
+    }
+
+    [Fact]
+    public async Task OrdersAreReadNewestFirstAndCarryTheCode()
+    {
+        Assert.SkipUnless(host.DatabaseAvailable, host.SkipReason);
+        await host.ResetAsync();
+
+        // The seed's purchases of U1, newest first, each with its derived code (data/seed/README.md, "Codes").
+        var expected = SeedFacts.Seed.History
+            .Where(h => h.Type == "purchase" && h.User == "U1")
+            .OrderBy(h => h.DaysAgo)
+            .ThenByDescending(h => h.Time, StringComparer.Ordinal)
+            .Select(h => (h.Product, SeedData.OrderCodeFor(h.Id)))
+            .ToList();
+        Assert.NotEmpty(expected);
+
+        var orders = Assert.IsType<WalletResult<IReadOnlyList<WalletOrder>>.Ok>(await Client.GetOrdersAsync(DemoUserId, Token)).Value;
+
+        Assert.Equal(expected, orders.Select(o => ((string?)o.ProductCode, o.Code)));
+        Assert.All(orders, o =>
+        {
+            Assert.False(string.IsNullOrEmpty(o.Code));
+            Assert.DoesNotContain(o.Code, o.ToString(), StringComparison.Ordinal);
+        });
     }
 
     [Fact]

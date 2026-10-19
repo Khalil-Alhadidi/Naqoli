@@ -8,6 +8,7 @@ using Agent.Core.Pending;
 using Agent.Core.Pipeline;
 using Agent.Core.Requests;
 using Agent.Core.Resolver;
+using Agent.Core.Store;
 using Agent.Core.Text;
 using Agent.Core.Trace;
 using Agent.Core.Wallet;
@@ -904,6 +905,36 @@ public sealed class Conversation : IDisposable
         catch (OperationCanceledException) when (stopping.IsCancellationRequested)
         {
             return new WalletResult<WalletContacts>.Unavailable(StoppedReason);
+        }
+        finally
+        {
+            Release();
+        }
+    }
+
+    /// <summary>
+    /// My orders (milestone 9b): the user's store purchases with their codes (<see cref="OrdersReader.ListAsync"/>), under
+    /// the conversation's turn. Adds no message and does not change <see cref="WalletVersion"/>.
+    /// </summary>
+    public async Task<WalletResult<IReadOnlyList<PurchaseOrder>>> ListOrdersAsync()
+    {
+        if (!await EnterAsync())
+            return new WalletResult<IReadOnlyList<PurchaseOrder>>.Unavailable(StoppedReason);
+        try
+        {
+            SetBusy(true);
+            await using var scope = scopes.CreateAsyncScope();
+            return await scope.ServiceProvider.GetRequiredService<OrdersReader>().ListAsync(userId, stopping);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // As the directory read: a failure here is a read with no answer, never an exception that ends the circuit.
+            trace.Record(TraceZone.Code, "error", ex.GetType().Name);
+            return new WalletResult<IReadOnlyList<PurchaseOrder>>.Unavailable(ErrorReason);
+        }
+        catch (OperationCanceledException) when (stopping.IsCancellationRequested)
+        {
+            return new WalletResult<IReadOnlyList<PurchaseOrder>>.Unavailable(StoppedReason);
         }
         finally
         {
