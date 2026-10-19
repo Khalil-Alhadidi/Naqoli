@@ -51,6 +51,17 @@ public static class TraceSteps
     /// <summary>A typed message longer than <c>MaxMessageChars</c>: message_too_long, no parse call; the detail is the length.</summary>
     public const string MessageTooLong = "message_too_long";
 
+    // Code zone: compound requests (milestone 9c, D7). The detail is a count, never a request's text.
+
+    /// <summary>A message with more than one request was split; the detail is <c>&lt;total&gt; requests, &lt;kept&gt; kept</c>.</summary>
+    public const string RequestsSplit = "requests_split";
+
+    /// <summary>A queued part runs because the previous one finished; the detail is <c>&lt;n&gt; of &lt;kept&gt;</c>.</summary>
+    public const string NextRequest = "next_request";
+
+    /// <summary>A new request dropped the parts still queued; the detail is how many.</summary>
+    public const string RequestsDropped = "requests_dropped";
+
     // Write zone: the Confirm handler.
     public const string BeginExecute = "begin_execute";
     public const string RecheckOk = "recheck_ok";

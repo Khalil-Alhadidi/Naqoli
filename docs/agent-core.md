@@ -51,7 +51,7 @@ The test hosts set `SweepIntervalSeconds` to 0 and use `NullTraceSink`, or a rec
 
 ## The parser seam
 
-`IParser.ParseAsync(text, context, cancellationToken)` (`src/Agent.Core/Parsing/IParser.cs`) is the parse call of rule 2: one call per message, read only, returning a `ParsedMessage` (`src/Agent.Core/Parsing/ParsedMessage.cs`): every request of the message, in the order spoken (D7, milestone 9c). A `ParsedMessage` holds at least one `ParsedRequest` (the constructor refuses an empty list or a null entry); `ParsedMessage.One(request)` makes a message of one, and `First` is the first spoken. Anything a parser cannot read is one `Unclear` request, so a caller that wants only the first request reads `First`. Two messages are equal when their requests are equal in order. Until the conversation's queue is built (milestone 9c, Task 2), `Conversation.SendAsync` runs `First` and the other requests are not acted on. `ParseContext(PendingNote, Map)` is all it may know besides the user's words (D5, rule 5): the one-line note of what is pending, built by code from the type and codes only, or null when nothing is pending; and the `MaskMap` of this message, which the structure validator needs to accept a token (null when the caller did not mask). The text it receives is already masked.
+`IParser.ParseAsync(text, context, cancellationToken)` (`src/Agent.Core/Parsing/IParser.cs`) is the parse call of rule 2: one call per message, read only, returning a `ParsedMessage` (`src/Agent.Core/Parsing/ParsedMessage.cs`): every request of the message, in the order spoken (D7, milestone 9c). A `ParsedMessage` holds at least one `ParsedRequest` (the constructor refuses an empty list or a null entry); `ParsedMessage.One(request)` makes a message of one, and `First` is the first spoken. Anything a parser cannot read is one `Unclear` request, so a caller that wants only the first request reads `First`. Two messages are equal when their requests are equal in order. `Conversation.SendAsync` runs `First` and queues the others, one part at a time (see Compound requests, under The conversation). `ParseContext(PendingNote, Map)` is all it may know besides the user's words (D5, rule 5): the one-line note of what is pending, built by code from the type and codes only, or null when nothing is pending; and the `MaskMap` of this message, which the structure validator needs to accept a token (null when the caller did not mask). The text it receives is already masked.
 
 The scripted implementation is `ScriptedParser` (`src/Agent.Core/Parsing/ScriptedParser.cs`). From milestone 7 it is an oracle over the development set: `ScriptedParser.Load(path)` reads two files.
 
@@ -84,7 +84,7 @@ flowchart LR
     norm --> lookup{"Equal, ordinal, to a masked, normalised dev-set say step?"}
     lookup -- yes --> req["ParsedMessage: every request of that step's parse from requests.dev.parses.jsonl, in order"]
     lookup -- no --> unclear["ParsedMessage of one request, Intent Unclear"]
-    req --> conv["Conversation.SendAsync: First"]
+    req --> conv["Conversation.SendAsync: First runs, the rest queued"]
     unclear --> conv
     conv --> orch["Orchestrator.HandleAsync"]
 ```
@@ -106,7 +106,7 @@ flowchart TD
     parse --> valid["ParsedRequestValidator (model parser): sets, lengths, figures, recipient"]
     valid -- "violation in any entry" --> unclear["One request: Unclear with Problem = field"]
     valid -- "every entry valid" --> list["ParsedMessage: every request, in order"]
-    list --> first["Conversation: First (the queue is milestone 9c)"]
+    list --> first["Conversation: First runs, the rest queued (D7)"]
     first --> unmask{"RecipientText exactly a token of this map?"}
     unmask -- yes --> number["RecipientText = the number as typed"]
     unmask -- no --> keep["unchanged"]
@@ -616,8 +616,35 @@ The alias offer (milestone 9a) adds two message kinds, neither with a code: `Ali
 | `LastAnswers` | The `SlotAnswers` of the pending request: what taps have answered for `LastRequest` |
 | `LastLearningEntry` | The learning-log entry the conversation wrote for its last reply (`model_invalid_reply` for a refused structure, `model_refusal` for a message the model refused, else `LearningLogRule.EntryFor`), or null; the runner grades it |
 | `ConsentShown` | True once the consent screen has been shown |
+| `QueuedRequests` | The parts of the last message still to run after the one running (D7, milestone 9c; below) |
 
 `Changed` is raised on every new message, and at the start and end of every action. It is raised while the action still holds its turn, so a handler sees each message on the async flow of the action that added it.
+
+### Compound requests (D7, milestone 9c)
+
+The parse call returns every request of a message, in the order spoken (`ParsedMessage`). The conversation runs them one part at a time. Each part goes through `HandleCoreAsync`, and so through the orchestrator, as any request does: its checks run against the wallet when its turn comes (rule 21), and a card is its own pending record with its own key, timer and tap (D7: one button bound to one transaction). The queue never executes anything (rule 1; `ConversationCompoundTests.TheQueueNeverExecutes`).
+
+- **The split.** When a message is handled as a new request (below), its parts after the first are queued with the un-masked request and its own ruling 3 flag. At most `Agent:MaxRequestsPerMessage` parts are kept, the first included; the value is read at the split, so a value saved later never changes a queue already running. The parts beyond the cap are not queued (the reply that names them comes with rule 22). Trace `requests_split`, detail `<total> requests, <kept> kept`, when the message had more than one request. A part's learning row is written under the masked text of the message it came from.
+- **What finishes a part.** A refusal, a balance reply or an unsupported reply, at once; a card that reaches Done, NotDone, Expired or Cancelled (a Confirm or a "check again", a Cancel tap or a typed no, the timer through `RefreshAsync`, or an "already handled" Confirm that finds the record in one of those states); and an open question cancelled (`DeclineQuestionAsync`'s cancel branch; its "none of these" branch is a refusal). A question, the consent screen and a card that is live or checking wait: a card still checking is not finished until "check again" settles it (rule 6). The reply to a message typed while a card waits that leaves the card (D6: unclear, or `change_waiting_card`) finishes nothing.
+- **The advance.** When the part that ran has finished and a part is queued, the next runs at once, under the same action (trace `next_request`, detail `<n> of <kept>`). A part that is refused or answered without a tap therefore runs on to the next in the same action, so one message can show a refusal and then a card. An exception on a part is shown as `not_done_nothing_taken` and counts as finished. The alias offer under a Done transfer stays open while the next card is built.
+- **What drops the queue.** Only a message handled as a new request, the parse path's last step, merged into the pending transfer or not: the queue is cleared first (trace `requests_dropped` with the count, when it held anything), then a waiting card is cancelled (which then finds nothing to run), then the message's own parts are queued, then part 1 runs (D7: "a new request cancels the rest"). Every other path leaves the queue: `message_too_long`, a typed yes (`points_to_confirm`), a typed no (it cancels the card, which leads to the next part), a PIN typed into the chat, the amount retry, an answer read in code, a parser that is unavailable, a message that leaves the waiting card, a question repeated, a tap, consent, a reissue and the Save of an alias. A message whose first part cannot be read while a card waits or a question is open is handled as before, and its other parts are not queued.
+- **The amount retry** (D6 extension) opens only when the refused transfer is the last part: with a part still queued, the next part runs at once.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Queued: message split (requests_split)
+    Queued --> Running: previous part finished (next_request)
+    Queued --> Dropped: new request (requests_dropped)
+    Running --> Finished: refusal, balance or unsupported reply
+    Running --> Waiting: question, consent screen or card
+    Waiting --> Running: tap on an option, typed answer, consent
+    Waiting --> Finished: card Done, NotDone, Expired or Cancelled; question cancelled
+    Waiting --> Finished: new request cancels the card
+    Finished --> [*]: the next queued part runs
+    Dropped --> [*]
+```
+
+`ConversationCompoundTests` runs CMP-01, CMP-03, CMP-05 and CMP-09 on the oracle, and the inputs of the review focus: a part refused, a card that fails at Confirm, a cancelled card, a cancelled question, a new message while a card waits, a yes, an unclear message and an answer read in code, the consent screen on part 1, and an amount refusal on a part that is not the last.
 
 ### D6, the typed yes and no
 
@@ -737,7 +764,7 @@ stateDiagram-v2
 | Code | `Orchestrator` | `parse_received` (the intent), `consent_checked` (`given` or `required`), `recipient_resolved` (`contact`, `alias`, `number`, `option`, `bill` or `purchase`), `amount_resolved` (the amount), `checks_passed` (the quote's total) or `check_failed:<reason>` (the figure), `card_created` (type, total, `pin` when one is needed), `question:<kind>` (how many options), `refusal:<code>` (the wallet code for `not_done_nothing_taken`, else the figure), `balance_shown` (no figure), `known_gap` (`choose_account` or `part_of_bill`), `reissue` (`try_again` or `send_again`) |
 | Write | `ConfirmHandler` | `begin_execute` (type and total), `recheck_ok` or `recheck_failed:<reason>` (the wallet code, if any), `execute_sent`, `outcome:<done, not_done, checking, expired, already_handled, not_found, pin_required, pin_wrong, pin_malformed, cancelled or exception>` (the record's state, the reason, or the attempts left), `lookup_by_key` (`done`, `failed`, `unknown_key` or `unavailable <reason>`; milestone 8), `settle_sent`, `settle_outcome:<the same names>` |
 
-The User and Model zones are written by the `Conversation` (below; `message_received`, `confirm_tapped`, `check_again_tapped`, `cancel_tapped`, `reissue_tapped`, `parse:<parser name>` with the intent, `parse:unavailable`) and the Claude parser (`more_than_one_request`, Model zone, with the count). The `Conversation` also writes, in the Code zone, `model_invalid_reply` (the field the validator refused), `model_refusal` (no detail), `answer_merged` (the typed question's kind), `option_rejected`, `reissue_rejected` (the card's or the record's state), `learning_logged` (the reason) and `error` (an exception's type). A detail holds codes, states and amounts only: never a PIN, an idempotency key, a purchase code, a phone, a name, a balance or any text the user typed (the unsupported reason stays out of the trace). `TraceSinkTests.NoPinKeyCodeOrPhoneInAnyStep` runs a PIN payment and a purchase through a recording sink and checks every step and detail.
+The `Conversation` also writes the compound-request steps in the Code zone (milestone 9c): `requests_split` (`<total> requests, <kept> kept`), `next_request` (`<n> of <kept>`) and `requests_dropped` (the count); counts only, never a request's text. The User and Model zones are written by the `Conversation` (below; `message_received`, `confirm_tapped`, `check_again_tapped`, `cancel_tapped`, `reissue_tapped`, `parse:<parser name>` with the intent, `parse:unavailable`) and the Claude parser (`more_than_one_request`, Model zone, with the count). The `Conversation` also writes, in the Code zone, `model_invalid_reply` (the field the validator refused), `model_refusal` (no detail), `answer_merged` (the typed question's kind), `option_rejected`, `reissue_rejected` (the card's or the record's state), `learning_logged` (the reason) and `error` (an exception's type). A detail holds codes, states and amounts only: never a PIN, an idempotency key, a purchase code, a phone, a name, a balance or any text the user typed (the unsupported reason stays out of the trace). `TraceSinkTests.NoPinKeyCodeOrPhoneInAnyStep` runs a PIN payment and a purchase through a recording sink and checks every step and detail.
 
 ```mermaid
 sequenceDiagram

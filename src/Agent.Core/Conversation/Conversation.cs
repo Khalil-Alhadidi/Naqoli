@@ -1,3 +1,4 @@
+using System.Globalization;
 using Agent.Core.Aliases;
 using Agent.Core.Audit;
 using Agent.Core.Confirm;
@@ -69,6 +70,22 @@ public sealed class Conversation : IDisposable
     // D6 extension (Khalil, 17 Oct 2026): the last request was a transfer refused for an amount reason, so the next
     // typed message may be a new amount for it (one message only; see AmountRetryCodes).
     private bool amountRetryOpen;
+
+    // D7 (milestone 9c): the parts of the last message still to run, after the one running, in the order spoken, each
+    // with its ruling 3 flag; at most MaxRequestsPerMessage - 1. A part leaves the queue only through HandleCoreAsync, so
+    // it becomes a card, a question or a reply like any request, and a card waits for its own tap (rule 1).
+    private readonly Queue<(ParsedRequest Request, bool Verbatim)> queued = new();
+
+    // The masked text of the message the queued parts came from: their learning rows are written under it (rule 5).
+    private string? queuedMaskedText;
+
+    // The parts of that message kept (the first included), and the number of the part running, for the trace.
+    private int partsKept;
+    private int partNumber;
+
+    // Set during an action when the part running finished (done, not done, cancelled, expired, or a refusal, a balance or
+    // an unsupported reply); AdvanceAsync then runs the next queued part. Cleared when each action takes its turn.
+    private bool partFinished;
 
     /// <param name="scopes">Opens one scope per action.</param>
     /// <param name="parser">The parse call (rule 2).</param>
@@ -217,6 +234,12 @@ public sealed class Conversation : IDisposable
     public bool ConsentShown { get; private set; }
 
     /// <summary>
+    /// The parts of the last message still to run after the one running (D7, milestone 9c): each runs when the previous
+    /// is finished. A new request drops them.
+    /// </summary>
+    public int QueuedRequests => queued.Count;
+
+    /// <summary>
     /// A typed message. With a live card, a yes word points to the Confirm button (D6: words never confirm), a no word
     /// cancels the card, and anything else cancels it and goes on as a new request. While a question is open, a message
     /// that is not a yes or a no is first read in code, before any masking or parse call (17 Oct 2026): an answer to
@@ -230,7 +253,9 @@ public sealed class Conversation : IDisposable
     /// question is open, a message the parse call reads as unclear repeats the question and leaves it open
     /// (<c>not_understood</c> with the question's kind); while a typed question is open, a transfer that is itself
     /// missing a recipient or an amount merges into the pending transfer; anything else (a complete request, another
-    /// intent) replaces the pending request. A parser that is unavailable gives <c>model_unavailable</c>.
+    /// intent) replaces the pending request. A parser that is unavailable gives <c>model_unavailable</c>. A message with
+    /// several requests (D7) runs the first and queues the rest (<see cref="QueuedRequests"/>); a new request drops the
+    /// parts still queued.
     /// </summary>
     public async Task SendAsync(string typedText)
     {
@@ -241,183 +266,8 @@ public sealed class Conversation : IDisposable
         {
             SetBusy(true);
             ClearAliasOffer();
-            var token = stopping;
-
-            // Known gaps row 34 (Khalil, 19 Oct 2026): a message that is only four to six digits may be a PIN, so it
-            // never writes a learning row, whatever path it takes.
-            var digitsOnly = DigitsOnly(typedText);
-            suppressLearningRow = digitsOnly;
-            trace.Record(TraceZone.User, "message_received", FormattableString.Invariant($"length {typedText.Length}"));
-
-            // Khalil, 19 Oct 2026: while a card with a PIN field is live (the condition of the row 34 branch below), such
-            // a message is echoed as one dot per digit. The message carries the mark and the count, never the digits.
-            Add(digitsOnly && PinVisible && IsCardLive
-                ? new ConversationMessage(
-                    ConversationRole.User,
-                    ConversationKind.Typed,
-                    ConversationMessage.PinMasked,
-                    MaskedDigits: ArabicDigits.ToAscii(typedText).Trim().Length)
-                : new ConversationMessage(ConversationRole.User, ConversationKind.Typed));
-
-            // Known gaps row 36 (Khalil, 19 Oct 2026): a message longer than MaxMessageChars is not read; it is refused
-            // message_too_long. Nothing is masked, the parser is not called and no learning row is written; a waiting
-            // card stays (unclear, D6).
-            if (typedText.Length > options.CurrentValue.MaxMessageChars)
-            {
-                trace.Record(TraceZone.Code, TraceSteps.MessageTooLong, FormattableString.Invariant($"{typedText.Length}"));
-                LastReply = new AgentReply.Refusal(ReasonCodes.MessageTooLong, null, null);
-                LastLearningEntry = null;
-                AddRefusal(ReasonCodes.MessageTooLong);
-                return;
-            }
-
-            var pendingNote = PendingNote();
-            // D6: a yes or a no is a message of at most MaxYesNoWords words made only of whole yes (or no) entries; a
-            // sentence with any other word in it is a request.
-            var words = WordsOf(typedText);
-            var maxYesNoWords = options.CurrentValue.MaxYesNoWords;
-            var isYes = IsPhrase(words, yesEntries, maxYesNoWords);
-            var isNo = !isYes && IsPhrase(words, noEntries, maxYesNoWords);
-
-            var cardWaiting = IsCardLive;
-            if (cardWaiting)
-            {
-                if (isYes)
-                {
-                    // D6: a typed yes never confirms; it points to the button.
-                    trace.Record(TraceZone.Code, "points_to_confirm", null);
-                    Add(new ConversationMessage(ConversationRole.Agent, ConversationKind.Info, ReasonCodes.PointsToConfirm));
-                    return;
-                }
-
-                if (isNo)
-                {
-                    await CancelCardAsync(token);
-                    return;
-                }
-
-                // Known gaps row 34: a PIN typed into the chat while the PIN field shows never reaches the parse call;
-                // the reply points to the PIN field and the card stays live.
-                if (PinVisible && digitsOnly)
-                {
-                    trace.Record(TraceZone.Code, TraceSteps.PinTypedInChat, null);
-                    AddOutcome(OutcomeCodes.PinRequired);
-                    LastLearningEntry = null;
-                    return;
-                }
-
-                // Anything else is parsed first, with the card still waiting (the pending note says so): only a new
-                // request cancels it (below).
-            }
-
-            // D6 extension (17 Oct 2026): after a transfer refused for an amount reason, the next message only, if it
-            // reads as an amount, goes into that transfer and the checks run again; anything else is a fresh message.
-            if (amountRetryOpen)
-            {
-                amountRetryOpen = false;
-                if (!cardWaiting && !isYes && !isNo && lastRequest is { } refused
-                    && WithoutFillerWords(typedText, options.CurrentValue.FillerWords) is { } amountText
-                    && AmountText.TryRead(amountText, out var retryValue, out var retryUnit))
-                {
-                    trace.Record(TraceZone.Code, AmountRetryStep, null);
-                    lastMaskedText = Masker.Mask(typedText).Text;
-                    await HandleCoreAsync(refused with { AmountValue = retryValue, AmountUnit = retryUnit }, answers, token);
-                    return;
-                }
-            }
-
-            // An answer to the open question is read in code first; only what the code cannot read reaches the model.
-            if (!cardWaiting && !isYes && !isNo && Question is { } open && lastRequest is not null
-                && await AnswerInCodeAsync(open.Kind, lastRequest, typedText, token) is { } answered)
-            {
-                trace.Record(TraceZone.Code, AnswerParsedStep, open.Kind);
-                lastMaskedText = Masker.Mask(typedText).Text;
-
-                // A contact answer the code read is the user's own text (ruling 3); an amount answer keeps the flag.
-                bool? verbatim = open.Kind is QuestionKinds.WhichContact or QuestionKinds.DidYouMean ? true : null;
-                await HandleCoreAsync(answered.Request, answered.Answers, token, verbatim: verbatim);
-                return;
-            }
-
-            // Rule 5: the parse call sees the typed text with every number masked, and nothing else of the user's.
-            var masked = Masker.Mask(typedText);
-            lastMaskedText = masked.Text;
-
-            ParsedRequest parsed;
-            try
-            {
-                // D7: the parse call returns every request of the message; until the queue is built the first is run.
-                parsed = (await parser.ParseAsync(masked.Text, new ParseContext(pendingNote, masked.Map), token)).First;
-            }
-            catch (ParserUnavailableException)
-            {
-                // Nothing was understood, so a waiting card stays until its timer ends.
-                trace.Record(TraceZone.Model, "parse:unavailable", null);
-                if (cardWaiting)
-                    trace.Record(TraceZone.Code, CardKeptStep, ReasonCodes.ModelUnavailable);
-                LastReply = new AgentReply.Refusal(ReasonCodes.ModelUnavailable, null, null);
-                LastLearningEntry = null;
-                AddRefusal(ReasonCodes.ModelUnavailable);
-                return;
-            }
-
-            trace.Record(TraceZone.Model, "parse:" + parser.Name, parsed.Intent.ToString());
-            parsed = Unmask(parsed, masked.Map);
-
-            // Ruling 3: the model's recipient counts as the user's words only when it occurs in the typed text as it is.
-            var parsedVerbatim = parsed.RecipientText is { } recipient
-                && typedText.Contains(recipient.Trim(), StringComparison.Ordinal);
-
-            // A structure the validator refused: the reply is not_understood, and the log says why (by field name).
-            // A message the model refused to parse is its own path: the same reply, logged as model_refusal, no detail.
-            LearningEntry? invalidReply = null;
-            if (parsed is { Intent: RequestIntent.Unclear, Problem: ClaudeParser.RefusalProblem })
-            {
-                trace.Record(TraceZone.Code, LearningLogRule.ModelRefusal, null);
-                invalidReply = new LearningEntry(LearningLogRule.ModelRefusal, null);
-            }
-            else if (parsed is { Intent: RequestIntent.Unclear, Problem: { } problem })
-            {
-                trace.Record(TraceZone.Code, LearningLogRule.ModelInvalidReply, problem);
-                invalidReply = new LearningEntry(LearningLogRule.ModelInvalidReply, problem);
-            }
-
-            if (cardWaiting)
-            {
-                // D6: anything unclear leaves the card until its timer ends, and so does a request to change it (its
-                // reply tells the user to cancel and ask again). Any other request cancels the card and goes on as new.
-                if (CardKeptBecause(parsed) is { } reason)
-                {
-                    trace.Record(TraceZone.Code, CardKeptStep, reason);
-                    await HandleCoreAsync(parsed, SlotAnswers.None, token, invalidReply, parsedVerbatim);
-                    return;
-                }
-
-                await CancelCardAsync(token);
-            }
-
-            // Not understood while a question is open: the question is asked again and stays open.
-            if (Question is { } pending && parsed.Intent == RequestIntent.Unclear)
-            {
-                await RepeatQuestionAsync(pending.Kind, invalidReply, token);
-                return;
-            }
-
-            var request = parsed;
-            var kept = SlotAnswers.None;
-            var verbatimNow = parsedVerbatim;
-            if (typedSlot is not null && lastRequest is not null && MergePartial(lastRequest, parsed) is { } merged)
-            {
-                // D3: the answer to a typed question that the model read as a partial request of the same kind.
-                trace.Record(TraceZone.Code, "answer_merged", typedSlot);
-                request = merged;
-                kept = answers;
-
-                // The flag of whichever message supplied the recipient.
-                verbatimNow = string.IsNullOrWhiteSpace(parsed.RecipientText) ? recipientVerbatim : parsedVerbatim;
-            }
-
-            await HandleCoreAsync(request, kept, token, ReferenceEquals(request, parsed) ? invalidReply : null, verbatimNow);
+            await ReadMessageAsync(typedText, stopping);
+            await AdvanceAsync(stopping);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -432,6 +282,193 @@ public sealed class Conversation : IDisposable
             suppressLearningRow = false;
             Release();
         }
+    }
+
+    /// <summary>
+    /// The body of <see cref="SendAsync"/>, under its turn. A message handled as a new request replaces the queue with
+    /// its own parts after the first (D7); every other path leaves the queue as it is.
+    /// </summary>
+    private async Task ReadMessageAsync(string typedText, CancellationToken token)
+    {
+        // Known gaps row 34 (Khalil, 19 Oct 2026): a message that is only four to six digits may be a PIN, so it
+        // never writes a learning row, whatever path it takes.
+        var digitsOnly = DigitsOnly(typedText);
+        suppressLearningRow = digitsOnly;
+        trace.Record(TraceZone.User, "message_received", FormattableString.Invariant($"length {typedText.Length}"));
+
+        // Khalil, 19 Oct 2026: while a card with a PIN field is live (the condition of the row 34 branch below), such
+        // a message is echoed as one dot per digit. The message carries the mark and the count, never the digits.
+        Add(digitsOnly && PinVisible && IsCardLive
+            ? new ConversationMessage(
+                ConversationRole.User,
+                ConversationKind.Typed,
+                ConversationMessage.PinMasked,
+                MaskedDigits: ArabicDigits.ToAscii(typedText).Trim().Length)
+            : new ConversationMessage(ConversationRole.User, ConversationKind.Typed));
+
+        // Known gaps row 36 (Khalil, 19 Oct 2026): a message longer than MaxMessageChars is not read; it is refused
+        // message_too_long. Nothing is masked, the parser is not called and no learning row is written; a waiting
+        // card stays (unclear, D6).
+        if (typedText.Length > options.CurrentValue.MaxMessageChars)
+        {
+            trace.Record(TraceZone.Code, TraceSteps.MessageTooLong, FormattableString.Invariant($"{typedText.Length}"));
+            LastReply = new AgentReply.Refusal(ReasonCodes.MessageTooLong, null, null);
+            LastLearningEntry = null;
+            AddRefusal(ReasonCodes.MessageTooLong);
+            return;
+        }
+
+        var pendingNote = PendingNote();
+        // D6: a yes or a no is a message of at most MaxYesNoWords words made only of whole yes (or no) entries; a
+        // sentence with any other word in it is a request.
+        var words = WordsOf(typedText);
+        var maxYesNoWords = options.CurrentValue.MaxYesNoWords;
+        var isYes = IsPhrase(words, yesEntries, maxYesNoWords);
+        var isNo = !isYes && IsPhrase(words, noEntries, maxYesNoWords);
+
+        var cardWaiting = IsCardLive;
+        if (cardWaiting)
+        {
+            if (isYes)
+            {
+                // D6: a typed yes never confirms; it points to the button.
+                trace.Record(TraceZone.Code, "points_to_confirm", null);
+                Add(new ConversationMessage(ConversationRole.Agent, ConversationKind.Info, ReasonCodes.PointsToConfirm));
+                return;
+            }
+
+            if (isNo)
+            {
+                await CancelCardAsync(token);
+                return;
+            }
+
+            // Known gaps row 34: a PIN typed into the chat while the PIN field shows never reaches the parse call;
+            // the reply points to the PIN field and the card stays live.
+            if (PinVisible && digitsOnly)
+            {
+                trace.Record(TraceZone.Code, TraceSteps.PinTypedInChat, null);
+                AddOutcome(OutcomeCodes.PinRequired);
+                LastLearningEntry = null;
+                return;
+            }
+
+            // Anything else is parsed first, with the card still waiting (the pending note says so): only a new
+            // request cancels it (below).
+        }
+
+        // D6 extension (17 Oct 2026): after a transfer refused for an amount reason, the next message only, if it
+        // reads as an amount, goes into that transfer and the checks run again; anything else is a fresh message.
+        if (amountRetryOpen)
+        {
+            amountRetryOpen = false;
+            if (!cardWaiting && !isYes && !isNo && lastRequest is { } refused
+                && WithoutFillerWords(typedText, options.CurrentValue.FillerWords) is { } amountText
+                && AmountText.TryRead(amountText, out var retryValue, out var retryUnit))
+            {
+                trace.Record(TraceZone.Code, AmountRetryStep, null);
+                lastMaskedText = Masker.Mask(typedText).Text;
+                await HandleCoreAsync(refused with { AmountValue = retryValue, AmountUnit = retryUnit }, answers, token);
+                return;
+            }
+        }
+
+        // An answer to the open question is read in code first; only what the code cannot read reaches the model.
+        if (!cardWaiting && !isYes && !isNo && Question is { } open && lastRequest is not null
+            && await AnswerInCodeAsync(open.Kind, lastRequest, typedText, token) is { } answered)
+        {
+            trace.Record(TraceZone.Code, AnswerParsedStep, open.Kind);
+            lastMaskedText = Masker.Mask(typedText).Text;
+
+            // A contact answer the code read is the user's own text (ruling 3); an amount answer keeps the flag.
+            bool? verbatim = open.Kind is QuestionKinds.WhichContact or QuestionKinds.DidYouMean ? true : null;
+            await HandleCoreAsync(answered.Request, answered.Answers, token, verbatim: verbatim);
+            return;
+        }
+
+        // Rule 5: the parse call sees the typed text with every number masked, and nothing else of the user's.
+        var masked = Masker.Mask(typedText);
+        lastMaskedText = masked.Text;
+
+        ParsedMessage message;
+        try
+        {
+            // D7: the parse call returns every request of the message; the first runs now, the others are queued below.
+            message = await parser.ParseAsync(masked.Text, new ParseContext(pendingNote, masked.Map), token);
+        }
+        catch (ParserUnavailableException)
+        {
+            // Nothing was understood, so a waiting card stays until its timer ends.
+            trace.Record(TraceZone.Model, "parse:unavailable", null);
+            if (cardWaiting)
+                trace.Record(TraceZone.Code, CardKeptStep, ReasonCodes.ModelUnavailable);
+            LastReply = new AgentReply.Refusal(ReasonCodes.ModelUnavailable, null, null);
+            LastLearningEntry = null;
+            AddRefusal(ReasonCodes.ModelUnavailable);
+            return;
+        }
+
+        trace.Record(TraceZone.Model, "parse:" + parser.Name, message.First.Intent.ToString());
+        var parsed = Unmask(message.First, masked.Map);
+        var parsedVerbatim = IsVerbatim(parsed, typedText);
+
+        // A structure the validator refused: the reply is not_understood, and the log says why (by field name).
+        // A message the model refused to parse is its own path: the same reply, logged as model_refusal, no detail.
+        LearningEntry? invalidReply = null;
+        if (parsed is { Intent: RequestIntent.Unclear, Problem: ClaudeParser.RefusalProblem })
+        {
+            trace.Record(TraceZone.Code, LearningLogRule.ModelRefusal, null);
+            invalidReply = new LearningEntry(LearningLogRule.ModelRefusal, null);
+        }
+        else if (parsed is { Intent: RequestIntent.Unclear, Problem: { } problem })
+        {
+            trace.Record(TraceZone.Code, LearningLogRule.ModelInvalidReply, problem);
+            invalidReply = new LearningEntry(LearningLogRule.ModelInvalidReply, problem);
+        }
+
+        if (cardWaiting)
+        {
+            // D6: anything unclear leaves the card until its timer ends, and so does a request to change it (its
+            // reply tells the user to cancel and ask again). Any other request cancels the card and goes on as new.
+            // The reply is about this message, not about the waiting part, so it finishes nothing.
+            if (CardKeptBecause(parsed) is { } reason)
+            {
+                trace.Record(TraceZone.Code, CardKeptStep, reason);
+                await HandleCoreAsync(parsed, SlotAnswers.None, token, invalidReply, parsedVerbatim, finishesPart: false);
+                return;
+            }
+        }
+
+        // Not understood while a question is open: the question is asked again and stays open. (A live card and an
+        // open question never coexist, so this never follows the card-kept branch above.)
+        if (Question is { } pending && parsed.Intent == RequestIntent.Unclear)
+        {
+            await RepeatQuestionAsync(pending.Kind, invalidReply, token);
+            return;
+        }
+
+        // A new request (D7): the parts still queued are dropped first, so the cancel of a waiting card runs none of
+        // them; then this message's own parts after the first are queued, and the first runs.
+        DropQueue();
+        if (cardWaiting)
+            await CancelCardAsync(token);
+        QueueParts(message, masked, typedText);
+
+        var request = parsed;
+        var kept = SlotAnswers.None;
+        var verbatimNow = parsedVerbatim;
+        if (typedSlot is not null && lastRequest is not null && MergePartial(lastRequest, parsed) is { } merged)
+        {
+            // D3: the answer to a typed question that the model read as a partial request of the same kind.
+            trace.Record(TraceZone.Code, "answer_merged", typedSlot);
+            request = merged;
+            kept = answers;
+
+            // The flag of whichever message supplied the recipient.
+            verbatimNow = string.IsNullOrWhiteSpace(parsed.RecipientText) ? recipientVerbatim : parsedVerbatim;
+        }
+
+        await HandleCoreAsync(request, kept, token, ReferenceEquals(request, parsed) ? invalidReply : null, verbatimNow);
     }
 
     /// <summary>The fewest and the most digits of a message that may be a PIN (known gaps row 34).</summary>
@@ -480,6 +517,7 @@ public sealed class Conversation : IDisposable
             }
 
             await HandleCoreAsync(answered.Request, answered.Answers, token);
+            await AdvanceAsync(token);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -527,6 +565,7 @@ public sealed class Conversation : IDisposable
             if (noneOfThese)
             {
                 await HandleCoreAsync(lastRequest, answers with { ContactOption = Option.NoneOfThese }, token);
+                await AdvanceAsync(token);
                 return;
             }
 
@@ -542,6 +581,10 @@ public sealed class Conversation : IDisposable
             LastReply = new AgentReply.Refusal(ReasonCodes.QuestionCancelled, null, null);
             LastLearningEntry = null;
             AddRefusal(ReasonCodes.QuestionCancelled);
+
+            // The part the question was for is finished: the next queued part runs (D7).
+            partFinished = true;
+            await AdvanceAsync(token);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -639,6 +682,7 @@ public sealed class Conversation : IDisposable
             ActionMessageIndex = null;
             if (lastRequest is not null)
                 await HandleCoreAsync(lastRequest, answers, token);
+            await AdvanceAsync(token);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -684,6 +728,7 @@ public sealed class Conversation : IDisposable
             }
 
             ShowOutcome(outcome);
+            await AdvanceAsync(stopping);
             return outcome;
         }
         catch (OperationCanceledException) when (stopping.IsCancellationRequested)
@@ -726,6 +771,7 @@ public sealed class Conversation : IDisposable
             }
 
             ShowOutcome(outcome);
+            await AdvanceAsync(stopping);
             return outcome;
         }
         catch (OperationCanceledException) when (stopping.IsCancellationRequested)
@@ -750,6 +796,7 @@ public sealed class Conversation : IDisposable
             trace.Record(TraceZone.User, "cancel_tapped", null);
             if (IsCardLive)
                 await CancelCardAsync(stopping);
+            await AdvanceAsync(stopping);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -853,7 +900,10 @@ public sealed class Conversation : IDisposable
             else if (state == PendingState.Cancelled)
             {
                 CardState = CardStatus.Cancelled;
+                partFinished = true;
             }
+
+            await AdvanceAsync(stopping);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -1099,6 +1149,7 @@ public sealed class Conversation : IDisposable
         try
         {
             await gate.WaitAsync(stopping);
+            partFinished = false;
             return true;
         }
         catch (OperationCanceledException)
@@ -1161,8 +1212,17 @@ public sealed class Conversation : IDisposable
     /// Whether the request's recipient occurs verbatim in a message the user typed (ruling 3); null keeps the flag of the
     /// pending request (a tap, a typed amount, the consent button).
     /// </param>
+    /// <param name="finishesPart">
+    /// False when the reply is about a message typed while a card waits and leaves the card (D6): it finishes no part.
+    /// Otherwise a refusal, a balance or an unsupported reply finishes the part (D7), and the next queued part runs.
+    /// </param>
     private async Task HandleCoreAsync(
-        ParsedRequest request, SlotAnswers tapped, CancellationToken token, LearningEntry? invalidReply = null, bool? verbatim = null)
+        ParsedRequest request,
+        SlotAnswers tapped,
+        CancellationToken token,
+        LearningEntry? invalidReply = null,
+        bool? verbatim = null,
+        bool finishesPart = true)
     {
         lastRequest = request;
         if (verbatim is { } typed)
@@ -1179,10 +1239,81 @@ public sealed class Conversation : IDisposable
 
         LastReply = reply;
         ShowReply(reply);
-        amountRetryOpen = OpensAmountRetry(request, reply);
+
+        // Ruling 7 (milestone 9c): the amount retry opens only for the last part; with a part still queued, it runs next.
+        amountRetryOpen = queued.Count == 0 && OpensAmountRetry(request, reply);
         LastLearningEntry = invalidReply ?? LearningLogRule.EntryFor(reply, request);
         await WriteLearningAsync(LastLearningEntry, token);
+        partFinished = finishesPart && reply is AgentReply.Refusal or AgentReply.BalanceReply or AgentReply.Unsupported;
     }
+
+    /// <summary>
+    /// D7: while the part that ran has finished and a part is queued, runs the next one through
+    /// <see cref="HandleCoreAsync"/> under the same turn (trace <c>next_request</c>), with its own ruling 3 flag and its
+    /// learning row under its message's masked text. A part refused, answered or failing at once runs on to the next; one
+    /// that needs a question, the consent screen or a card waits. An exception on a part is shown as any action's failure
+    /// (<c>not_done_nothing_taken</c>) and counts as finished, so it still leads to the next.
+    /// </summary>
+    private async Task AdvanceAsync(CancellationToken token)
+    {
+        while (partFinished)
+        {
+            partFinished = false;
+            if (!queued.TryDequeue(out var next))
+                return;
+
+            partNumber++;
+            trace.Record(TraceZone.Code, TraceSteps.NextRequest, FormattableString.Invariant($"{partNumber} of {partsKept}"));
+            lastMaskedText = queuedMaskedText;
+            try
+            {
+                await HandleCoreAsync(next.Request, SlotAnswers.None, token, verbatim: next.Verbatim);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                Failed(ex);
+                partFinished = true;
+            }
+        }
+    }
+
+    /// <summary>D7: a new request drops the parts still queued (trace <c>requests_dropped</c> with the count).</summary>
+    private void DropQueue()
+    {
+        if (queued.Count > 0)
+            trace.Record(TraceZone.Code, TraceSteps.RequestsDropped, queued.Count.ToString(CultureInfo.InvariantCulture));
+        queued.Clear();
+        queuedMaskedText = null;
+    }
+
+    /// <summary>
+    /// D7: queues the parts of <paramref name="message"/> after the first, in the order spoken, at most
+    /// <see cref="AgentOptions.MaxRequestsPerMessage"/> parts in all (read now, so a value saved later never changes this
+    /// queue); each is un-masked and gets its own ruling 3 flag. The parts beyond the cap are not queued. Traces
+    /// <c>requests_split</c> when the message had more than one request.
+    /// </summary>
+    private void QueueParts(ParsedMessage message, MaskedText masked, string typedText)
+    {
+        partNumber = 1;
+        partsKept = 1;
+        var total = message.Requests.Count;
+        if (total < 2)
+            return;
+
+        partsKept = Math.Min(total, options.CurrentValue.MaxRequestsPerMessage);
+        trace.Record(TraceZone.Code, TraceSteps.RequestsSplit, FormattableString.Invariant($"{total} requests, {partsKept} kept"));
+        foreach (var part in message.Requests.Skip(1).Take(partsKept - 1))
+        {
+            var request = Unmask(part, masked.Map);
+            queued.Enqueue((request, IsVerbatim(request, typedText)));
+        }
+
+        queuedMaskedText = masked.Text;
+    }
+
+    /// <summary>Ruling 3: the model's recipient counts as the user's words only when it occurs in the typed text as it is.</summary>
+    private static bool IsVerbatim(ParsedRequest request, string typedText)
+        => request.RecipientText is { } recipient && typedText.Contains(recipient.Trim(), StringComparison.Ordinal);
 
     /// <summary>The trace step of a typed amount merged into a transfer refused for an amount reason.</summary>
     private const string AmountRetryStep = "amount_retry";
@@ -1477,6 +1608,7 @@ public sealed class Conversation : IDisposable
                 WalletChanged(ConversationWalletChange.Payment);
                 AddOutcome(OutcomeCodes.Done, done.BalanceAfterIqd, done.Reference, done.PurchaseCode);
                 OfferAlias();
+                partFinished = true;
                 break;
 
             case ConfirmOutcome.NotDone notDone:
@@ -1485,6 +1617,7 @@ public sealed class Conversation : IDisposable
                 ActionMessageIndex = null;
                 Add(new ConversationMessage(
                     ConversationRole.Agent, ConversationKind.Outcome, OutcomeCodes.NotDone, notDone.AmountIqd, Reason: notDone.Reason));
+                partFinished = true;
                 break;
 
             case ConfirmOutcome.Checking:
@@ -1499,7 +1632,13 @@ public sealed class Conversation : IDisposable
 
             case ConfirmOutcome.AlreadyHandled handled:
                 if (CardState == CardStatus.Live)
+                {
                     CardState = StatusOf(handled.State) ?? CardState;
+
+                    // The part finished elsewhere (a state a card can end in): the next queued part runs (D7).
+                    partFinished = CardState is CardStatus.Done or CardStatus.NotDone or CardStatus.Expired or CardStatus.Cancelled;
+                }
+
                 AddOutcome(OutcomeCodes.AlreadyHandled);
                 break;
 
@@ -1570,6 +1709,7 @@ public sealed class Conversation : IDisposable
             CardState = CardStatus.Cancelled;
             PinVisible = false;
             AddOutcome(OutcomeCodes.Cancelled);
+            partFinished = true;
             return;
         }
 
@@ -1582,6 +1722,7 @@ public sealed class Conversation : IDisposable
         CardState = CardStatus.Expired;
         PinVisible = false;
         AddOutcome(OutcomeCodes.Expired);
+        partFinished = true;
     }
 
     private static CardStatus? StatusOf(PendingState state) => state switch

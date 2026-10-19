@@ -61,6 +61,9 @@ internal sealed class ConversationHarness : IAsyncDisposable
         return new ConversationHarness(provider, conversation, trace);
     }
 
+    /// <summary>A scope of the conversation's own services (the pending store, the agent database).</summary>
+    public AsyncServiceScope CreateScope() => provider.CreateAsyncScope();
+
     /// <summary>Every audit row, oldest first.</summary>
     public async Task<List<global::Agent.Core.Audit.AuditEntry>> AuditRowsAsync()
     {
