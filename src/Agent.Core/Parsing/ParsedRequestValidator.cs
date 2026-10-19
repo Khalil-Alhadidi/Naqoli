@@ -53,6 +53,9 @@ public static class ParsedRequestValidator
         ["unclear"] = RequestIntent.Unclear,
     };
 
+    /// <summary>The intent names the structure may carry (rule 11: none of them returns or refunds anything).</summary>
+    internal static IReadOnlyCollection<string> IntentNames => Intents.Keys;
+
     private static readonly Dictionary<string, AmountUnit> Units = new(StringComparer.Ordinal)
     {
         ["none"] = AmountUnit.None,

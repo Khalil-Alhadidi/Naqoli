@@ -334,4 +334,29 @@ public class ParsedRequestValidatorTests
         AssertProblem(ParsedRequestValidator.Validate(new ParsedRequestsDto([]), Map), "requests");
         AssertProblem(ParsedRequestValidator.Validate(new ParsedRequestsDto(null), Map), "requests");
     }
+
+    private static readonly string[] ReturnWords = ["return", "refund", "reverse"];
+
+    [Fact]
+    public void TheIntentAndUnsupportedSetsCarryNoReturnOrRefundValue()
+    {
+        // Rule 11: a code cannot be returned, so neither the structure nor the schema the model is held to can say it.
+        string[] values = [.. ParsedRequestValidator.IntentNames, .. ParsedRequestValidator.UnsupportedReasons];
+        Assert.NotEmpty(ParsedRequestValidator.IntentNames);
+        Assert.All(values, value => Assert.DoesNotContain(ReturnWords, word => value.Contains(word, StringComparison.OrdinalIgnoreCase)));
+
+        var schema = ClaudeParser.Schema.GetRawText();
+        Assert.All(ReturnWords, word => Assert.DoesNotContain(word, schema, StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void AReturnIntentOrARefundReasonIsInvalid()
+    {
+        AssertProblem(
+            ParsedRequestValidator.Validate(new ParsedRequestDto { Intent = "return", AmountUnit = "none" }, Map),
+            "intent");
+        AssertProblem(
+            ParsedRequestValidator.Validate(new ParsedRequestDto { Intent = "unsupported", AmountUnit = "none", UnsupportedReason = "refund" }, Map),
+            "unsupported_reason");
+    }
 }

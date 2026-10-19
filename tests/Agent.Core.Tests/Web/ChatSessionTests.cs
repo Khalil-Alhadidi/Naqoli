@@ -3,7 +3,9 @@ extern alias AgentWeb;
 using System.Net.Http.Json;
 using Agent.Core.Aliases;
 using Agent.Core.Confirm;
+using Agent.Core.Audit;
 using Agent.Core.Conversation;
+using Agent.Core.Data;
 using Agent.Core.Parsing;
 using Agent.Core.Pending;
 using Agent.Core.Pipeline;
@@ -12,6 +14,7 @@ using Agent.Core.Tests.Agent;
 using Agent.Core.Tests.Wallet;
 using AgentWeb::Agent.Web.Resources;
 using AgentWeb::Agent.Web.Services;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Localization;
 using Wallet.MockApi.Contracts;
@@ -491,6 +494,28 @@ public sealed class ChatSessionTests(AgentHost host) : IAsyncDisposable
         var label = PhoneFormat.OptionLabel(tapped, circuit.Text);
         await session.TapOptionAsync(tapped.Value);
         Assert.Equal(label, session.Messages.Last(m => m.Role == ChatRole.User).Text);
+    }
+
+    [Fact]
+    public async Task AnUnsupportedRequestWithNoReasonFallsToNotSupported()
+    {
+        // Rule 11 (ADD-24's parse): "return the card I bought" has no request type and no reason in the structure, so
+        // the model marks it unsupported with no reason; the agent replies not_supported and logs it with no detail.
+        const string sentence = "return the card I bought";
+        var circuit = await StartAsync(SeedFacts.DemoUserId, new ScriptedSentence(sentence, new ParsedRequest { Intent = RequestIntent.Unsupported }));
+        var session = circuit.Session;
+
+        await session.SendAsync(sentence);
+
+        Assert.Equal(circuit.Text["Refusal_" + ReasonCodes.NotSupported].Value, LastAgentMessage(session).Text);
+        Assert.True(circuit.Text["Unsupported_" + ReasonCodes.NotSupported].ResourceNotFound);
+        Assert.Null(session.CardMessageId);
+
+        var db = circuit.Scope.ServiceProvider.GetRequiredService<AgentDbContext>();
+        var refused = Assert.Single(await db.AuditEntries.AsNoTracking().Where(a => a.Event == AuditEvents.Refused).ToListAsync(TestContext.Current.CancellationToken));
+        Assert.Equal(ReasonCodes.NotSupported, refused.Reason);
+        var row = Assert.Single(await db.LearningEntries.AsNoTracking().ToListAsync(TestContext.Current.CancellationToken));
+        Assert.Equal((SeedFacts.DemoUserId, ReasonCodes.NotSupported, (string?)null), (row.UserId, row.Reason, row.Detail));
     }
 
     [Fact]
