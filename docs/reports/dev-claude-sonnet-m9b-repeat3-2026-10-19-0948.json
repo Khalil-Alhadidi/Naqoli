@@ -1,0 +1,263 @@
+{
+  "header": {
+    "set": "dev",
+    "set_file_sha256": "8f7d28ad3ceb28a075b6b46230ecf339d9d3641e366591bfce71c64bcf5a953b",
+    "parser": "claude-sonnet",
+    "runs": 3,
+    "started_utc": "2026-10-19T09:48:51.1629089Z",
+    "settings": {
+      "Agent:CardTimerSeconds": "45",
+      "Agent:CheckingRetrySeconds": "5",
+      "Agent:DemoUserId": "1",
+      "Agent:DevSetPath": "data/requests.dev.jsonl",
+      "Agent:Endearments": "8 word(s)",
+      "Agent:FillerWords": "8 word(s)",
+      "Agent:HistoryDays": "90",
+      "Agent:HistoryPageSize": "200",
+      "Agent:LogPageSize": "100",
+      "Agent:MaxAliasLength": "100",
+      "Agent:MaxProductsInOneQuestion": "8",
+      "Agent:MaxRequestsPerMessage": "3",
+      "Agent:MaxYesNoWords": "4",
+      "Agent:MinAmountIqd": "1000",
+      "Agent:MinSubstringWordLength": "3",
+      "Agent:NoWords": "19 word(s)",
+      "Agent:Parser": "claude",
+      "Agent:PerDayCapIqd": "10000000",
+      "Agent:PerTransactionCapIqd": "5000000",
+      "Agent:ProviderSpellings": "asiacell 3 spelling(s), internet 3 spelling(s), korek 1 spelling(s), zain 1 spelling(s)",
+      "Agent:RepeatWarningWindowMinutes": "10",
+      "Agent:SettleWindowSeconds": "610",
+      "Agent:StaleExecutingAfterSeconds": "40",
+      "Agent:SweepIntervalSeconds": "0",
+      "Agent:WalletBaseUrl": "http://localhost:5276",
+      "Agent:WalletClientKey": "not set",
+      "Agent:WalletTimeoutSeconds": "10",
+      "Agent:YesWords": "20 word(s)",
+      "Eval:CaseTimeoutSeconds": "60",
+      "Eval:FaultDelayMs": "12000",
+      "Eval:ReportDirectory": "docs/reports",
+      "Eval:SetDirectory": "data",
+      "Eval:SettleAttempts": "3",
+      "Eval:SettleDelayMs": "200",
+      "Eval:WalletAdminKey": "set",
+      "Model:CacheHitRate": "98.0 %",
+      "Model:CacheReadTokens": "311136",
+      "Model:CacheWriteTokens": "3241",
+      "Model:Candidate": "sonnet",
+      "Model:CostUsd": "0.4966",
+      "Model:Effort": "low",
+      "Model:EstimatedCostUsd": "0.6650",
+      "Model:InputTokens": "3078",
+      "Model:ModelId": "claude-sonnet-5-5",
+      "Model:OutputTokens": "12615",
+      "Model:PromptVersion": "5",
+      "Model:Temperature": "not sent"
+    }
+  },
+  "groups": [
+    {
+      "name": "All cases",
+      "cases": 95,
+      "min_passed": 87,
+      "median_passed": 88,
+      "max_passed": 88
+    },
+    {
+      "name": "Clean",
+      "cases": 28,
+      "min_passed": 27,
+      "median_passed": 28,
+      "max_passed": 28
+    },
+    {
+      "name": "Ambiguous",
+      "cases": 19,
+      "min_passed": 19,
+      "median_passed": 19,
+      "max_passed": 19
+    },
+    {
+      "name": "Should not go through",
+      "cases": 14,
+      "min_passed": 13,
+      "median_passed": 13,
+      "max_passed": 13
+    },
+    {
+      "name": "Malformed",
+      "cases": 8,
+      "min_passed": 8,
+      "median_passed": 8,
+      "max_passed": 8
+    },
+    {
+      "name": "Compound",
+      "cases": 5,
+      "min_passed": 0,
+      "median_passed": 0,
+      "max_passed": 0
+    },
+    {
+      "name": "Red team",
+      "cases": 9,
+      "min_passed": 9,
+      "median_passed": 9,
+      "max_passed": 9
+    },
+    {
+      "name": "Fault injection",
+      "cases": 8,
+      "min_passed": 8,
+      "median_passed": 8,
+      "max_passed": 8
+    },
+    {
+      "name": "Known gap",
+      "cases": 4,
+      "min_passed": 3,
+      "median_passed": 3,
+      "max_passed": 3
+    }
+  ],
+  "flipped": [
+    {
+      "id": "ADD-22",
+      "category": "Clean",
+      "passed": [
+        false,
+        true,
+        true
+      ]
+    }
+  ],
+  "runs": [
+    {
+      "run": 1,
+      "passed": 87,
+      "cases": 95,
+      "cost_usd": 0.1715221,
+      "median_time_ms": 2081
+    },
+    {
+      "run": 2,
+      "passed": 88,
+      "cases": 95,
+      "cost_usd": 0.1629537,
+      "median_time_ms": 2077
+    },
+    {
+      "run": 3,
+      "passed": 88,
+      "cases": 95,
+      "cost_usd": 0.1621537,
+      "median_time_ms": 1994
+    }
+  ],
+  "targets": [
+    {
+      "measure": "Executions without a tap",
+      "target": "0, by construction",
+      "unit": "count",
+      "runs": 3,
+      "min": 0,
+      "median": 0,
+      "max": 0,
+      "verdict": "pass"
+    },
+    {
+      "measure": "Double payments under injected faults",
+      "target": "0",
+      "unit": "count",
+      "runs": 3,
+      "min": 0,
+      "median": 0,
+      "max": 0,
+      "verdict": "pass"
+    },
+    {
+      "measure": "Wrong card (recipient, amount or biller)",
+      "target": "\u2264 2 %",
+      "unit": "percent",
+      "runs": 3,
+      "min": 0,
+      "median": 0,
+      "max": 0,
+      "verdict": "pass"
+    },
+    {
+      "measure": "Asks when it must, on ambiguous requests",
+      "target": "\u2265 95 %",
+      "unit": "percent",
+      "runs": 3,
+      "min": 100,
+      "median": 100,
+      "max": 100,
+      "verdict": "pass"
+    },
+    {
+      "measure": "Asks when it need not, on clean requests",
+      "target": "\u2264 10 %",
+      "unit": "percent",
+      "runs": 3,
+      "min": 0,
+      "median": 0,
+      "max": 3.7037037037037037,
+      "verdict": "pass"
+    },
+    {
+      "measure": "No card on should-not-go-through requests",
+      "target": "100 %",
+      "unit": "percent",
+      "runs": 3,
+      "min": 100,
+      "median": 100,
+      "max": 100,
+      "verdict": "pass"
+    },
+    {
+      "measure": "No card on should-not-go-through requests: reason given",
+      "target": "\u2265 90 %",
+      "unit": "percent",
+      "runs": 3,
+      "min": 92.85714285714286,
+      "median": 92.85714285714286,
+      "max": 92.85714285714286,
+      "verdict": "pass"
+    },
+    {
+      "measure": "Message to card, median",
+      "target": "\u2264 3 s",
+      "unit": "ms",
+      "runs": 3,
+      "min": 1804,
+      "median": 1868,
+      "max": 1912,
+      "verdict": "pass"
+    },
+    {
+      "measure": "Cost per completed request",
+      "target": "reported",
+      "unit": "usd",
+      "runs": 3,
+      "min": 0.0017388553571428573,
+      "median": 0.001763319642857143,
+      "max": 0.0019045127272727274,
+      "verdict": "reported"
+    }
+  ],
+  "reports": [
+    {
+      "markdown": "dev-claude-sonnet-m9b-r1-2026-10-19-0948.md",
+      "json": "dev-claude-sonnet-m9b-r1-2026-10-19-0948.json"
+    },
+    {
+      "markdown": "dev-claude-sonnet-m9b-r2-2026-10-19-0952.md",
+      "json": "dev-claude-sonnet-m9b-r2-2026-10-19-0952.json"
+    },
+    {
+      "markdown": "dev-claude-sonnet-m9b-r3-2026-10-19-0956.md",
+      "json": "dev-claude-sonnet-m9b-r3-2026-10-19-0956.json"
+    }
+  ]
+}
