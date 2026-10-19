@@ -1347,7 +1347,7 @@ public sealed class ConversationTests(AgentHost host) : IAsyncDisposable
 
         public string Name => "unavailable-after-first";
 
-        public Task<ParsedRequest> ParseAsync(string text, ParseContext context, CancellationToken cancellationToken)
+        public Task<ParsedMessage> ParseAsync(string text, ParseContext context, CancellationToken cancellationToken)
             => Interlocked.Increment(ref calls) == 1
                 ? first.ParseAsync(text, context, cancellationToken)
                 : throw new ParserUnavailableException();
@@ -1360,10 +1360,10 @@ public sealed class ConversationTests(AgentHost host) : IAsyncDisposable
 
         public string Name => "refusal-after-first";
 
-        public Task<ParsedRequest> ParseAsync(string text, ParseContext context, CancellationToken cancellationToken)
+        public Task<ParsedMessage> ParseAsync(string text, ParseContext context, CancellationToken cancellationToken)
             => Interlocked.Increment(ref calls) == 1
                 ? first.ParseAsync(text, context, cancellationToken)
-                : Task.FromResult(new ParsedRequest { Intent = RequestIntent.Unclear, Problem = ClaudeParser.RefusalProblem });
+                : Task.FromResult(ParsedMessage.One(new ParsedRequest { Intent = RequestIntent.Unclear, Problem = ClaudeParser.RefusalProblem }));
     }
 
     /// <summary>A parser whose model is down.</summary>
@@ -1426,7 +1426,7 @@ public sealed class ConversationTests(AgentHost host) : IAsyncDisposable
     {
         public string Name => "unavailable";
 
-        public Task<ParsedRequest> ParseAsync(string text, ParseContext context, CancellationToken cancellationToken)
+        public Task<ParsedMessage> ParseAsync(string text, ParseContext context, CancellationToken cancellationToken)
             => throw new ParserUnavailableException();
     }
 

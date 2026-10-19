@@ -21,7 +21,9 @@ namespace Agent.Core.Parsing;
 /// (<c>parse-prompt.md</c>, <see cref="PromptVersion"/>) as the system message and, as the user message, the pending
 /// note and the masked text only (rule 5). It asks for the strict structure (<see cref="ParsedRequestsDto"/>) through
 /// <see cref="ChatOptions.ResponseFormat"/>, reads the reply strictly and hands it to <see cref="ParsedRequestValidator"/>
-/// with the message's mask map. It never throws for a bad reply (that is <see cref="RequestIntent.Unclear"/> with a
+/// with the message's mask map, which checks every request of the list; the validated list, in the order spoken, is
+/// the <see cref="ParsedMessage"/> it returns (D7). It never throws for a bad reply (that is one
+/// <see cref="RequestIntent.Unclear"/> request with a
 /// <see cref="ParsedRequest.Problem"/>: the validator's field name, or one of the parser's own problems,
 /// <see cref="JsonProblem"/>, <see cref="TruncatedProblem"/> and <see cref="RefusalProblem"/>); a call that fails or outlasts the candidate's timeout throws
 /// <see cref="ParserUnavailableException"/>. Logs hold the model id, the time, the tokens (the cache writes and reads
@@ -48,7 +50,7 @@ public sealed partial class ClaudeParser : IParser, IParserUsage
     /// </summary>
     public const string RefusalProblem = "refusal";
 
-    /// <summary>The Model-zone trace step when the reply listed more than one request (detail: how many).</summary>
+    /// <summary>The Model-zone trace step when the reply listed more than one request (detail: how many, D7).</summary>
     public const string MoreThanOneRequestStep = "more_than_one_request";
 
     private const string PromptResource = "Agent.Core.Parsing.parse-prompt.md";
@@ -128,7 +130,7 @@ public sealed partial class ClaudeParser : IParser, IParserUsage
         return examples;
     }
 
-    public async Task<ParsedRequest> ParseAsync(string text, ParseContext context, CancellationToken cancellationToken)
+    public async Task<ParsedMessage> ParseAsync(string text, ParseContext context, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(text);
         ArgumentNullException.ThrowIfNull(context);
@@ -204,23 +206,27 @@ public sealed partial class ClaudeParser : IParser, IParserUsage
 
         // Cut off at MaxOutputTokens (thinking counts against it): whatever text came is incomplete.
         if (response.FinishReason == ChatFinishReason.Length)
-            return new ParsedRequest { Intent = RequestIntent.Unclear, Problem = TruncatedProblem };
+            return Unclear(TruncatedProblem);
 
         // The model refused the message (stop reason refusal, reported by the adapter as ContentFilter): no structure.
         if (response.FinishReason == ChatFinishReason.ContentFilter)
         {
             LogRefused(candidate.ModelId, (long)duration.TotalMilliseconds);
-            return new ParsedRequest { Intent = RequestIntent.Unclear, Problem = RefusalProblem };
+            return Unclear(RefusalProblem);
         }
 
         if (!TryRead(response.Text, out var reply))
-            return new ParsedRequest { Intent = RequestIntent.Unclear, Problem = JsonProblem };
+            return Unclear(JsonProblem);
 
         if (reply.Requests is { Count: > 1 } several)
             trace.Record(TraceZone.Model, MoreThanOneRequestStep, several.Count.ToString(CultureInfo.InvariantCulture));
 
-        return ParsedRequestValidator.Validate(reply, map).Request;
+        return new ParsedMessage(ParsedRequestValidator.Validate(reply, map).Requests);
     }
+
+    /// <summary>A reply with no structure to validate: one unclear request carrying the parser's own problem.</summary>
+    private static ParsedMessage Unclear(string problem)
+        => ParsedMessage.One(new ParsedRequest { Intent = RequestIntent.Unclear, Problem = problem });
 
     /// <summary>
     /// The system message: the frozen prompt as one text block, marked cacheable with the candidate's lifetime

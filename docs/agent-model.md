@@ -68,7 +68,7 @@ The model returns `{"requests": [...]}` (`ParsedRequestsDto`), one entry per req
 | `unsupported_reason` | `withdrawal`, `other_balance`, `other_currency`, `refers_back`, `same_as_last_time`, `choose_account`, `part_of_bill`, `credit_to_own_number`, `change_waiting_card`, `other_language`, `receive_from`; null (schema version 3, 16 Oct 2026, adds the one value `receive_from`: the user asks to receive money from someone else; the enum is built from `ParsedRequestValidator.UnsupportedReasons`) |
 | `currency_text` | A currency other than dinars, as typed; null |
 
-The JSON schema sent with the call is exported from `ParsedRequestsDto` by `JsonSchemaExporter`. Every object is closed (`additionalProperties: false`) with every field required, and each enum string is limited to its set (`ClaudeParser.Schema`). Until milestone 9 builds compound requests, the first request is used and `more_than_one_request` is traced with the count.
+The JSON schema sent with the call is exported from `ParsedRequestsDto` by `JsonSchemaExporter`. Every object is closed (`additionalProperties: false`) with every field required, and each enum string is limited to its set (`ClaudeParser.Schema`). The parser returns every request of the reply, in the order spoken (`ParsedMessage`, D7, milestone 9c), and traces `more_than_one_request` with the count when there are several; the validator checks every entry, and one broken entry refuses the whole message.
 
 ## The validator
 

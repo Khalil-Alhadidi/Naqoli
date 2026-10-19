@@ -8,7 +8,7 @@ namespace Agent.Web.Services;
 /// names. When <see cref="ModelFaultSwitch.Take"/> gives a fault, the call never reaches the parser underneath:
 /// <see cref="ModelFaultMode.Unreachable"/> throws <see cref="ParserUnavailableException"/> (the phone shows
 /// <c>model_unavailable</c>), and <see cref="ModelFaultMode.InvalidReply"/> returns what the structure validator returns
-/// for a refused reply, an unclear request with <see cref="ParsedRequest.Problem"/> <see cref="InjectedProblem"/> (the
+/// for a refused reply, a message of one unclear request with <see cref="ParsedRequest.Problem"/> <see cref="InjectedProblem"/> (the
 /// conversation's <c>model_invalid_reply</c> path), as the runner's <c>RecordingParser</c> does. Otherwise it delegates.
 /// </summary>
 public sealed class FaultingParser(IParser inner, ModelFaultSwitch faults) : IParser, IParserUsage
@@ -25,7 +25,7 @@ public sealed class FaultingParser(IParser inner, ModelFaultSwitch faults) : IPa
     /// <summary>The parser underneath's usage, when it reports one.</summary>
     public ParseUsage? LastUsage => (Inner as IParserUsage)?.LastUsage;
 
-    public Task<ParsedRequest> ParseAsync(string text, ParseContext context, CancellationToken cancellationToken)
+    public Task<ParsedMessage> ParseAsync(string text, ParseContext context, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(text);
         ArgumentNullException.ThrowIfNull(context);
@@ -33,7 +33,7 @@ public sealed class FaultingParser(IParser inner, ModelFaultSwitch faults) : IPa
         return faults.Take() switch
         {
             ModelFaultMode.Unreachable => throw new ParserUnavailableException("Injected fault: the model cannot be reached."),
-            ModelFaultMode.InvalidReply => Task.FromResult(new ParsedRequest { Intent = RequestIntent.Unclear, Problem = InjectedProblem }),
+            ModelFaultMode.InvalidReply => Task.FromResult(ParsedMessage.One(new ParsedRequest { Intent = RequestIntent.Unclear, Problem = InjectedProblem })),
             _ => Inner.ParseAsync(text, context, cancellationToken),
         };
     }

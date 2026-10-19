@@ -346,7 +346,8 @@ public sealed class Conversation : IDisposable
             ParsedRequest parsed;
             try
             {
-                parsed = await parser.ParseAsync(masked.Text, new ParseContext(pendingNote, masked.Map), token);
+                // D7: the parse call returns every request of the message; until the queue is built the first is run.
+                parsed = (await parser.ParseAsync(masked.Text, new ParseContext(pendingNote, masked.Map), token)).First;
             }
             catch (ParserUnavailableException)
             {

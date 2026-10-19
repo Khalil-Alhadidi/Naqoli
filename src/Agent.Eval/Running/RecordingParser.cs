@@ -10,7 +10,7 @@ public enum ParserFault
     Unreachable,
 
     /// <summary>
-    /// <c>model_invalid_reply</c>: the call returns what the structure validator returns for a reply it refused, an
+    /// <c>model_invalid_reply</c>: the call returns what the structure validator returns for a reply it refused, one
     /// <see cref="RequestIntent.Unclear"/> request with <see cref="ParsedRequest.Problem"/>
     /// <see cref="RecordingParser.InjectedProblem"/>, so the conversation takes its <c>model_invalid_reply</c> path.
     /// </summary>
@@ -20,7 +20,8 @@ public enum ParserFault
 /// <summary>
 /// The runner's parser: it records every text handed to the parse call (for the outbound-text check, D12), which is
 /// the masked text, since the conversation masks every number before it calls the parser (rule 5, review R3), and each
-/// call's usage, applies an armed <see cref="ParserFault"/>, and otherwise passes the call to the inner parser.
+/// call's usage, applies an armed <see cref="ParserFault"/>, and otherwise passes the call to the inner parser and its
+/// message (every request of it) back.
 /// </summary>
 public sealed class RecordingParser(IParser inner) : IParser, IParserUsage
 {
@@ -90,7 +91,7 @@ public sealed class RecordingParser(IParser inner) : IParser, IParserUsage
         }
     }
 
-    public async Task<ParsedRequest> ParseAsync(string text, ParseContext context, CancellationToken cancellationToken)
+    public async Task<ParsedMessage> ParseAsync(string text, ParseContext context, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(text);
         ArgumentNullException.ThrowIfNull(context);
@@ -112,7 +113,7 @@ public sealed class RecordingParser(IParser inner) : IParser, IParserUsage
             case ParserFault.Unreachable:
                 throw new ParserUnavailableException("Injected fault: model_unreachable.");
             case ParserFault.InvalidReply:
-                return new ParsedRequest { Intent = RequestIntent.Unclear, Problem = InjectedProblem };
+                return ParsedMessage.One(new ParsedRequest { Intent = RequestIntent.Unclear, Problem = InjectedProblem });
         }
 
         var parsed = await inner.ParseAsync(text, context, cancellationToken);

@@ -282,7 +282,7 @@ public sealed class ConversationAliasTests(AgentHost host)
 
         public IReadOnlyList<(string Text, ParseContext Context)> Calls => [.. calls];
 
-        public Task<ParsedRequest> ParseAsync(string text, ParseContext context, CancellationToken cancellationToken)
+        public Task<ParsedMessage> ParseAsync(string text, ParseContext context, CancellationToken cancellationToken)
         {
             calls.Enqueue((text, context));
             return inner.ParseAsync(text, context, cancellationToken);

@@ -81,7 +81,7 @@ public class AnthropicAdapterTests
         var (parser, handler) = Start();
         handler.Answer = () => Message("{\"requests\":[" + Item + "]}");
 
-        var parsed = await parser.ParseAsync("pay the water", new ParseContext("open_question which_bill", MaskMap.Empty), Token);
+        var parsed = (await parser.ParseAsync("pay the water", new ParseContext("open_question which_bill", MaskMap.Empty), Token)).First;
 
         Assert.Equal(ParsedRequest.Bill("water", null, null, AmountUnit.None), parsed);
         var body = Assert.Single(handler.Bodies);

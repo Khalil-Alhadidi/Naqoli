@@ -61,8 +61,8 @@ public sealed record ParsedRequestDto
 }
 
 /// <summary>
-/// The whole reply of the parse call: a list of requests in the order spoken (D7). Until compound requests are built
-/// (milestone 9), the first is used and the others are only noted (<see cref="ValidationResult.MoreThanOneRequest"/>).
+/// The whole reply of the parse call: a list of requests in the order spoken (D7). <see cref="ParsedRequestValidator"/>
+/// checks every entry; the parsers hand the whole list on as a <see cref="ParsedMessage"/>.
 /// </summary>
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record ParsedRequestsDto([property: JsonPropertyName("requests")] IReadOnlyList<ParsedRequestDto>? Requests);

@@ -5,11 +5,15 @@ using Agent.Core.Text;
 namespace Agent.Core.Parsing;
 
 /// <summary>
-/// The validator's verdict: the request to hand on, and the name of the field that broke a rule (null when none did).
-/// <paramref name="MoreThanOneRequest"/> is true when the reply listed more than one request and only the first was
-/// taken (D7, until milestone 9).
+/// The validator's verdict: the requests to hand on, in the order spoken (D7), and the name of the field that broke a
+/// rule (null when none did). With a problem, <paramref name="Requests"/> is one <see cref="RequestIntent.Unclear"/>
+/// request carrying it: one broken entry refuses the whole message.
 /// </summary>
-public sealed record ValidationResult(ParsedRequest Request, string? Problem, bool MoreThanOneRequest = false);
+public sealed record ValidationResult(IReadOnlyList<ParsedRequest> Requests, string? Problem)
+{
+    /// <summary>The first request (the only one for the single form, or when there is a problem).</summary>
+    public ParsedRequest First => Requests[0];
+}
 
 /// <summary>
 /// Checks the parse call's strict structure as untrusted output (rule 2, review I3) before code acts on it. Enum strings
@@ -70,16 +74,32 @@ public static class ParsedRequestValidator
 
     private static readonly HashSet<string> Reasons = new(UnsupportedReasons, StringComparer.Ordinal);
 
-    /// <summary>Validates the first request of <paramref name="reply"/>; an empty or missing list is a problem (<c>requests</c>).</summary>
+    /// <summary>
+    /// Validates every request of <paramref name="reply"/> in order and stops at the first that breaks a rule (D7: the
+    /// whole message is refused, as one broken request is). An empty or missing list, or a null entry, is a problem
+    /// (<c>requests</c>).
+    /// </summary>
     public static ValidationResult Validate(ParsedRequestsDto reply, MaskMap map)
     {
         ArgumentNullException.ThrowIfNull(reply);
         ArgumentNullException.ThrowIfNull(map);
 
-        if (reply.Requests is not { Count: > 0 } requests || requests[0] is null)
+        if (reply.Requests is not { Count: > 0 } entries)
             return Invalid("requests");
 
-        return Validate(requests[0], map) with { MoreThanOneRequest = requests.Count > 1 };
+        var requests = new List<ParsedRequest>(entries.Count);
+        foreach (var entry in entries)
+        {
+            if (entry is null)
+                return Invalid("requests");
+
+            var result = Validate(entry, map);
+            if (result.Problem is not null)
+                return result;
+            requests.Add(result.First);
+        }
+
+        return new ValidationResult(requests, null);
     }
 
     /// <summary>Validates one request against the fixed sets and limits, and its recipient against <paramref name="map"/>.</summary>
@@ -141,7 +161,7 @@ public static class ParsedRequestValidator
             UnsupportedReason = dto.UnsupportedReason,
             CurrencyText = Blank(dto.CurrencyText),
         };
-        return new ValidationResult(request, null);
+        return new ValidationResult([request], null);
     }
 
     /// <summary>
@@ -160,5 +180,5 @@ public static class ParsedRequestValidator
     private static string? Blank(string? text) => string.IsNullOrWhiteSpace(text) ? null : text.Trim();
 
     private static ValidationResult Invalid(string field)
-        => new(new ParsedRequest { Intent = RequestIntent.Unclear, Problem = field }, field);
+        => new([new ParsedRequest { Intent = RequestIntent.Unclear, Problem = field }], field);
 }

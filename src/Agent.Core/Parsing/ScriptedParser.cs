@@ -14,7 +14,7 @@ public sealed record ScriptedSentence(string Sentence, ParsedRequest Request);
 
 /// <summary>
 /// The parser the screen journeys use, and the console's default: an oracle over the development set. An exact dev-set
-/// message returns that case's expected parse, written by hand in <c>requests.dev.parses.jsonl</c> next to the set
+/// message returns that case's expected parse (every request of it, in order), written by hand in <c>requests.dev.parses.jsonl</c> next to the set
 /// (<see cref="Load"/>); anything else is <see cref="RequestIntent.Unclear"/>. Each message is masked
 /// (<see cref="Masker"/>) as the typed text is, and both are compared after <see cref="ArabicText.Normalize"/> (digits to
 /// ASCII, whitespace collapsed), ordinal and whole. It never calls a model and holds no state per user, so one instance
@@ -39,7 +39,7 @@ public sealed class ScriptedParser : IParser, IParserUsage
         AllowDuplicateProperties = false,
     };
 
-    private readonly Dictionary<string, ParsedRequest> sentences;
+    private readonly Dictionary<string, ParsedMessage> sentences;
 
     private ParseUsage? lastUsage;
 
@@ -49,17 +49,17 @@ public sealed class ScriptedParser : IParser, IParserUsage
     {
         ArgumentNullException.ThrowIfNull(sentences);
 
-        this.sentences = new Dictionary<string, ParsedRequest>(StringComparer.Ordinal);
+        this.sentences = new Dictionary<string, ParsedMessage>(StringComparer.Ordinal);
         foreach (var sentence in sentences)
         {
             // The conversation masks the typed text before the parse call, so each sentence is masked the same way: a
             // sentence may hold a real-looking number, and the typed text matches it in any spacing or digit form.
-            if (!this.sentences.TryAdd(ArabicText.Normalize(Masker.Mask(sentence.Sentence).Text), sentence.Request))
+            if (!this.sentences.TryAdd(ArabicText.Normalize(Masker.Mask(sentence.Sentence).Text), ParsedMessage.One(sentence.Request)))
                 throw new ArgumentException($"The scripted sentence '{sentence.Sentence}' is listed twice.", nameof(sentences));
         }
     }
 
-    private ScriptedParser(Dictionary<string, ParsedRequest> sentences) => this.sentences = sentences;
+    private ScriptedParser(Dictionary<string, ParsedMessage> sentences) => this.sentences = sentences;
 
     public string Name => ParserName;
 
@@ -72,8 +72,8 @@ public sealed class ScriptedParser : IParser, IParserUsage
     /// Each sidecar line is <c>{"id", "step" (0-based among the case's steps), "say", "parse"}</c>, where <c>parse</c>
     /// is the structure the model returns (<see cref="ParsedRequestsDto"/>) with a typed number written as typed. At load
     /// each <c>say</c> is masked, every number in the parse's texts becomes its token, and
-    /// <see cref="ParsedRequestValidator"/> checks the parse against the message's map; its first request is what the
-    /// message returns.
+    /// <see cref="ParsedRequestValidator"/> checks the parse against the message's map; its requests, in order, are what
+    /// the message returns.
     /// </summary>
     /// <exception cref="ArgumentException">
     /// The file name is not exactly <see cref="DevSetFileName"/> (nothing is opened), or the set or the sidecar is a
@@ -103,7 +103,7 @@ public sealed class ScriptedParser : IParser, IParserUsage
 
         var says = ReadSays(full);
 
-        var sentences = new Dictionary<string, ParsedRequest>(StringComparer.Ordinal);
+        var sentences = new Dictionary<string, ParsedMessage>(StringComparer.Ordinal);
         var parseJson = new Dictionary<string, string>(StringComparer.Ordinal);
         var covered = new HashSet<(string Id, int Step)>();
         var number = 0;
@@ -138,7 +138,7 @@ public sealed class ScriptedParser : IParser, IParserUsage
             }
 
             parseJson.Add(key, json);
-            sentences.Add(key, result.Request);
+            sentences.Add(key, new ParsedMessage(result.Requests));
         }
 
         var missing = says.Keys.Where(k => !covered.Contains(k)).OrderBy(k => k.Id, StringComparer.Ordinal).ThenBy(k => k.Step).ToList();
@@ -152,15 +152,15 @@ public sealed class ScriptedParser : IParser, IParserUsage
         return new ScriptedParser(sentences);
     }
 
-    public Task<ParsedRequest> ParseAsync(string text, ParseContext context, CancellationToken cancellationToken)
+    public Task<ParsedMessage> ParseAsync(string text, ParseContext context, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(text);
         ArgumentNullException.ThrowIfNull(context);
 
         var started = Stopwatch.GetTimestamp();
-        var parsed = sentences.TryGetValue(ArabicText.Normalize(text), out var request)
-            ? request
-            : new ParsedRequest { Intent = RequestIntent.Unclear };
+        var parsed = sentences.TryGetValue(ArabicText.Normalize(text), out var message)
+            ? message
+            : ParsedMessage.One(new ParsedRequest { Intent = RequestIntent.Unclear });
         Volatile.Write(ref lastUsage, new ParseUsage(0, 0, 0, 0, 0m, Stopwatch.GetElapsedTime(started)));
         return Task.FromResult(parsed);
     }

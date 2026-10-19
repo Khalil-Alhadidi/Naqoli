@@ -61,9 +61,9 @@ public class LiveModelTests(ITestOutputHelper output)
         foreach (var (message, answer) in ClaudeParser.Examples().Take(3))
         {
             var masked = Masker.Mask(message);
-            var expected = ParsedRequestValidator.Validate(JsonSerializer.Deserialize<ParsedRequestsDto>(answer)!, masked.Map).Request;
+            var expected = ParsedRequestValidator.Validate(JsonSerializer.Deserialize<ParsedRequestsDto>(answer)!, masked.Map).First;
 
-            var parsed = await parser.ParseAsync(masked.Text, new ParseContext(null, masked.Map), Token);
+            var parsed = (await parser.ParseAsync(masked.Text, new ParseContext(null, masked.Map), Token)).First;
 
             Print(candidate, parser);
             Assert.Equal(expected, parsed);
@@ -84,7 +84,7 @@ public class LiveModelTests(ITestOutputHelper output)
         {
             var masked = Masker.Mask(question.Message);
 
-            var parsed = await parser.ParseAsync(masked.Text, new ParseContext(null, masked.Map), Token);
+            var parsed = (await parser.ParseAsync(masked.Text, new ParseContext(null, masked.Map), Token)).First;
 
             Print(candidate, parser);
             Assert.Equal(RequestIntent.Balance, parsed.Intent);

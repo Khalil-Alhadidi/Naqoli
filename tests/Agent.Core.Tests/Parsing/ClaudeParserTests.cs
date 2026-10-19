@@ -61,7 +61,7 @@ public class ClaudeParserTests
         var (parser, client, _) = Start();
         client.Reply = (_, _, _) => Task.FromResult(FakeChatClient.Json(Transfer));
 
-        var parsed = await parser.ParseAsync("send fifty to Ali", new ParseContext(null, MaskMap.Empty), Token);
+        var parsed = (await parser.ParseAsync("send fifty to Ali", new ParseContext(null, MaskMap.Empty), Token)).First;
 
         Assert.Equal(ParsedRequest.Transfer("Ali", 50m, AmountUnit.Thousand), parsed);
     }
@@ -257,8 +257,8 @@ public class ClaudeParserTests
         client.Reply = (_, _, _) => Task.FromResult(FakeChatClient.Json(Dto(
             "\"intent\":\"transfer\",\"recipient_text\":\"<NUM_1>\",\"amount_value\":50000,\"amount_unit\":\"none\",\"biller_code\":null,\"biller_text\":null,\"bill_label_text\":null,\"operator_text\":null,\"product_type\":null,\"product_value\":null,\"unsupported_reason\":null,\"currency_text\":null")));
 
-        var withMap = await parser.ParseAsync("send 50000 to <NUM_1>", new ParseContext(null, Masker.Mask("send 50000 to 07701234567").Map), Token);
-        var withoutMap = await parser.ParseAsync("send 50000 to <NUM_1>", new ParseContext(null), Token);
+        var withMap = (await parser.ParseAsync("send 50000 to <NUM_1>", new ParseContext(null, Masker.Mask("send 50000 to 07701234567").Map), Token)).First;
+        var withoutMap = (await parser.ParseAsync("send 50000 to <NUM_1>", new ParseContext(null), Token)).First;
 
         Assert.Equal("<NUM_1>", withMap.RecipientText);
         Assert.Equal((RequestIntent.Unclear, "recipient_text"), (withoutMap.Intent, withoutMap.Problem));
@@ -272,7 +272,7 @@ public class ClaudeParserTests
         client.Reply = (_, _, _) => Task.FromResult(FakeChatClient.Json(Dto(
             "\"intent\":\"transfer\",\"recipient_text\":\"<NUM_1>\",\"amount_value\":50000,\"amount_unit\":\"none\",\"biller_code\":null,\"biller_text\":null,\"bill_label_text\":null,\"operator_text\":null,\"product_type\":null,\"product_value\":null,\"unsupported_reason\":null,\"currency_text\":null")));
 
-        var parsed = await parser.ParseAsync("send 50000 to 07701234567", new ParseContext(null), Token);
+        var parsed = (await parser.ParseAsync("send 50000 to 07701234567", new ParseContext(null), Token)).First;
 
         Assert.Equal("Pending: none\nMessage: send 50000 to <NUM_1>", client.Calls[0].Messages[1].Text);
         Assert.Equal("<NUM_1>", parsed.RecipientText);
@@ -285,7 +285,7 @@ public class ClaudeParserTests
         var (parser, client, _) = Start();
         client.Reply = (_, _, _) => Task.FromResult(FakeChatClient.Json(Transfer.Replace("\"intent\":\"transfer\"", "\"intent\":\"balance\",\"intent\":\"transfer\"", StringComparison.Ordinal)));
 
-        var parsed = await parser.ParseAsync("x", new ParseContext(null, MaskMap.Empty), Token);
+        var parsed = (await parser.ParseAsync("x", new ParseContext(null, MaskMap.Empty), Token)).First;
 
         Assert.Equal((RequestIntent.Unclear, ClaudeParser.JsonProblem), (parsed.Intent, parsed.Problem));
     }
@@ -296,7 +296,7 @@ public class ClaudeParserTests
         var (parser, client, _) = Start();
         client.Reply = (_, _, _) => Task.FromResult(FakeChatClient.Json(Transfer.Replace("\"transfer\"", "\"execute\"", StringComparison.Ordinal)));
 
-        var parsed = await parser.ParseAsync("x", new ParseContext(null, MaskMap.Empty), Token);
+        var parsed = (await parser.ParseAsync("x", new ParseContext(null, MaskMap.Empty), Token)).First;
 
         Assert.Equal((RequestIntent.Unclear, "intent"), (parsed.Intent, parsed.Problem));
     }
@@ -312,7 +312,7 @@ public class ClaudeParserTests
         var (parser, client, _) = Start();
         client.Reply = (_, _, _) => Task.FromResult(FakeChatClient.Json(text, 10, 5));
 
-        var parsed = await parser.ParseAsync("x", new ParseContext(null, MaskMap.Empty), Token);
+        var parsed = (await parser.ParseAsync("x", new ParseContext(null, MaskMap.Empty), Token)).First;
 
         Assert.Equal((RequestIntent.Unclear, ClaudeParser.JsonProblem), (parsed.Intent, parsed.Problem));
         Assert.Equal(10, parser.LastUsage?.InputTokens);
@@ -329,7 +329,7 @@ public class ClaudeParserTests
             return Task.FromResult(response);
         };
 
-        var parsed = await parser.ParseAsync("x", new ParseContext(null, MaskMap.Empty), Token);
+        var parsed = (await parser.ParseAsync("x", new ParseContext(null, MaskMap.Empty), Token)).First;
 
         Assert.Equal((RequestIntent.Unclear, ClaudeParser.TruncatedProblem), (parsed.Intent, parsed.Problem));
         Assert.Equal(1_500, parser.LastUsage?.OutputTokens);
@@ -347,14 +347,14 @@ public class ClaudeParserTests
             return Task.FromResult(response);
         };
 
-        var parsed = await parser.ParseAsync("x", new ParseContext(null, MaskMap.Empty), Token);
+        var parsed = (await parser.ParseAsync("x", new ParseContext(null, MaskMap.Empty), Token)).First;
 
         Assert.Equal((RequestIntent.Unclear, ClaudeParser.RefusalProblem), (parsed.Intent, parsed.Problem));
         Assert.Equal((900, 3), (parser.LastUsage?.InputTokens, parser.LastUsage?.OutputTokens));
     }
 
     [Fact]
-    public async Task MoreThanOneRequestTakesTheFirstAndTracesTheCount()
+    public async Task MoreThanOneRequestReturnsEveryRequestAndTracesTheCount()
     {
         var (parser, client, trace) = Start();
         var item = Transfer[13..^2];
@@ -362,7 +362,7 @@ public class ClaudeParserTests
 
         var parsed = await parser.ParseAsync("x", new ParseContext(null, MaskMap.Empty), Token);
 
-        Assert.Equal("Ali", parsed.RecipientText);
+        Assert.Equal(["Ali", "Omar"], parsed.Requests.Select(r => r.RecipientText));
         Assert.Contains((TraceZone.Model, ClaudeParser.MoreThanOneRequestStep, "2"), trace.Entries);
     }
 

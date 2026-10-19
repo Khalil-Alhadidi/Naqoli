@@ -8,8 +8,8 @@ namespace Agent.Core.Tests.Parsing;
 
 /// <summary>
 /// The scripted parser, an oracle over the development set: an exact dev-set message (masked and normalised as the
-/// conversation masks the typed text) returns that case's parse from <c>requests.dev.parses.jsonl</c>; anything else is
-/// <see cref="RequestIntent.Unclear"/>. It loads only a file named <c>requests.dev.jsonl</c> (rule 7: the held-out set
+/// conversation masks the typed text) returns that case's parse from <c>requests.dev.parses.jsonl</c>, every request of
+/// it in order (D7); anything else is one <see cref="RequestIntent.Unclear"/> request. It loads only a file named <c>requests.dev.jsonl</c> (rule 7: the held-out set
 /// is never opened), and the throwaway sets of these tests live in a temp directory, never at the held-out path.
 /// </summary>
 public sealed class ScriptedParserTests : IDisposable
@@ -119,7 +119,7 @@ public sealed class ScriptedParserTests : IDisposable
                     && reply.GetString() == "points_to_confirm";
 
                 var typed = Masker.Mask(say.GetString()!);
-                var parsed = await parser.ParseAsync(typed.Text, new ParseContext(null, typed.Map), Token);
+                var parsed = (await parser.ParseAsync(typed.Text, new ParseContext(null, typed.Map), Token)).First;
 
                 Assert.True(parsed.Problem is null, id);
                 Assert.True(yesOrNo == (parsed.Intent == RequestIntent.Unclear), id);
@@ -127,6 +127,45 @@ public sealed class ScriptedParserTests : IDisposable
         }
 
         Assert.True(says >= 72, "Every case says at least once.");
+    }
+
+    [Fact]
+    public async Task AMessageOfSeveralRequestsReturnsThemAllInOrder()
+    {
+        // D7: the oracle keeps the whole list of the parse, as the model's reply is kept.
+        var dev = WriteSet(
+            [Case("T-01", "send 25000 to x and 5000 to y")],
+            [Line("T-01", 0, "send 25000 to x and 5000 to y", Transfer25000 + "," + Transfer25000.Replace("\"x\"", "\"y\"", StringComparison.Ordinal))]);
+
+        var parsed = await ScriptedParser.Load(dev).ParseAsync("send 25000 to x and 5000 to y", NothingPending, Token);
+
+        Assert.Equal(["x", "y"], parsed.Requests.Select(r => r.RecipientText));
+    }
+
+    [Fact]
+    public async Task EveryParseOfTheSidecarComesBackWhole()
+    {
+        // Each say step returns every request of its parse, in the sidecar's order (the compound cases hold two to four).
+        var parser = ScriptedParser.Load(DevSetPath);
+        var sidecar = Path.Combine(Path.GetDirectoryName(DevSetPath)!, ScriptedParser.SidecarFileName);
+        var compound = 0;
+        foreach (var line in File.ReadLines(sidecar).Where(l => l.Length > 0))
+        {
+            using var document = JsonDocument.Parse(line);
+            var id = document.RootElement.GetProperty("id").GetString();
+            var intents = document.RootElement.GetProperty("parse").GetProperty("requests").EnumerateArray()
+                .Select(r => r.GetProperty("intent").GetString())
+                .ToList();
+            var typed = Masker.Mask(document.RootElement.GetProperty("say").GetString()!);
+
+            var parsed = await parser.ParseAsync(typed.Text, new ParseContext(null, typed.Map), Token);
+
+            Assert.True(intents.SequenceEqual(parsed.Requests.Select(r => r.Intent.ToString()), StringComparer.OrdinalIgnoreCase), id);
+            if (intents.Count > 1)
+                compound++;
+        }
+
+        Assert.True(compound >= 5, "The five compound cases of the development set.");
     }
 
     [Fact]
@@ -171,7 +210,7 @@ public sealed class ScriptedParserTests : IDisposable
             .First(c => c.GetProperty("id").GetString() == "CLN-01")
             .GetProperty("message").GetString()!;
 
-        var parsed = await parser.ParseAsync(sentence, NothingPending, Token);
+        var parsed = (await parser.ParseAsync(sentence, NothingPending, Token)).First;
 
         Assert.Equal(ParsedRequest.Transfer(SeedFacts.Contact("S01").Alias, 50, AmountUnit.Thousand), parsed);
     }
@@ -184,7 +223,7 @@ public sealed class ScriptedParserTests : IDisposable
     {
         var parser = ScriptedParser.Load(DevSetPath);
 
-        Assert.Equal(new ParsedRequest { Intent = RequestIntent.Unclear }, await parser.ParseAsync(typed, NothingPending, Token));
+        Assert.Equal(ParsedMessage.One(new ParsedRequest { Intent = RequestIntent.Unclear }), await parser.ParseAsync(typed, NothingPending, Token));
     }
 
     [Fact]
@@ -198,7 +237,7 @@ public sealed class ScriptedParserTests : IDisposable
         var parser = ScriptedParser.Load(dev);
 
         var typed = Masker.Mask("send 25000 to 07701234567");
-        var parsed = await parser.ParseAsync(typed.Text, new ParseContext(null, typed.Map), Token);
+        var parsed = (await parser.ParseAsync(typed.Text, new ParseContext(null, typed.Map), Token)).First;
 
         Assert.Equal(ParsedRequest.Transfer("<NUM_1>", 25_000, AmountUnit.None), parsed);
     }
@@ -211,8 +250,8 @@ public sealed class ScriptedParserTests : IDisposable
         var parser = ScriptedParser.Load(dev);
         var expected = ParsedRequest.Transfer("x", 25_000, AmountUnit.None);
 
-        Assert.Equal(expected, await parser.ParseAsync("send ٢٥٠٠٠ to x", NothingPending, Token));
-        Assert.Equal(expected, await parser.ParseAsync("  send  25000\tto x ", NothingPending, Token));
+        Assert.Equal(ParsedMessage.One(expected), await parser.ParseAsync("send ٢٥٠٠٠ to x", NothingPending, Token));
+        Assert.Equal(ParsedMessage.One(expected), await parser.ParseAsync("  send  25000\tto x ", NothingPending, Token));
     }
 
     [Fact]
@@ -299,7 +338,7 @@ public sealed class ScriptedParserTests : IDisposable
         var typed = Masker.Mask("send 25000 to 0770 123 4567");
 
         Assert.Equal("send 25000 to <NUM_1>", typed.Text);
-        Assert.Equal(request, await parser.ParseAsync(typed.Text, new ParseContext(null, typed.Map), Token));
+        Assert.Equal(ParsedMessage.One(request), await parser.ParseAsync(typed.Text, new ParseContext(null, typed.Map), Token));
     }
 
     [Fact]

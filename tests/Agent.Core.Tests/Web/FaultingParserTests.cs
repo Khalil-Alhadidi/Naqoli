@@ -29,10 +29,10 @@ public class FaultingParserTests
 
         public string Name => "counting";
 
-        public Task<ParsedRequest> ParseAsync(string text, ParseContext context, CancellationToken cancellationToken)
+        public Task<ParsedMessage> ParseAsync(string text, ParseContext context, CancellationToken cancellationToken)
         {
             Calls++;
-            return Task.FromResult(Expected);
+            return Task.FromResult(ParsedMessage.One(Expected));
         }
     }
 
@@ -48,7 +48,7 @@ public class FaultingParserTests
     {
         var (parser, inner, _) = Create();
 
-        Assert.Equal(Expected, await parser.ParseAsync(Sentence, Context, Token));
+        Assert.Equal(ParsedMessage.One(Expected), await parser.ParseAsync(Sentence, Context, Token));
         Assert.Equal(1, inner.Calls);
     }
 
@@ -64,7 +64,7 @@ public class FaultingParserTests
         Assert.Equal(0, inner.Calls);
         Assert.Equal(ModelFaultMode.None, faults.Mode);
 
-        Assert.Equal(Expected, await parser.ParseAsync(Sentence, Context, Token));
+        Assert.Equal(ParsedMessage.One(Expected), await parser.ParseAsync(Sentence, Context, Token));
         Assert.Equal(1, inner.Calls);
         Assert.Equal(2, changed);
     }
@@ -75,7 +75,7 @@ public class FaultingParserTests
         var (parser, inner, faults) = Create();
         faults.Set(ModelFaultMode.InvalidReply, once: true);
 
-        var parsed = await parser.ParseAsync(Sentence, Context, Token);
+        var parsed = (await parser.ParseAsync(Sentence, Context, Token)).First;
 
         Assert.Equal(new ParsedRequest { Intent = RequestIntent.Unclear, Problem = FaultingParser.InjectedProblem }, parsed);
         Assert.Equal("injected", FaultingParser.InjectedProblem);
@@ -94,7 +94,7 @@ public class FaultingParserTests
         Assert.Equal((ModelFaultMode.Unreachable, false), (faults.Mode, faults.Once));
 
         faults.Clear();
-        Assert.Equal(Expected, await parser.ParseAsync(Sentence, Context, Token));
+        Assert.Equal(ParsedMessage.One(Expected), await parser.ParseAsync(Sentence, Context, Token));
         Assert.Equal(1, inner.Calls);
     }
 
@@ -121,7 +121,7 @@ public class FaultingParserTests
 
         await Assert.ThrowsAsync<ParserUnavailableException>(() => parser.ParseAsync(Sentence, Context, Token));
         Assert.Equal(2, after);
-        Assert.Equal(Expected, await parser.ParseAsync(Sentence, Context, Token));
+        Assert.Equal(ParsedMessage.One(Expected), await parser.ParseAsync(Sentence, Context, Token));
         Assert.Equal(1, inner.Calls);
     }
 

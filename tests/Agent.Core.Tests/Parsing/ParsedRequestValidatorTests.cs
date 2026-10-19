@@ -24,10 +24,10 @@ public class ParsedRequestValidatorTests
     private static void AssertProblem(ValidationResult result, string field)
     {
         Assert.Equal(field, result.Problem);
-        Assert.Equal(RequestIntent.Unclear, result.Request.Intent);
-        Assert.Equal(field, result.Request.Problem);
-        Assert.Null(result.Request.RecipientText);
-        Assert.Null(result.Request.AmountValue);
+        Assert.Equal(RequestIntent.Unclear, result.First.Intent);
+        Assert.Equal(field, result.First.Problem);
+        Assert.Null(result.First.RecipientText);
+        Assert.Null(result.First.AmountValue);
     }
 
     [Fact]
@@ -38,7 +38,7 @@ public class ParsedRequestValidatorTests
         Assert.Null(result.Problem);
         Assert.Equal(
             new ParsedRequest { Intent = RequestIntent.Transfer, RecipientText = "Ali", AmountValue = 50m, AmountUnit = AmountUnit.Thousand },
-            result.Request);
+            result.First);
     }
 
     [Fact]
@@ -53,10 +53,10 @@ public class ParsedRequestValidatorTests
         var currency = ParsedRequestValidator.Validate(
             new ParsedRequestDto { Intent = "transfer", RecipientText = "Ali", AmountValue = 100, AmountUnit = "none", CurrencyText = "dollars" }, Map);
 
-        Assert.Equal(ParsedRequest.Bill("water", "home", null, AmountUnit.None, billerText: "water company"), bill.Request);
-        Assert.Equal(ParsedRequest.Purchase("zain", "credit", 5_000), purchase.Request);
-        Assert.Equal(new ParsedRequest { Intent = RequestIntent.Unsupported, UnsupportedReason = "withdrawal" }, unsupported.Request);
-        Assert.Equal("dollars", currency.Request.CurrencyText);
+        Assert.Equal(ParsedRequest.Bill("water", "home", null, AmountUnit.None, billerText: "water company"), bill.First);
+        Assert.Equal(ParsedRequest.Purchase("zain", "credit", 5_000), purchase.First);
+        Assert.Equal(new ParsedRequest { Intent = RequestIntent.Unsupported, UnsupportedReason = "withdrawal" }, unsupported.First);
+        Assert.Equal("dollars", currency.First.CurrencyText);
         Assert.All([bill, purchase, unsupported, currency], r => Assert.Null(r.Problem));
     }
 
@@ -72,7 +72,7 @@ public class ParsedRequestValidatorTests
         var result = ParsedRequestValidator.Validate(new ParsedRequestDto { Intent = intent, AmountUnit = "none" }, Map);
 
         Assert.Null(result.Problem);
-        Assert.Equal(expected, result.Request.Intent);
+        Assert.Equal(expected, result.First.Intent);
     }
 
     [Theory]
@@ -96,7 +96,7 @@ public class ParsedRequestValidatorTests
         var result = ParsedRequestValidator.Validate(Transfer(unit: unit), Map);
 
         Assert.Null(result.Problem);
-        Assert.Equal(expected, result.Request.AmountUnit);
+        Assert.Equal(expected, result.First.AmountUnit);
     }
 
     [Theory]
@@ -119,7 +119,7 @@ public class ParsedRequestValidatorTests
         var result = ParsedRequestValidator.Validate(new ParsedRequestDto { Intent = "bill", AmountUnit = "none", BillerCode = biller }, Map);
 
         Assert.Null(result.Problem);
-        Assert.Equal(biller, result.Request.BillerCode);
+        Assert.Equal(biller, result.First.BillerCode);
     }
 
     [Theory]
@@ -142,7 +142,7 @@ public class ParsedRequestValidatorTests
         var result = ParsedRequestValidator.Validate(new ParsedRequestDto { Intent = "purchase", AmountUnit = "none", ProductType = type }, Map);
 
         Assert.Null(result.Problem);
-        Assert.Equal(type, result.Request.ProductType);
+        Assert.Equal(type, result.First.ProductType);
     }
 
     [Theory]
@@ -173,7 +173,7 @@ public class ParsedRequestValidatorTests
             new ParsedRequestDto { Intent = "unsupported", AmountUnit = "none", UnsupportedReason = reason }, Map);
 
         Assert.Null(result.Problem);
-        Assert.Equal(reason, result.Request.UnsupportedReason);
+        Assert.Equal(reason, result.First.UnsupportedReason);
     }
 
     [Theory]
@@ -224,8 +224,8 @@ public class ParsedRequestValidatorTests
     [Fact]
     public void ZeroAndNoAmountAreRead()
     {
-        Assert.Equal(0m, ParsedRequestValidator.Validate(Transfer(amount: 0), Map).Request.AmountValue);
-        Assert.Null(ParsedRequestValidator.Validate(Transfer(amount: null), Map).Request.AmountValue);
+        Assert.Equal(0m, ParsedRequestValidator.Validate(Transfer(amount: 0), Map).First.AmountValue);
+        Assert.Null(ParsedRequestValidator.Validate(Transfer(amount: null), Map).First.AmountValue);
     }
 
     [Theory]
@@ -283,7 +283,7 @@ public class ParsedRequestValidatorTests
         var result = ParsedRequestValidator.Validate(Transfer(recipient: "<NUM_1>"), Map);
 
         Assert.Null(result.Problem);
-        Assert.Equal("<NUM_1>", result.Request.RecipientText);
+        Assert.Equal("<NUM_1>", result.First.RecipientText);
     }
 
     [Theory]
@@ -302,9 +302,9 @@ public class ParsedRequestValidatorTests
         var result = ParsedRequestValidator.Validate(Transfer(recipient: "  ") with { OperatorText = string.Empty, BillerText = " " }, Map);
 
         Assert.Null(result.Problem);
-        Assert.Null(result.Request.RecipientText);
-        Assert.Null(result.Request.BillerText);
-        Assert.Null(result.Request.OperatorText);
+        Assert.Null(result.First.RecipientText);
+        Assert.Null(result.First.BillerText);
+        Assert.Null(result.First.OperatorText);
     }
 
     [Fact]
@@ -319,13 +319,34 @@ public class ParsedRequestValidatorTests
     }
 
     [Fact]
-    public void AListUsesItsFirstRequestAndSaysWhenThereWereMore()
+    public void AListKeepsEveryRequestInOrder()
     {
         var one = ParsedRequestValidator.Validate(new ParsedRequestsDto([Transfer()]), Map);
         var two = ParsedRequestValidator.Validate(new ParsedRequestsDto([Transfer(), Transfer(recipient: "Omar")]), Map);
 
-        Assert.Equal(("Ali", false), (one.Request.RecipientText, one.MoreThanOneRequest));
-        Assert.Equal(("Ali", true), (two.Request.RecipientText, two.MoreThanOneRequest));
+        Assert.Null(one.Problem);
+        Assert.Equal(["Ali"], one.Requests.Select(r => r.RecipientText));
+        Assert.Null(two.Problem);
+        Assert.Equal(["Ali", "Omar"], two.Requests.Select(r => r.RecipientText));
+    }
+
+    [Fact]
+    public void AListWithABrokenSecondEntryIsOneUnclearRequest()
+    {
+        // D7: a structure that breaks a rule anywhere in the list refuses the whole message, as one broken request does.
+        var result = ParsedRequestValidator.Validate(new ParsedRequestsDto([Transfer(), Transfer() with { Intent = "refund" }]), Map);
+
+        AssertProblem(result, "intent");
+        Assert.Single(result.Requests);
+    }
+
+    [Fact]
+    public void AListWithANullEntryIsTheProblemRequests()
+    {
+        var result = ParsedRequestValidator.Validate(new ParsedRequestsDto([Transfer(), null!]), Map);
+
+        AssertProblem(result, "requests");
+        Assert.Single(result.Requests);
     }
 
     [Fact]
