@@ -166,7 +166,7 @@ public sealed class ConsoleJourneys(JourneyHost host) : JourneyBase(host)
         Assert.Equal(balance, await Host.BalanceAsync(U3));
 
         // Known gaps row 34 (Khalil, 19 Oct 2026): the PIN typed into the chat is not parsed and not logged; the reply
-        // points to the PIN field and the card stays live.
+        // points to the PIN field and the card stays live, and the user's own bubble shows one dot per digit.
         var modelEntries = page.Locator("[data-testid=trace-entry][data-zone=model]");
         var modelEntriesBefore = await modelEntries.CountAsync();
         var learningRowsBefore = (await LearningRowsAsync()).Count;
@@ -174,6 +174,7 @@ public sealed class ConsoleJourneys(JourneyHost host) : JourneyBase(host)
 
         await Expect(Outcomes(page, "pin")).ToHaveCountAsync(2);
         await Expect(Outcomes(page, "pin").Last).ToHaveTextAsync(Text["Outcome_pin_required"].Value);
+        await Expect(page.Locator("[data-testid=chat-message][data-role=user]").Last).ToHaveTextAsync(new string('\u2022', pin.Length));
         await Expect(page.GetByTestId("card")).ToHaveAttributeAsync("data-state", "live");
         Assert.Equal(balance, await Host.BalanceAsync(U3));
         Assert.Equal(learningRowsBefore, (await LearningRowsAsync()).Count);
@@ -185,14 +186,11 @@ public sealed class ConsoleJourneys(JourneyHost host) : JourneyBase(host)
         await Expect(Outcomes(page, "done")).ToHaveCountAsync(1);
         Assert.Equal(balance - 1_501_000, await Host.BalanceAsync(U3));
 
-        // Neither PIN, in either digit form, is in the chat, the trace, the audit log or the learning log; the one
-        // exception is the user's own bubble of the PIN typed into the chat above, shown as typed.
+        // Neither PIN, in either digit form, is in the chat (the PIN typed into the chat above shows as dots), the
+        // trace, the audit log or the learning log.
         var forms = new[] { pin, wrong, PhoneFormat.Digits(pin), PhoneFormat.Digits(wrong) };
         var seen = new List<string>();
-        var chat = (await TextsAsync(page, "chat-message")).ToList();
-        Assert.Equal(1, chat.Count(text => text.Trim() == pin));
-        chat.Remove(chat.First(text => text.Trim() == pin));
-        seen.AddRange(chat);
+        seen.AddRange(await TextsAsync(page, "chat-message"));
         seen.AddRange(await TextsAsync(page, "trace-entry"));
         seen.AddRange(await AgentRowsAsync());
         Assert.True(seen.Count > 0);

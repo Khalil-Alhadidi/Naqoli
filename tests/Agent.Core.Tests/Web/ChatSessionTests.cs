@@ -12,6 +12,7 @@ using Agent.Core.Pipeline;
 using Agent.Core.Requests;
 using Agent.Core.Tests.Agent;
 using Agent.Core.Tests.Wallet;
+using Agent.Core.Text;
 using AgentWeb::Agent.Web.Resources;
 using AgentWeb::Agent.Web.Services;
 using Microsoft.EntityFrameworkCore;
@@ -437,6 +438,46 @@ public sealed class ChatSessionTests(AgentHost host) : IAsyncDisposable
 
         Assert.Equal(circuit.Text["Refusal_" + ReasonCodes.MessageTooLong].Value, LastAgentMessage(session).Text);
         Assert.False(circuit.Text["Refusal_" + ReasonCodes.MessageTooLong].ResourceNotFound);
+    }
+
+    private const string PayTheTraderSentence = "pay the trader";
+
+    /// <summary>U3's transfer to the trader, large enough for the PIN field.</summary>
+    private static ScriptedSentence PayTheTrader()
+        => new(PayTheTraderSentence, ParsedRequest.Transfer(SeedFacts.Contact("T01").SavedName, 1_100_000, AmountUnit.Dinars));
+
+    [Fact]
+    public async Task APinTypedIntoTheChatWhileAPinCardIsLiveIsEchoedAsOneDotPerDigit()
+    {
+        // Khalil, 19 Oct 2026: the user's bubble shows dots, never the digits, in either digit form.
+        var circuit = await StartAsync(SeedFacts.TraderUserId, PayTheTrader());
+        var session = circuit.Session;
+        var pin = SeedFacts.PinOf("U3");
+        await session.SendAsync(PayTheTraderSentence);
+        Assert.True(session.PinVisible);
+
+        await session.SendAsync(ArabicDigits.ToArabicIndic(pin + "7"));
+        Assert.Equal(new string('\u2022', 5), session.Messages.Last(m => m.Role == ChatRole.User).Text);
+
+        await session.SendAsync(pin);
+        Assert.Equal(new string('\u2022', pin.Length), session.Messages.Last(m => m.Role == ChatRole.User).Text);
+
+        foreach (var message in session.Messages)
+        {
+            Assert.DoesNotContain(pin, message.Text, StringComparison.Ordinal);
+            Assert.DoesNotContain(ArabicDigits.ToArabicIndic(pin), message.Text, StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
+    public async Task AFourDigitMessageWithNoPinCardLiveIsEchoedAsTyped()
+    {
+        var circuit = await StartAsync();
+        var session = circuit.Session;
+
+        await session.SendAsync("1234");
+
+        Assert.Equal("1234", session.Messages.First(m => m.Role == ChatRole.User).Text);
     }
 
     [Fact]

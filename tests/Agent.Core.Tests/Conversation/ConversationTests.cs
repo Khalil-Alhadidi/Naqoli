@@ -799,6 +799,11 @@ public sealed class ConversationTests(AgentHost host) : IAsyncDisposable
 
         await conversation.SendAsync(" " + ArabicDigits.ToArabicIndic(pin) + " ");
 
+        // Khalil, 19 Oct 2026: the user's own message is marked for the dots and carries the digit count, not the digits.
+        var typed = conversation.Messages.Last(m => m.Role == ConversationRole.User);
+        Assert.Equal(
+            (ConversationKind.Typed, ConversationMessage.PinMasked, (int?)pin.Length),
+            (typed.Kind, typed.Code, typed.MaskedDigits));
         Assert.Equal(callsBefore, parser.Calls.Count);
         Assert.Equal(Outcome(OutcomeCodes.PinRequired), LastAgentMessage(conversation));
         Assert.Equal(CardStatus.Live, conversation.CardState);

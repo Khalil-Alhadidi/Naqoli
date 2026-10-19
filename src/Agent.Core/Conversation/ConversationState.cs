@@ -95,7 +95,10 @@ public static class OutcomeCodes
 /// </summary>
 /// <param name="Role">Who it is from.</param>
 /// <param name="Kind">What it is.</param>
-/// <param name="Code">The reason code, question kind, outcome code or option value; null for a typed message, a card, the consent screen and a balance.</param>
+/// <param name="Code">
+/// The reason code, question kind, outcome code or option value; null for a card, the consent screen, a balance and a
+/// typed message, except a typed message that may be a PIN, which is <see cref="PinMasked"/>.
+/// </param>
 /// <param name="AmountIqd">The figure: a balance, a refusal's figure (the minimum, a cap, a shortfall), or the balance after a Done outcome.</param>
 /// <param name="Reference">The wallet reference of a Done outcome.</param>
 /// <param name="PurchaseCode">The purchase code of a Done purchase (shown on the phone only, never traced).</param>
@@ -103,6 +106,9 @@ public static class OutcomeCodes
 /// <param name="Reason">The reason code of a <c>not_done</c> outcome.</param>
 /// <param name="QuestionKind">
 /// The kind of the open question a <c>not_understood</c> refusal repeats; the question stays open.
+/// </param>
+/// <param name="MaskedDigits">
+/// The number of digits of a typed message marked <see cref="PinMasked"/>; the digits themselves are never kept.
 /// </param>
 public sealed record ConversationMessage(
     ConversationRole Role,
@@ -113,12 +119,19 @@ public sealed record ConversationMessage(
     string? PurchaseCode = null,
     int? AttemptsLeft = null,
     string? Reason = null,
-    string? QuestionKind = null)
+    string? QuestionKind = null,
+    int? MaskedDigits = null)
 {
+    /// <summary>
+    /// The <see cref="Code"/> of a typed message of four to six digits sent while a card with a PIN field is live: the
+    /// phone shows one dot per digit (<see cref="MaskedDigits"/>), never the digits (Khalil, 19 Oct 2026).
+    /// </summary>
+    public const string PinMasked = "pin_masked";
+
     /// <summary>Keeps the purchase code out of any string form of the message (security review M2 of milestone 9b).</summary>
     public override string ToString()
         => FormattableString.Invariant(
-            $"ConversationMessage {{ Role = {Role}, Kind = {Kind}, Code = {Code}, AmountIqd = {AmountIqd}, Reference = {Reference}, PurchaseCode = {(PurchaseCode is null ? "none" : "***")}, AttemptsLeft = {AttemptsLeft}, Reason = {Reason}, QuestionKind = {QuestionKind} }}");
+            $"ConversationMessage {{ Role = {Role}, Kind = {Kind}, Code = {Code}, AmountIqd = {AmountIqd}, Reference = {Reference}, PurchaseCode = {(PurchaseCode is null ? "none" : "***")}, AttemptsLeft = {AttemptsLeft}, Reason = {Reason}, QuestionKind = {QuestionKind}, MaskedDigits = {MaskedDigits} }}");
 }
 
 /// <summary>A question the conversation asked, for the grader: its kind, how it is answered, and the values offered.</summary>

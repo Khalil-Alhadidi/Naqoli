@@ -29,6 +29,9 @@ public sealed class ChatSession : IDisposable
     /// </summary>
     private static readonly AsyncLocal<string?> SendingText = new();
 
+    /// <summary>The dot (U+2022) a PIN typed into the chat is echoed with, one per digit (Khalil, 19 Oct 2026).</summary>
+    private const char PinDot = '\u2022';
+
     /// <summary>
     /// The alias text being saved on this async flow (the offer's text, read before the save closes the offer), so the
     /// <see cref="ConversationKind.AliasSaved"/> message can say what was saved.
@@ -223,7 +226,10 @@ public sealed class ChatSession : IDisposable
         return await conversation.DeleteAliasAsync(aliasId);
     }
 
-    /// <summary>A typed message (see <see cref="Conversation.SendAsync"/>); the words are shown as typed.</summary>
+    /// <summary>
+    /// A typed message (see <see cref="Conversation.SendAsync"/>); the words are shown as typed, except a message the
+    /// conversation marks <see cref="ConversationMessage.PinMasked"/>, shown as one dot per digit.
+    /// </summary>
     public async Task SendAsync(string typedText)
     {
         ArgumentNullException.ThrowIfNull(typedText);
@@ -435,6 +441,11 @@ public sealed class ChatSession : IDisposable
     {
         switch (message.Kind)
         {
+            case ConversationKind.Typed when message.Code == ConversationMessage.PinMasked:
+                // A PIN typed into the chat while the PIN field shows: one dot per digit, never the typed text.
+                yield return (ChatRole.User, new string(PinDot, message.MaskedDigits ?? 0), ChatMessageKind.Text, null, ChatAction.None);
+                break;
+
             case ConversationKind.Typed:
                 yield return (ChatRole.User, SendingText.Value ?? string.Empty, ChatMessageKind.Text, null, ChatAction.None);
                 break;

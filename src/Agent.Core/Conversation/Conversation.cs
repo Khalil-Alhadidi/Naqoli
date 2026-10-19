@@ -248,7 +248,16 @@ public sealed class Conversation : IDisposable
             var digitsOnly = DigitsOnly(typedText);
             suppressLearningRow = digitsOnly;
             trace.Record(TraceZone.User, "message_received", FormattableString.Invariant($"length {typedText.Length}"));
-            Add(new ConversationMessage(ConversationRole.User, ConversationKind.Typed));
+
+            // Khalil, 19 Oct 2026: while a card with a PIN field is live (the condition of the row 34 branch below), such
+            // a message is echoed as one dot per digit. The message carries the mark and the count, never the digits.
+            Add(digitsOnly && PinVisible && IsCardLive
+                ? new ConversationMessage(
+                    ConversationRole.User,
+                    ConversationKind.Typed,
+                    ConversationMessage.PinMasked,
+                    MaskedDigits: ArabicDigits.ToAscii(typedText).Trim().Length)
+                : new ConversationMessage(ConversationRole.User, ConversationKind.Typed));
 
             // Known gaps row 36 (Khalil, 19 Oct 2026): a message longer than MaxMessageChars is not read; it is refused
             // message_too_long. Nothing is masked, the parser is not called and no learning row is written; a waiting
