@@ -109,6 +109,30 @@ public class ArabicTextTests
     }
 
     [Fact]
+    public void TheLamFormJoinsTheLamToTheFirstWordAndDropsTheAlefOfAl()
+    {
+        // "to the mother" is typed lam, lam, then the word: the alef of al is dropped. "to Ahmad" is lam, then the name.
+        var al = new string([Alef, Lam]);
+        var word = new string([Meem, Waw, Lam, Dal, Heh]);
+
+        Assert.Equal(new string([Lam, Lam]) + word, ArabicText.LamForm(al + word));
+        Assert.Equal(Lam + Ahmad, ArabicText.LamForm(Ahmad));
+        Assert.Equal(Lam + Ahmad + " " + al + word, ArabicText.LamForm(Ahmad + " " + al + word));   // the first word only
+        Assert.Equal(Lam + (AlefHamzaAbove + Ahmad[1..]), ArabicText.LamForm(AlefHamzaAbove + Ahmad[1..]));
+        Assert.Throws<ArgumentException>(() => ArabicText.LamForm(" "));
+    }
+
+    [Fact]
+    public void TheFourthNameOfCmp07IsTypedInItsLamForm()
+    {
+        // CMP-07 (milestone 9c): the name the key expects is typed with the preposition lam joined to it.
+        var name = DevSetText.NotPrepared("CMP-07");
+
+        Assert.DoesNotContain(name, DevSetText.Say("CMP-07"), StringComparison.Ordinal);
+        Assert.Contains(ArabicText.LamForm(name), DevSetText.Say("CMP-07"), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void KeyOfAllahIsTheTwoLetterRemainder()
         => Assert.Equal(new string([Lam, Heh]), ArabicText.Key(new string([Alef, Lam, Lam, Heh])));
 

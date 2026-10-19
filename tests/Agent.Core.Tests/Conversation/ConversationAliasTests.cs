@@ -76,7 +76,7 @@ public sealed class ConversationAliasTests(AgentHost host)
 
         // Steps 4 and 5: tap and confirm; offered again, never saved.
         await conversation.TapOptionAsync("S08");
-        Assert.IsType<ConfirmOutcome.Done>(await conversation.ConfirmAsync(null));
+        Assert.IsType<ConfirmOutcome.Done>(await conversation.ConfirmShownAsync(null));
         Assert.Equal(expected, conversation.AliasOffer?.Text);
         Assert.Equal(seedAliases, (await ContactsAsync()).Aliases.Count);
     }
@@ -253,7 +253,7 @@ public sealed class ConversationAliasTests(AgentHost host)
         Assert.Contains("S08", question.Options.Select(o => o.Value));
         await conversation.TapOptionAsync("S08");
         Assert.IsType<CardView>(conversation.Card);
-        Assert.IsType<ConfirmOutcome.Done>(await conversation.ConfirmAsync(null));
+        Assert.IsType<ConfirmOutcome.Done>(await conversation.ConfirmShownAsync(null));
     }
 
     private static WalletContact S08(WalletContacts contacts) => Assert.Single(contacts.Contacts, c => c.Code == "S08");

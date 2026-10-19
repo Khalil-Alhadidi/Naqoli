@@ -302,14 +302,17 @@ public sealed class CaseDriver
                     "wrong" => pins.WrongPinOf(userCode),
                     _ => null,
                 };
+                // Ruling 8 of milestone 9c: the tap names the card shown before it, captured once, so both taps of a twice
+                // pair name the same card, as two taps on one card's button do.
+                var shown = conversation.Card?.PendingId ?? Guid.Empty;
                 if (step.Twice)
-                    await Task.WhenAll(conversation.ConfirmAsync(typed), conversation.ConfirmAsync(typed));
+                    await Task.WhenAll(conversation.ConfirmAsync(shown, typed), conversation.ConfirmAsync(shown, typed));
                 else
-                    await conversation.ConfirmAsync(typed);
+                    await conversation.ConfirmAsync(shown, typed);
                 break;
 
             case "cancel":
-                await conversation.CancelAsync();
+                await conversation.CancelAsync(conversation.Card?.PendingId ?? Guid.Empty);
                 break;
 
             case "try_again":

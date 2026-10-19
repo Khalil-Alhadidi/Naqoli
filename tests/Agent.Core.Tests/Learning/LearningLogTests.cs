@@ -109,8 +109,8 @@ public class LearningLogTests(AgentHost host)
         // The same session pays with a PIN, once wrong and once right: a card and its outcomes log nothing.
         await conversation.SendAsync(TraderText);
         Assert.True(conversation.PinVisible);
-        Assert.IsType<ConfirmOutcome.PinWrong>(await conversation.ConfirmAsync(WrongPin));
-        Assert.IsType<ConfirmOutcome.Done>(await conversation.ConfirmAsync(TraderPin));
+        Assert.IsType<ConfirmOutcome.PinWrong>(await conversation.ConfirmShownAsync(WrongPin));
+        Assert.IsType<ConfirmOutcome.Done>(await conversation.ConfirmShownAsync(TraderPin));
 
         var rows = await RowsAsync();
         Assert.Single(rows);

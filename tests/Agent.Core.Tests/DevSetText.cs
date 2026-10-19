@@ -55,6 +55,30 @@ internal static class DevSetText
         return document.RootElement.GetProperty("parse").GetProperty("requests")[0].GetProperty("recipient_text").GetString();
     }
 
+    /// <summary>
+    /// The text of field <paramref name="field"/> (a wire name, such as <c>operator_text</c>) of request number
+    /// <paramref name="request"/> in the sidecar's parse of say step <paramref name="step"/> of <paramref name="id"/>.
+    /// </summary>
+    public static string? SidecarText(string id, int step, int request, string field)
+    {
+        using var document = Line(
+            ScriptedParser.SidecarFileName,
+            root => root.GetProperty("id").GetString() == id && root.GetProperty("step").GetInt32() == step);
+        return document.RootElement.GetProperty("parse").GetProperty("requests")[request].GetProperty(field).GetString();
+    }
+
+    /// <summary>
+    /// The <c>not_prepared</c> text of the case's expected replies (milestone 9c: the names of the parts beyond the cap,
+    /// in the user's own words).
+    /// </summary>
+    public static string NotPrepared(string id)
+    {
+        using var document = Line(ScriptedParser.DevSetFileName, root => root.GetProperty("id").GetString() == id);
+        return document.RootElement.GetProperty("expect").GetProperty("replies").EnumerateArray()
+            .Select(r => r.TryGetProperty("not_prepared", out var names) ? names.GetString() : null)
+            .Single(n => n is not null)!;
+    }
+
     /// <summary>The endearments the console is configured with (<c>src/Agent.Web/appsettings.json</c>), never a literal.</summary>
     public static string[] ConfiguredEndearments() => ConfiguredWords("Endearments");
 

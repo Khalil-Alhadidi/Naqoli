@@ -178,7 +178,7 @@ public sealed class ConversationAnswerTests(AgentHost host)
         Assert.Equal(new global::Agent.Core.Learning.LearningEntry("choose_account", null), conversation.LastLearningEntry);
         Assert.Equal(RequestIntent.Unsupported, conversation.LastRequest?.Intent);
 
-        Assert.IsType<ConfirmOutcome.Done>(await conversation.ConfirmAsync(null));
+        Assert.IsType<ConfirmOutcome.Done>(await conversation.ConfirmShownAsync(null));
         Assert.Equal(SeedFacts.DemoBalance - 31_000, await host.Wallet.AccountBalanceAsync(SeedFacts.DemoPhone));
     }
 
@@ -213,7 +213,7 @@ public sealed class ConversationAnswerTests(AgentHost host)
         var card = Assert.IsType<CardView>(conversation.Card);
         Assert.Equal(("bill", "BS4", 35_000L), (card.Type, card.BillCode, card.AmountIqd));
         Assert.Single(conversation.QuestionsAsked);
-        Assert.IsType<ConfirmOutcome.Done>(await conversation.ConfirmAsync(null));
+        Assert.IsType<ConfirmOutcome.Done>(await conversation.ConfirmShownAsync(null));
     }
 
     [Fact]
@@ -453,7 +453,7 @@ public sealed class ConversationAnswerTests(AgentHost host)
         Assert.Equal(SeedFacts.Contact("S14").Number, card.ToPhone);
         Assert.Equal(SeedFacts.Contact("S14").SavedName, card.DisplayName);
         Assert.Equal(150_000, card.AmountIqd);
-        Assert.IsType<ConfirmOutcome.Done>(await conversation.ConfirmAsync(null));
+        Assert.IsType<ConfirmOutcome.Done>(await conversation.ConfirmShownAsync(null));
         Assert.Equal(SeedFacts.DemoBalance - 151_000, await host.Wallet.AccountBalanceAsync(SeedFacts.DemoPhone));
     }
 

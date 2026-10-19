@@ -169,6 +169,8 @@ flowchart TD
 
 Then step 7, so a card is a new record with a new ID, key and timer, and nothing moves until its own Confirm. A `SendAgain` card always carries `Warning` `repeat`, whether or not the history rule set it; a `TryAgain` card carries it only when the rule does. The old record is never reopened (architecture section 5).
 
+`Conversation.ReissueAsync` does nothing while a question is open (trace `reissue_rejected` with detail `question_open`, milestone 9c), before it reads the record. The old finished card still shows its button then, but the question belongs to a later request, or to a queued part of a compound message that waits on it, and a reissue would drop it (`ConversationCompoundTests.ASendAgainTapWhileAPartWaitsOnItsQuestionIsRejected`).
+
 ```mermaid
 sequenceDiagram
     participant P as Phone (card-try-again or card-send-again)
@@ -180,6 +182,7 @@ sequenceDiagram
     participant K as Checks and CardBuilder
     P->>S: ReissueAsync()
     S->>V: ReissueAsync()
+    V->>V: a question open: reissue_rejected (question_open)
     V->>V: kind from CardState (Live, Checking or no card: reissue_rejected)
     V->>R: FindAsync(card.PendingId, user)
     R-->>V: the stored record (Executing, Checking or still live: reissue_rejected)
@@ -195,7 +198,9 @@ sequenceDiagram
 
 ```mermaid
 flowchart TD
-    T["Try again or Send again tap"] --> S{"Card state"}
+    T["Try again or Send again tap"] --> Q{"Question open?"}
+    Q -- yes --> QR["reissue_rejected (question_open): nothing"]
+    Q -- no --> S{"Card state"}
     S -- "Live, Checking, no card" --> R["reissue_rejected: nothing"]
     S -- "Expired, Cancelled, NotDone" --> A["ReissueKind.TryAgain"]
     S -- "Done" --> B["ReissueKind.SendAgain"]
@@ -583,10 +588,10 @@ Every action opens its own DI scope (`CreateAsyncScope`) and resolves the agent'
 | `DeclineQuestionAsync()` | The question's final option (17 Oct 2026); with no open question, traced `option_rejected`. On `which_contact` or `did_you_mean` with options it is `Option.NoneOfThese`: the pending request goes back to the orchestrator with that `ContactOption`, and `Orchestrator.TransferAsync`, seeing a resolution with options and that value, traces `recipient_resolved` with `none_of_these` and refuses `recipient_not_found` through `RefuseAsync` (audit row and learning row as always). On every other question, typed ones included, it is `Option.CancelQuestion`: traced `question_cancelled` with the kind, an audit row `refused` with `question_cancelled` (`ReasonCodes.QuestionCancelled`), the pending request, answers and question cleared, the reply `question_cancelled`, no learning row; the next message is a fresh request. The user's `Option` message carries the constant |
 | `OpenAsync()` | The open check, once per conversation, when the phone opens (milestone 7 post-tag; Khalil, 18 Oct 2026); a second call returns at once. Reads the user (`WalletClient.GetUserAsync`). Not consented: one audit row `consent_shown`, trace `consent_checked` with `required`, `ConsentShown` true and a `ConversationKind.Consent` message with `ActionMessageIndex` on it. Consented: trace `consent_checked` with `given`, nothing shown. No usable answer: trace `consent_checked` with `unavailable`, nothing shown, and the first request's consent gate catches it. An exception is traced `error` and shows nothing. The runner does not call it |
 | `GiveConsentAsync()` | `WalletClient.GiveConsentAsync`, then answers the pending request and its answers again; with no pending request (the tap on the open screen's button) it only records consent and shows nothing more |
-| `ConfirmAsync(pin)` | `ConfirmHandler.ConfirmAsync(user, Card.PendingId, pin)`; the PIN is passed through and kept nowhere |
+| `ConfirmAsync(pendingId, pin)` | `ConfirmHandler.ConfirmAsync(user, Card.PendingId, pin)`; the PIN is passed through and kept nowhere. Only when `pendingId` is the card shown (ruling 8 of milestone 9c: with cards that follow one another, a second tap meant for card 1 never reaches card 2); otherwise the trace `tap_rejected` (`stale_card`, with the outcome `already_handled`, or `no_card` with no message) and nothing moves. The phone's card panel passes its own card's id; the runner passes the id of the card shown before the tap (one id for both taps of a `twice` step) |
 | `SettleAsync()` | Only while the card is Checking: `ConfirmHandler.SettleCheckingAsync`, the same body under the same key (rule 6) |
-| `CancelAsync()` | `PendingStore.CancelAsync` while the card is live |
-| `ReissueAsync()` | D19, the card's Try again or Send again: only for a card shown as Expired, Cancelled or NotDone (`ReissueKind.TryAgain`) or Done (`ReissueKind.SendAgain`), and only when its stored record is not live, Executing or Checking (else traced `reissue_rejected`). Reads the record, then `Orchestrator.ReissueAsync`; the reply is shown as any reply (a new card, or a refusal that leaves the old card). Never the Confirm handler |
+| `CancelAsync(pendingId)` | `PendingStore.CancelAsync` while the card is live; a `pendingId` that is not the card shown is rejected as for `ConfirmAsync` |
+| `ReissueAsync()` | D19, the card's Try again or Send again: only with no question open, for a card shown as Expired, Cancelled or NotDone (`ReissueKind.TryAgain`) or Done (`ReissueKind.SendAgain`), and only when its stored record is not live, Executing or Checking (else traced `reissue_rejected`: `question_open`, or the card's or the record's state). Reads the record, then `Orchestrator.ReissueAsync`; the reply is shown as any reply (a new card, or a refusal that leaves the old card). Never the Confirm handler |
 | `RefreshAsync()` | Reads the record; marks the card expired when it is Pending past `ExpiresAt`, Expired, or gone |
 | `SaveAliasAsync()` | Milestone 9a, the Save tap of the open alias offer (rule 18): `AliasDirectory.SaveAsync` with the offer's text and account. With no open offer it returns null (traced `option_rejected`). `Saved` adds a `ConversationKind.AliasSaved` message and raises `WalletVersion`. `Refused` adds a refusal with its code. Both close the offer. `Unavailable` adds `not_done_nothing_taken` and keeps the offer open |
 | `ListAliasesAsync()`, `AddAliasAsync(text, accountId)`, `AddAliasForPhoneAsync(text, phone)`, `DeleteAliasAsync(aliasId)` | Milestone 9a, the alias directory under the conversation's turn, through `AliasDirectory`. `WalletVersion` goes up after a save or delete. They add no conversation message |
@@ -624,11 +629,14 @@ The alias offer (milestone 9a) adds two message kinds, neither with a code: `Ali
 
 The parse call returns every request of a message, in the order spoken (`ParsedMessage`). The conversation runs them one part at a time. Each part goes through `HandleCoreAsync`, and so through the orchestrator, as any request does: its checks run against the wallet when its turn comes (rule 21), and a card is its own pending record with its own key, timer and tap (D7: one button bound to one transaction). The queue never executes anything (rule 1; `ConversationCompoundTests.TheQueueNeverExecutes`).
 
-- **The split.** When a message is handled as a new request (below), its parts after the first are queued with the un-masked request and its own ruling 3 flag. At most `Agent:MaxRequestsPerMessage` parts are kept, the first included; the value is read at the split, so a value saved later never changes a queue already running. The parts beyond the cap are not queued (the reply that names them comes with rule 22). Trace `requests_split`, detail `<total> requests, <kept> kept`, when the message had more than one request. A part's learning row is written under the masked text of the message it came from.
+- **The split.** When a message is handled as a new request (below), its parts after the first are queued with the un-masked request and its own ruling 3 flag. At most `Agent:MaxRequestsPerMessage` parts are kept, the first included; the value is read at the split, so a value saved later never changes a queue already running. The parts beyond the cap are not queued: they are kept with the message as `NotPreparedPart`s (rule 22, below). Trace `requests_split`, detail `<total> requests, <kept> kept`, when the message had more than one request. A part's learning row is written under the masked text of the message it came from.
 - **What finishes a part.** A refusal, a balance reply or an unsupported reply, at once; a card that reaches Done, NotDone, Expired or Cancelled (a Confirm or a "check again", a Cancel tap or a typed no, the timer through `RefreshAsync`, or an "already handled" Confirm that finds the record in one of those states); and an open question cancelled (`DeclineQuestionAsync`'s cancel branch; its "none of these" branch is a refusal). A question, the consent screen and a card that is live or checking wait: a card still checking is not finished until "check again" settles it (rule 6). The reply to a message typed while a card waits that leaves the card (D6: unclear, or `change_waiting_card`) finishes nothing.
 - **The advance.** When the part that ran has finished and a part is queued, the next runs at once, under the same action (trace `next_request`, detail `<n> of <kept>`). A part that is refused or answered without a tap therefore runs on to the next in the same action, so one message can show a refusal and then a card. An exception on a part is shown as `not_done_nothing_taken` and counts as finished. The alias offer under a Done transfer stays open while the next card is built.
 - **What drops the queue.** Only a message handled as a new request, the parse path's last step, merged into the pending transfer or not: the queue is cleared first (trace `requests_dropped` with the count, when it held anything), then a waiting card is cancelled (which then finds nothing to run), then the message's own parts are queued, then part 1 runs (D7: "a new request cancels the rest"). Every other path leaves the queue: `message_too_long`, a typed yes (`points_to_confirm`), a typed no (it cancels the card, which leads to the next part), a PIN typed into the chat, the amount retry, an answer read in code, a parser that is unavailable, a message that leaves the waiting card, a question repeated, a tap, consent, a reissue and the Save of an alias. A message whose first part cannot be read while a card waits or a question is open is handled as before, and its other parts are not queued.
 - **The amount retry** (D6 extension) opens only when the refused transfer is the last part: with a part still queued, the next part runs at once.
+- **The cap (rule 22).** When the last prepared part finishes with the queue empty, and the message had parts beyond `Agent:MaxRequestsPerMessage`, the conversation adds the `Info` message `max_three_requests` with them (`NotPrepared`, in the order spoken), writes the learning row `more_than_three_requests` with the number of requests in the message as its detail (`4` for CMP-07), under the message's masked text (`LastLearningEntry` set, trace `learning_logged`), and forgets them. With a cap of 1 nothing is queued, and the reply comes when part 1 finishes. A new request that drops the queue forgets them too, so the reply is never shown; nothing was promised for those parts.
+- **The names (ruling 2 as amended, 19 Oct 2026).** A `NotPreparedPart(Intent, Text)` carries the user's own words for the part: a transfer's recipient, a bill's biller (else its label), a purchase's operator. The parser's text counts only when the typed message holds it as written, or in its lam form (`ArabicText.LamForm`: the preposition lam joined to the first word, which loses the alef of al, as CMP-07's fourth name is typed); otherwise `Text` is null and the phone names the part by its request type. No model text reaches the phone (rules 3 and 4). This test is used only for these names; the alias offer keeps its own verbatim test (ruling 3 of milestone 9a). A message's string form prints the number of parts, never their text.
+- **Taps name their card (ruling 8).** `ConfirmAsync(pendingId, pin)` and `CancelAsync(pendingId)` act only on the card shown (see Actions), so two Confirms on card 1 execute once and never reach card 2.
 
 ```mermaid
 stateDiagram-v2
@@ -641,6 +649,8 @@ stateDiagram-v2
     Waiting --> Finished: card Done, NotDone, Expired or Cancelled; question cancelled
     Waiting --> Finished: new request cancels the card
     Finished --> [*]: the next queued part runs
+    Finished --> Named: the queue is empty and parts were beyond the cap
+    Named --> [*]: max_three_requests reply, more_than_three_requests row
     Dropped --> [*]
 ```
 
@@ -718,7 +728,7 @@ flowchart TD
 
 ### Messages as codes
 
-A `ConversationMessage(Role, Kind, Code, AmountIqd, Reference, PurchaseCode, AttemptsLeft, Reason, QuestionKind)` carries codes and figures only. `QuestionKind` is set only on a `not_understood` refusal that repeats the open question (the question stays open). A user message carries no text: the screen and the runner keep what was typed.
+A `ConversationMessage(Role, Kind, Code, AmountIqd, Reference, PurchaseCode, AttemptsLeft, Reason, QuestionKind, MaskedDigits, NotPrepared)` carries codes and figures only. `QuestionKind` is set only on a `not_understood` refusal that repeats the open question (the question stays open). `NotPrepared` (milestone 9c) is set only on the `Info` message `max_three_requests`: the parts beyond the cap as `NotPreparedPart(Intent, Text)`, where `Text` is the user's own words or null; `ToString()` prints their count only. A user message carries no text: the screen and the runner keep what was typed.
 
 | Kind | Role | Code | Figures |
 |---|---|---|---|
@@ -731,7 +741,7 @@ A `ConversationMessage(Role, Kind, Code, AmountIqd, Reference, PurchaseCode, Att
 | `Consent` | Agent | none | none |
 | `Card` | Agent | none | none; the card is `Card` |
 | `Outcome` | Agent | `done`, `checking`, `not_done`, `expired`, `cancelled`, `pin_required`, `pin_wrong`, `pin_malformed`, `already_handled` or `not_found` (`OutcomeCodes`) | `done`: `Reference`, `AmountIqd` (the balance after), `PurchaseCode`; `not_done`: `Reason`, `AmountIqd`; `pin_wrong`: `AttemptsLeft` |
-| `Info` | Agent | `points_to_confirm`, or a card's note (`account_choice_unavailable`), added just before the card's message | none |
+| `Info` | Agent | `points_to_confirm`, a card's note (`account_choice_unavailable`), added just before the card's message, or `max_three_requests` (rule 22) after the last prepared part of a message finished | `NotPrepared` on `max_three_requests` |
 
 ```mermaid
 stateDiagram-v2
@@ -764,7 +774,7 @@ stateDiagram-v2
 | Code | `Orchestrator` | `parse_received` (the intent), `consent_checked` (`given` or `required`), `recipient_resolved` (`contact`, `alias`, `number`, `option`, `bill` or `purchase`), `amount_resolved` (the amount), `checks_passed` (the quote's total) or `check_failed:<reason>` (the figure), `card_created` (type, total, `pin` when one is needed), `question:<kind>` (how many options), `refusal:<code>` (the wallet code for `not_done_nothing_taken`, else the figure), `balance_shown` (no figure), `known_gap` (`choose_account` or `part_of_bill`), `reissue` (`try_again` or `send_again`) |
 | Write | `ConfirmHandler` | `begin_execute` (type and total), `recheck_ok` or `recheck_failed:<reason>` (the wallet code, if any), `execute_sent`, `outcome:<done, not_done, checking, expired, already_handled, not_found, pin_required, pin_wrong, pin_malformed, cancelled or exception>` (the record's state, the reason, or the attempts left), `lookup_by_key` (`done`, `failed`, `unknown_key` or `unavailable <reason>`; milestone 8), `settle_sent`, `settle_outcome:<the same names>` |
 
-The `Conversation` also writes the compound-request steps in the Code zone (milestone 9c): `requests_split` (`<total> requests, <kept> kept`), `next_request` (`<n> of <kept>`) and `requests_dropped` (the count); counts only, never a request's text. The User and Model zones are written by the `Conversation` (below; `message_received`, `confirm_tapped`, `check_again_tapped`, `cancel_tapped`, `reissue_tapped`, `parse:<parser name>` with the intent, `parse:unavailable`) and the Claude parser (`more_than_one_request`, Model zone, with the count). The `Conversation` also writes, in the Code zone, `model_invalid_reply` (the field the validator refused), `model_refusal` (no detail), `answer_merged` (the typed question's kind), `option_rejected`, `reissue_rejected` (the card's or the record's state), `learning_logged` (the reason) and `error` (an exception's type). A detail holds codes, states and amounts only: never a PIN, an idempotency key, a purchase code, a phone, a name, a balance or any text the user typed (the unsupported reason stays out of the trace). `TraceSinkTests.NoPinKeyCodeOrPhoneInAnyStep` runs a PIN payment and a purchase through a recording sink and checks every step and detail.
+The `Conversation` also writes the compound-request steps in the Code zone (milestone 9c): `requests_split` (`<total> requests, <kept> kept`), `next_request` (`<n> of <kept>`) and `requests_dropped` (the count); counts only, never a request's text. A Confirm or Cancel tap for a card that is not the one shown traces `tap_rejected` (`stale_card` or `no_card`). The User and Model zones are written by the `Conversation` (below; `message_received`, `confirm_tapped`, `check_again_tapped`, `cancel_tapped`, `reissue_tapped`, `parse:<parser name>` with the intent, `parse:unavailable`) and the Claude parser (`more_than_one_request`, Model zone, with the count). The `Conversation` also writes, in the Code zone, `model_invalid_reply` (the field the validator refused), `model_refusal` (no detail), `answer_merged` (the typed question's kind), `option_rejected`, `reissue_rejected` (the card's or the record's state, or `question_open`), `learning_logged` (the reason) and `error` (an exception's type). A detail holds codes, states and amounts only: never a PIN, an idempotency key, a purchase code, a phone, a name, a balance or any text the user typed (the unsupported reason stays out of the trace). `TraceSinkTests.NoPinKeyCodeOrPhoneInAnyStep` runs a PIN payment and a purchase through a recording sink and checks every step and detail.
 
 ```mermaid
 sequenceDiagram
@@ -816,7 +826,7 @@ Never stored: a PIN, a balance figure, a purchase code (full or partial), the ty
 | `Unsupported` with any other reason (`withdrawal`) | `not_supported`, with the reason as detail |
 | A `not_logged` refusal (`insufficient_balance`, the two caps, `nothing_due`, `account_closed`, `number_has_no_wallet`, `consent_required`), any other refusal, a question, a balance, the consent screen, a card | null |
 
-`more_than_three_requests`, `model_invalid_reply` and `model_refusal` are in the logged list but are not replies. The caller that splits a message (milestone 9c) builds the first; the conversation builds the second when the parsed request carries a `Problem` (see The learning log), and the third when the `Problem` is `refusal`. `model_refusal` joined the seed's list after `model_invalid_reply` in `seed-v3` (16 Oct 2026, at Khalil's instruction), so `LearningLogRule.Logged` names it and stays pinned to `settings.json`.
+`more_than_three_requests`, `model_invalid_reply` and `model_refusal` are in the logged list but are not replies. The conversation builds the first when the last prepared part of a message with more requests than `Agent:MaxRequestsPerMessage` finishes (milestone 9c, with the number of requests as its detail); the conversation builds the second when the parsed request carries a `Problem` (see The learning log), and the third when the `Problem` is `refusal`. `model_refusal` joined the seed's list after `model_invalid_reply` in `seed-v3` (16 Oct 2026, at Khalil's instruction), so `LearningLogRule.Logged` names it and stays pinned to `settings.json`.
 
 ```mermaid
 flowchart TD
@@ -973,7 +983,7 @@ sequenceDiagram
 | `PerTransactionCapIqd` | 5,000,000 | Checks and the Confirm recheck |
 | `PerDayCapIqd` | 10,000,000 | Checks and the Confirm recheck. The three limits must be ordered, `MinAmountIqd` <= `PerTransactionCapIqd` <= `PerDayCapIqd`, validated at start and on every save (review M4, Khalil, 16 Oct 2026) |
 | `CardTimerSeconds` | 45 | `PendingStore.CreateAsync` |
-| `MaxRequestsPerMessage` | 3 | Not read yet (compound requests, milestone 9c) |
+| `MaxRequestsPerMessage` | 3; 1 to 20 | The conversation, when it splits a message (D7, rule 22, milestone 9c): the parts kept, the first included; the rest are named in the `max_three_requests` reply and logged `more_than_three_requests`. Read at the split, so a value saved later never changes a queue already running |
 | `MaxProductsInOneQuestion` | 8 | Product and internet-card questions |
 | `RepeatWarningWindowMinutes` | 10 | `CardBuilder`, repeat warning |
 | `HistoryDays` | 90 | `CardBuilder`, first time |
@@ -996,7 +1006,7 @@ sequenceDiagram
 | `DevSetPath` | `data/requests.dev.jsonl` | The oracle: the development set, relative to the repository root unless rooted; its file name must be `requests.dev.jsonl` (rule 7) |
 | `YesWords`, `NoWords` | empty | `Conversation`, D6. Phone text, so not set in `Agent.Core`: the console post-configures them from `Word_yes` and `Word_no` in its resource file, and the test host sets `yes` and `no` |
 
-The settings component shows them ([agent-web.md](agent-web.md), "The settings component"). It edits exactly `RuntimeSettings.EditableNames`: `MinAmountIqd`, `PerTransactionCapIqd`, `PerDayCapIqd`, `CardTimerSeconds`, `MaxProductsInOneQuestion`, `RepeatWarningWindowMinutes`, `HistoryDays`, `MinSubstringWordLength`, `MaxYesNoWords`, `LogPageSize`, `CheckingRetrySeconds`, `MaxAliasLength` and `MaxMessageChars`. The runtime store refuses any other key. The rest, `MaxRequestsPerMessage` included (nothing reads it yet), is read only. The client key goes in user secrets or the environment, never in a committed file.
+The settings component shows them ([agent-web.md](agent-web.md), "The settings component"). It edits exactly `RuntimeSettings.EditableNames`: `MinAmountIqd`, `PerTransactionCapIqd`, `PerDayCapIqd`, `CardTimerSeconds`, `MaxProductsInOneQuestion`, `RepeatWarningWindowMinutes`, `HistoryDays`, `MinSubstringWordLength`, `MaxYesNoWords`, `LogPageSize`, `CheckingRetrySeconds`, `MaxAliasLength` and `MaxMessageChars`. The runtime store refuses any other key. The rest is read only, `MaxRequestsPerMessage` included for now (the conversation reads it from milestone 9c; it becomes editable with the phone's part of that milestone). The client key goes in user secrets or the environment, never in a committed file.
 
 **Options at run time (D8, milestone 7).** Every scoped service that reads `AgentOptions` reads `IOptionsSnapshot<AgentOptions>`, which is computed again per scope. Every conversation action and every eval step opens its own scope, so a value saved in the settings component applies to the next action without a restart. The singletons (`PendingSweeper`, the `WalletClient` configuration) keep `IOptions`. The conversation takes `IOptionsMonitor<AgentOptions>`: it reads the D6 word lists once, when it is built, and `MaxYesNoWords` again for every message, so a saved limit applies to the next message of an open page (`ConversationTests.AMaxYesNoWordsSavedInTheSettingsAppliesToTheNextMessage`). A value is validated before it is published, as the options are at start (`[Range]` and the cross-field rules), so a refused one never takes effect anywhere (`RuntimeSettingsTests`, `ChecksTests.ACapChangedLiveAppliesToTheNextCheck`).
 

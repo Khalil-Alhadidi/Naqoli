@@ -232,7 +232,8 @@
         pin = null;
         try
         {
-            await Session.ConfirmAsync(typedPin);
+            // Ruling 8 of milestone 9c: the tap names its card. Task 5 captures the id when the panel renders.
+            await Session.ConfirmAsync(Session.Card!.PendingId, typedPin);
         }
         finally
         {
@@ -245,7 +246,7 @@
         acting = true;
         try
         {
-            await Session.CancelAsync();
+            await Session.CancelAsync(Session.Card!.PendingId);
         }
         finally
         {

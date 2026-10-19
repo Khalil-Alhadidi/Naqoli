@@ -142,7 +142,7 @@ public sealed class ConversationTests(AgentHost host) : IAsyncDisposable
             conversation.Messages);
         Assert.Equal(1, conversation.CardMessageIndex);
 
-        var outcome = await conversation.ConfirmAsync(null);
+        var outcome = await conversation.ConfirmShownAsync(null);
 
         var done = Assert.IsType<ConfirmOutcome.Done>(outcome);
         Assert.Equal(CardStatus.Done, conversation.CardState);
@@ -520,7 +520,7 @@ public sealed class ConversationTests(AgentHost host) : IAsyncDisposable
 
         await conversation.SendAsync("hmm what was that");
 
-        Assert.IsType<ConfirmOutcome.Done>(await conversation.ConfirmAsync(null));
+        Assert.IsType<ConfirmOutcome.Done>(await conversation.ConfirmShownAsync(null));
         Assert.Equal(SeedFacts.DemoBalance - 51_000, await host.Wallet.AccountBalanceAsync(SeedFacts.DemoPhone));
     }
 
@@ -608,7 +608,7 @@ public sealed class ConversationTests(AgentHost host) : IAsyncDisposable
         await conversation.SendAsync(HammoudiSentence);
         var card = conversation.Card!;
 
-        var outcomes = await Task.WhenAll(conversation.ConfirmAsync(null), conversation.ConfirmAsync(null));
+        var outcomes = await Task.WhenAll(conversation.ConfirmShownAsync(null), conversation.ConfirmShownAsync(null));
 
         Assert.Single(outcomes, o => o is ConfirmOutcome.Done);
         Assert.Single(outcomes, o => o == new ConfirmOutcome.AlreadyHandled(PendingState.Done));
@@ -633,7 +633,7 @@ public sealed class ConversationTests(AgentHost host) : IAsyncDisposable
         Assert.Equal(Outcome(OutcomeCodes.Expired), LastAgentMessage(conversation));
 
         // A late Confirm (a stale page) still reaches nothing.
-        Assert.IsType<ConfirmOutcome.Expired>(await conversation.ConfirmAsync(null));
+        Assert.IsType<ConfirmOutcome.Expired>(await conversation.ConfirmShownAsync(null));
         Assert.Equal(SeedFacts.DemoBalance, await host.Wallet.AccountBalanceAsync(SeedFacts.DemoPhone));
     }
 
@@ -728,12 +728,12 @@ public sealed class ConversationTests(AgentHost host) : IAsyncDisposable
         var pinCard = Assert.IsType<CardView>(conversation.Card);
         Assert.True(pinCard.PinRequired);
         Assert.True(conversation.PinVisible);
-        Assert.IsType<ConfirmOutcome.Done>(await conversation.ConfirmAsync(ArabicDigits.ToArabicIndic(pin)));
+        Assert.IsType<ConfirmOutcome.Done>(await conversation.ConfirmShownAsync(ArabicDigits.ToArabicIndic(pin)));
         var pinKey = (await RecordAsync(session, pinCard.PendingId, SeedFacts.TraderUserId)).IdempotencyKey;
 
         await conversation.SendAsync("zain credit five");
         var purchaseCard = Assert.IsType<CardView>(conversation.Card);
-        var bought = Assert.IsType<ConfirmOutcome.Done>(await conversation.ConfirmAsync(null));
+        var bought = Assert.IsType<ConfirmOutcome.Done>(await conversation.ConfirmShownAsync(null));
         Assert.NotNull(bought.PurchaseCode);
         var purchaseKey = (await RecordAsync(session, purchaseCard.PendingId, SeedFacts.TraderUserId)).IdempotencyKey;
         Assert.Equal(bought.PurchaseCode, LastAgentMessage(conversation).PurchaseCode);
@@ -821,7 +821,7 @@ public sealed class ConversationTests(AgentHost host) : IAsyncDisposable
             }
         }
 
-        Assert.IsType<ConfirmOutcome.Done>(await conversation.ConfirmAsync(pin));
+        Assert.IsType<ConfirmOutcome.Done>(await conversation.ConfirmShownAsync(pin));
     }
 
     [Fact]
@@ -900,7 +900,7 @@ public sealed class ConversationTests(AgentHost host) : IAsyncDisposable
 
         await conversation.SendAsync("zain credit five");
         var purchaseCard = Assert.IsType<CardView>(conversation.Card);
-        var bought = Assert.IsType<ConfirmOutcome.Done>(await conversation.ConfirmAsync(null));
+        var bought = Assert.IsType<ConfirmOutcome.Done>(await conversation.ConfirmShownAsync(null));
         Assert.NotNull(bought.PurchaseCode);
         var messages = conversation.Messages.Count;
 
@@ -1165,7 +1165,7 @@ public sealed class ConversationTests(AgentHost host) : IAsyncDisposable
                 Assert.IsType<TransitionResult.Completed>(await store.CompleteAsync(card.PendingId, SeedFacts.DemoUserId, state, "test", null, null, null, Token));
         }
 
-        Assert.Equal(new ConfirmOutcome.AlreadyHandled(state), await session.Conversation.ConfirmAsync(null));
+        Assert.Equal(new ConfirmOutcome.AlreadyHandled(state), await session.Conversation.ConfirmShownAsync(null));
     }
 
     [Fact]
@@ -1203,7 +1203,7 @@ public sealed class ConversationTests(AgentHost host) : IAsyncDisposable
         Assert.DoesNotContain(session.Trace.Entries, e => e.Step is TraceSteps.BeginExecute or TraceSteps.ExecuteSent);
 
         // Nothing moves until Confirm.
-        Assert.IsType<ConfirmOutcome.Done>(await conversation.ConfirmAsync(null));
+        Assert.IsType<ConfirmOutcome.Done>(await conversation.ConfirmShownAsync(null));
         Assert.Equal(1, await WalletRowsAsync(fresh.IdempotencyKey));
         Assert.Equal(SeedFacts.DemoBalance - 51_000, await host.Wallet.AccountBalanceAsync(SeedFacts.DemoPhone));
     }
@@ -1214,7 +1214,7 @@ public sealed class ConversationTests(AgentHost host) : IAsyncDisposable
         var session = await StartAsync();
         var conversation = session.Conversation;
         await conversation.SendAsync(HammoudiSentence);
-        await conversation.CancelAsync();
+        await conversation.CancelShownAsync();
         Assert.Equal(CardStatus.Cancelled, conversation.CardState);
 
         await conversation.ReissueAsync();
@@ -1237,7 +1237,7 @@ public sealed class ConversationTests(AgentHost host) : IAsyncDisposable
         var conversation = session.Conversation;
         await conversation.SendAsync(HammoudiSentence);
         var first = conversation.Card!;
-        Assert.IsType<ConfirmOutcome.Done>(await conversation.ConfirmAsync(null));
+        Assert.IsType<ConfirmOutcome.Done>(await conversation.ConfirmShownAsync(null));
         var paid = await RecordAsync(session, first.PendingId);
 
         // Past the repeat window, so the line comes from Send again itself, not from the history rule.

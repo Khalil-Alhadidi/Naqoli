@@ -119,7 +119,7 @@ public sealed class OutboundPayloadTests(AgentHost host)
         List<string> purchaseCodes = [];
         if (confirmPurchase)
         {
-            var bought = Assert.IsType<ConfirmOutcome.Done>(await conversation.ConfirmAsync(null));
+            var bought = Assert.IsType<ConfirmOutcome.Done>(await conversation.ConfirmShownAsync(null));
             Assert.NotNull(bought.PurchaseCode);
             var orders = Assert.IsType<WalletResult<IReadOnlyList<PurchaseOrder>>.Ok>(await conversation.ListOrdersAsync()).Value;
             Assert.Equal(bought.PurchaseCode, orders[0].Code);

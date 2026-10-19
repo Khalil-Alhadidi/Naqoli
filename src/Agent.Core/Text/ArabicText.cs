@@ -52,6 +52,22 @@ public static class ArabicText
         return text.Length >= 4 && text[0] == Alef && text[1] == Lam ? text[2..] : text;
     }
 
+    /// <summary>
+    /// The text with the preposition lam ("to") joined to its first word, as it is typed (milestone 9c, ruling 2 as
+    /// amended): a first word that starts with alef lam loses that alef, so "to" and "the mother" are typed lam, lam,
+    /// then the rest of the word; any other first word is typed lam, then the word ("to Ali" is lam, ain, lam, yeh).
+    /// Only the plain alef is dropped. The text is trimmed first; nothing else is changed.
+    /// </summary>
+    /// <exception cref="ArgumentException">The text is blank.</exception>
+    public static string LamForm(string text)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(text);
+        var trimmed = text.Trim();
+        return trimmed.Length >= 2 && trimmed[0] == Alef && trimmed[1] == Lam
+            ? Lam + trimmed[1..]
+            : Lam + trimmed;
+    }
+
     /// <summary>The comparison key: normalised, leading <c>al</c> stripped, spaces removed.</summary>
     public static string Key(string text) => StripLeadingAl(Normalize(text)).Replace(" ", string.Empty, StringComparison.Ordinal);
 

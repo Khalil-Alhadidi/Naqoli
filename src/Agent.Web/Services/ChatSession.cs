@@ -280,11 +280,14 @@ public sealed class ChatSession : IDisposable
         await conversation.GiveConsentAsync();
     }
 
-    /// <summary>The card's Confirm button (rule 1), with the PIN typed on the card; the PIN is passed through and kept nowhere.</summary>
-    public async Task<ConfirmOutcome?> ConfirmAsync(string? pin)
+    /// <summary>
+    /// The card's Confirm button (rule 1) for the card <paramref name="pendingId"/> names (ruling 8 of milestone 9c), with
+    /// the PIN typed on the card; the PIN is passed through and kept nowhere.
+    /// </summary>
+    public async Task<ConfirmOutcome?> ConfirmAsync(Guid pendingId, string? pin)
     {
         TraceLog.Current.Value = trace;
-        return await conversation.ConfirmAsync(pin);
+        return await conversation.ConfirmAsync(pendingId, pin);
     }
 
     /// <summary>The "check again" button of a Checking outcome: the same body under the same key (rule 6).</summary>
@@ -310,11 +313,11 @@ public sealed class ChatSession : IDisposable
         await conversation.ReissueAsync();
     }
 
-    /// <summary>The card's Cancel button.</summary>
-    public async Task CancelAsync()
+    /// <summary>The card's Cancel button for the card <paramref name="pendingId"/> names (ruling 8 of milestone 9c).</summary>
+    public async Task CancelAsync(Guid pendingId)
     {
         TraceLog.Current.Value = trace;
-        await conversation.CancelAsync();
+        await conversation.CancelAsync(pendingId);
     }
 
     /// <summary>Called by the card's countdown when it reaches zero.</summary>

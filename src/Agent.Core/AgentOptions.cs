@@ -32,7 +32,11 @@ public sealed class AgentOptions
     [Range(1, 3_600)]
     public int CardTimerSeconds { get; set; } = 45;
 
-    /// <summary>The most requests one message may carry.</summary>
+    /// <summary>
+    /// The most requests of one message that are prepared (D7, rule 22, milestone 9c), read by the conversation when it
+    /// splits a message, so a value saved later never changes a queue already running. The parts beyond it are named in
+    /// the <c>max_three_requests</c> reply and logged <c>more_than_three_requests</c>.
+    /// </summary>
     [Range(1, 20)]
     public int MaxRequestsPerMessage { get; set; } = 3;
 

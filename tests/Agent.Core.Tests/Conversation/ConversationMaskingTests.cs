@@ -93,7 +93,7 @@ public sealed class ConversationMaskingTests(AgentHost host)
 
         await session.Conversation.SendAsync("send 50000 to " + typed);
         Assert.IsType<CardView>(session.Conversation.Card);
-        Assert.NotNull(await session.Conversation.ConfirmAsync(null));
+        Assert.NotNull(await session.Conversation.ConfirmShownAsync(null));
         await session.Conversation.SendAsync("and to " + typed + " too");
 
         Assert.Equal(ReasonCodes.RecipientNotFound, Assert.IsType<AgentReply.Refusal>(session.Conversation.LastReply).Code);

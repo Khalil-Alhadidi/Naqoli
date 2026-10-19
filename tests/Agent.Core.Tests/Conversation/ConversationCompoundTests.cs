@@ -2,6 +2,7 @@ using System.Net.Http.Json;
 using Agent.Core.Confirm;
 using Agent.Core.Conversation;
 using Agent.Core.Data;
+using Agent.Core.Learning;
 using Agent.Core.Masking;
 using Agent.Core.Parsing;
 using Agent.Core.Pending;
@@ -36,11 +37,23 @@ public sealed class ConversationCompoundTests(AgentHost host)
 
     private static string HammoudiAlias => SeedFacts.Contact("S01").Alias!;
 
-    private async Task<ConversationHarness> StartAsync(IParser? parser = null, int userId = U1)
+    // ARABIC LETTER ALEF, LAM, AIN and MEEM: a synthetic name with al, and its lam form (no Arabic literal in C#).
+    private const char Alef = '\u0627';
+    private const char Lam = '\u0644';
+    private const char Ain = '\u0639';
+    private const char Meem = '\u0645';
+
+    private async Task<ConversationHarness> StartAsync(IParser? parser = null, int userId = U1, Action<AgentOptions>? configure = null)
     {
         Assert.SkipUnless(host.DatabaseAvailable, host.SkipReason);
-        return await ConversationHarness.StartAsync(host, parser ?? OracleParser.Value, userId);
+        return await ConversationHarness.StartAsync(host, parser ?? OracleParser.Value, userId, configure);
     }
+
+    /// <summary>The <c>max_three_requests</c> replies so far (rule 22).</summary>
+    private static List<ConversationMessage> NotPreparedReplies(AgentConversation conversation)
+        => [.. conversation.Messages.Where(m => m.Kind == ConversationKind.Info && m.Code == ReasonCodes.MaxThreeRequests)];
+
+    private static ParsedRequest TransferOf(string recipient) => ParsedRequest.Transfer(recipient, 10, AmountUnit.Thousand);
 
     /// <summary>A parser that answers each sentence (masked as typed) with its requests, in order.</summary>
     private static CapturingParser Says(params (string Text, ParsedRequest[] Requests)[] says)
@@ -81,7 +94,7 @@ public sealed class ConversationCompoundTests(AgentHost host)
         Assert.Equal(1, conversation.QueuedRequests);
         Assert.True(Traced(harness, TraceSteps.RequestsSplit, "2 requests, 2 kept"));
 
-        Assert.IsType<ConfirmOutcome.Done>(await conversation.ConfirmAsync(null));
+        Assert.IsType<ConfirmOutcome.Done>(await conversation.ConfirmShownAsync(null));
 
         Assert.Equal(2, conversation.CardsIssued.Count);
         Assert.Equal(first, conversation.CardsIssued[0]);
@@ -91,7 +104,7 @@ public sealed class ConversationCompoundTests(AgentHost host)
         Assert.Equal(0, conversation.QueuedRequests);
         Assert.True(Traced(harness, TraceSteps.NextRequest, "2 of 2"));
 
-        await conversation.CancelAsync();
+        await conversation.CancelShownAsync();
 
         Assert.Equal(CardStatus.Cancelled, conversation.CardState);
         Assert.Equal(2, conversation.CardsIssued.Count);
@@ -116,7 +129,7 @@ public sealed class ConversationCompoundTests(AgentHost host)
         var second = LiveTransferTo(conversation, "S19", 25_000);
         Assert.Equal(724_000, second.BalanceAfterIqd);
 
-        Assert.IsType<ConfirmOutcome.Done>(await conversation.ConfirmAsync(null));
+        Assert.IsType<ConfirmOutcome.Done>(await conversation.ConfirmShownAsync(null));
         Assert.Equal(724_000, await BalanceAsync());
     }
 
@@ -139,11 +152,11 @@ public sealed class ConversationCompoundTests(AgentHost host)
         Assert.Equal(("bill", "BS2"), (bill.Type, bill.BillCode));
         Assert.Equal(1, conversation.QueuedRequests);
 
-        Assert.IsType<ConfirmOutcome.Done>(await conversation.ConfirmAsync(null));
+        Assert.IsType<ConfirmOutcome.Done>(await conversation.ConfirmShownAsync(null));
         var transfer = LiveTransferTo(conversation, "S01", 50_000);
         Assert.Equal(571_000, transfer.BalanceAfterIqd);
 
-        Assert.IsType<ConfirmOutcome.Done>(await conversation.ConfirmAsync(null));
+        Assert.IsType<ConfirmOutcome.Done>(await conversation.ConfirmShownAsync(null));
         Assert.Equal(571_000, await BalanceAsync());
     }
 
@@ -161,7 +174,7 @@ public sealed class ConversationCompoundTests(AgentHost host)
         LiveTransferTo(conversation, "S15", 50_000);
         Assert.True(balance.i < conversation.CardMessageIndex);
 
-        Assert.IsType<ConfirmOutcome.Done>(await conversation.ConfirmAsync(null));
+        Assert.IsType<ConfirmOutcome.Done>(await conversation.ConfirmShownAsync(null));
         Assert.Equal(699_000, await BalanceAsync());
     }
 
@@ -207,7 +220,7 @@ public sealed class ConversationCompoundTests(AgentHost host)
         using (var debit = await host.Wallet.Client.PostAsJsonAsync("/admin/debit", new DebitRequest(U1, 600_000), Token))
             Assert.True(debit.IsSuccessStatusCode, debit.StatusCode.ToString());
 
-        var outcome = Assert.IsType<ConfirmOutcome.NotDone>(await conversation.ConfirmAsync(null));
+        var outcome = Assert.IsType<ConfirmOutcome.NotDone>(await conversation.ConfirmShownAsync(null));
         Assert.Equal(ReasonCodes.InsufficientBalance, outcome.Reason);
         Assert.Equal(PendingState.NotDone, await StateOfAsync(harness, first.PendingId));
 
@@ -267,7 +280,7 @@ public sealed class ConversationCompoundTests(AgentHost host)
         Assert.Equal(0, conversation.QueuedRequests);
         LiveTransferTo(conversation, "S01", 50_000);
 
-        Assert.IsType<ConfirmOutcome.Done>(await conversation.ConfirmAsync(null));
+        Assert.IsType<ConfirmOutcome.Done>(await conversation.ConfirmShownAsync(null));
 
         Assert.Equal(2, conversation.CardsIssued.Count);
         Assert.Equal(CardStatus.Done, conversation.CardState);
@@ -316,7 +329,7 @@ public sealed class ConversationCompoundTests(AgentHost host)
         Assert.Equal(1, conversation.QueuedRequests);
         Assert.Single(parser.Calls);
 
-        Assert.IsType<ConfirmOutcome.Done>(await conversation.ConfirmAsync(null));
+        Assert.IsType<ConfirmOutcome.Done>(await conversation.ConfirmShownAsync(null));
         LiveTransferTo(conversation, "S19", 25_000);
     }
 
@@ -340,7 +353,7 @@ public sealed class ConversationCompoundTests(AgentHost host)
         LiveTransferTo(conversation, "S04", 25_000);
         Assert.Equal(1, conversation.QueuedRequests);
 
-        Assert.IsType<ConfirmOutcome.Done>(await conversation.ConfirmAsync(null));
+        Assert.IsType<ConfirmOutcome.Done>(await conversation.ConfirmShownAsync(null));
         Assert.Equal("purchase", Assert.IsType<CardView>(conversation.Card).Type);
         Assert.Equal(CardStatus.Live, conversation.CardState);
     }
@@ -386,5 +399,206 @@ public sealed class ConversationCompoundTests(AgentHost host)
         }
 
         Assert.Equal(SeedFacts.DemoBalance, await BalanceAsync());
+    }
+
+    [Fact]
+    public async Task CMP07_FourRequestsGiveThreeCardsAndTheReplyNamesTheFourth()
+    {
+        await using var harness = await StartAsync();
+        var conversation = harness.Conversation;
+
+        await conversation.SendAsync(DevSetText.Say("CMP-07"));
+        Assert.True(Traced(harness, TraceSteps.RequestsSplit, "4 requests, 3 kept"));
+        Assert.Equal(2, conversation.QueuedRequests);
+
+        foreach (var contact in new[] { "S04", "S19", "S18" })
+        {
+            LiveTransferTo(conversation, contact, 10_000);
+            Assert.Empty(NotPreparedReplies(conversation));
+            Assert.IsType<ConfirmOutcome.Done>(await conversation.ConfirmShownAsync());
+        }
+
+        // After the third Done outcome: the reply that names the fourth part, in the user's own words (rule 22).
+        var reply = Assert.Single(NotPreparedReplies(conversation));
+        Assert.Equal(reply, conversation.Messages[^1]);
+        var part = Assert.Single(reply.NotPrepared!);
+        Assert.Equal((RequestIntent.Transfer, DevSetText.NotPrepared("CMP-07")), (part.Intent, part.Text));
+        Assert.Equal(new LearningEntry(LearningLogRule.MoreThanThreeRequests, "4"), conversation.LastLearningEntry);
+        var row = Assert.Single(await harness.LearningRowsAsync(), r => r.Reason == LearningLogRule.MoreThanThreeRequests);
+        Assert.Equal("4", row.Detail);
+        Assert.True(Traced(harness, "learning_logged", LearningLogRule.MoreThanThreeRequests));
+        Assert.Equal(3, conversation.CardsIssued.Count);
+        Assert.Equal(717_000, await BalanceAsync());
+    }
+
+    [Fact]
+    public async Task ACapOfOneNamesTheSecondPart()
+    {
+        await using var harness = await StartAsync(configure: o => o.MaxRequestsPerMessage = 1);
+        var conversation = harness.Conversation;
+
+        await conversation.SendAsync(DevSetText.Say("CMP-01"));
+        LiveTransferTo(conversation, "S04", 25_000);
+        Assert.Equal(0, conversation.QueuedRequests);
+        Assert.True(Traced(harness, TraceSteps.RequestsSplit, "2 requests, 1 kept"));
+        Assert.Empty(NotPreparedReplies(conversation));
+
+        Assert.IsType<ConfirmOutcome.Done>(await conversation.ConfirmShownAsync());
+
+        var part = Assert.Single(Assert.Single(NotPreparedReplies(conversation)).NotPrepared!);
+        Assert.Equal((RequestIntent.Purchase, DevSetText.SidecarText("CMP-01", 0, 1, "operator_text")), (part.Intent, part.Text));
+        Assert.Equal(new LearningEntry(LearningLogRule.MoreThanThreeRequests, "2"), conversation.LastLearningEntry);
+        Assert.Single(conversation.CardsIssued);
+    }
+
+    [Fact]
+    public async Task FivePartsAtTheCapOfThreeNameTwoInOrder()
+    {
+        var first = SeedFacts.Contact("S04").SavedName;
+        var second = SeedFacts.Contact("S19").SavedName;
+        var sentence = "send ten thousand each to " + HammoudiAlias + ", " + first + ", " + second + ", zaid and huda";
+        var parser = Says((sentence,
+            [TransferOf(HammoudiAlias), TransferOf(first), TransferOf(second), TransferOf("zaid"), TransferOf("huda")]));
+        await using var harness = await StartAsync(parser);
+        var conversation = harness.Conversation;
+
+        await conversation.SendAsync(sentence);
+        for (var card = 0; card < 3; card++)
+            Assert.IsType<ConfirmOutcome.Done>(await conversation.ConfirmShownAsync());
+
+        var reply = Assert.Single(NotPreparedReplies(conversation));
+        Assert.Equal(["zaid", "huda"], reply.NotPrepared!.Select(p => p.Text));
+        Assert.Equal("5", conversation.LastLearningEntry?.Detail);
+        Assert.Equal(3, conversation.CardsIssued.Count);
+    }
+
+    [Fact]
+    public async Task ANameTheUserDidNotTypeIsReplacedByTheType()
+    {
+        // Rules 3 and 4: the parser's recipient is not in the typed text, so no text of it reaches the reply.
+        const string sentence = "send ten thousand to my brother and to the other one";
+        var parser = Says((sentence, [TransferOf(HammoudiAlias), TransferOf("omar")]));
+        await using var harness = await StartAsync(parser, configure: o => o.MaxRequestsPerMessage = 1);
+        var conversation = harness.Conversation;
+
+        await conversation.SendAsync(sentence);
+        Assert.IsType<ConfirmOutcome.Done>(await conversation.ConfirmShownAsync());
+
+        var part = Assert.Single(Assert.Single(NotPreparedReplies(conversation)).NotPrepared!);
+        Assert.Equal((RequestIntent.Transfer, (string?)null), (part.Intent, part.Text));
+    }
+
+    [Fact]
+    public async Task ANameTypedWithTheLamJoinedIsTheUsersOwnWords()
+    {
+        // Ruling 2 as amended (19 Oct 2026): "to the X" is typed lam, then X without the alef of al; X is still the
+        // user's own words. The text the parser returns, X with its al, is shown.
+        var name = new string([Alef, Lam, Ain, Meem]);
+        var typedName = new string([Lam, Lam, Ain, Meem]);
+        var sentence = "send ten thousand to " + HammoudiAlias + " and ten thousand " + typedName;
+        var parser = Says((sentence, [TransferOf(HammoudiAlias), TransferOf(name)]));
+        await using var harness = await StartAsync(parser, configure: o => o.MaxRequestsPerMessage = 1);
+        var conversation = harness.Conversation;
+
+        await conversation.SendAsync(sentence);
+        Assert.IsType<ConfirmOutcome.Done>(await conversation.ConfirmShownAsync());
+
+        var part = Assert.Single(Assert.Single(NotPreparedReplies(conversation)).NotPrepared!);
+        Assert.Equal(name, part.Text);
+    }
+
+    [Fact]
+    public async Task TheReplyIsNotShownWhenANewMessageDropsTheRest()
+    {
+        await using var harness = await StartAsync();
+        var conversation = harness.Conversation;
+
+        await conversation.SendAsync(DevSetText.Say("CMP-07"));
+        await conversation.SendAsync(DevSetText.Say("CLN-01"));
+        Assert.True(Traced(harness, TraceSteps.RequestsDropped, "2"));
+
+        Assert.IsType<ConfirmOutcome.Done>(await conversation.ConfirmShownAsync());
+
+        Assert.Empty(NotPreparedReplies(conversation));
+        Assert.DoesNotContain(await harness.LearningRowsAsync(), r => r.Reason == LearningLogRule.MoreThanThreeRequests);
+        Assert.Equal(2, conversation.CardsIssued.Count);
+    }
+
+    [Fact]
+    public async Task TwoConfirmsOnCardOneExecuteOnceAndNeverReachCardTwo()
+    {
+        await using var harness = await StartAsync();
+        var conversation = harness.Conversation;
+
+        await conversation.SendAsync(DevSetText.Say("CMP-01"));
+        var first = LiveTransferTo(conversation, "S04", 25_000).PendingId;
+
+        var outcomes = await Task.WhenAll(conversation.ConfirmAsync(first, null), conversation.ConfirmAsync(first, null));
+
+        Assert.Single(outcomes, o => o is ConfirmOutcome.Done);
+        Assert.Single(outcomes, o => o is null);
+        Assert.Equal(1, CountOf(conversation, ConversationKind.Outcome, OutcomeCodes.AlreadyHandled));
+        Assert.True(Traced(harness, TraceSteps.TapRejected, "stale_card"));
+        Assert.Equal(("purchase", CardStatus.Live), (conversation.Card?.Type, conversation.CardState));
+        Assert.Equal(724_000, await BalanceAsync());
+    }
+
+    [Fact]
+    public async Task AConfirmWithAStaleIdIsAlreadyHandledAndMovesNothing()
+    {
+        await using var harness = await StartAsync();
+        var conversation = harness.Conversation;
+
+        await conversation.SendAsync(DevSetText.Say("CMP-01"));
+        var first = LiveTransferTo(conversation, "S04", 25_000).PendingId;
+        Assert.IsType<ConfirmOutcome.Done>(await conversation.ConfirmShownAsync());
+        var second = Assert.IsType<CardView>(conversation.Card);
+
+        Assert.Null(await conversation.ConfirmAsync(first, null));
+        Assert.Equal(OutcomeCodes.AlreadyHandled, conversation.Messages[^1].Code);
+        await conversation.CancelAsync(first);
+        Assert.Equal(OutcomeCodes.AlreadyHandled, conversation.Messages[^1].Code);
+
+        Assert.Equal(2, harness.Trace.Entries.Count(e => e.Step == TraceSteps.TapRejected && e.Detail == "stale_card"));
+        Assert.Equal((second, CardStatus.Live), (conversation.Card, conversation.CardState));
+        Assert.Equal(PendingState.Pending, await StateOfAsync(harness, second.PendingId));
+        Assert.Equal(724_000, await BalanceAsync());
+    }
+
+    [Fact]
+    public async Task AConfirmWithNoCardIsRejected()
+    {
+        await using var harness = await StartAsync();
+        var conversation = harness.Conversation;
+
+        Assert.Null(await conversation.ConfirmAsync(Guid.NewGuid(), null));
+        await conversation.CancelAsync(Guid.NewGuid());
+
+        Assert.Empty(conversation.Messages);
+        Assert.Equal(2, harness.Trace.Entries.Count(e => e.Step == TraceSteps.TapRejected && e.Detail == "no_card"));
+    }
+
+    [Fact]
+    public async Task ASendAgainTapWhileAPartWaitsOnItsQuestionIsRejected()
+    {
+        const string sentence = "send fifty thousand to my brother and pay the electricity";
+        var parser = Says((sentence,
+        [
+            ParsedRequest.Transfer(HammoudiAlias, 50, AmountUnit.Thousand),
+            ParsedRequest.Bill("electricity", null, null, AmountUnit.None),
+        ]));
+        await using var harness = await StartAsync(parser);
+        var conversation = harness.Conversation;
+
+        await conversation.SendAsync(sentence);
+        Assert.IsType<ConfirmOutcome.Done>(await conversation.ConfirmShownAsync());
+        Assert.Equal(QuestionKinds.WhichBill, Assert.IsType<AgentReply.Question>(conversation.Question).Kind);
+
+        // The Done card still offers Send again, but the bill's question is open: the tap does nothing.
+        await conversation.ReissueAsync();
+
+        Assert.Single(conversation.CardsIssued);
+        Assert.Equal(QuestionKinds.WhichBill, Assert.IsType<AgentReply.Question>(conversation.Question).Kind);
+        Assert.True(Traced(harness, "reissue_rejected", "question_open"));
     }
 }

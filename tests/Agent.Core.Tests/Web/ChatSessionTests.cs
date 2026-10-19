@@ -20,6 +20,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Localization;
 using Wallet.MockApi.Contracts;
 using ContactsOk = Agent.Core.Wallet.WalletResult<Agent.Core.Wallet.WalletContacts>.Ok;
+using Agent.Core.Tests.Conversation;
 
 namespace Agent.Core.Tests.Web;
 
@@ -92,7 +93,7 @@ public sealed class ChatSessionTests(AgentHost host) : IAsyncDisposable
     {
         await session.SendAsync(DevSetText.Say("AMB-19"));
         await session.TapOptionAsync("S08");
-        Assert.IsType<ConfirmOutcome.Done>(await session.ConfirmAsync(null));
+        Assert.IsType<ConfirmOutcome.Done>(await session.ConfirmShownAsync(null));
     }
 
     [Fact]
@@ -181,7 +182,7 @@ public sealed class ChatSessionTests(AgentHost host) : IAsyncDisposable
         Assert.Equal(circuit.Text["Refusal_" + ReasonCodes.PointsToConfirm].Value, LastAgentMessage(session).Text);
         Assert.Equal(CardStatus.Live, session.CardState);
 
-        var done = Assert.IsType<ConfirmOutcome.Done>(await session.ConfirmAsync(null));
+        var done = Assert.IsType<ConfirmOutcome.Done>(await session.ConfirmShownAsync(null));
 
         var message = LastAgentMessage(session);
         Assert.Equal("done", message.Outcome);
@@ -204,7 +205,7 @@ public sealed class ChatSessionTests(AgentHost host) : IAsyncDisposable
         using (var fault = await host.Wallet.Client.PostAsJsonAsync("/admin/faults", new FaultRequest("error", null, Once: true), TestContext.Current.CancellationToken))
             Assert.True(fault.IsSuccessStatusCode, fault.StatusCode.ToString());
 
-        var notDone = Assert.IsType<ConfirmOutcome.NotDone>(await session.ConfirmAsync(null));
+        var notDone = Assert.IsType<ConfirmOutcome.NotDone>(await session.ConfirmShownAsync(null));
 
         Assert.Equal(ReasonCodes.NotDoneNothingTaken, notDone.Reason);
         var message = LastAgentMessage(session);
@@ -224,7 +225,7 @@ public sealed class ChatSessionTests(AgentHost host) : IAsyncDisposable
         using (var debit = await host.Wallet.Client.PostAsJsonAsync("/admin/debit", new DebitRequest(SeedFacts.DemoUserId, SeedFacts.DemoBalance - 20_000), TestContext.Current.CancellationToken))
             Assert.True(debit.IsSuccessStatusCode, debit.StatusCode.ToString());
 
-        var notDone = Assert.IsType<ConfirmOutcome.NotDone>(await session.ConfirmAsync(null));
+        var notDone = Assert.IsType<ConfirmOutcome.NotDone>(await session.ConfirmShownAsync(null));
 
         Assert.Equal(ReasonCodes.InsufficientBalance, notDone.Reason);
         var shortfall = Assert.IsType<long>(notDone.AmountIqd);
@@ -270,7 +271,7 @@ public sealed class ChatSessionTests(AgentHost host) : IAsyncDisposable
         var first = session.Card!;
         Assert.Null(session.Reissue);
 
-        await session.CancelAsync();
+        await session.CancelShownAsync();
         Assert.Equal(ReissueKind.TryAgain, session.Reissue);
 
         await session.ReissueAsync();
@@ -282,7 +283,7 @@ public sealed class ChatSessionTests(AgentHost host) : IAsyncDisposable
         Assert.Equal(LastAgentMessage(session).Id, session.CardMessageId);
         Assert.Contains(circuit.Trace.Entries, e => e.Step == "reissue");
 
-        Assert.IsType<ConfirmOutcome.Done>(await session.ConfirmAsync(null));
+        Assert.IsType<ConfirmOutcome.Done>(await session.ConfirmShownAsync(null));
         Assert.Equal(ReissueKind.SendAgain, session.Reissue);
     }
 
@@ -327,7 +328,7 @@ public sealed class ChatSessionTests(AgentHost host) : IAsyncDisposable
         Assert.Equal(CardStatus.Live, session.CardState);
         Assert.Equal(new ChatMessage(1, ChatRole.User, HammoudiSentence, ChatMessageKind.Text), session.Messages[0]);
         Assert.Equal(LastAgentMessage(session).Id, session.CardMessageId);
-        Assert.IsType<ConfirmOutcome.Done>(await session.ConfirmAsync(null));
+        Assert.IsType<ConfirmOutcome.Done>(await session.ConfirmShownAsync(null));
     }
 
     /// <summary>The changes raised on the circuit's <see cref="WalletChanges"/> from now on (the handler may run on any thread).</summary>
@@ -351,7 +352,7 @@ public sealed class ChatSessionTests(AgentHost host) : IAsyncDisposable
 
         await session.SendAsync(HammoudiSentence);
         Assert.Empty(raised);
-        Assert.IsType<ConfirmOutcome.Done>(await session.ConfirmAsync(null));
+        Assert.IsType<ConfirmOutcome.Done>(await session.ConfirmShownAsync(null));
 
         Assert.Equal(new WalletChange(SeedFacts.DemoUserId, WalletChangeKind.Payment), Assert.Single(raised));
     }
@@ -391,7 +392,7 @@ public sealed class ChatSessionTests(AgentHost host) : IAsyncDisposable
         Assert.True(afterEmptyRestart > start);
 
         await session.SendAsync(HammoudiSentence);
-        Assert.IsType<ConfirmOutcome.Done>(await session.ConfirmAsync(null));
+        Assert.IsType<ConfirmOutcome.Done>(await session.ConfirmShownAsync(null));
         var afterPayment = session.WalletVersion;
         Assert.True(afterPayment > afterEmptyRestart);
 
@@ -519,7 +520,7 @@ public sealed class ChatSessionTests(AgentHost host) : IAsyncDisposable
         var session = circuit.Session;
 
         await session.SendAsync(ZainCreditSentence);
-        var bought = Assert.IsType<ConfirmOutcome.Done>(await session.ConfirmAsync(null));
+        var bought = Assert.IsType<ConfirmOutcome.Done>(await session.ConfirmShownAsync(null));
         Assert.NotNull(bought.PurchaseCode);
 
         var done = session.Messages.Where(m => m.Outcome == "done").ToList();
@@ -579,7 +580,7 @@ public sealed class ChatSessionTests(AgentHost host) : IAsyncDisposable
         var circuit = await StartAsync(SeedFacts.DemoUserId, ZainCredit());
         var session = circuit.Session;
         await session.SendAsync(ZainCreditSentence);
-        var bought = Assert.IsType<ConfirmOutcome.Done>(await session.ConfirmAsync(null));
+        var bought = Assert.IsType<ConfirmOutcome.Done>(await session.ConfirmShownAsync(null));
 
         var orders = Assert.IsType<global::Agent.Core.Wallet.WalletResult<IReadOnlyList<global::Agent.Core.Store.PurchaseOrder>>.Ok>(await session.ListOrdersAsync()).Value;
 

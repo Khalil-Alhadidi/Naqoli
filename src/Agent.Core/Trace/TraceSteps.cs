@@ -62,6 +62,12 @@ public static class TraceSteps
     /// <summary>A new request dropped the parts still queued; the detail is how many.</summary>
     public const string RequestsDropped = "requests_dropped";
 
+    /// <summary>
+    /// A Confirm or Cancel tap named a card that is not the one shown (ruling 8): <c>stale_card</c>, or <c>no_card</c>
+    /// when none is shown. Nothing moves.
+    /// </summary>
+    public const string TapRejected = "tap_rejected";
+
     // Write zone: the Confirm handler.
     public const string BeginExecute = "begin_execute";
     public const string RecheckOk = "recheck_ok";

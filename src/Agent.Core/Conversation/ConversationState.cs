@@ -1,4 +1,5 @@
 using Agent.Core.Pipeline;
+using Agent.Core.Requests;
 
 namespace Agent.Core.Conversation;
 
@@ -110,6 +111,10 @@ public static class OutcomeCodes
 /// <param name="MaskedDigits">
 /// The number of digits of a typed message marked <see cref="PinMasked"/>; the digits themselves are never kept.
 /// </param>
+/// <param name="NotPrepared">
+/// The parts of a message beyond <c>Agent:MaxRequestsPerMessage</c>, on the <see cref="ConversationKind.Info"/> message
+/// <c>max_three_requests</c> (rule 22, milestone 9c), in the order spoken; null on every other message.
+/// </param>
 public sealed record ConversationMessage(
     ConversationRole Role,
     ConversationKind Kind,
@@ -120,7 +125,8 @@ public sealed record ConversationMessage(
     int? AttemptsLeft = null,
     string? Reason = null,
     string? QuestionKind = null,
-    int? MaskedDigits = null)
+    int? MaskedDigits = null,
+    IReadOnlyList<NotPreparedPart>? NotPrepared = null)
 {
     /// <summary>
     /// The <see cref="Code"/> of a typed message of four to six digits sent while a card with a PIN field is live: the
@@ -128,11 +134,26 @@ public sealed record ConversationMessage(
     /// </summary>
     public const string PinMasked = "pin_masked";
 
-    /// <summary>Keeps the purchase code out of any string form of the message (security review M2 of milestone 9b).</summary>
+    /// <summary>
+    /// Keeps the purchase code (security review M2 of milestone 9b) and the user's words for the parts not prepared
+    /// (milestone 9c; only their count) out of any string form of the message.
+    /// </summary>
     public override string ToString()
         => FormattableString.Invariant(
-            $"ConversationMessage {{ Role = {Role}, Kind = {Kind}, Code = {Code}, AmountIqd = {AmountIqd}, Reference = {Reference}, PurchaseCode = {(PurchaseCode is null ? "none" : "***")}, AttemptsLeft = {AttemptsLeft}, Reason = {Reason}, QuestionKind = {QuestionKind}, MaskedDigits = {MaskedDigits} }}");
+            $"ConversationMessage {{ Role = {Role}, Kind = {Kind}, Code = {Code}, AmountIqd = {AmountIqd}, Reference = {Reference}, PurchaseCode = {(PurchaseCode is null ? "none" : "***")}, AttemptsLeft = {AttemptsLeft}, Reason = {Reason}, QuestionKind = {QuestionKind}, MaskedDigits = {MaskedDigits}, NotPrepared = {(NotPrepared is null ? "none" : NotPrepared.Count.ToString(System.Globalization.CultureInfo.InvariantCulture))} }}");
 }
+
+/// <summary>
+/// A part of a message beyond <c>Agent:MaxRequestsPerMessage</c> (rule 22, milestone 9c): nothing is prepared for it,
+/// and the reply names it.
+/// </summary>
+/// <param name="Intent">The part's request type; the phone names a part with no text by its type's word.</param>
+/// <param name="Text">
+/// The user's own words for the part (a transfer's recipient, a bill's biller or label, a purchase's operator), or null.
+/// The parser's text counts only when the typed message holds it as written or in its lam form
+/// (<see cref="Text.ArabicText.LamForm"/>; ruling 2 as amended, 19 Oct 2026), so no model text reaches the phone.
+/// </param>
+public sealed record NotPreparedPart(RequestIntent Intent, string? Text);
 
 /// <summary>A question the conversation asked, for the grader: its kind, how it is answered, and the values offered.</summary>
 public sealed record ConversationQuestion(string Kind, QuestionAnswer Answer, IReadOnlyList<string> OptionValues);

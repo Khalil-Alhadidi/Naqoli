@@ -83,6 +83,11 @@ public sealed class Conversation : IDisposable
     private int partsKept;
     private int partNumber;
 
+    // Rule 22: the parts of that message beyond the cap, kept with it (never queued) until the last queued part finishes
+    // and the reply names them; the number of requests the message held, for the learning row.
+    private readonly List<NotPreparedPart> notPrepared = [];
+    private int requestsInMessage;
+
     // Set during an action when the part running finished (done, not done, cancelled, expired, or a refusal, a balance or
     // an unsupported reply); AdvanceAsync then runs the next queued part. Cleared when each action takes its turn.
     private bool partFinished;
@@ -699,17 +704,20 @@ public sealed class Conversation : IDisposable
     }
 
     /// <summary>
-    /// The card's Confirm button (rule 1): the only path to <see cref="ConfirmHandler.ConfirmAsync"/>, with the PIN typed
-    /// on the card. The PIN is passed through and kept nowhere. Returns the outcome, or null when no card is shown or the
-    /// outcome is unknown after an exception.
+    /// The card's Confirm button (rule 1): the only path to <see cref="ConfirmHandler.ConfirmAsync"/>, for the card
+    /// <paramref name="pendingId"/> names, with the PIN typed on the card. The PIN is passed through and kept nowhere.
+    /// The tap acts only when <paramref name="pendingId"/> is the card shown (ruling 8 of milestone 9c: with cards that
+    /// follow one another, a tap meant for card 1 never reaches card 2); otherwise it traces <c>tap_rejected</c>, adds
+    /// <c>already_handled</c> for a card no longer shown, and moves nothing. Returns the outcome, or null when the tap was
+    /// rejected or the outcome is unknown after an exception.
     /// </summary>
-    public async Task<ConfirmOutcome?> ConfirmAsync(string? pin)
+    public async Task<ConfirmOutcome?> ConfirmAsync(Guid pendingId, string? pin)
     {
         if (!await EnterAsync())
             return null;
         try
         {
-            if (Card is not { } card)
+            if (RejectsTap(pendingId) is not { } card)
                 return null;
 
             SetBusy(true);
@@ -785,13 +793,19 @@ public sealed class Conversation : IDisposable
         }
     }
 
-    /// <summary>The card's Cancel button.</summary>
-    public async Task CancelAsync()
+    /// <summary>
+    /// The card's Cancel button, for the card <paramref name="pendingId"/> names: as <see cref="ConfirmAsync"/>, a tap
+    /// for a card that is not the one shown is rejected and moves nothing (ruling 8 of milestone 9c).
+    /// </summary>
+    public async Task CancelAsync(Guid pendingId)
     {
         if (!await EnterAsync())
             return;
         try
         {
+            if (RejectsTap(pendingId) is null)
+                return;
+
             SetBusy(true);
             trace.Record(TraceZone.User, "cancel_tapped", null);
             if (IsCardLive)
@@ -817,7 +831,9 @@ public sealed class Conversation : IDisposable
     /// <see cref="Orchestrator.ReissueAsync"/>, without the model, and shows the reply as any reply (a new card, or a
     /// refusal that leaves the old card as it is). Try again is for a card that expired, was cancelled or definitely
     /// failed; Send again for a done one. With no card, a live card or a payment still checking it does nothing (traced
-    /// as <c>reissue_rejected</c>). It never reaches the Confirm handler: the new card waits for its own Confirm.
+    /// as <c>reissue_rejected</c>), and so it does while a question is open (detail <c>question_open</c>, milestone 9c):
+    /// the question belongs to a later request, or to a queued part waiting on it, and is never dropped by the tap. It
+    /// never reaches the Confirm handler: the new card waits for its own Confirm.
     /// </summary>
     public async Task ReissueAsync()
     {
@@ -829,6 +845,12 @@ public sealed class Conversation : IDisposable
             ClearAliasOffer();
             var token = stopping;
             trace.Record(TraceZone.User, "reissue_tapped", null);
+            if (Question is not null)
+            {
+                trace.Record(TraceZone.Code, ReissueRejectedStep, QuestionOpenDetail);
+                return;
+            }
+
             if (Card is not { } card || ReissueKindOf(CardState) is not { } kind)
             {
                 trace.Record(TraceZone.Code, ReissueRejectedStep, CardState?.ToString());
@@ -1163,8 +1185,42 @@ public sealed class Conversation : IDisposable
     /// <summary>The card type an alias is offered for.</summary>
     private const string TransferType = "transfer";
 
-    /// <summary>The trace step of a reissue tap that rebuilt nothing; the detail is the card's or the record's state.</summary>
+    /// <summary>
+    /// The trace step of a reissue tap that rebuilt nothing; the detail is the card's or the record's state, or
+    /// <see cref="QuestionOpenDetail"/>.
+    /// </summary>
     private const string ReissueRejectedStep = "reissue_rejected";
+
+    /// <summary>The <c>reissue_rejected</c> detail while a question is open.</summary>
+    private const string QuestionOpenDetail = "question_open";
+
+    /// <summary>The <see cref="TraceSteps.TapRejected"/> detail of a tap for a card that is not the one shown.</summary>
+    private const string StaleCardDetail = "stale_card";
+
+    /// <summary>The <see cref="TraceSteps.TapRejected"/> detail of a tap with no card shown.</summary>
+    private const string NoCardDetail = "no_card";
+
+    /// <summary>
+    /// Ruling 8 of milestone 9c: the card shown when <paramref name="pendingId"/> names it; otherwise null, with the
+    /// trace <c>tap_rejected</c> (<c>no_card</c>, or <c>stale_card</c> with the outcome <c>already_handled</c>).
+    /// </summary>
+    private CardView? RejectsTap(Guid pendingId)
+    {
+        if (Card is not { } card)
+        {
+            trace.Record(TraceZone.Code, TraceSteps.TapRejected, NoCardDetail);
+            return null;
+        }
+
+        if (card.PendingId != pendingId)
+        {
+            trace.Record(TraceZone.Code, TraceSteps.TapRejected, StaleCardDetail);
+            AddOutcome(OutcomeCodes.AlreadyHandled);
+            return null;
+        }
+
+        return card;
+    }
 
     /// <summary>
     /// D19: what a card in <paramref name="state"/> offers. Expired, Cancelled and NotDone (nothing moved) offer
@@ -1260,7 +1316,10 @@ public sealed class Conversation : IDisposable
         {
             partFinished = false;
             if (!queued.TryDequeue(out var next))
+            {
+                await ShowNotPreparedAsync(token);
                 return;
+            }
 
             partNumber++;
             trace.Record(TraceZone.Code, TraceSteps.NextRequest, FormattableString.Invariant($"{partNumber} of {partsKept}"));
@@ -1277,20 +1336,44 @@ public sealed class Conversation : IDisposable
         }
     }
 
-    /// <summary>D7: a new request drops the parts still queued (trace <c>requests_dropped</c> with the count).</summary>
+    /// <summary>
+    /// Rule 22: once the last prepared part has finished, the <c>max_three_requests</c> reply names the parts beyond the
+    /// cap (<see cref="ConversationMessage.NotPrepared"/>), the learning row <c>more_than_three_requests</c> is written
+    /// with the number of requests in the message as its detail, under the message's masked text, and the parts are
+    /// forgotten. Nothing when there are none.
+    /// </summary>
+    private async Task ShowNotPreparedAsync(CancellationToken token)
+    {
+        if (notPrepared.Count == 0)
+            return;
+
+        Add(new ConversationMessage(ConversationRole.Agent, ConversationKind.Info, ReasonCodes.MaxThreeRequests, NotPrepared: [.. notPrepared]));
+        var entry = new LearningEntry(LearningLogRule.MoreThanThreeRequests, requestsInMessage.ToString(CultureInfo.InvariantCulture));
+        notPrepared.Clear();
+        lastMaskedText = queuedMaskedText;
+        LastLearningEntry = entry;
+        await WriteLearningAsync(entry, token);
+    }
+
+    /// <summary>
+    /// D7: a new request drops the parts still queued (trace <c>requests_dropped</c> with the count) and forgets the
+    /// parts not prepared, so their reply is never shown.
+    /// </summary>
     private void DropQueue()
     {
         if (queued.Count > 0)
             trace.Record(TraceZone.Code, TraceSteps.RequestsDropped, queued.Count.ToString(CultureInfo.InvariantCulture));
         queued.Clear();
+        notPrepared.Clear();
         queuedMaskedText = null;
     }
 
     /// <summary>
     /// D7: queues the parts of <paramref name="message"/> after the first, in the order spoken, at most
     /// <see cref="AgentOptions.MaxRequestsPerMessage"/> parts in all (read now, so a value saved later never changes this
-    /// queue); each is un-masked and gets its own ruling 3 flag. The parts beyond the cap are not queued. Traces
-    /// <c>requests_split</c> when the message had more than one request.
+    /// queue); each is un-masked and gets its own ruling 3 flag. The parts beyond the cap are not queued: they are kept
+    /// as <see cref="NotPreparedPart"/>s for the reply of rule 22 (with a cap of 1, nothing is queued and the reply comes
+    /// when part 1 finishes). Traces <c>requests_split</c> when the message had more than one request.
     /// </summary>
     private void QueueParts(ParsedMessage message, MaskedText masked, string typedText)
     {
@@ -1301,6 +1384,7 @@ public sealed class Conversation : IDisposable
             return;
 
         partsKept = Math.Min(total, options.CurrentValue.MaxRequestsPerMessage);
+        requestsInMessage = total;
         trace.Record(TraceZone.Code, TraceSteps.RequestsSplit, FormattableString.Invariant($"{total} requests, {partsKept} kept"));
         foreach (var part in message.Requests.Skip(1).Take(partsKept - 1))
         {
@@ -1308,7 +1392,46 @@ public sealed class Conversation : IDisposable
             queued.Enqueue((request, IsVerbatim(request, typedText)));
         }
 
+        foreach (var part in message.Requests.Skip(partsKept))
+        {
+            var request = Unmask(part, masked.Map);
+            notPrepared.Add(new NotPreparedPart(request.Intent, NameOf(request, typedText)));
+        }
+
         queuedMaskedText = masked.Text;
+    }
+
+    /// <summary>
+    /// Ruling 2 (milestone 9c): the user's own words for a part not prepared (a transfer's recipient; a bill's biller,
+    /// else its label; a purchase's operator), or null when the parser's text is not one of the user's words
+    /// (<see cref="NamesTypedWords"/>) or the request type has none.
+    /// </summary>
+    private static string? NameOf(ParsedRequest request, string typedText)
+    {
+        string?[] candidates = request.Intent switch
+        {
+            RequestIntent.Transfer => [request.RecipientText],
+            RequestIntent.Bill => [request.BillerText, request.BillLabelText],
+            RequestIntent.Purchase => [request.OperatorText],
+            _ => [],
+        };
+        return candidates.FirstOrDefault(c => NamesTypedWords(c, typedText))?.Trim();
+    }
+
+    /// <summary>
+    /// Ruling 2 as amended (controller, 19 Oct 2026): true when <paramref name="typedText"/> holds
+    /// <paramref name="text"/> as written, or in its lam form (<see cref="ArabicText.LamForm"/>, the preposition joined
+    /// to the first word as <c>ContactResolver</c> reads a typed answer), ordinal. Used only for the names of the parts
+    /// not prepared; the alias offer keeps its own test (<see cref="IsVerbatim"/>).
+    /// </summary>
+    private static bool NamesTypedWords(string? text, string typedText)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return false;
+
+        var trimmed = text.Trim();
+        return typedText.Contains(trimmed, StringComparison.Ordinal)
+            || typedText.Contains(ArabicText.LamForm(trimmed), StringComparison.Ordinal);
     }
 
     /// <summary>Ruling 3: the model's recipient counts as the user's words only when it occurs in the typed text as it is.</summary>
