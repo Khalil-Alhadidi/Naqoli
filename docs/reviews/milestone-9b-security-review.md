@@ -66,4 +66,4 @@ The nine rules hold.
 
 ## Controller's note (19 Oct 2026)
 
-R8 was already met by 0275c45 (Task 6), committed while the review ran. M1 to M3 were fixed in the same milestone through the implementer (the fix commit is named in `docs/build-plan.md`, milestone 9b). R1 to R7 are for Khalil.
+R8 was already met by 0275c45 (Task 6), committed while the review ran. M1 to M3 were fixed in the same milestone through the implementer (d9d3ad2). Khalil's decisions of 19 Oct 2026 (`docs/plans/milestone-9b-close.md`): R2 (order dates `dd/MM/yyyy`), R3 (the copy-failed label `Purchase_code_copy_failed`, his wording) and R4 (the type word on the purchase card, `PendingRecord.ProductType`, migration `ProductType`) were built in 4b2576c; R1, R5, R6 and R7 stay documented and are not built.
