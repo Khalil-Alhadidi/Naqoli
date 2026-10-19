@@ -228,6 +228,14 @@ public sealed class JourneyHost : IAsyncLifetime
     public async Task<WalletContacts> ContactsAsync(int userId)
         => (await Wallet.GetFromJsonAsync<WalletContacts>($"/users/{userId}/contacts"))!;
 
+    /// <summary>The user's store orders, newest first, with their purchase codes, from the wallet (milestone 9b).</summary>
+    public async Task<IReadOnlyList<WalletOrder>> OrdersAsync(int userId)
+        => (await Wallet.GetFromJsonAsync<List<WalletOrder>>($"/users/{userId}/orders"))!;
+
+    /// <summary>The store catalogue, from the wallet (milestone 9b).</summary>
+    public async Task<IReadOnlyList<WalletProduct>> ProductsAsync()
+        => (await Wallet.GetFromJsonAsync<List<WalletProduct>>("/store/products"))!;
+
     /// <summary>The user's aliases, in id order, from the wallet (milestone 9a).</summary>
     public async Task<IReadOnlyList<WalletAlias>> AliasesAsync(int userId)
         => [.. (await ContactsAsync(userId)).Aliases.OrderBy(a => a.AliasId)];

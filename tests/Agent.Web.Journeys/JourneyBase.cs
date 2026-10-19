@@ -37,7 +37,13 @@ public abstract partial class JourneyBase(JourneyHost host) : IAsyncLifetime
         if (host.SkipReason is not null)
             return;
         await host.ResetAsync();
-        context = await host.Browser.NewContextAsync(new BrowserNewContextOptions { ViewportSize = new ViewportSize { Width = 1600, Height = 950 } });
+        context = await host.Browser.NewContextAsync(new BrowserNewContextOptions
+        {
+            ViewportSize = new ViewportSize { Width = 1600, Height = 950 },
+
+            // Milestone 9b: the copy buttons write to the clipboard, and the purchase journeys read it back.
+            Permissions = ["clipboard-read", "clipboard-write"],
+        });
     }
 
     public async ValueTask DisposeAsync()
@@ -67,6 +73,9 @@ public abstract partial class JourneyBase(JourneyHost host) : IAsyncLifetime
         await input.PressAsync("Enter");
         await Expect(messages.Nth(before + 1)).ToBeVisibleAsync();
     }
+
+    /// <summary>What the page's clipboard holds now (the context grants clipboard-read).</summary>
+    protected static async Task<string> ClipboardAsync(IPage page) => await page.EvaluateAsync<string>("() => navigator.clipboard.readText()");
 
     /// <summary>The agent's latest chat message.</summary>
     protected static ILocator LastAgentMessage(IPage page) => page.Locator("[data-testid=chat-message][data-role=agent]").Last;
