@@ -54,10 +54,8 @@ public static class ContactResolver
         if (typedKey.Length == 0)
             return new Resolution.NotFound();
 
-        var keyed = candidates.Select(c => (Candidate: c, Key: ArabicText.Key(c.Text))).ToList();
-
         // 1. Exact (rules 1, 2, 3, 7): the whole key equals a saved name or alias; hits on one account count once.
-        var exact = keyed.Where(k => k.Key == typedKey).Select(k => k.Candidate).ToList();
+        var exact = ExactHits(typedKey, candidates);
         if (exact.Count > 0)
         {
             var accounts = OnePerAccount(exact);
@@ -79,6 +77,8 @@ public static class ContactResolver
         var typedWords = ArabicText.Words(typedName);
         if (typedWords.All(w => ArabicText.IsTitle(w) || ArabicText.IsKinship(w)))
             return new Resolution.NotFound();
+
+        var keyed = candidates.Select(c => (Candidate: c, Key: ArabicText.Key(c.Text))).ToList();
 
         // 2. Near (rule 6): the whole key is one edit away from a whole saved name or alias; always a question, even
         // with one candidate. Checked before partial (Khalil, 15 Oct 2026, CLN-03-v1): a name one letter short of a saved
@@ -135,6 +135,36 @@ public static class ContactResolver
 
         // 5. None (rule 8).
         return new Resolution.NotFound();
+    }
+
+    /// <summary>
+    /// The exact step alone (rules 1, 2, 3 and 7), as <see cref="Resolve(string, IReadOnlyList{ContactCandidate}, int, IReadOnlyCollection{string})"/>
+    /// runs it: the candidates whose whole key equals the typed name's, one per account, and, when none does and the
+    /// typed name holds an endearment, the same step on what is left without it. Empty when nothing matches exactly; a
+    /// near spelling, a partial or a shared word is never in it. Pure. The person-or-bill rule reads it
+    /// (<see cref="PersonOrBillRule"/>, Khalil, 20 Oct 2026).
+    /// </summary>
+    /// <param name="typedName">The name as the user typed it.</param>
+    /// <param name="candidates">The user's saved names and aliases (<see cref="ContactCandidate.From"/>).</param>
+    /// <param name="endearments"><see cref="AgentOptions.Endearments"/>.</param>
+    public static IReadOnlyList<ContactCandidate> ExactMatches(
+        string typedName, IReadOnlyList<ContactCandidate> candidates, IReadOnlyCollection<string> endearments)
+    {
+        ArgumentNullException.ThrowIfNull(typedName);
+        ArgumentNullException.ThrowIfNull(candidates);
+        ArgumentNullException.ThrowIfNull(endearments);
+
+        var typedKey = ArabicText.Key(typedName);
+        if (typedKey.Length == 0)
+            return [];
+
+        var exact = ExactHits(typedKey, candidates);
+        if (exact.Count > 0)
+            return OnePerAccount(exact);
+
+        return WithoutEndearments(typedName, endearments) is { Length: > 0 } rest
+            ? ExactMatches(rest, candidates, [])
+            : [];
     }
 
     /// <summary>
@@ -199,6 +229,10 @@ public static class ContactResolver
             ? string.Join(' ', typedWords.Where(w => !words.Contains(w)))
             : null;
     }
+
+    /// <summary>The candidates whose whole key equals <paramref name="typedKey"/>, in candidate order (the exact step).</summary>
+    private static List<ContactCandidate> ExactHits(string typedKey, IReadOnlyList<ContactCandidate> candidates)
+        => candidates.Where(c => ArabicText.Key(c.Text) == typedKey).ToList();
 
     private static bool IsTitleName(ContactCandidate candidate)
     {

@@ -20,6 +20,7 @@ public class QuestionKindsTests
     [InlineData(QuestionKinds.WhichContact, 2, QuestionAnswer.Tap)]
     [InlineData(QuestionKinds.WhichProduct, 0, QuestionAnswer.Tap)]
     [InlineData(QuestionKinds.BillOrStore, 2, QuestionAnswer.Tap)]
+    [InlineData(QuestionKinds.PersonOrBill, 2, QuestionAnswer.Tap)]
     public void OnlyAMissingAmountOrRecipientIsTyped(string kind, int optionCount, QuestionAnswer expected)
         => Assert.Equal(expected, QuestionKinds.AnswerFor(kind, optionCount));
 }

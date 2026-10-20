@@ -1760,6 +1760,9 @@ public sealed class Conversation : IDisposable
                     return (purchase, answers with { ProductCode = option.Value });
                 }
 
+            case QuestionKinds.PersonOrBill:
+                return PersonOrBillAnswer(option, last, answers);
+
             case QuestionKinds.WhichBill:
             case QuestionKinds.BillOrStore:
                 {
@@ -1773,6 +1776,46 @@ public sealed class Conversation : IDisposable
                         ? last
                         : ParsedRequest.Bill(null, null, null, AmountUnit.None);
                     return (bill, answers with { BillCode = option.Value });
+                }
+
+            default:
+                return null;
+        }
+    }
+
+    /// <summary>
+    /// A tap on a <c>person_or_bill</c> option (Khalil, 20 Oct 2026), by the option's side. The person: the request becomes
+    /// a transfer to the name the user typed, with the amount and its unit kept (a pending transfer, or a transfer from
+    /// another account that the agent handles as one, stays as it is), and the tapped value is the contact option. The
+    /// bill: the request becomes a bill with the amount kept, so a named amount that is not the amount due is refused (D9)
+    /// (a pending bill, or a request to pay part of one, stays as it is), and the tapped value is the bill code. Either
+    /// way the question is answered and is not asked again. Null for an option with no side or a name that is gone.
+    /// </summary>
+    private static (ParsedRequest Request, SlotAnswers Answers)? PersonOrBillAnswer(Option option, ParsedRequest last, SlotAnswers answers)
+    {
+        switch (option.Side)
+        {
+            case OptionSide.Person:
+                {
+                    var transfer = last.Intent == RequestIntent.Transfer
+                        || (string.Equals(last.UnsupportedReason, LearningLogRule.ChooseAccount, StringComparison.Ordinal)
+                            && !string.IsNullOrWhiteSpace(last.RecipientText))
+                        ? last
+                        : PersonOrBillRule.BillText(last) is { } typed
+                            ? ParsedRequest.Transfer(typed, last.AmountValue, last.AmountUnit)
+                            : null;
+                    return transfer is null
+                        ? null
+                        : (transfer, answers with { ContactOption = option.Value, PersonOrBill = true });
+                }
+
+            case OptionSide.Bill:
+                {
+                    var bill = last.Intent == RequestIntent.Bill
+                        || string.Equals(last.UnsupportedReason, LearningLogRule.PartOfBill, StringComparison.Ordinal)
+                        ? last
+                        : ParsedRequest.Bill(null, null, last.AmountValue, last.AmountUnit);
+                    return (bill, answers with { BillCode = option.Value, PersonOrBill = true });
                 }
 
             default:

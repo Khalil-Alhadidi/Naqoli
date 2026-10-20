@@ -13,6 +13,13 @@ public static class QuestionKinds
     public const string BillOrStore = "bill_or_store";
     public const string WhichOperator = "which_operator";
 
+    /// <summary>
+    /// The name the user typed is exactly both a contact (a saved name or an alias) and the label of one of their bills
+    /// (Khalil, 20 Oct 2026): the agent never chooses by the intent the model read. Its options are the person (one per
+    /// account) and the bill (one per matching bill), each tagged with its <see cref="OptionSide"/>.
+    /// </summary>
+    public const string PersonOrBill = "person_or_bill";
+
     /// <summary>The name of a contact resolver question kind.</summary>
     public static string Of(QuestionKind kind) => kind switch
     {

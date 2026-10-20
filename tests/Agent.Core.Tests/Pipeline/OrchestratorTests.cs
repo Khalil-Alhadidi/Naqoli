@@ -1009,6 +1009,83 @@ public class OrchestratorTests(AgentHost host)
         Assert.Equal((first.ToPhone, first.DisplayName), (again.ToPhone, again.DisplayName));
     }
 
+    // Person or bill (Khalil, 20 Oct 2026): a name that is exactly both a contact and a bill label is asked about. The
+    // seed has no such pair, so each case saves BS2's label as an alias of S04 through the alias directory first.
+
+    private static string Bs2Label => SeedWallet.LabelOf("BS2");
+
+    /// <summary>Saves BS2's label as U1's alias of S04's account and returns that account's ID.</summary>
+    private async Task<int> SaveBs2LabelOnS04Async()
+    {
+        await using var scope = host.Services.CreateAsyncScope();
+        var read = await scope.ServiceProvider.GetRequiredService<WalletClient>().GetContactsAsync(U1, Token);
+        var s04 = Assert.Single(Assert.IsType<WalletResult<WalletContacts>.Ok>(read).Value.Contacts, c => c.Code == "S04");
+        Assert.IsType<AliasResult.Saved>(
+            await scope.ServiceProvider.GetRequiredService<AliasDirectory>().SaveAsync(U1, Bs2Label, s04.TargetAccountId, Token));
+        return s04.TargetAccountId;
+    }
+
+    /// <summary>CLN-10's parse, built from the seed: U1's electricity bill labelled as BS2.</summary>
+    private static ParsedRequest Cln10Parse() => ParsedRequest.Bill("electricity", Bs2Label, null, AmountUnit.None);
+
+    private static void AssertPersonOrBill(AgentReply reply)
+    {
+        var question = Question(reply, QuestionKinds.PersonOrBill, QuestionAnswer.Tap);
+        Assert.Equal(["S04", "BS2"], question.Options.Select(o => o.Value));
+        Assert.Equal([OptionSide.Person, OptionSide.Bill], question.Options.Select(o => o.Side));
+        Assert.Equal(SeedFacts.Contact("S04").SavedName, question.Options[0].Display);
+        Assert.Equal(SeedFacts.Account(SeedFacts.Contact("S04").Number).RegisteredName, question.Options[0].RegisteredName);
+        Assert.Equal((Bs2Label, AmountDueOf("BS2")), (question.Options[1].Display, question.Options[1].AmountIqd));
+    }
+
+    [Fact]
+    public async Task ATransferToANameThatIsAlsoABillLabelAsksPersonOrBill()
+    {
+        await StartAsync();
+        await SaveBs2LabelOnS04Async();
+
+        AssertPersonOrBill(await HandleAsync(U1, ParsedRequest.Transfer(Bs2Label, 50_000, AmountUnit.Dinars)));
+
+        Assert.Equal(0, await PendingCountAsync());
+        var row = (await AuditAsync()).Last();
+        Assert.Equal((AuditEvents.QuestionAsked, QuestionKinds.PersonOrBill), (row.Event, row.Reason));
+    }
+
+    [Fact]
+    public async Task ABillWithALabelThatIsAlsoAContactAsksPersonOrBill()
+    {
+        await StartAsync();
+        await SaveBs2LabelOnS04Async();
+
+        AssertPersonOrBill(await HandleAsync(U1, Cln10Parse()));
+        Assert.Equal(0, await PendingCountAsync());
+    }
+
+    [Fact]
+    public async Task OnceAnsweredPersonOrBillIsNotAskedAgain()
+    {
+        await StartAsync();
+        var s04Account = await SaveBs2LabelOnS04Async();
+
+        var bill = Card(await HandleAsync(U1, Cln10Parse(), new SlotAnswers(BillCode: "BS2", PersonOrBill: true)));
+        Assert.Equal(("bill", "BS2", AmountDueOf("BS2")), (bill.Type, bill.BillCode, bill.AmountIqd));
+
+        var transfer = Card(await HandleAsync(
+            U1, ParsedRequest.Transfer(Bs2Label, 50_000, AmountUnit.Dinars), new SlotAnswers(ContactOption: "S04", PersonOrBill: true)));
+        Assert.Equal(("transfer", s04Account, 50_000L), (transfer.Type, transfer.ToAccountId, transfer.AmountIqd));
+        Assert.Equal(SeedFacts.Contact("S04").Number, transfer.ToPhone);
+    }
+
+    [Fact]
+    public async Task WithNoSuchAliasCln10GivesTheBs2CardAsToday()
+    {
+        await StartAsync();
+
+        var card = Card(await HandleAsync(U1, Cln10Parse()));
+
+        Assert.Equal(("bill", "BS2", AmountDueOf("BS2")), (card.Type, card.BillCode, card.AmountIqd));
+    }
+
     /// <summary>
     /// For a request whose path <paramref name="rewrite"/> maps to a path (not null): runs <paramref name="onMatch"/>,
     /// sends it to that path instead, and records the match. Every other request passes on as it is.

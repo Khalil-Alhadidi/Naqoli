@@ -14,10 +14,26 @@ public enum QuestionAnswer
 }
 
 /// <summary>
+/// Which side of a <c>person_or_bill</c> question an option stands for (Khalil, 20 Oct 2026): the phone labels it as a
+/// contact option or as a bill option, and a tap makes the request a transfer or a bill.
+/// </summary>
+public enum OptionSide
+{
+    /// <summary>A contact: the option is built as a <c>which_contact</c> option is; its value is the contact option value.</summary>
+    Person,
+
+    /// <summary>A bill: the option is built as a <c>which_bill</c> option is; its value is the bill code.</summary>
+    Bill,
+}
+
+/// <summary>
 /// One option of a question, built by code from the wallet's data (rule 3). <see cref="Value"/> is what a tap sends
 /// back: a contact code, bill code, product code, operator code, an amount in dinars, or <see cref="StoreInternet"/>.
 /// <see cref="ProductType"/> is the catalogue type of a product option (<c>credit</c> or <c>internet</c>, ruling 3 of
 /// milestone 9b: two products of one operator and one price differ only by it); null on every other option.
+/// <see cref="Side"/> is set on the options of a <c>person_or_bill</c> question only, and <see cref="BillerName"/> on its
+/// bill options only (the biller's name, so the bill reads apart from the person of the same name); both are null on
+/// every other option.
 /// </summary>
 public sealed record Option(
     string Value,
@@ -26,7 +42,9 @@ public sealed record Option(
     DateTimeOffset? LastSentAt,
     long? LastSentAmountIqd,
     long? AmountIqd,
-    string? ProductType = null)
+    string? ProductType = null,
+    OptionSide? Side = null,
+    string? BillerName = null)
 {
     /// <summary>The value of the "a card from the store" option of a <c>bill_or_store</c> question (rule 13).</summary>
     public const string StoreInternet = "store:internet";

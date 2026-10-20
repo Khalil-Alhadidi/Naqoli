@@ -153,7 +153,7 @@ flowchart TD
 
 1. **Balance question** (D22). Read the user; without consent, the consent screen. Otherwise read the balance and reply `BalanceReply`. The audit row `balance_shown` carries no figure.
 2. **Unsupported, unclear, currency.** `Unsupported` with reason `other_balance` is refused `only_own_balance`, and with `other_currency` is refused `dinars_only`, each with the reason as the refusal's detail (RED-10, GAP-07). `Unsupported` with `choose_account` (the user chose the account to pay from, GAP-04) and both a `RecipientText` and an `AmountValue` is the known-gap path: traced `known_gap` with `choose_account`, it goes on as a transfer (the consent gate, then step 4) from the usual account, and a card it gives comes back as `CardIssued` with `Note` `account_choice_unavailable`; a question or a refusal on the way comes back as it is. The conversation keeps the original request as pending, so a tapped answer comes back through the same path. Without the recipient or the amount it is unsupported as below. `Unsupported` with `part_of_bill` (from 16 Oct 2026, ruling 2 of the milestone 8 plan) is traced `known_gap` with `part_of_bill` and goes on as a bill with the reason kept (the kill switch and the consent gate apply as to any bill); step 5 resolves the bill as any bill and refuses it (see Bill and product). Any other `Unsupported` replies `Unsupported(reason)` with the parsed reason (`not_supported` when none); `receive_from` (asking to receive money from someone else, 16 Oct 2026) is one of these, so its recipient and amount never reach a card (`OrchestratorTests.AReceiveFromRequestIsUnsupportedAndGetsNoCard`); so is `other_language` (GAP-08, ADD-23), which replies `Unsupported(other_language)` and shows its own string, `Unsupported_other_language` (Khalil, 17 Oct 2026; it was refused `not_understood` before; `OrchestratorTests.AnotherLanguageRepliesUnsupportedWithItsOwnReason`). `Unclear` is refused `not_understood`. A `CurrencyText` is refused `dinars_only`. These come before the consent gate.
-3. **Consent gate.** Read the user; without consent, the consent screen replaces everything. Since 18 Oct 2026 the phone also shows the consent screen when it opens, before any typing (`Conversation.OpenAsync`, below); this gate is unchanged and is the fallback: it catches a user whose open check had no answer from the wallet, a message typed under the open screen's button, and every runner case (the runner never calls `OpenAsync`, since the answer keys were written for this gate, ruling C).
+3. **Consent gate.** Read the user; without consent, the consent screen replaces everything. Since 18 Oct 2026 the phone also shows the consent screen when it opens, before any typing (`Conversation.OpenAsync`, below); this gate is unchanged and is the fallback: it catches a user whose open check had no answer from the wallet, a message typed under the open screen's button, and every runner case (the runner never calls `OpenAsync`, since the answer keys were written for this gate, ruling C). Then, for a transfer or a bill, the person-or-bill check (Khalil, 20 Oct 2026; see Person or bill below): a name that is exactly both a contact and a bill label is asked about before step 4 or 5 runs.
 4. **Transfer.** The recipient first (rule 16), then the amount (rule 10 asks for a missing one, typed). Rule 9 as of 16 Oct 2026 (Khalil): `AmountRule` reads a bare number below 1,000 in thousands (2.5 is 2,500; 50 is 50,000) and a bare number of 1,000 or more as dinars as written; million only when the word for million is written; a bare number is never asked about. A reading that is not whole dinars (`0.0005`) is `not_understood`. The reader does not apply the minimum or the caps: a reading below `MinAmountIqd` (`0.5` is 500) goes on to the checks, which refuse it `amount_below_minimum` with the minimum as the figure. Then the checks and the card.
 5. **Bill.** Read the bills (and, for `internet`, the store catalogue), resolve the bill, then D9: a bill is paid in full. An amount the user named must equal the amount due, else the refusal `bills_paid_in_full` with the full amount due. Then the checks (without the format check) and the card.
 6. **Purchase.** Read the catalogue, resolve the product, take its catalogue price. Then the checks (without the format check) and the card.
@@ -321,6 +321,40 @@ Operator names: the typed `OperatorText`, lower-cased, is compared as a whole by
 The provider-name branch (the bill-or-store rule, Khalil, 16 Oct 2026): where rule 13 applies (one bill of the internet biller with an amount due), `BillResolver.NamesProvider` reads `ParsedRequest.BillerText` (schema version 2, the user's words for the biller). When a word of it is a provider name of the bill, the bill goes straight to the card; otherwise the agent asks `bill_or_store` as before. The provider names are `ProviderNames.Of(bill)`: the first word inside the parentheses of the wallet's Arabic and English biller names (`Internet (Earthlink subscription)` gives `Earthlink`); a name without parentheses gives none (ruling 1 of the milestone 8 plan). Besides these, the spellings configured for the bill's biller code in `Agent:ProviderSpellings` count as provider names (Khalil, 16 Oct 2026; configuration, so `Agent.Core` holds no Arabic): for `internet`, the spellings of the development set's bill messages and of the matching rules, and the spaced form Khalil named. Names are compared as contact names are (rule 1, `ArabicText.Key`: the normalising, a leading `al` dropped, spaces inside a name ignored): `ProviderNames.AnyNamed` compares the key of every run of one to three consecutive words of `BillerText` with each name's key, ignoring case for English, so a name typed with a space inside it matches the name written as one word; a part of a word does not match. `BillResolver.NamesProvider(billerText, bill, options)`. The other branches are unchanged, and `BillerText` is read only here: it is never on the card, the trace or the audit log. So "pay the Earthlink subscription" (CLN-09, CLN-09-v1) is the card, and "pay the internet subscription" (CLN-25) or "pay the internet" (AMB-09, AMB-21) asks.
 
 Part of a bill (ruling 2 of the milestone 8 plan, 16 Oct 2026; D9 and the matching rule "Part of a bill"): a request parsed as `unsupported` `part_of_bill` is read as a bill, with the reason kept. The bill is resolved from `BillerCode`, `BillerText` and `BillLabelText` as any bill is. One bill with an amount due (a `Card` resolution, the bill of an `AskBillOrStore`, since the user means the bill, or a tapped bill) is refused `bills_paid_in_full` with the bill's amount due from the wallet and the detail `part_of_bill`, before any check or quote, whatever amount was named; several bills ask `which_bill`, and the tap gives the same refusal for the tapped bill (the conversation keeps the `part_of_bill` request as pending); nothing due is `nothing_due`; no bill, and the store branch of rule 17, is `bill_not_found`. The learning log gets `part_of_bill`.
+
+### Person or bill (Khalil, 20 Oct 2026)
+
+When the name the user typed is both a person (a saved name or an alias of one of their contacts) and one of their bills (the label of a bill), the agent never chooses by the intent the model read: it asks one question, `person_or_bill` (option 1 (a), "always ask"). The plan is `docs/plans/person-or-bill.md`.
+
+- **The typed text** (`PersonOrBillRule.TypedText`): for a transfer, `RecipientText` unless it looks like a number; for a bill, `BillLabelText`, else `BillerText`. Any other intent, or no such text, skips the check.
+- **Same name, exact only.** The person side is the contact resolver's exact step alone (`ContactResolver.ExactMatches`: the `ArabicText.Key` of the typed text equals that of a saved name or alias, one candidate per account, and the same step again without the endearments when nothing matched; `Resolve` runs the same step through the same private helper). The bill side is every bill of the user whose label has the same key (`PersonOrBillRule.Bills`). A near spelling, a partial and a shared word are not the same name. `PersonOrBillRule.Find` returns both lists, or null when either is empty. Pure.
+- **Where.** `Orchestrator.HandleAsync`, after the consent gate and before the transfer or bill path, while `SlotAnswers.PersonOrBill` is false. The path's own list is read first (contacts for a transfer, bills for a bill); the other only when the name is in the first, and the lists read go on to the path, so a request whose name is in neither makes exactly the reads it made before. A read with no answer is `not_done_nothing_taken` with the `wallet_` detail.
+- **The question.** `Question(person_or_bill, Tap, options)`: the person first, one option per account, built as a `which_contact` option is (value `Orchestrator.ContactOptionValue`, the registered name, the last sent) but shown by the contact's saved name where the account has one (the alias that matched is the bill's label, so it would not tell the two apart), `Side` `Person`; then one option per matching bill, built as a `which_bill` option is (value the bill code, the label, the amount due) with `BillerName`, `Side` `Bill`. The final option is cancel (`question_cancelled`). Traced `question:person_or_bill`; one `question_asked` audit row; no learning-log row.
+- **The tap** (`Conversation.AnswerForOption`, by the option's `Side`). Person: the request becomes `Transfer(typed text, amount, unit)` (a pending transfer, or a `choose_account` transfer, stays as it is), `ContactOption` = the value, `PersonOrBill` = true; the transfer path then runs as always (a missing amount asks `which_amount`, typed). Bill: the request becomes `Bill(null, null, amount, unit)` (a pending bill, or a `part_of_bill` request, stays as it is), `BillCode` = the value, `PersonOrBill` = true; the bill path takes the tapped bill, and D9 refuses a named amount that is not the amount due.
+- **Rule 5.** The options are code's; the pending note while the question is open is `open_question person_or_bill`, and nothing of the options reaches the parse call.
+- **The seed** has no such pair (checked 20 Oct 2026, `PersonOrBillRuleTests.TheSeedAsItIsHasNoSuchPair`), so no answer key changes; the tests save BS2's label as an alias of S04 first.
+
+```mermaid
+flowchart TD
+    pb0["After the consent gate: a transfer or a bill"] --> pb1{"PersonOrBill answered?"}
+    pb1 -- yes --> pbPath["The transfer or bill path, as always"]
+    pb1 -- no --> pb2{"Typed text? (recipient, not a number; label, else biller text)"}
+    pb2 -- none --> pbPath
+    pb2 -- yes --> pb3["Read the path's own list: contacts for a transfer, bills for a bill"]
+    pb3 -- "no answer" --> pbUnread["Refusal not_done_nothing_taken, wallet_ detail"]
+    pb3 --> pb4{"Name in it? (exact step; label key)"}
+    pb4 -- no --> pbPath
+    pb4 -- yes --> pb5["Read the other list"]
+    pb5 -- "no answer" --> pbUnread
+    pb5 --> pb6{"Exactly a contact and a bill label?"}
+    pb6 -- no --> pbPath
+    pb6 -- yes --> pbAsk["Question person_or_bill: person options, bill options, cancel"]
+    pbAsk -- "tap the person" --> pbT["Transfer to the typed name, amount kept; ContactOption, PersonOrBill"]
+    pbAsk -- "tap a bill" --> pbB["Bill, amount kept; BillCode, PersonOrBill"]
+    pbAsk -- cancel --> pbC["question_cancelled"]
+    pbT --> pbPath
+    pbB --> pbPath
+```
 
 ### The checks
 
@@ -677,7 +711,7 @@ When a card is live:
 
 ### Answers to a question
 
-The conversation keeps the pending request as a pair: `LastRequest` and `LastAnswers`, a `SlotAnswers(ContactOption, BillCode, ProductCode)` that only code fills, from tapped option values (D3). The pair goes to `Orchestrator.HandleAsync(user, request, answers)`. Nothing of `SlotAnswers` reaches the parse call: the pending note stays the question kind or the card type (rule 5).
+The conversation keeps the pending request as a pair: `LastRequest` and `LastAnswers`, a `SlotAnswers(ContactOption, BillCode, ProductCode, PersonOrBill)` that only code fills, from tapped option values (D3). The pair goes to `Orchestrator.HandleAsync(user, request, answers)`. Nothing of `SlotAnswers` reaches the parse call: the pending note stays the question kind or the card type (rule 5).
 
 A tap (`TapOptionAsync`) reads nothing from the wallet:
 
@@ -688,6 +722,7 @@ A tap (`TapOptionAsync`) reads nothing from the wallet:
 | `which_operator` | `OperatorText` = the provider code | Kept |
 | `which_product` | The same purchase; after a bill request (rule 17), `Purchase(null, "internet", null)` | `ProductCode` = the product code |
 | `which_bill`, `bill_or_store` | The same bill request, else `Bill(null, null, null)`; `store:internet` is `Purchase(null, "internet", null)` | `BillCode` = the bill code; none for `store:internet` |
+| `person_or_bill` (20 Oct 2026) | Person side: the same transfer, else `Transfer(typed text, amount, unit)`. Bill side: the same bill request, else `Bill(null, null, amount, unit)` | `ContactOption` (person) or `BillCode` (bill) = the value; `PersonOrBill` = true |
 
 The orchestrator uses an answer only to pick among what it resolved itself:
 

@@ -201,10 +201,22 @@ public sealed class Orchestrator
             return await ConsentAsync(userId, cancellationToken);
         trace.Record(TraceZone.Code, TraceSteps.ConsentChecked, ConsentGiven);
 
+        // 4. Person or bill (Khalil, 20 Oct 2026): a name that is exactly both a contact and a bill label is asked about,
+        // whatever intent the model read, until a tap has answered it. The reads it makes go on to the path.
+        WalletContacts? contacts = null;
+        IReadOnlyList<WalletBill>? bills = null;
+        if (!answers.PersonOrBill && PersonOrBillRule.TypedText(request) is { } typed)
+        {
+            var check = await PersonOrBillAsync(userId, request.Intent, typed, cancellationToken);
+            if (check.Reply is { } stopped)
+                return stopped;
+            (contacts, bills) = (check.Contacts, check.Bills);
+        }
+
         var reply = request.Intent switch
         {
-            RequestIntent.Transfer => await TransferAsync(user, request, answers, cancellationToken),
-            RequestIntent.Bill => await BillAsync(userId, request, answers, cancellationToken),
+            RequestIntent.Transfer => await TransferAsync(user, request, answers, contacts, cancellationToken),
+            RequestIntent.Bill => await BillAsync(userId, request, answers, bills, cancellationToken),
             RequestIntent.Purchase => await PurchaseAsync(userId, request, answers, cancellationToken),
             _ => await RefuseAsync(userId, ReasonCodes.NotUnderstood, null, null, cancellationToken),
         };
@@ -321,12 +333,74 @@ public sealed class Orchestrator
             && request.AmountValue is not null;
 
     /// <summary>
+    /// The person-or-bill check (Khalil, 20 Oct 2026; <see cref="PersonOrBillRule"/>). The path's own list is read first
+    /// (the contacts for a transfer, the bills for a bill), and the other only when the typed name is in the first, so
+    /// a request whose name is in neither costs no read the path would not make. When the name is exactly both, the
+    /// reply is the <c>person_or_bill</c> question: the person first (one option per account, built as a
+    /// <c>which_contact</c> option is and shown by the contact's saved name), then one option per bill (built as a
+    /// <c>which_bill</c> option is, with the biller's name). A read with no answer is the usual refusal. Otherwise no
+    /// reply, and the lists read so far, which the path then uses instead of reading them again.
+    /// </summary>
+    private async Task<(AgentReply? Reply, WalletContacts? Contacts, IReadOnlyList<WalletBill>? Bills)> PersonOrBillAsync(
+        int userId, RequestIntent intent, string typed, CancellationToken cancellationToken)
+    {
+        WalletContacts? contacts = null;
+        IReadOnlyList<WalletBill>? bills = null;
+        if (intent == RequestIntent.Transfer)
+        {
+            var contactsRead = await wallet.GetContactsAsync(userId, cancellationToken);
+            if (contactsRead is not WalletResult<WalletContacts>.Ok { Value: var read })
+                return (await RefuseUnreadAsync(userId, contactsRead, cancellationToken), null, null);
+            contacts = read;
+            if (PersonOrBillRule.People(typed, ContactCandidate.From(contacts), options).Count == 0)
+                return (null, contacts, null);
+
+            var billsRead = await wallet.GetBillsAsync(userId, cancellationToken);
+            if (billsRead is not WalletResult<IReadOnlyList<WalletBill>>.Ok { Value: var userBills })
+                return (await RefuseUnreadAsync(userId, billsRead, cancellationToken), null, null);
+            bills = userBills;
+        }
+        else
+        {
+            var billsRead = await wallet.GetBillsAsync(userId, cancellationToken);
+            if (billsRead is not WalletResult<IReadOnlyList<WalletBill>>.Ok { Value: var userBills })
+                return (await RefuseUnreadAsync(userId, billsRead, cancellationToken), null, null);
+            bills = userBills;
+            if (PersonOrBillRule.Bills(typed, bills).Count == 0)
+                return (null, null, bills);
+
+            var contactsRead = await wallet.GetContactsAsync(userId, cancellationToken);
+            if (contactsRead is not WalletResult<WalletContacts>.Ok { Value: var read })
+                return (await RefuseUnreadAsync(userId, contactsRead, cancellationToken), null, null);
+            contacts = read;
+        }
+
+        var candidates = ContactCandidate.From(contacts);
+        if (PersonOrBillRule.Find(typed, candidates, bills, options) is not { } match)
+            return (null, contacts, bills);
+
+        // The typed name is the bill's label too, so the person is shown by the contact's saved name where the account
+        // has one, not by the alias that matched.
+        List<Option> choices =
+        [
+            .. match.People.Select(p => ContactOption(p) with
+            {
+                Display = candidates.FirstOrDefault(c => !c.IsAlias && c.AccountId == p.AccountId)?.Text ?? p.Text,
+                Side = OptionSide.Person,
+            }),
+            .. match.Bills.Select(b => BillOption(b) with { Side = OptionSide.Bill, BillerName = b.BillerName }),
+        ];
+        return (await AskAsync(userId, QuestionKinds.PersonOrBill, choices, cancellationToken), contacts, bills);
+    }
+
+    /// <summary>
     /// Step 4: the recipient first (rule 16), then the amount, then the checks and the card. A question among contacts
     /// that the user has answered by a tap (<see cref="SlotAnswers.ContactOption"/>) takes the tapped candidate; the
     /// question's "none of these" option (<see cref="Option.NoneOfThese"/>) is <c>recipient_not_found</c>.
+    /// <paramref name="read"/> is the user's contacts when the person-or-bill check has already read them, else null.
     /// </summary>
     private async Task<AgentReply> TransferAsync(
-        WalletUser user, ParsedRequest request, SlotAnswers answers, CancellationToken cancellationToken)
+        WalletUser user, ParsedRequest request, SlotAnswers answers, WalletContacts? read, CancellationToken cancellationToken)
     {
         var userId = user.Id;
         if (string.IsNullOrWhiteSpace(request.RecipientText))
@@ -358,9 +432,14 @@ public sealed class Orchestrator
         }
         else
         {
-            var contactsRead = await wallet.GetContactsAsync(userId, cancellationToken);
-            if (contactsRead is not WalletResult<WalletContacts>.Ok { Value: var contacts })
-                return await RefuseUnreadAsync(userId, contactsRead, cancellationToken);
+            var contacts = read;
+            if (contacts is null)
+            {
+                var contactsRead = await wallet.GetContactsAsync(userId, cancellationToken);
+                if (contactsRead is not WalletResult<WalletContacts>.Ok { Value: var fetched })
+                    return await RefuseUnreadAsync(userId, contactsRead, cancellationToken);
+                contacts = fetched;
+            }
 
             var candidates = ContactCandidate.From(contacts);
             var resolution = ContactResolver.Resolve(
@@ -408,15 +487,7 @@ public sealed class Orchestrator
                         byOption ? RecipientByOption : chosen.IsAlias ? RecipientByAlias : RecipientByContact);
                     break;
                 case Resolution.Options choice:
-                    var contactOptions = choice.Candidates
-                        .Select(c => new Option(
-                            ContactOptionValue(c),
-                            c.Text,
-                            c.RegisteredName,
-                            c.LastSentAt,
-                            c.LastSentAmountIqd,
-                            null))
-                        .ToList();
+                    var contactOptions = choice.Candidates.Select(ContactOption).ToList();
                     return await AskAsync(userId, QuestionKinds.Of(choice.Kind), contactOptions, cancellationToken);
                 case Resolution.NotFound:
                     return await RefuseAsync(userId, ReasonCodes.RecipientNotFound, request.RecipientText, null, cancellationToken);
@@ -448,12 +519,19 @@ public sealed class Orchestrator
     /// <summary>
     /// Step 5: the bill from the biller, paid in full (D9), then the checks and the card. A bill the user tapped
     /// (<see cref="SlotAnswers.BillCode"/>) that is one of the user's bills is taken without asking again.
+    /// <paramref name="read"/> is the user's bills when the person-or-bill check has already read them, else null.
     /// </summary>
-    private async Task<AgentReply> BillAsync(int userId, ParsedRequest request, SlotAnswers answers, CancellationToken cancellationToken)
+    private async Task<AgentReply> BillAsync(
+        int userId, ParsedRequest request, SlotAnswers answers, IReadOnlyList<WalletBill>? read, CancellationToken cancellationToken)
     {
-        var billsRead = await wallet.GetBillsAsync(userId, cancellationToken);
-        if (billsRead is not WalletResult<IReadOnlyList<WalletBill>>.Ok { Value: var bills })
-            return await RefuseUnreadAsync(userId, billsRead, cancellationToken);
+        var bills = read;
+        if (bills is null)
+        {
+            var billsRead = await wallet.GetBillsAsync(userId, cancellationToken);
+            if (billsRead is not WalletResult<IReadOnlyList<WalletBill>>.Ok { Value: var fetched })
+                return await RefuseUnreadAsync(userId, billsRead, cancellationToken);
+            bills = fetched;
+        }
 
         var tappedBill = answers.BillCode is { } billCode
             ? bills.FirstOrDefault(b => string.Equals(b.Code, billCode, StringComparison.Ordinal))
@@ -631,6 +709,16 @@ public sealed class Orchestrator
             FormattableString.Invariant($"{record.Type} {record.TotalIqd}{(record.PinRequired ? " pin" : string.Empty)}"));
         return new AgentReply.CardIssued(record, Alias: subject.Alias);
     }
+
+    /// <summary>A contact option, as every contact question shows it: the matched text, the registered name, the last sent.</summary>
+    private static Option ContactOption(ContactCandidate candidate)
+        => new(
+            ContactOptionValue(candidate),
+            candidate.Text,
+            candidate.RegisteredName,
+            candidate.LastSentAt,
+            candidate.LastSentAmountIqd,
+            null);
 
     private static Option BillOption(WalletBill bill)
         => new(bill.Code, bill.Label ?? bill.BillerName, null, null, null, bill.AmountDueIqd);
