@@ -742,4 +742,37 @@ public sealed class ChatSessionTests(AgentHost host) : IAsyncDisposable
 
         Assert.Equal(circuit.Text["Refusal_not_prepared", PhoneFormat.Digits(number)].Value, LastAgentMessage(session).Text);
     }
+
+    // ---- person or bill (Khalil, 20 Oct 2026) ----
+
+    [Fact]
+    public async Task ThePersonOrBillQuestionShowsKhalilsLineAndBothOptions()
+    {
+        // CLN-10 on the oracle after BS2's label is saved as an alias of S04: the name is both a person and a bill.
+        var circuit = await StartAsync(Oracle());
+        var session = circuit.Session;
+        var label = global::Agent.Core.Tests.Resolver.SeedWallet.LabelOf("BS2");
+        var services = circuit.Scope.ServiceProvider;
+        var read = await services.GetRequiredService<global::Agent.Core.Wallet.WalletClient>().GetContactsAsync(SeedFacts.DemoUserId, TestContext.Current.CancellationToken);
+        var s04 = Assert.Single(Assert.IsType<ContactsOk>(read).Value.Contacts, c => c.Code == "S04");
+        Assert.IsType<AliasResult.Saved>(await services.GetRequiredService<AliasDirectory>()
+            .SaveAsync(SeedFacts.DemoUserId, label, s04.TargetAccountId, TestContext.Current.CancellationToken));
+
+        await session.SendAsync(DevSetText.Say("CLN-10"));
+
+        Assert.Equal(circuit.Text["Question_" + QuestionKinds.PersonOrBill].Value, LastAgentMessage(session).Text);
+        var question = Assert.IsType<AgentReply.Question>(session.Question);
+        Assert.Equal(["S04", "BS2"], question.Options.Select(o => o.Value));
+
+        // The person by the contact's saved name; the bill by its biller and label, with the amount due.
+        var biller = SeedFacts.Seed.Billers.Single(b => b.Code == "electricity").NameAr;
+        var due = SeedFacts.Seed.Bills.Single(b => b.Id == "BS2").AmountDue;
+        Assert.Equal(SeedFacts.Contact("S04").SavedName, PhoneFormat.OptionLabel(question.Options[0], circuit.Text));
+        Assert.Equal(biller + " " + label + " " + PhoneFormat.Amount(due, circuit.Text), PhoneFormat.OptionLabel(question.Options[1], circuit.Text));
+
+        // The tapped bill shows as the user's message by its biller and label.
+        await session.TapOptionAsync("BS2");
+        Assert.Contains(session.Messages, m => m.Role == ChatRole.User && m.Text == biller + " " + label);
+        Assert.Equal("BS2", session.Card?.BillCode);
+    }
 }

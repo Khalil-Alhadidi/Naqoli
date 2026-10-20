@@ -41,6 +41,7 @@
   <data name="Question_which_amount" xml:space="preserve"><value>شكد المبلغ؟</value></data>
   <data name="Question_bill_or_store" xml:space="preserve"><value>تدفع فاتورة الإنترنيت، لو تشتري كارت إنترنيت من المتجر؟</value></data>
   <data name="Question_which_operator" xml:space="preserve"><value>أي شركة؟</value></data>
+  <data name="Question_person_or_bill" xml:space="preserve"><value>قصدك فاتورة لو شخص معين ؟</value></data>
   <data name="Option_store_internet" xml:space="preserve"><value>كارت من المتجر</value></data>
   <data name="Option_LastSent" xml:space="preserve"><value>آخر تحويل {0}</value></data>
   <data name="Option_NoPreviousTransfer" xml:space="preserve"><value>ما حوّلتله من قبل</value></data>

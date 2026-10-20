@@ -167,6 +167,31 @@ public abstract partial class JourneyBase(JourneyHost host) : IAsyncLifetime
         await Expect(page.GetByTestId("fault-error")).ToHaveCountAsync(0);
     }
 
+    /// <summary>Opens the phone's directory screen (milestone 9a); the chat input is gone while it shows.</summary>
+    protected static async Task OpenDirectoryAsync(IPage page)
+    {
+        await page.GetByTestId("phone-directory").ClickAsync();
+        await Expect(page.GetByTestId("phone-directory-screen")).ToBeVisibleAsync();
+        await Expect(page.GetByTestId("phone-input")).ToHaveCountAsync(0);
+    }
+
+    /// <summary>Fills the phone directory's form with <paramref name="text"/> for the contact <paramref name="code"/> and saves.</summary>
+    protected static async Task AddInDirectoryAsync(IPage page, string text, string code)
+    {
+        await page.GetByTestId("directory-text").FillAsync(text);
+        await PickAsync(page, "directory-target", "directory-target-option", code);
+        await page.GetByTestId("directory-save").ClickAsync();
+    }
+
+    /// <summary>Opens the select <paramref name="selectId"/> and clicks the item of contact <paramref name="code"/>.</summary>
+    protected static async Task PickAsync(IPage page, string selectId, string optionId, string code)
+    {
+        await page.GetByTestId(selectId).ClickAsync();
+        var item = page.Locator($"[data-testid={optionId}][data-code={code}]");
+        await item.ClickAsync();
+        await Expect(item).ToHaveCountAsync(0);
+    }
+
     /// <summary>The text of <paramref name="key"/> with an amount, as the phone formats it.</summary>
     protected string WithAmount(string key, long amountIqd) => Text[key, PhoneFormat.Amount(amountIqd, Text)].Value;
 

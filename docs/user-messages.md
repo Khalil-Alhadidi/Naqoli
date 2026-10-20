@@ -86,6 +86,7 @@ A question is a chat line with options under it, or with the typing box as the a
 | `Question_bill_or_store` | تدفع فاتورة الإنترنيت، لو تشتري كارت إنترنيت من المتجر؟ | "Pay the internet" with no provider named, from a user with an internet bill (rule 13): the bill and `Option_store_internet`. | Tap one. | |
 | `Question_which_product` | شنو هو بالضبط؟ | The products that fit, up to `MaxProductsInOneQuestion` (rules 11, 12, 17), each labelled name, type word and price. | Tap one. | |
 | `Question_which_operator` | أي شركة؟ | More than `MaxProductsInOneQuestion` products fit (rule 12, AMB-24). | Tap one. | |
+| `Question_person_or_bill` | قصدك فاتورة لو شخص معين ؟ | The typed name is exactly both a contact (saved name or alias) and the label of one of the user's bills (Khalil, 20 Oct 2026): the person (labelled as a contact option, with `Option_LastSent` or `Option_NoPreviousTransfer`), the bill (its biller's name, label and amount due), then `Option_CancelQuestion`. | Tap one: the person goes on as a transfer (a missing amount asks `Question_which_amount`), the bill as that bill's card. | |
 | `Option_store_internet` | كارت من المتجر | The store option of `bill_or_store`, and the user's echoed line after tapping it. | | |
 | `Option_LastSent` | آخر تحويل {0} | Under a contact option: the last amount sent to that contact (D3). | | |
 | `Option_NoPreviousTransfer` | ما حوّلتله من قبل | Under a contact option with no previous transfer. | | |

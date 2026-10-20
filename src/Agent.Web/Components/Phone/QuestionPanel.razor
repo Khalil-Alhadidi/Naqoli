@@ -13,7 +13,7 @@
                     {
                         <small><bdi>@option.RegisteredName</bdi></small>
                     }
-                    @if (IsContactQuestion(question.Kind))
+                    @if (IsContactOption(question.Kind, option))
                     {
                         <small data-testid="option-last-sent">@LastSent(option)</small>
                     }
@@ -34,6 +34,11 @@
     // The options of a contact question label the last amount sent to that contact, or say there was none.
     private static bool IsContactQuestion(string kind)
         => kind is QuestionKinds.WhichContact or QuestionKinds.DidYouMean;
+
+    // A contact option: every option of a contact question, and the person option of a person_or_bill question (Khalil,
+    // 20 Oct 2026), which the panel labels by the option, not by the question kind.
+    private static bool IsContactOption(string kind, Option option)
+        => IsContactQuestion(kind) || option.Side == OptionSide.Person;
 
     private static string DeclineValue(AgentReply.Question question)
         => IsContactQuestion(question.Kind) && question.Options.Count > 0 ? Option.NoneOfThese : Option.CancelQuestion;

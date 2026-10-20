@@ -256,30 +256,6 @@ public sealed class AliasJourneys(JourneyHost host) : JourneyBase(host)
         await Expect(Outcomes(page, "done")).ToHaveCountAsync(1);
     }
 
-    private static async Task OpenDirectoryAsync(IPage page)
-    {
-        await page.GetByTestId("phone-directory").ClickAsync();
-        await Expect(page.GetByTestId("phone-directory-screen")).ToBeVisibleAsync();
-        await Expect(page.GetByTestId("phone-input")).ToHaveCountAsync(0);
-    }
-
-    /// <summary>Fills the phone directory's form with <paramref name="text"/> for the contact <paramref name="code"/> and saves.</summary>
-    private static async Task AddInDirectoryAsync(IPage page, string text, string code)
-    {
-        await page.GetByTestId("directory-text").FillAsync(text);
-        await PickAsync(page, "directory-target", "directory-target-option", code);
-        await page.GetByTestId("directory-save").ClickAsync();
-    }
-
-    /// <summary>Opens the select <paramref name="selectId"/> and clicks the item of contact <paramref name="code"/>.</summary>
-    private static async Task PickAsync(IPage page, string selectId, string optionId, string code)
-    {
-        await page.GetByTestId(selectId).ClickAsync();
-        var item = page.Locator($"[data-testid={optionId}][data-code={code}]");
-        await item.ClickAsync();
-        await Expect(item).ToHaveCountAsync(0);
-    }
-
     /// <summary>The saved name of U1's contact <paramref name="code"/>, as the wallet holds it.</summary>
     private async Task<string> SavedNameAsync(string code)
         => (await Host.ContactsAsync(U1)).Contacts.Single(c => c.Code == code).SavedName;

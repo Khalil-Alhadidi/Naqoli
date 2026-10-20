@@ -586,8 +586,9 @@ public sealed class ChatSession : IDisposable
 
     /// <summary>
     /// The text of a tapped option, from the open question (the conversation adds the tap while the question is still
-    /// open): the store option's string, the final option's string ("none of these" or "cancel"), the display name, or
-    /// the amount.
+    /// open): the store option's string, the final option's string ("none of these" or "cancel"), the option's name
+    /// (<see cref="PhoneFormat.OptionName"/>: the display name, with the biller's name before a <c>person_or_bill</c>
+    /// bill), or the amount.
     /// </summary>
     private string OptionText(string? value)
     {
@@ -600,7 +601,7 @@ public sealed class ChatSession : IDisposable
             return Text("Option_CancelQuestion");
         if (option is { ProductType: not null })
             return PhoneFormat.OptionLabel(option, text);
-        if (option?.Display is { } display)
+        if (option is not null && PhoneFormat.OptionName(option) is { } display)
             return display;
         if (option?.AmountIqd is { } amount)
             return PhoneFormat.Amount(amount, text);

@@ -35,9 +35,9 @@ public static class PhoneFormat
         => ArabicDigits.ToArabicIndic(instant.ToOffset(AgentClock.IraqOffset).ToString("dd/MM/yyyy", CultureInfo.InvariantCulture));
 
     /// <summary>
-    /// The label of a question option: the store option's string; else the display name, then the product type's word
-    /// (<c>Product_type_credit</c>, <c>Product_type_internet</c>) when the option is a product (ruling 3 of milestone 9b),
-    /// then the amount when it has one; else the amount, or the value.
+    /// The label of a question option: the store option's string; else the option's name (<see cref="OptionName"/>), then
+    /// the product type's word (<c>Product_type_credit</c>, <c>Product_type_internet</c>) when the option is a product
+    /// (ruling 3 of milestone 9b), then the amount when it has one; else the amount, or the value.
     /// </summary>
     public static string OptionLabel(Option option, IStringLocalizer<PhoneStrings> text)
     {
@@ -46,7 +46,7 @@ public static class PhoneFormat
 
         if (option.Value == Option.StoreInternet)
             return text["Option_store_internet"].Value;
-        if (option.Display is { } display)
+        if (OptionName(option) is { } display)
         {
             var label = display;
             if (ProductTypeWord(option.ProductType, text) is { } word)
@@ -55,6 +55,20 @@ public static class PhoneFormat
         }
 
         return option.AmountIqd is { } amount ? Amount(amount, text) : option.Value;
+    }
+
+    /// <summary>
+    /// The name an option shows: its display name, and for the bill option of a <c>person_or_bill</c> question
+    /// (<see cref="OptionSide.Bill"/>, Khalil, 20 Oct 2026) the biller's name before it, as the wallet holds both, since
+    /// the label is the same name as the person's. Null when the option has no display name.
+    /// </summary>
+    public static string? OptionName(Option option)
+    {
+        ArgumentNullException.ThrowIfNull(option);
+
+        return option is { Side: OptionSide.Bill, BillerName: { } biller, Display: { } label } && !string.Equals(biller, label, StringComparison.Ordinal)
+            ? biller + " " + label
+            : option.Display;
     }
 
     /// <summary>
