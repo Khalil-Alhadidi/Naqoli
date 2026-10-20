@@ -480,7 +480,13 @@ public sealed class Conversation : IDisposable
             if (droppedParts)
                 Add(new ConversationMessage(ConversationRole.Agent, ConversationKind.Info, ReasonCodes.QueueDropped));
             request = merged;
-            kept = answers;
+
+            // Security review M2 (person or bill): a recipient the answer changes is a fresh name, so no tap on the
+            // earlier name carries over: the contact option and the person-or-bill answer are cleared, and the check runs
+            // again.
+            kept = string.IsNullOrWhiteSpace(parsed.RecipientText)
+                ? answers
+                : answers with { ContactOption = null, PersonOrBill = false };
 
             // The flag of whichever message supplied the recipient.
             verbatimNow = string.IsNullOrWhiteSpace(parsed.RecipientText) ? recipientVerbatim : parsedVerbatim;
@@ -1648,7 +1654,7 @@ public sealed class Conversation : IDisposable
                         answer, ContactCandidate.From(contacts), current.MinSubstringWordLength, current.Endearments);
                     return match.Resolution is Resolution.NotFound
                         ? null
-                        : (last with { RecipientText = match.Text }, answers with { ContactOption = null });
+                        : (last with { RecipientText = match.Text }, answers with { ContactOption = null, PersonOrBill = false });
                 }
 
             default:

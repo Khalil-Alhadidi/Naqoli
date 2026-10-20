@@ -1086,6 +1086,99 @@ public class OrchestratorTests(AgentHost host)
         Assert.Equal(("bill", "BS2", AmountDueOf("BS2")), (card.Type, card.BillCode, card.AmountIqd));
     }
 
+    /// <summary>Saves BS2's label as U1's alias of <paramref name="contactCode"/>'s account.</summary>
+    private async Task SaveBs2LabelOnAsync(string contactCode)
+    {
+        await using var scope = host.Services.CreateAsyncScope();
+        var read = await scope.ServiceProvider.GetRequiredService<WalletClient>().GetContactsAsync(U1, Token);
+        var contact = Assert.Single(Assert.IsType<WalletResult<WalletContacts>.Ok>(read).Value.Contacts, c => c.Code == contactCode);
+        Assert.IsType<AliasResult.Saved>(
+            await scope.ServiceProvider.GetRequiredService<AliasDirectory>().SaveAsync(U1, Bs2Label, contact.TargetAccountId, Token));
+    }
+
+    [Fact]
+    public async Task AStalePersonTapPicksNothingAndAsksAgainWithTodaysOptions()
+    {
+        // Security review M1: the question offered S04, then the name moved to S05. The tap on S04 gives no card for S05.
+        await StartAsync();
+        await SaveBs2LabelOnAsync("S05");
+
+        var reply = await HandleAsync(
+            U1, ParsedRequest.Transfer(Bs2Label, 50_000, AmountUnit.Dinars), new SlotAnswers(ContactOption: "S04", PersonOrBill: true));
+
+        var question = Question(reply, QuestionKinds.PersonOrBill, QuestionAnswer.Tap);
+        Assert.Equal(["S05", "BS2"], question.Options.Select(o => o.Value));
+        Assert.Equal(0, await PendingCountAsync());
+    }
+
+    [Fact]
+    public async Task ABillTapNoLongerAmongTheUsersBillsIsBillNotFound()
+    {
+        // Security review R1: a code that is not U1's (U3's BT3) is never resolved as if untapped.
+        await StartAsync();
+
+        Refusal(
+            await HandleAsync(U1, ParsedRequest.Bill(null, null, null, AmountUnit.None), new SlotAnswers(BillCode: "BT3", PersonOrBill: true)),
+            ReasonCodes.BillNotFound);
+        Assert.Equal(0, await PendingCountAsync());
+    }
+
+    /// <summary>The orchestrator over a wallet whose <paramref name="failing"/> route answers 503 (security review R2).</summary>
+    private async Task<AgentReply> HandleWithFailingRouteAsync(string failing, ParsedRequest request)
+    {
+        var handler = new FailingHandler(failing) { InnerHandler = host.Wallet.CreateHandler() };
+        await using var scope = host.Services.CreateAsyncScope();
+        var orchestrator = OrchestratorThrough(scope.ServiceProvider, host.CreateClient(handler, TimeSpan.FromSeconds(10)));
+        var reply = await orchestrator.HandleAsync(U1, request, Token);
+        Assert.True(handler.Matched);
+        return reply;
+    }
+
+    [Fact]
+    public async Task AnExactNameTransferWhoseBillsReadFailsIsNothingTaken()
+    {
+        await StartAsync();
+        await SaveBs2LabelOnS04Async();
+
+        var refusal = Refusal(
+            await HandleWithFailingRouteAsync("/bills", ParsedRequest.Transfer(Bs2Label, 50_000, AmountUnit.Dinars)),
+            ReasonCodes.NotDoneNothingTaken);
+
+        Assert.StartsWith(ReasonCodes.WalletDetailPrefix, refusal.Detail, StringComparison.Ordinal);
+        Assert.DoesNotContain(await AuditAsync(), a => a.Event == AuditEvents.QuestionAsked);
+        Assert.Equal(0, await PendingCountAsync());
+    }
+
+    [Fact]
+    public async Task ALabelledBillWhoseContactsReadFailsIsNothingTaken()
+    {
+        await StartAsync();
+        await SaveBs2LabelOnS04Async();
+
+        var refusal = Refusal(await HandleWithFailingRouteAsync("/contacts", Cln10Parse()), ReasonCodes.NotDoneNothingTaken);
+
+        Assert.StartsWith(ReasonCodes.WalletDetailPrefix, refusal.Detail, StringComparison.Ordinal);
+        Assert.DoesNotContain(await AuditAsync(), a => a.Event == AuditEvents.QuestionAsked);
+        Assert.Equal(0, await PendingCountAsync());
+    }
+
+    /// <summary>Answers 503 for a request whose path ends with <paramref name="suffix"/>; every other request passes on.</summary>
+    private sealed class FailingHandler(string suffix) : DelegatingHandler
+    {
+        public bool Matched { get; private set; }
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            if (request.RequestUri is { } uri && uri.AbsolutePath.EndsWith(suffix, StringComparison.Ordinal))
+            {
+                Matched = true;
+                return Task.FromResult(new HttpResponseMessage(System.Net.HttpStatusCode.ServiceUnavailable));
+            }
+
+            return base.SendAsync(request, cancellationToken);
+        }
+    }
+
     /// <summary>
     /// For a request whose path <paramref name="rewrite"/> maps to a path (not null): runs <paramref name="onMatch"/>,
     /// sends it to that path instead, and records the match. Every other request passes on as it is.

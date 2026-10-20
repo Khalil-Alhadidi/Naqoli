@@ -331,6 +331,9 @@ When the name the user typed is both a person (a saved name or an alias of one o
 - **Where.** `Orchestrator.HandleAsync`, after the consent gate and before the transfer or bill path, while `SlotAnswers.PersonOrBill` is false. The path's own list is read first (contacts for a transfer, bills for a bill); the other only when the name is in the first, and the lists read go on to the path, so a request whose name is in neither makes exactly the reads it made before. A read with no answer is `not_done_nothing_taken` with the `wallet_` detail.
 - **The question.** `Question(person_or_bill, Tap, options)`: the person first, one option per account, built as a `which_contact` option is (value `Orchestrator.ContactOptionValue`, the registered name, the last sent) but shown by the contact's saved name where the account has one (the alias that matched is the bill's label, so it would not tell the two apart), `Side` `Person`; then one option per matching bill, built as a `which_bill` option is (value the bill code, the label, the amount due) with `BillerName`, `Side` `Bill`. The final option is cancel (`question_cancelled`). Traced `question:person_or_bill`; one `question_asked` audit row; no learning-log row.
 - **The tap** (`Conversation.AnswerForOption`, by the option's `Side`). Person: the request becomes `Transfer(typed text, amount, unit)` (a pending transfer, or a `choose_account` transfer, stays as it is), `ContactOption` = the value, `PersonOrBill` = true; the transfer path then runs as always (a missing amount asks `which_amount`, typed). Bill: the request becomes `Bill(null, null, amount, unit)` (a pending bill, or a `part_of_bill` request, stays as it is), `BillCode` = the value, `PersonOrBill` = true; the bill path takes the tapped bill, and D9 refuses a named amount that is not the amount due.
+- **A stale person tap picks nothing** (security review M1). When `PersonOrBill` and a `ContactOption` are set and the name no longer resolves to the tapped account (a `Card` for another account, options that do not hold it, or no match: the alias moved after the question was shown, say), `TransferAsync` clears both and runs the check again on today's lists: a name still shared asks `person_or_bill` with today's options; otherwise the name is resolved as if untapped. Any other stale tap is ignored, as before.
+- **A changed recipient clears the answer** (security review M2). A typed answer that the model merges into the pending transfer with a recipient, and a typed contact answer read in code, reset `ContactOption` to null and `PersonOrBill` to false, so a new name goes through the check again and no earlier tap picks for it.
+- **A tapped bill no longer among the user's bills** (security review R1). With `PersonOrBill` and a `BillCode` that is not one of the user's bills, `BillAsync` refuses `bill_not_found`; it never resolves the request as if untapped, which could give another bill's card.
 - **Rule 5.** The options are code's; the pending note while the question is open is `open_question person_or_bill`, and nothing of the options reaches the parse call.
 - **The seed** has no such pair (checked 20 Oct 2026, `PersonOrBillRuleTests.TheSeedAsItIsHasNoSuchPair`), so no answer key changes; the tests save BS2's label as an alias of S04 first.
 
@@ -352,8 +355,12 @@ flowchart TD
     pbAsk -- "tap the person" --> pbT["Transfer to the typed name, amount kept; ContactOption, PersonOrBill"]
     pbAsk -- "tap a bill" --> pbB["Bill, amount kept; BillCode, PersonOrBill"]
     pbAsk -- cancel --> pbC["question_cancelled"]
-    pbT --> pbPath
-    pbB --> pbPath
+    pbT --> pbStale{"Tapped account still the name's?"}
+    pbStale -- yes --> pbPath
+    pbStale -- "no: answer cleared" --> pb2
+    pbB --> pbBill{"Tapped bill still the user's?"}
+    pbBill -- yes --> pbPath
+    pbBill -- no --> pbNF["Refusal bill_not_found"]
 ```
 
 ### The checks

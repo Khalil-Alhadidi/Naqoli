@@ -468,6 +468,19 @@ public sealed class Orchestrator
                 }
             }
 
+            // Security review M1 (person or bill): a person tap that is not what the name resolves to now (the alias moved
+            // to another account after the question was shown, say) picks nothing. The answer is cleared and the check runs
+            // again on today's lists, so a name still shared is asked about with today's options; otherwise the name is
+            // resolved as if untapped. Any other stale tap is ignored, as before.
+            if (answers is { PersonOrBill: true, ContactOption: { } stale } && stale != Option.NoneOfThese && !byOption
+                && (resolution is not Resolution.Card { Chosen: var now } || !string.Equals(ContactOptionValue(now), stale, StringComparison.Ordinal)))
+            {
+                answers = answers with { ContactOption = null, PersonOrBill = false };
+                var again = await PersonOrBillAsync(userId, RequestIntent.Transfer, request.RecipientText, cancellationToken);
+                if (again.Reply is { } asked)
+                    return asked;
+            }
+
             switch (resolution)
             {
                 case Resolution.Card { Chosen: var chosen }:
@@ -536,6 +549,11 @@ public sealed class Orchestrator
         var tappedBill = answers.BillCode is { } billCode
             ? bills.FirstOrDefault(b => string.Equals(b.Code, billCode, StringComparison.Ordinal))
             : null;
+        // Security review R1: a bill tapped on a person-or-bill question that is no longer one of the user's bills is not
+        // found; it is never resolved as if untapped, which could give another bill's card.
+        if (tappedBill is null && answers is { PersonOrBill: true, BillCode: not null })
+            return await RefuseAsync(userId, ReasonCodes.BillNotFound, null, null, cancellationToken);
+
         if (tappedBill is not null)
         {
             // D9 as the resolver applies it to a bill it picked: a bill with nothing due gets no card.

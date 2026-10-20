@@ -5,6 +5,7 @@ using Agent.Core.Confirm;
 using Agent.Core.Conversation;
 using Agent.Core.Parsing;
 using Agent.Core.Pipeline;
+using Agent.Core.Requests;
 using Agent.Core.Tests.Agent;
 using Agent.Core.Tests.Resolver;
 using Agent.Core.Tests.Wallet;
@@ -146,6 +147,114 @@ public sealed class ConversationPersonOrBillTests(AgentHost host)
                 Assert.DoesNotContain(value, call.Context.PendingNote ?? string.Empty, StringComparison.Ordinal);
             }
         }
+    }
+
+    /// <summary>Saves BS1's label as U1's alias of S05: a second name that is both a person and a bill.</summary>
+    private async Task SaveBs1LabelOnS05Async(ConversationHarness harness)
+    {
+        await using var scope = harness.CreateScope();
+        var read = await scope.ServiceProvider.GetRequiredService<WalletClient>().GetContactsAsync(U1, Token);
+        var s05 = Assert.Single(Assert.IsType<WalletResult<WalletContacts>.Ok>(read).Value.Contacts, c => c.Code == "S05");
+        Assert.IsType<AliasResult.Saved>(await scope.ServiceProvider.GetRequiredService<AliasDirectory>()
+            .SaveAsync(U1, SeedWallet.LabelOf("BS1"), s05.TargetAccountId, Token));
+    }
+
+    [Fact]
+    public async Task ARecipientTypedAfterThePersonTapIsAFreshNameAndAsksAgain()
+    {
+        // Security review M2: after the person tap, a recipient-only message naming another clashing name clears the
+        // earlier answer, so the check runs again on the new name.
+        const string other = "the other one";
+        var parser = new OverlayParser(
+            ScriptedParser.Load(DevSetPath),
+            new() { [other] = ParsedMessage.One(ParsedRequest.Transfer(SeedWallet.LabelOf("BS1"), null, AmountUnit.None)) });
+        await using var harness = await StartAsync(parser);
+        await SaveBs1LabelOnS05Async(harness);
+        var conversation = harness.Conversation;
+        await conversation.SendAsync(DevSetText.Say(Cln10));
+        AssertPersonOrBill(conversation);
+        await conversation.TapOptionAsync("S04");
+        Assert.Equal(QuestionKinds.WhichAmount, conversation.Question?.Kind);
+
+        await conversation.SendAsync(other);
+
+        var question = Assert.IsType<AgentReply.Question>(conversation.Question);
+        Assert.Equal(QuestionKinds.PersonOrBill, question.Kind);
+        Assert.Equal(["S05", "BS1"], question.Options.Select(o => o.Value));
+        Assert.Equal(new SlotAnswers(), conversation.LastAnswers);
+        Assert.Null(conversation.Card);
+    }
+
+    [Fact]
+    public async Task ACompoundMessageWaitsOnPersonOrBillAndTheSecondPartRunsAfterTheTap()
+    {
+        // Security review R2: the first part asks; the second part waits until the tap's card is done.
+        const string both = "pay the shop and send hammoudi fifty";
+        var parser = new OverlayParser(
+            ScriptedParser.Load(DevSetPath),
+            new()
+            {
+                [both] = new ParsedMessage(
+                [
+                    ParsedRequest.Bill("electricity", Bs2Label, null, AmountUnit.None),
+                    ParsedRequest.Transfer(SeedFacts.Contact("S01").Alias, 50, AmountUnit.Thousand),
+                ]),
+            });
+        await using var harness = await StartAsync(parser);
+        var conversation = harness.Conversation;
+
+        await conversation.SendAsync(both);
+
+        AssertPersonOrBill(conversation);
+        await conversation.TapOptionAsync("BS2");
+        Assert.Equal(("bill", "BS2"), (conversation.Card?.Type, conversation.Card?.BillCode));
+
+        Assert.IsType<ConfirmOutcome.Done>(await conversation.ConfirmShownAsync(null));
+
+        var transfer = Assert.IsType<CardView>(conversation.Card);
+        Assert.Equal(("transfer", 50_000L, SeedFacts.HammoudiPhone), (transfer.Type, transfer.AmountIqd, transfer.ToPhone));
+    }
+
+    [Fact]
+    public async Task ANewRequestWhileTheQuestionIsOpenReplacesItWithNoAnswerCarried()
+    {
+        await using var harness = await StartAsync();
+        var conversation = harness.Conversation;
+        await conversation.SendAsync(DevSetText.Say(Cln10));
+        AssertPersonOrBill(conversation);
+
+        await conversation.SendAsync(DevSetText.Say("CLN-01"));
+
+        Assert.Null(conversation.Question);
+        Assert.Equal(SlotAnswers.None, conversation.LastAnswers);
+        var card = Assert.IsType<CardView>(conversation.Card);
+        Assert.Equal(("transfer", SeedFacts.HammoudiPhone), (card.Type, card.ToPhone));
+    }
+
+    [Fact]
+    public async Task ATapWithAValueFromAnEarlierQuestionIsRejected()
+    {
+        await using var harness = await StartAsync();
+        var conversation = harness.Conversation;
+        await conversation.SendAsync(DevSetText.Say("AMB-19"));
+        Assert.Contains("S08", Assert.IsType<AgentReply.Question>(conversation.Question).Options.Select(o => o.Value));
+        await conversation.DeclineQuestionAsync();
+        await conversation.SendAsync(DevSetText.Say(Cln10));
+        AssertPersonOrBill(conversation);
+
+        await conversation.TapOptionAsync("S08");
+
+        Assert.Contains(harness.Trace.Entries, e => e.Step == "option_rejected");
+        AssertPersonOrBill(conversation);
+    }
+
+    /// <summary>Answers the texts it holds with their message, and every other text as <paramref name="inner"/> does.</summary>
+    private sealed class OverlayParser(IParser inner, Dictionary<string, ParsedMessage> replies) : IParser
+    {
+        public string Name => inner.Name;
+
+        public Task<ParsedMessage> ParseAsync(string text, ParseContext context, CancellationToken cancellationToken)
+            => replies.TryGetValue(text, out var message) ? Task.FromResult(message) : inner.ParseAsync(text, context, cancellationToken);
     }
 
     /// <summary>Records every text and context handed to the parse call, then answers as <paramref name="inner"/> does.</summary>
