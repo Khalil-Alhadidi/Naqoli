@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text.RegularExpressions;
 using Wallet.MockApi;
 using Wallet.MockApi.Data.Seed;
 
@@ -24,6 +25,50 @@ public class SeedSetTests
         Assert.Equal(15, seed.Products.Count);
         Assert.Equal(86, seed.History.Count);
         Assert.Equal("IQD", seed.Settings.Currency);
+    }
+
+    /// <summary>The files that quote the line <c>migrate</c> prints, relative to the repository root.</summary>
+    private static readonly string[] FilesWithTheMigrateLine = ["CLAUDE.md", "README.md", Path.Combine("docs", "wallet-api.md")];
+
+    /// <summary>The line <c>migrate</c> prints (<c>Program.cs</c>), with its four counts.</summary>
+    private static readonly Regex MigrateLine = new(
+        @"Database ready: (?<users>[0-9]+) users, (?<accounts>[0-9]+) accounts, (?<contacts>[0-9]+) contacts, (?<transactions>[0-9]+) transactions",
+        RegexOptions.CultureInvariant | RegexOptions.ExplicitCapture,
+        TimeSpan.FromSeconds(1));
+
+    /// <summary>
+    /// Milestone 9c close-out (item 7): every <c>Database ready</c> line quoted in <c>CLAUDE.md</c>, <c>README.md</c> and
+    /// <c>docs/wallet-api.md</c> holds the loaded seed's counts (one transaction per history row, <c>SeedData.Apply</c>),
+    /// so a changed seed fails here until the lines are updated. A mismatch names the file and the field only.
+    /// </summary>
+    [Fact]
+    public void TheMigrateLineInTheDocsMatchesTheSeed()
+    {
+        var seed = Seed;
+        var expected = new Dictionary<string, int>(StringComparer.Ordinal)
+        {
+            ["users"] = seed.Users.Count,
+            ["accounts"] = seed.Accounts.Count,
+            ["contacts"] = seed.Contacts.Count,
+            ["transactions"] = seed.History.Count,
+        };
+
+        var mismatches = new List<string>();
+        foreach (var file in FilesWithTheMigrateLine)
+        {
+            var lines = MigrateLine.Matches(File.ReadAllText(Path.Combine(SeedHashTests.RepositoryRoot(), file)));
+            Assert.True(lines.Count > 0, file + " quotes no migrate line");
+            foreach (Match line in lines)
+            {
+                foreach (var (field, count) in expected)
+                {
+                    if (int.Parse(line.Groups[field].Value, CultureInfo.InvariantCulture) != count)
+                        mismatches.Add(file + " " + field);
+                }
+            }
+        }
+
+        Assert.Empty(mismatches);
     }
 
     [Fact]
