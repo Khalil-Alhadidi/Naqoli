@@ -120,6 +120,7 @@
         nameof(AgentOptions.MaxAliasLength) => o => o.MaxAliasLength,
         nameof(AgentOptions.MaxMessageChars) => o => o.MaxMessageChars,
         nameof(AgentOptions.MaxRequestsPerMessage) => o => o.MaxRequestsPerMessage,
+        nameof(AgentOptions.MaxNamedNotPrepared) => o => o.MaxNamedNotPrepared,
         _ => throw new InvalidOperationException("No reader for the editable setting " + name + "."),
     };
 

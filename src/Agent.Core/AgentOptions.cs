@@ -40,6 +40,14 @@ public sealed class AgentOptions
     [Range(1, 20)]
     public int MaxRequestsPerMessage { get; set; } = 3;
 
+    /// <summary>
+    /// The most parts beyond <see cref="MaxRequestsPerMessage"/> that the <c>max_three_requests</c> reply names (review R1
+    /// of milestone 9c, Khalil, 20 Oct 2026): the first ones, in the order spoken. The learning row
+    /// <c>more_than_three_requests</c> keeps the number of requests in the message.
+    /// </summary>
+    [Range(1, 20)]
+    public int MaxNamedNotPrepared { get; set; } = 5;
+
     /// <summary>The most products one question may offer.</summary>
     [Range(1, 50)]
     public int MaxProductsInOneQuestion { get; set; } = 8;

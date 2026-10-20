@@ -82,6 +82,7 @@ public sealed class RuntimeSettings
         nameof(AgentOptions.MaxAliasLength),
         nameof(AgentOptions.MaxMessageChars),
         nameof(AgentOptions.MaxRequestsPerMessage),
+        nameof(AgentOptions.MaxNamedNotPrepared),
     ];
 
     private const string Prefix = AgentOptions.SectionName + ":";

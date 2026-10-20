@@ -472,6 +472,37 @@ public sealed class ConversationCompoundTests(AgentHost host)
         Assert.Equal(3, conversation.CardsIssued.Count);
     }
 
+    [Theory]
+    [InlineData(3, 3)]
+    [InlineData(null, 5)]
+    public async Task AtMostMaxNamedNotPreparedPartsAreNamed(int? maxNamed, int named)
+    {
+        // Review R1 of milestone 9c (Khalil, 20 Oct 2026): nine requests at the cap of 3 give three cards and name at
+        // most MaxNamedNotPrepared of the six beyond it, in the order spoken; the row's detail stays the total.
+        var first = SeedFacts.Contact("S04").SavedName;
+        var second = SeedFacts.Contact("S19").SavedName;
+        string[] beyond = ["zaid", "huda", "omar", "sami", "rana", "laith"];
+        var sentence = "send ten thousand each to " + HammoudiAlias + ", " + first + ", " + second + ", " + string.Join(", ", beyond);
+        var parser = Says((sentence, [TransferOf(HammoudiAlias), TransferOf(first), TransferOf(second), .. beyond.Select(TransferOf)]));
+        await using var harness = await StartAsync(parser, configure: o =>
+        {
+            o.MaxRequestsPerMessage = 3;
+            if (maxNamed is { } value)
+                o.MaxNamedNotPrepared = value;
+        });
+        var conversation = harness.Conversation;
+
+        await conversation.SendAsync(sentence);
+        Assert.True(Traced(harness, TraceSteps.RequestsSplit, "9 requests, 3 kept"));
+        for (var card = 0; card < 3; card++)
+            Assert.IsType<ConfirmOutcome.Done>(await conversation.ConfirmShownAsync());
+
+        var reply = Assert.Single(NotPreparedReplies(conversation));
+        Assert.Equal(beyond.Take(named), reply.NotPrepared!.Select(p => p.Text));
+        Assert.Equal(new LearningEntry(LearningLogRule.MoreThanThreeRequests, "9"), conversation.LastLearningEntry);
+        Assert.Equal(3, conversation.CardsIssued.Count);
+    }
+
     [Fact]
     public async Task ANameTheUserDidNotTypeIsReplacedByTheType()
     {

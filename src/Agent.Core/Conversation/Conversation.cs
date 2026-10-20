@@ -83,8 +83,9 @@ public sealed class Conversation : IDisposable
     private int partsKept;
     private int partNumber;
 
-    // Rule 22: the parts of that message beyond the cap, kept with it (never queued) until the last queued part finishes
-    // and the reply names them; the number of requests the message held, for the learning row.
+    // Rule 22: the parts of that message beyond the cap (at most MaxNamedNotPrepared, review R1), kept with it (never
+    // queued) until the last queued part finishes and the reply names them; the number of requests the message held,
+    // for the learning row.
     private readonly List<NotPreparedPart> notPrepared = [];
     private int requestsInMessage;
 
@@ -1408,9 +1409,11 @@ public sealed class Conversation : IDisposable
     /// <summary>
     /// D7: queues the parts of <paramref name="message"/> after the first, in the order spoken, at most
     /// <see cref="AgentOptions.MaxRequestsPerMessage"/> parts in all (read now, so a value saved later never changes this
-    /// queue); each is un-masked and gets its own ruling 3 flag. The parts beyond the cap are not queued: they are kept
-    /// as <see cref="NotPreparedPart"/>s for the reply of rule 22 (with a cap of 1, nothing is queued and the reply comes
-    /// when part 1 finishes). Traces <c>requests_split</c> when the message had more than one request.
+    /// queue); each is un-masked and gets its own ruling 3 flag. The parts beyond the cap are not queued: at most
+    /// <see cref="AgentOptions.MaxNamedNotPrepared"/> of them, the first in the order spoken, are kept as
+    /// <see cref="NotPreparedPart"/>s for the reply of rule 22 (review R1; with a cap of 1, nothing is queued and the
+    /// reply comes when part 1 finishes), and the learning detail keeps the number of requests in the message. Traces
+    /// <c>requests_split</c> when the message had more than one request.
     /// </summary>
     private void QueueParts(ParsedMessage message, MaskedText masked, string typedText)
     {
@@ -1420,7 +1423,8 @@ public sealed class Conversation : IDisposable
         if (total < 2)
             return;
 
-        partsKept = Math.Min(total, options.CurrentValue.MaxRequestsPerMessage);
+        var current = options.CurrentValue;
+        partsKept = Math.Min(total, current.MaxRequestsPerMessage);
         requestsInMessage = total;
         trace.Record(TraceZone.Code, TraceSteps.RequestsSplit, FormattableString.Invariant($"{total} requests, {partsKept} kept"));
         foreach (var part in message.Requests.Skip(1).Take(partsKept - 1))
@@ -1429,7 +1433,7 @@ public sealed class Conversation : IDisposable
             queued.Enqueue((request, IsVerbatim(request, typedText)));
         }
 
-        foreach (var part in message.Requests.Skip(partsKept))
+        foreach (var part in message.Requests.Skip(partsKept).Take(current.MaxNamedNotPrepared))
         {
             var request = Unmask(part, masked.Map);
             notPrepared.Add(new NotPreparedPart(request.Intent, NameOf(request, typedText)));

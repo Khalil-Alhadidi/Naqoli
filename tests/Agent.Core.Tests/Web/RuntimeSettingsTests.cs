@@ -162,6 +162,27 @@ public sealed class RuntimeSettingsTests : IDisposable
         Assert.Equal(accepted ? int.Parse(value, System.Globalization.CultureInfo.InvariantCulture) : 3, current);
     }
 
+    /// <summary>
+    /// Review R1 of milestone 9c (Khalil, 20 Oct 2026): the most parts the "not prepared" reply names is editable within
+    /// its range, 1 to 20.
+    /// </summary>
+    [Theory]
+    [InlineData("1", true)]
+    [InlineData("20", true)]
+    [InlineData("0", false)]
+    [InlineData("21", false)]
+    public void MaxNamedNotPreparedIsEditableWithinItsRange(string value, bool accepted)
+    {
+        const string key = "Agent:" + nameof(AgentOptions.MaxNamedNotPrepared);
+        Assert.Contains(nameof(AgentOptions.MaxNamedNotPrepared), RuntimeSettings.EditableNames);
+
+        Assert.Equal(accepted, Settings.TrySet(key, value, out var error));
+
+        Assert.Equal(accepted, error is null);
+        var current = provider.GetRequiredService<IOptionsMonitor<AgentOptions>>().CurrentValue.MaxNamedNotPrepared;
+        Assert.Equal(accepted ? int.Parse(value, System.Globalization.CultureInfo.InvariantCulture) : 5, current);
+    }
+
     /// <summary>Security review M2: the keys the runtime store accepts are exactly the editable names.</summary>
     [Fact]
     public void EveryEditableNameCanBeSaved()
