@@ -372,7 +372,7 @@ flowchart TD
 
 The seventeen keys of milestone 9a (`Offer_save_alias`, `Offer_save_alias_button`, `Reply_alias_saved`, `Reply_alias_deleted`, `Refusal_alias_exists`, `Refusal_alias_invalid`, `Refusal_alias_shared`, `Directory_Open`, `Directory_Back`, `Directory_Title`, `Directory_Empty`, `Directory_Text`, `Directory_Target`, `Directory_TargetNone`, `Directory_Phone`, `Directory_Save` and `Directory_Delete`) were English `TODO-AR` placeholders from 17 Oct 2026 until Khalil wrote them on 18 Oct 2026 (the close-out, `docs/plans/milestone-9a-close.md`); the allow-list `PhoneStringsTests.AwaitingKhalil` was then empty until the keys of milestone 9b (below). Before them, `Refusal_question_cancelled` (the reply after a question's cancel option) was written by Khalil on 17 Oct 2026; `Card_TryAgain` and `Card_SendAgain` (milestone 7, D19), and the D21 wording of `Refusal_invalid_number` (it now asks for the full mobile number or a saved name) on 16 Oct 2026. `PhoneStringsTests.NoValueIsAPlaceholderExceptTheKeysAwaitingKhalil` keeps the allow-list: a new key is added there with a `TODO-AR` value until he writes it.
 
-**Milestone 9c (19 Oct 2026).** Three keys are English `TODO-AR` placeholders awaiting Khalil, listed in `PhoneStringsTests.AwaitingKhalil`: `Refusal_not_prepared` (the line under `Refusal_max_three_requests` that names the parts not prepared, `{0}` the names), `List_joiner` (the join of two names, `{0}` the names so far and `{1}` the next: a template, so the joiner needs no edge space, which `NoValueIsBlankOrHasAnEdgeSpace` forbids) and `Type_request` (the word for a part with no type word of its own, such as a balance question).
+**Milestone 9c (19 Oct 2026).** Three keys are English `TODO-AR` placeholders awaiting Khalil, listed in `PhoneStringsTests.AwaitingKhalil`: `Refusal_not_prepared` (the line under `Refusal_max_three_requests` that names the parts not prepared, `{0}` the names), `List_joiner` (the join of two names, `{0}` the names so far and `{1}` the next: a template, so the joiner needs no edge space, which `NoValueIsBlankOrHasAnEdgeSpace` forbids) and `Type_request` (the word for a part with no type word of its own, such as a balance question). The close-out added `Reply_queue_dropped` (review R2). Khalil wrote the four on 20 Oct 2026 (`docs/plans/milestone-9c-close.md`, item 5); no key is `TODO-AR` and the allow-list `PhoneStringsTests.AwaitingKhalil` is empty again.
 
 **Milestone 9b (19 Oct 2026).** Seven keys of milestone 9b (`Orders_Open`, `Orders_Title`, `Orders_Empty`, `Purchase_code_copy`, `Purchase_code_copied`, `Product_type_credit`, `Product_type_internet`) were English `TODO-AR` placeholders until Khalil wrote them on 19 Oct 2026 in the close-out (`docs/plans/milestone-9b-close.md`), together with the new `Purchase_code_copy_failed` (security review R3). No key is `TODO-AR`; the allow-list `PhoneStringsTests.AwaitingKhalil` is empty again (meanings in the table below).
 
@@ -469,9 +469,10 @@ The seventeen keys of milestone 9a (`Offer_save_alias`, `Offer_save_alias_button
 | `Type_transfer` | Transfer | |
 | `Type_bill` | Bill | |
 | `Type_purchase` | Purchase | |
-| `Type_request` | Request: a part not prepared with no type word of its own | `TODO-AR` (milestone 9c) |
-| `Refusal_not_prepared` | Not prepared: {0}, the names of the parts beyond the cap, under `Refusal_max_three_requests` | `TODO-AR` (milestone 9c) |
-| `List_joiner` | {0}, {1}: two names joined | `TODO-AR` (milestone 9c); a template, folded over the names in order |
+| `Type_request` | Request: a part not prepared with no type word of its own | Khalil's Arabic, 20 Oct 2026 (milestone 9c) |
+| `Refusal_not_prepared` | I did not prepare these: {0}. Send them in another request; the names of the parts beyond the cap, under `Refusal_max_three_requests` | Khalil's Arabic, 20 Oct 2026 (milestone 9c) |
+| `List_joiner` | {0}, {1}: two names joined by the Arabic comma and a space | Khalil's Arabic, 20 Oct 2026 (milestone 9c); a template, folded over the names in order |
+| `Reply_queue_dropped` | I cancelled the rest of the requests: a typed answer merged into part 1 dropped the parts after it | Khalil's Arabic, 20 Oct 2026 (review R2 of milestone 9c) |
 | `Currency_iqd` | IQD | |
 | `Phone_Placeholder` | Write your request | |
 | `Phone_Send` | Send | |
