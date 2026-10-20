@@ -459,7 +459,7 @@ public sealed class Conversation : IDisposable
 
         // A new request (D7): the parts still queued are dropped first, so the cancel of a waiting card runs none of
         // them; then this message's own parts after the first are queued, and the first runs.
-        DropQueue();
+        var droppedParts = DropQueue();
         if (cardWaiting)
             await CancelCardAsync(token);
         QueueParts(message, masked, typedText);
@@ -471,6 +471,11 @@ public sealed class Conversation : IDisposable
         {
             // D3: the answer to a typed question that the model read as a partial request of the same kind.
             trace.Record(TraceZone.Code, "answer_merged", typedSlot);
+
+            // Review R2 of milestone 9c (Khalil, 20 Oct 2026): an answer merged into part 1 has dropped the parts after
+            // it, so the phone says so before the merged request runs. A new request drops them silently (ruling 5).
+            if (droppedParts)
+                Add(new ConversationMessage(ConversationRole.Agent, ConversationKind.Info, ReasonCodes.QueueDropped));
             request = merged;
             kept = answers;
 
@@ -1395,15 +1400,17 @@ public sealed class Conversation : IDisposable
 
     /// <summary>
     /// D7: a new request drops the parts still queued (trace <c>requests_dropped</c> with the count) and forgets the
-    /// parts not prepared, so their reply is never shown.
+    /// parts not prepared, so their reply is never shown. Returns true when there was a part queued or not prepared.
     /// </summary>
-    private void DropQueue()
+    private bool DropQueue()
     {
+        var held = queued.Count > 0 || notPrepared.Count > 0;
         if (queued.Count > 0)
             trace.Record(TraceZone.Code, TraceSteps.RequestsDropped, queued.Count.ToString(CultureInfo.InvariantCulture));
         queued.Clear();
         notPrepared.Clear();
         queuedMaskedText = null;
+        return held;
     }
 
     /// <summary>

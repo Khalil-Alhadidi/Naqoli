@@ -644,6 +644,32 @@ public sealed class ChatSessionTests(AgentHost host) : IAsyncDisposable
     }
 
     [Fact]
+    public async Task AQueueDroppedReplyShowsKhalilsLine()
+    {
+        // Review R2 of milestone 9c (Khalil, 20 Oct 2026): the one Info code whose key starts Reply_.
+        const string sentence = "send to my brother and twenty five thousand to my sister";
+        const string answer = "the usual amount, thirty";
+        var parser = new CapturingParser(new Dictionary<string, ParsedMessage>(StringComparer.Ordinal)
+        {
+            [sentence] = new([
+                ParsedRequest.Transfer(SeedFacts.Contact("S01").Alias, null, AmountUnit.None),
+                ParsedRequest.Transfer(SeedFacts.Contact("S19").SavedName, 25, AmountUnit.Thousand),
+            ]),
+            [answer] = new([ParsedRequest.Transfer(null, 30, AmountUnit.Thousand)]),
+        });
+        var circuit = await StartAsync(parser);
+        var session = circuit.Session;
+
+        await session.SendAsync(sentence);
+        await session.SendAsync(answer);
+
+        var line = circuit.Text["Reply_" + ReasonCodes.QueueDropped];
+        Assert.False(line.ResourceNotFound);
+        Assert.Contains(session.Messages, m => m.Role == ChatRole.Agent && m.Text == line.Value);
+        Assert.NotNull(session.Card);
+    }
+
+    [Fact]
     public async Task ConfirmAndCancelPassTheCardId()
     {
         // Ruling 8: a tap for card 1 after card 2 is shown is already handled, and nothing moves.

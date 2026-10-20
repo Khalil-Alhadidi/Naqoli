@@ -182,4 +182,5 @@
   <data name="Refusal_not_prepared" xml:space="preserve"><value>TODO-AR Not prepared: {0}</value></data>
   <data name="List_joiner" xml:space="preserve"><value>TODO-AR {0}, {1}</value></data>
   <data name="Type_request" xml:space="preserve"><value>TODO-AR request</value></data>
+  <data name="Reply_queue_dropped" xml:space="preserve"><value>TODO-AR The other requests were cancelled</value></data>
 </root>

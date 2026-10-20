@@ -476,6 +476,11 @@ public sealed class ChatSession : IDisposable
                 yield return (ChatRole.Agent, Text("Refusal_not_prepared", NotPreparedNames(parts)), ChatMessageKind.Text, null, ChatAction.None);
                 break;
 
+            case ConversationKind.Info when message.Code == ReasonCodes.QueueDropped:
+                // Review R2 of milestone 9c: the one Info code whose key starts Reply_ (a typed answer dropped the rest).
+                yield return (ChatRole.Agent, Text("Reply_" + message.Code), ChatMessageKind.Text, null, ChatAction.None);
+                break;
+
             case ConversationKind.Info:
                 yield return (ChatRole.Agent, Text("Refusal_" + message.Code), ChatMessageKind.Text, null, ChatAction.None);
                 break;

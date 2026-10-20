@@ -56,6 +56,15 @@ public static class ReasonCodes
     public const string QuestionCancelled = "question_cancelled";
 
     /// <summary>
+    /// A typed answer to a typed question that the code could not read and the parse call read as a partial transfer
+    /// merged into the pending transfer, and the parts still queued (or not prepared) of the message before were dropped
+    /// (D7, ruling 5): the phone says so before the merged request runs (review R2 of milestone 9c, Khalil, 20 Oct 2026).
+    /// Informational; a new request that drops the queue says nothing. Not in Khalil's list (data/README.md); not a
+    /// logged reason.
+    /// </summary>
+    public const string QueueDropped = "queue_dropped";
+
+    /// <summary>
     /// An alias refused because its key (<see cref="Text.ArabicText.Key"/>) equals the key of a saved name or alias the
     /// user already has, or the wallet holds that text already (milestone 9a, ruling 4, D15). Not a logged reason.
     /// </summary>

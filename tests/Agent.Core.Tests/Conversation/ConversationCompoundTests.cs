@@ -334,6 +334,63 @@ public sealed class ConversationCompoundTests(AgentHost host)
     }
 
     [Fact]
+    public async Task ATypedAnswerTheModelMergesDropsTheQueueAndSaysSo()
+    {
+        // Review R2 of milestone 9c (Khalil, 20 Oct 2026): an answer the code cannot read, that the model reads as a
+        // partial transfer, merges into part 1 and drops the queue (ruling 5); the phone says so before the card.
+        const string sentence = "send to my brother and twenty five thousand to my sister";
+        const string answer = "the usual amount, thirty";
+        var parser = Says(
+            (sentence,
+            [
+                ParsedRequest.Transfer(HammoudiAlias, null, AmountUnit.None),
+                ParsedRequest.Transfer(SeedFacts.Contact("S19").SavedName, 25, AmountUnit.Thousand),
+            ]),
+            (answer, [ParsedRequest.Transfer(null, 30, AmountUnit.Thousand)]));
+        await using var harness = await StartAsync(parser);
+        var conversation = harness.Conversation;
+
+        await conversation.SendAsync(sentence);
+        Assert.Equal(QuestionKinds.WhichAmount, Assert.IsType<AgentReply.Question>(conversation.Question).Kind);
+        Assert.Equal(1, conversation.QueuedRequests);
+
+        await conversation.SendAsync(answer);
+
+        Assert.Contains(harness.Trace.Entries, e => e.Step == "answer_merged");
+        Assert.True(Traced(harness, TraceSteps.RequestsDropped, "1"));
+        Assert.Equal(1, CountOf(conversation, ConversationKind.Info, ReasonCodes.QueueDropped));
+        var dropped = conversation.Messages.ToList().FindIndex(m => m.Code == ReasonCodes.QueueDropped);
+        Assert.Equal(ConversationKind.Card, conversation.Messages[dropped + 1].Kind);
+        LiveTransferTo(conversation, "S01", 30_000);
+        Assert.Equal(0, conversation.QueuedRequests);
+    }
+
+    [Fact]
+    public async Task ANewRequestDropsTheQueueWithoutTheReply()
+    {
+        // Ruling 5, D7: a new request typed while parts are queued cancels the rest with no reply of its own.
+        const string sentence = "send to my brother and twenty five thousand to my sister";
+        const string next = "send fifty thousand to my brother";
+        var parser = Says(
+            (sentence,
+            [
+                ParsedRequest.Transfer(HammoudiAlias, null, AmountUnit.None),
+                ParsedRequest.Transfer(SeedFacts.Contact("S19").SavedName, 25, AmountUnit.Thousand),
+            ]),
+            (next, [ParsedRequest.Transfer(HammoudiAlias, 50, AmountUnit.Thousand)]));
+        await using var harness = await StartAsync(parser);
+        var conversation = harness.Conversation;
+
+        await conversation.SendAsync(sentence);
+        await conversation.SendAsync(next);
+
+        Assert.True(Traced(harness, TraceSteps.RequestsDropped, "1"));
+        Assert.Equal(0, CountOf(conversation, ConversationKind.Info, ReasonCodes.QueueDropped));
+        LiveTransferTo(conversation, "S01", 50_000);
+        Assert.Equal(0, conversation.QueuedRequests);
+    }
+
+    [Fact]
     public async Task TheConsentScreenOnPartOneLosesNothing()
     {
         await using var harness = await StartAsync();
