@@ -26,8 +26,9 @@ public sealed class CaseGrader
     public static readonly IReadOnlyList<string> ClosedReasons = [ReasonCodes.AccountClosed, "pin_locked"];
 
     /// <summary>
-    /// The join of several names in a <c>not_prepared</c> key (milestone 9c): the Arabic comma and a space. A guess until
-    /// a key shows one; every key so far names one part.
+    /// The join of several names in a <c>not_prepared</c> key (milestone 9c): the Arabic comma and a space, the form of
+    /// Khalil's phone template <c>List_joiner</c> (20 Oct 2026), so a reply that names two parts grades as the phone
+    /// shows it. <c>ChatSessionTests.TheListJoinerGivesTheGradersJoinForTwoNames</c> pins the two together.
     /// </summary>
     public const string NotPreparedJoiner = "\u060C ";
 

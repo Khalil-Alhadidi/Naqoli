@@ -15,6 +15,7 @@ using Agent.Core.Tests.Agent;
 using Agent.Core.Tests.Conversation;
 using Agent.Core.Tests.Wallet;
 using Agent.Core.Text;
+using Agent.Eval.Grading;
 using AgentWeb::Agent.Web.Resources;
 using AgentWeb::Agent.Web.Services;
 using Microsoft.EntityFrameworkCore;
@@ -667,6 +668,32 @@ public sealed class ChatSessionTests(AgentHost host) : IAsyncDisposable
         Assert.False(line.ResourceNotFound);
         Assert.Contains(session.Messages, m => m.Role == ChatRole.Agent && m.Text == line.Value);
         Assert.NotNull(session.Card);
+    }
+
+    [Fact]
+    public async Task TheListJoinerGivesTheGradersJoinForTwoNames()
+    {
+        // Khalil, 20 Oct 2026: several names join with the Arabic comma and a space. The phone's template and the
+        // runner's comparison must agree, or a reply naming two parts would grade "names different".
+        const string sentence = "send ten thousand to my brother, zaid and huda";
+        var parser = new CapturingParser(new Dictionary<string, ParsedMessage>(StringComparer.Ordinal)
+        {
+            [sentence] = new([
+                ParsedRequest.Transfer(SeedFacts.Contact("S01").Alias, 10, AmountUnit.Thousand),
+                ParsedRequest.Transfer("zaid", 10, AmountUnit.Thousand),
+                ParsedRequest.Transfer("huda", 10, AmountUnit.Thousand),
+            ]),
+        });
+        var circuit = await StartAsync(parser, configure: o => o.MaxRequestsPerMessage = 1);
+        var session = circuit.Session;
+
+        var graders = string.Join(CaseGrader.NotPreparedJoiner, "zaid", "huda");
+        Assert.Equal(graders, circuit.Text["List_joiner", "zaid", "huda"].Value);
+
+        await session.SendAsync(sentence);
+        Assert.IsType<ConfirmOutcome.Done>(await session.ConfirmShownAsync());
+
+        Assert.Equal(circuit.Text["Refusal_not_prepared", graders].Value, LastAgentMessage(session).Text);
     }
 
     [Fact]
