@@ -87,7 +87,10 @@ public sealed class Conversation : IDisposable
     // queued) until the last queued part finishes and the reply names them; the number of requests the message held,
     // for the learning row.
     private readonly List<NotPreparedPart> notPrepared = [];
-    private int requestsInMessage;
+
+    // Review R5 of milestone 9c: the more_than_three_requests entry written at the split (null when none was written),
+    // which the reply makes the last learning entry again without a second write.
+    private LearningEntry? notPreparedEntry;
 
     // Set during an action when the part running finished (done, not done, cancelled, expired, or a refusal, a balance or
     // an unsupported reply); AdvanceAsync then runs the next queued part. Cleared when each action takes its turn.
@@ -462,7 +465,7 @@ public sealed class Conversation : IDisposable
         var droppedParts = DropQueue();
         if (cardWaiting)
             await CancelCardAsync(token);
-        QueueParts(message, masked, typedText);
+        await QueuePartsAsync(message, masked, typedText, token);
 
         var request = parsed;
         var kept = SlotAnswers.None;
@@ -1355,7 +1358,7 @@ public sealed class Conversation : IDisposable
             partFinished = false;
             if (!queued.TryDequeue(out var next))
             {
-                await ShowNotPreparedAsync(token);
+                ShowNotPrepared();
                 return;
             }
 
@@ -1380,27 +1383,25 @@ public sealed class Conversation : IDisposable
 
     /// <summary>
     /// Rule 22: once the last prepared part has finished, the <c>max_three_requests</c> reply names the parts beyond the
-    /// cap (<see cref="ConversationMessage.NotPrepared"/>), the learning row <c>more_than_three_requests</c> is written
-    /// with the number of requests in the message as its detail, under the message's masked text, and the parts are
-    /// forgotten. Nothing when there are none.
+    /// cap (<see cref="ConversationMessage.NotPrepared"/>) and the parts are forgotten. The learning row
+    /// <c>more_than_three_requests</c> was written at the split (review R5): the reply makes that entry the last one
+    /// again (<see cref="LastLearningEntry"/>), with no second write. Nothing when there are none.
     /// </summary>
-    private async Task ShowNotPreparedAsync(CancellationToken token)
+    private void ShowNotPrepared()
     {
         if (notPrepared.Count == 0)
             return;
 
         Add(new ConversationMessage(ConversationRole.Agent, ConversationKind.Info, ReasonCodes.MaxThreeRequests, NotPrepared: [.. notPrepared]));
-        var entry = new LearningEntry(LearningLogRule.MoreThanThreeRequests, requestsInMessage.ToString(CultureInfo.InvariantCulture));
         notPrepared.Clear();
-        lastMaskedText = queuedMaskedText;
-        suppressLearningRow = false;
-        LastLearningEntry = entry;
-        await WriteLearningAsync(entry, token);
+        LastLearningEntry = notPreparedEntry;
+        notPreparedEntry = null;
     }
 
     /// <summary>
     /// D7: a new request drops the parts still queued (trace <c>requests_dropped</c> with the count) and forgets the
-    /// parts not prepared, so their reply is never shown. Returns true when there was a part queued or not prepared.
+    /// parts not prepared, so their reply is never shown; their learning row, written at the split, stays (review R5).
+    /// Returns true when there was a part queued or not prepared.
     /// </summary>
     private bool DropQueue()
     {
@@ -1409,6 +1410,7 @@ public sealed class Conversation : IDisposable
             trace.Record(TraceZone.Code, TraceSteps.RequestsDropped, queued.Count.ToString(CultureInfo.InvariantCulture));
         queued.Clear();
         notPrepared.Clear();
+        notPreparedEntry = null;
         queuedMaskedText = null;
         return held;
     }
@@ -1419,10 +1421,13 @@ public sealed class Conversation : IDisposable
     /// queue); each is un-masked and gets its own ruling 3 flag. The parts beyond the cap are not queued: at most
     /// <see cref="AgentOptions.MaxNamedNotPrepared"/> of them, the first in the order spoken, are kept as
     /// <see cref="NotPreparedPart"/>s for the reply of rule 22 (review R1; with a cap of 1, nothing is queued and the
-    /// reply comes when part 1 finishes), and the learning detail keeps the number of requests in the message. Traces
+    /// reply comes when part 1 finishes). When there are parts beyond the cap, the learning row
+    /// <c>more_than_three_requests</c> is written now (review R5 of milestone 9c, Khalil, 20 Oct 2026), with the number
+    /// of requests in the message as its detail, under the message's masked text, and <see cref="LastLearningEntry"/> is
+    /// set; so a user who leaves the prepared cards, or a new request that drops them, still leaves the row. Traces
     /// <c>requests_split</c> when the message had more than one request.
     /// </summary>
-    private void QueueParts(ParsedMessage message, MaskedText masked, string typedText)
+    private async Task QueuePartsAsync(ParsedMessage message, MaskedText masked, string typedText, CancellationToken token)
     {
         partNumber = 1;
         partsKept = 1;
@@ -1432,7 +1437,6 @@ public sealed class Conversation : IDisposable
 
         var current = options.CurrentValue;
         partsKept = Math.Min(total, current.MaxRequestsPerMessage);
-        requestsInMessage = total;
         trace.Record(TraceZone.Code, TraceSteps.RequestsSplit, FormattableString.Invariant($"{total} requests, {partsKept} kept"));
         foreach (var part in message.Requests.Skip(1).Take(partsKept - 1))
         {
@@ -1447,6 +1451,14 @@ public sealed class Conversation : IDisposable
         }
 
         queuedMaskedText = masked.Text;
+        if (total <= partsKept)
+            return;
+
+        // The row is the message's own, so a message that may be a PIN writes none (known gaps row 34), as any row.
+        lastMaskedText = masked.Text;
+        LastLearningEntry = new LearningEntry(LearningLogRule.MoreThanThreeRequests, total.ToString(CultureInfo.InvariantCulture));
+        await WriteLearningAsync(LastLearningEntry, token);
+        notPreparedEntry = LastLearningEntry;
     }
 
     /// <summary>

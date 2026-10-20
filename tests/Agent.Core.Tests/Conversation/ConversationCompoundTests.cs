@@ -468,6 +468,10 @@ public sealed class ConversationCompoundTests(AgentHost host)
         Assert.True(Traced(harness, TraceSteps.RequestsSplit, "4 requests, 3 kept"));
         Assert.Equal(2, conversation.QueuedRequests);
 
+        // Review R5 of milestone 9c (Khalil, 20 Oct 2026): the row is written at the split, before any tap.
+        var split = Assert.Single(await harness.LearningRowsAsync(), r => r.Reason == LearningLogRule.MoreThanThreeRequests);
+        Assert.Equal("4", split.Detail);
+
         foreach (var contact in new[] { "S04", "S19", "S18" })
         {
             LiveTransferTo(conversation, contact, 10_000);
@@ -596,8 +600,10 @@ public sealed class ConversationCompoundTests(AgentHost host)
     }
 
     [Fact]
-    public async Task TheReplyIsNotShownWhenANewMessageDropsTheRest()
+    public async Task TheRowIsWrittenEvenWhenANewMessageDropsTheRest()
     {
+        // Review R5 of milestone 9c (Khalil, 20 Oct 2026): a drop forgets the names, so the reply is never shown, but
+        // the more_than_three_requests row written at the split stays.
         await using var harness = await StartAsync();
         var conversation = harness.Conversation;
 
@@ -608,7 +614,8 @@ public sealed class ConversationCompoundTests(AgentHost host)
         Assert.IsType<ConfirmOutcome.Done>(await conversation.ConfirmShownAsync());
 
         Assert.Empty(NotPreparedReplies(conversation));
-        Assert.DoesNotContain(await harness.LearningRowsAsync(), r => r.Reason == LearningLogRule.MoreThanThreeRequests);
+        var row = Assert.Single(await harness.LearningRowsAsync(), r => r.Reason == LearningLogRule.MoreThanThreeRequests);
+        Assert.Equal(("4", Masker.Mask(DevSetText.Say("CMP-07")).Text), (row.Detail, row.MaskedText));
         Assert.Equal(2, conversation.CardsIssued.Count);
     }
 
