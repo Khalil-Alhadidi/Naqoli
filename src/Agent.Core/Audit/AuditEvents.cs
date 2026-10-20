@@ -16,6 +16,12 @@ public static class AuditEvents
     public const string Refused = "refused";
     public const string ConsentShown = "consent_shown";
 
+    /// <summary>
+    /// The consent screen's No button was tapped (Khalil, 20 Oct 2026): nothing was sent to the wallet; the reason is
+    /// <c>consent_required</c>.
+    /// </summary>
+    public const string ConsentDeclined = "consent_declined";
+
     /// <summary>The kill switch was flipped in the console; the reason is <c>on</c> or <c>off</c>.</summary>
     public const string KillSwitch = "kill_switch";
 

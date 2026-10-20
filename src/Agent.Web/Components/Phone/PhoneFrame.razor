@@ -44,9 +44,11 @@
         <div class="phone-compose">
             <input class="phone-input" data-testid="phone-input" type="text" autocomplete="off"
                    placeholder="@Text["Phone_Placeholder"]"
+                   disabled="@Session.ConsentPending"
                    @bind="typed" @bind:event="oninput" @onkeydown="OnKeyDownAsync" />
+            @* Khalil, 20 Oct 2026: nothing is typed while the consent screen's buttons show; Agree enables the box. *@
             <MudButton data-testid="phone-send" Variant="Variant.Filled" Color="Color.Primary"
-                       Disabled="@(Session.Busy || string.IsNullOrWhiteSpace(typed))" OnClick="SendAsync">
+                       Disabled="@(Session.Busy || Session.ConsentPending || string.IsNullOrWhiteSpace(typed))" OnClick="SendAsync">
                 @Text["Phone_Send"]
             </MudButton>
         </div>
@@ -91,7 +93,7 @@
 
     private async Task SendAsync()
     {
-        if (string.IsNullOrWhiteSpace(typed))
+        if (string.IsNullOrWhiteSpace(typed) || Session.ConsentPending)
             return;
 
         var message = typed;

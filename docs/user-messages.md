@@ -43,7 +43,7 @@ Shown as one chat line from the agent. A figure, when the code has one, is forma
 | `Refusal_not_done_nothing_taken` | ما مشت، بس ما انسحب شي من رصيدك | (a) The kill switch is on: every transfer, bill and purchase is refused before any wallet read (detail `kill_switch`). (b) A wallet read has no answer (unreachable, timeout; detail `wallet_<reason>`) while a request is prepared, at the daily-cap read, or at the quote. (c) The wallet refuses a quote with a code the agent has no reply for (`invalid_amount`, `unknown_product`, `unknown_user`, ...). (d) A tapped option that cannot be turned into an answer. (e) The consent call to the wallet fails. (f) The Confirm handler throws and the record is still Pending. (g) The names screen or the My orders screen cannot load its list (shown in the empty-list slot). (h) The fallback for any code with no key. Also nested in `Outcome_not_done` as `Refusal_nothing_taken_short` (section 5). | Try again later. | F2: (a) the service is paused by the operator, (b) the wallet is not answering, and (g) a list could not be loaded, are three different situations; in (g) "not done, nothing was taken" answers a question the user did not ask. F1: no next step in any of them. |
 | `Refusal_nothing_taken_short` | ما انسحب شي من رصيدك | Only inside `Outcome_not_done` as `{0}`, when the reason is `not_done_nothing_taken`, none, or one without a key (Khalil, 18 Oct 2026). | See `Outcome_not_done`. | |
 | `Refusal_pin_locked` | الرقم السري انقفل | Nested in `Outcome_not_done` when the wallet answers `pin_locked` (423) at the tap, or when the third wrong PIN locks it. | Unlock the PIN in the app. | F1: no next step. |
-| `Refusal_consent_required` | لازم توافق أول | Never: a user without consent sees the consent screen (`Reply_consent`) instead. | | U |
+| `Refusal_consent_required` | لازم توافق أول | The user taps `Reply_consent_decline_button` on the consent screen (Khalil, 20 Oct 2026): nothing is sent to the wallet and the request is cleared; the consent buttons stay. | Tap `Reply_consent_button`; nothing can be typed until then. | |
 | `Refusal_biller_unavailable` | هاي الجهة مو متوفرة هسه، جرب بعدين | Never: no code path and no wallet code produces `biller_unavailable`. | | U |
 | `Refusal_balance` | رصيدك هو {0} | Never: the balance reply is `Reply_balance`. | | U, F3 (same text as `Reply_balance`) |
 | `Refusal_cannot_change_card` | ما تتغير. الغيها واطلب من جديد | Never: a change to the waiting card is shown as `Unsupported_change_waiting_card`. | | U, F3: two texts for one situation, and they differ |
@@ -139,6 +139,7 @@ Built by code; the labels below frame figures from the wallet. The card's type w
 | `Reply_balance` | رصيدك هو {0} | The balance question (D22): the user's own balance, read by code. | Nothing. | F3 with the unused `Refusal_balance`. |
 | `Reply_consent` | قبل ما نبدي، شي مهم: ما أحرّك أي دينار من محفظتك إلا إذا إنت تضغط تأكد بنفسك، وبكل مرة. موافق؟ | The consent screen: when the phone opens for a user without consent, and in place of any request from such a user. | Tap `Reply_consent_button`. | |
 | `Reply_consent_button` | موافق | The button under the consent screen; a failed consent call shows `Refusal_not_done_nothing_taken`. | | |
+| `Reply_consent_decline_button` | لا اوافق | The No button beside `Reply_consent_button` (Khalil, 20 Oct 2026); the tap shows as the user's line, then `Refusal_consent_required`. Both buttons stay, and the message box is disabled, until the user agrees. | Tap `Reply_consent_button` to go on. | |
 
 ## 7. Aliases and the names screen
 
@@ -187,7 +188,7 @@ Built by code; the labels below frame figures from the wallet. The card's type w
 
 ## 10. Keys never shown today
 
-`Refusal_consent_required`, `Refusal_biller_unavailable`, `Refusal_balance`, `Refusal_cannot_change_card`, `Refusal_code_entered_by_user`, `Refusal_caller_cancelled`, `Unsupported_other_balance`, `Unsupported_other_currency`, `Unsupported_part_of_bill`. None is harmful; each is either a duplicate of the key that is shown, a reason the code never produces, or a reserved code.
+`Refusal_biller_unavailable`, `Refusal_balance`, `Refusal_cannot_change_card`, `Refusal_code_entered_by_user`, `Refusal_caller_cancelled`, `Unsupported_other_balance`, `Unsupported_other_currency`, `Unsupported_part_of_bill`. None is harmful; each is either a duplicate of the key that is shown, a reason the code never produces, or a reserved code.
 
 ## Summary of the flags
 

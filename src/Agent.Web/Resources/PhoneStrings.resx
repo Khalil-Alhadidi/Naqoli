@@ -34,6 +34,7 @@
   <data name="Reply_balance" xml:space="preserve"><value>رصيدك هو {0}</value></data>
   <data name="Reply_consent" xml:space="preserve"><value>قبل ما نبدي، شي مهم: ما أحرّك أي دينار من محفظتك إلا إذا إنت تضغط تأكد بنفسك، وبكل مرة. موافق؟</value></data>
   <data name="Reply_consent_button" xml:space="preserve"><value>موافق</value></data>
+  <data name="Reply_consent_decline_button" xml:space="preserve"><value>لا اوافق</value></data>
   <data name="Question_which_contact" xml:space="preserve"><value>ياهو تقصد؟</value></data>
   <data name="Question_did_you_mean" xml:space="preserve"><value>تقصد</value></data>
   <data name="Question_which_product" xml:space="preserve"><value>شنو هو بالضبط؟</value></data>

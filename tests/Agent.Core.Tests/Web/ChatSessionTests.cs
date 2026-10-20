@@ -309,7 +309,33 @@ public sealed class ChatSessionTests(AgentHost host) : IAsyncDisposable
         var only = Assert.Single(session.Messages);
         Assert.Equal(new ChatMessage(1, ChatRole.Agent, circuit.Text["Reply_consent"].Value, ChatMessageKind.Text, null, ChatAction.Consent), only);
         Assert.Equal(only.Id, session.ActionMessageId);
+        Assert.True(session.ConsentPending);
         Assert.Contains(circuit.Trace.Entries, e => e.Step == "consent_checked");
+    }
+
+    [Fact]
+    public async Task DecliningConsentShowsTheTapAndKhalilsConsentRequiredLine()
+    {
+        // Khalil, 20 Oct 2026: the consent screen's No button.
+        var circuit = await StartAsync(userId: 5);
+        var session = circuit.Session;
+        await session.OpenAsync();
+
+        await session.DeclineConsentAsync();
+
+        Assert.Equal(3, session.Messages.Count);
+        Assert.Equal(new ChatMessage(2, ChatRole.User, circuit.Text["Reply_consent_decline_button"].Value, ChatMessageKind.Text, null, ChatAction.None), session.Messages[1]);
+        Assert.Equal(new ChatMessage(3, ChatRole.Agent, circuit.Text["Refusal_consent_required"].Value, ChatMessageKind.Text, null, ChatAction.None), session.Messages[2]);
+        Assert.Contains(circuit.Trace.Entries, e => e.Step == "consent_declined");
+
+        // The consent message keeps both buttons and the message box is disabled until Agree.
+        Assert.Equal(1, session.ActionMessageId);
+        Assert.True(session.ConsentPending);
+
+        await session.GiveConsentAsync();
+
+        Assert.Null(session.ActionMessageId);
+        Assert.False(session.ConsentPending);
     }
 
     [Fact]

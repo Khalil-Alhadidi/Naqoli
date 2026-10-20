@@ -41,6 +41,9 @@
                 <div class="phone-message-action">
                     <MudButton data-testid="consent-button" Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
                                Disabled="@Session.Busy" OnClick="Session.GiveConsentAsync">@Text["Reply_consent_button"]</MudButton>
+                    @* Khalil, 20 Oct 2026: No sends nothing to the wallet; the buttons stay until Agree. *@
+                    <MudButton data-testid="consent-decline" Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small"
+                               Disabled="@Session.Busy" OnClick="Session.DeclineConsentAsync">@Text["Reply_consent_decline_button"]</MudButton>
                 </div>
             }
         </div>

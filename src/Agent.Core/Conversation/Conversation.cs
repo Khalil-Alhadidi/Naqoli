@@ -71,6 +71,12 @@ public sealed class Conversation : IDisposable
     // typed message may be a new amount for it (one message only; see AmountRetryCodes).
     private bool amountRetryOpen;
 
+    /// <summary>
+    /// Set by the consent screen's No (<see cref="DeclineConsentAsync"/>), cleared by a successful
+    /// <see cref="GiveConsentAsync"/>: while set, a typed message is not read and the consent screen is shown again.
+    /// </summary>
+    private bool consentDeclined;
+
     // D7 (milestone 9c): the parts of the last message still to run, after the one running, in the order spoken, each
     // with its ruling 3 flag; at most MaxRequestsPerMessage - 1. A part leaves the queue only through HandleCoreAsync, so
     // it becomes a card, a question or a reply like any request, and a card waits for its own tap (rule 1).
@@ -264,7 +270,8 @@ public sealed class Conversation : IDisposable
     /// missing a recipient or an amount merges into the pending transfer; anything else (a complete request, another
     /// intent) replaces the pending request. A parser that is unavailable gives <c>model_unavailable</c>. A message with
     /// several requests (D7) runs the first and queues the rest (<see cref="QueuedRequests"/>); a new request drops the
-    /// parts still queued.
+    /// parts still queued. After the consent screen's No (<see cref="DeclineConsentAsync"/>) and before Agree, a message
+    /// is not read at all: the consent screen is shown again.
     /// </summary>
     public async Task SendAsync(string typedText)
     {
@@ -318,6 +325,24 @@ public sealed class Conversation : IDisposable
                 ConversationMessage.PinMasked,
                 MaskedDigits: ArabicDigits.ToAscii(typedText).Trim().Length)
             : new ConversationMessage(ConversationRole.User, ConversationKind.Typed));
+
+        // Khalil, 20 Oct 2026: after the consent screen's No, nothing is read until consent is given. Nothing is masked,
+        // the parser is not called and no learning row is written; the consent screen is shown again with both buttons.
+        if (consentDeclined)
+        {
+            trace.Record(TraceZone.Code, TraceSteps.ConsentRequiredBlocked, null);
+            await using (var scope = scopes.CreateAsyncScope())
+            {
+                await scope.ServiceProvider.GetRequiredService<AuditLog>().WriteAsync(
+                    userId, null, AuditEvents.ConsentShown, null, null, null, null, null, token);
+            }
+
+            var consentScreen = new AgentReply.ConsentScreen();
+            LastReply = consentScreen;
+            LastLearningEntry = null;
+            ShowReply(consentScreen);
+            return;
+        }
 
         // Known gaps row 36 (Khalil, 19 Oct 2026): a message longer than MaxMessageChars is not read; it is refused
         // message_too_long. Nothing is masked, the parser is not called and no learning row is written; a waiting
@@ -711,6 +736,7 @@ public sealed class Conversation : IDisposable
             }
 
             trace.Record(TraceZone.Code, "consent_given", null);
+            consentDeclined = false;
             ActionMessageIndex = null;
             if (lastRequest is not null)
                 await HandleCoreAsync(lastRequest, answers, token);
@@ -732,6 +758,85 @@ public sealed class Conversation : IDisposable
         {
             Release();
         }
+    }
+
+    /// <summary>
+    /// The consent screen's No button (Khalil, 20 Oct 2026), under the same gate as <see cref="GiveConsentAsync"/>. With
+    /// no consent message live (<see cref="ConsentPending"/>) it does nothing (traced as <c>option_rejected</c>).
+    /// Otherwise nothing is sent to the wallet, so the user stays not consented: the tap is echoed
+    /// (<see cref="Option.DeclineConsent"/>), the pending request, its answers, any open question and the parts queued
+    /// behind it are cleared, one <c>consent_declined</c> audit row is written (no learning row), trace
+    /// <c>consent_declined</c>, and the reply is <c>consent_required</c>. The consent message keeps both buttons, so Agree
+    /// is one tap away, and a second No repeats the refusal. Until consent is given (<see cref="GiveConsentAsync"/>), a
+    /// typed message is not read: it shows the consent screen again (<see cref="SendAsync"/>).
+    /// </summary>
+    public async Task DeclineConsentAsync()
+    {
+        if (!await EnterAsync())
+            return;
+        try
+        {
+            if (!ConsentLive())
+            {
+                trace.Record(TraceZone.Code, "option_rejected", null);
+                return;
+            }
+
+            SetBusy(true);
+            ClearAliasOffer();
+            var token = stopping;
+
+            // The consent message keeps its buttons (Khalil, 20 Oct 2026): no request is read until Agree.
+            Add(new ConversationMessage(ConversationRole.User, ConversationKind.Option, Option.DeclineConsent));
+            consentDeclined = true;
+            DropQueue();
+            lastRequest = null;
+            answers = SlotAnswers.None;
+            Question = null;
+            QuestionMessageIndex = null;
+            typedSlot = null;
+            amountRetryOpen = false;
+            partFinished = false;
+
+            trace.Record(TraceZone.Code, "consent_declined", null);
+            await using (var scope = scopes.CreateAsyncScope())
+            {
+                await scope.ServiceProvider.GetRequiredService<AuditLog>().WriteAsync(
+                    userId, null, AuditEvents.ConsentDeclined, null, null, ReasonCodes.ConsentRequired, null, null, token);
+            }
+
+            LastReply = new AgentReply.Refusal(ReasonCodes.ConsentRequired, null, null);
+            LastLearningEntry = null;
+            AddRefusal(ReasonCodes.ConsentRequired);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            Failed(ex);
+            DropQueue();
+        }
+        catch (OperationCanceledException) when (stopping.IsCancellationRequested)
+        {
+            // The conversation ended; the agent has recorded what it could (see Dispose).
+        }
+        finally
+        {
+            Release();
+        }
+    }
+
+    /// <summary>
+    /// True while the consent message is the message whose buttons show (<see cref="ActionMessageIndex"/>): shown on
+    /// open, after a request from a user who has not consented, or after No. The phone disables its message box and send
+    /// button while it is true (Khalil, 20 Oct 2026).
+    /// </summary>
+    public bool ConsentPending => ConsentLive();
+
+    private bool ConsentLive()
+    {
+        if (ActionMessageIndex is not { } index)
+            return false;
+        lock (messagesGate)
+            return index < messages.Count && messages[index].Kind == ConversationKind.Consent;
     }
 
     /// <summary>

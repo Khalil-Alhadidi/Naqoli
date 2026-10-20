@@ -125,6 +125,12 @@ public sealed class ChatSession : IDisposable
     /// <summary>The message whose button (consent, or check again) is live; older ones lose theirs.</summary>
     public int? ActionMessageId => IdOf(conversation.ActionMessageIndex);
 
+    /// <summary>
+    /// True while the consent message carries its buttons (Khalil, 20 Oct 2026): the phone's message box and send button
+    /// are disabled until Agree.
+    /// </summary>
+    public bool ConsentPending => conversation.ConsentPending;
+
     /// <summary>True while the card needs a PIN field.</summary>
     public bool PinVisible => conversation.PinVisible;
 
@@ -279,6 +285,13 @@ public sealed class ChatSession : IDisposable
     {
         TraceLog.Current.Value = trace;
         await conversation.GiveConsentAsync();
+    }
+
+    /// <summary>The consent screen's No button (see <see cref="Conversation.DeclineConsentAsync"/>).</summary>
+    public async Task DeclineConsentAsync()
+    {
+        TraceLog.Current.Value = trace;
+        await conversation.DeclineConsentAsync();
     }
 
     /// <summary>
@@ -586,7 +599,8 @@ public sealed class ChatSession : IDisposable
 
     /// <summary>
     /// The text of a tapped option, from the open question (the conversation adds the tap while the question is still
-    /// open): the store option's string, the final option's string ("none of these" or "cancel"), the option's name
+    /// open): the store option's string, the final option's string ("none of these" or "cancel"), the consent screen's
+    /// No (<c>Reply_consent_decline_button</c>), the option's name
     /// (<see cref="PhoneFormat.OptionName"/>: the display name, with the biller's name before a <c>person_or_bill</c>
     /// bill), or the amount.
     /// </summary>
@@ -599,6 +613,8 @@ public sealed class ChatSession : IDisposable
             return Text("Option_NoneOfThese");
         if (value == Option.CancelQuestion)
             return Text("Option_CancelQuestion");
+        if (value == Option.DeclineConsent)
+            return Text("Reply_consent_decline_button");
         if (option is { ProductType: not null })
             return PhoneFormat.OptionLabel(option, text);
         if (option is not null && PhoneFormat.OptionName(option) is { } display)

@@ -6,6 +6,13 @@ public static class TraceSteps
     // Code zone: the orchestrator.
     public const string ParseReceived = "parse_received";
     public const string ConsentChecked = "consent_checked";
+
+    /// <summary>
+    /// A message typed after the consent screen's No and before Agree (Khalil, 20 Oct 2026): not read; the consent
+    /// screen is shown again.
+    /// </summary>
+    public const string ConsentRequiredBlocked = "consent_required_blocked";
+
     public const string RecipientResolved = "recipient_resolved";
     public const string AmountResolved = "amount_resolved";
     public const string ChecksPassed = "checks_passed";

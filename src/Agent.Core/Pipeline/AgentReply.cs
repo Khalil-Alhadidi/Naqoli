@@ -60,6 +60,13 @@ public sealed record Option(
     /// (<c>question_cancelled</c>). Never in a question's <see cref="AgentReply.Question.Options"/>.
     /// </summary>
     public const string CancelQuestion = "cancel_question";
+
+    /// <summary>
+    /// The consent screen's No button (Khalil, 20 Oct 2026), as the user's tap in the conversation
+    /// (<see cref="Conversation.Conversation.DeclineConsentAsync"/>). Never in a question's
+    /// <see cref="AgentReply.Question.Options"/>.
+    /// </summary>
+    public const string DeclineConsent = "decline_consent";
 }
 
 /// <summary>

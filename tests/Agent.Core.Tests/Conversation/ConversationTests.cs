@@ -1058,6 +1058,162 @@ public sealed class ConversationTests(AgentHost host) : IAsyncDisposable
         Assert.Contains(session.Trace.Entries, e => e.Step == TraceSteps.ConsentChecked && e.Detail == "given");
     }
 
+    [Fact]
+    public async Task DecliningTheConsentScreenClearsTheRequestAndRepliesConsentRequired()
+    {
+        // Khalil, 20 Oct 2026: the consent screen's No button. Nothing is sent to the wallet, the pending request is
+        // cleared, the phone says consent is required, and one consent_declined row is audited (no learning row). The
+        // consent message keeps both buttons.
+        var session = await StartAsync(NoConsentUserId);
+        var conversation = session.Conversation;
+        await conversation.SendAsync(HammoudiSentence);
+        Assert.Equal(new ConversationMessage(ConversationRole.Agent, ConversationKind.Consent), LastAgentMessage(conversation));
+        var consentIndex = conversation.ActionMessageIndex;
+        Assert.True(conversation.ConsentPending);
+        var learningRows = (await LearningRowsAsync(session)).Count;
+        var before = conversation.Messages.Count;
+
+        await conversation.DeclineConsentAsync();
+
+        Assert.Equal(before + 2, conversation.Messages.Count);
+        Assert.Equal(new ConversationMessage(ConversationRole.User, ConversationKind.Option, Option.DeclineConsent), conversation.Messages[before]);
+        Assert.Equal(new ConversationMessage(ConversationRole.Agent, ConversationKind.Refusal, ReasonCodes.ConsentRequired), conversation.Messages[before + 1]);
+        Assert.Equal(ReasonCodes.ConsentRequired, Assert.IsType<AgentReply.Refusal>(conversation.LastReply).Code);
+        Assert.Equal(consentIndex, conversation.ActionMessageIndex);
+        Assert.True(conversation.ConsentPending);
+        Assert.Null(conversation.Card);
+        Assert.Null(conversation.Question);
+        Assert.Null(conversation.LastLearningEntry);
+        Assert.Equal(0, conversation.QueuedRequests);
+        Assert.False(conversation.Busy);
+        Assert.Contains(session.Trace.Entries, e => e.Zone == TraceZone.Code && e.Step == "consent_declined" && e.Detail is null);
+        Assert.Equal(1, await AuditRowsAsync(session, NoConsentUserId, AuditEvents.ConsentDeclined));
+        Assert.Equal(learningRows, (await LearningRowsAsync(session)).Count);
+        Assert.False(await ConsentGivenAsync(session, NoConsentUserId));
+
+        // A second No repeats the refusal; the buttons stay.
+        await conversation.DeclineConsentAsync();
+
+        Assert.Equal(before + 4, conversation.Messages.Count);
+        Assert.Equal(new ConversationMessage(ConversationRole.Agent, ConversationKind.Refusal, ReasonCodes.ConsentRequired), LastAgentMessage(conversation));
+        Assert.Equal(consentIndex, conversation.ActionMessageIndex);
+        Assert.Equal(2, await AuditRowsAsync(session, NoConsentUserId, AuditEvents.ConsentDeclined));
+        Assert.False(await ConsentGivenAsync(session, NoConsentUserId));
+    }
+
+    [Fact]
+    public async Task AfterNoATypedMessageIsNotReadAndTheConsentScreenIsShownAgain()
+    {
+        // Khalil, 20 Oct 2026: after No, nothing is read until Agree: no masking, no parse call, no learning row.
+        var parser = new CapturingParser(new Dictionary<string, ParsedRequest>(StringComparer.Ordinal)
+        {
+            [BalanceSentence] = ParsedRequest.Balance(),
+        });
+        var session = await StartAsync(NoConsentUserId, parser);
+        var conversation = session.Conversation;
+        await conversation.OpenAsync();
+        await conversation.DeclineConsentAsync();
+        var learningRows = (await LearningRowsAsync(session)).Count;
+        var before = conversation.Messages.Count;
+
+        await conversation.SendAsync(BalanceSentence);
+
+        Assert.Empty(parser.Calls);
+        Assert.Equal(before + 2, conversation.Messages.Count);
+        Assert.Equal(new ConversationMessage(ConversationRole.User, ConversationKind.Typed), conversation.Messages[before]);
+        Assert.Equal(new ConversationMessage(ConversationRole.Agent, ConversationKind.Consent), conversation.Messages[before + 1]);
+        Assert.Equal(before + 1, conversation.ActionMessageIndex);
+        Assert.True(conversation.ConsentPending);
+        Assert.IsType<AgentReply.ConsentScreen>(conversation.LastReply);
+        Assert.Null(conversation.LastLearningEntry);
+        Assert.Equal(learningRows, (await LearningRowsAsync(session)).Count);
+        Assert.Contains(session.Trace.Entries, e => e.Step == TraceSteps.ConsentRequiredBlocked);
+        Assert.Equal(2, await ConsentShownRowsAsync(session, NoConsentUserId));
+        Assert.False(await ConsentGivenAsync(session, NoConsentUserId));
+    }
+
+    [Fact]
+    public async Task AfterNoThenAgreeATypedRequestIsHandled()
+    {
+        var parser = new CapturingParser(new Dictionary<string, ParsedRequest>(StringComparer.Ordinal)
+        {
+            [BalanceSentence] = ParsedRequest.Balance(),
+        });
+        var session = await StartAsync(NoConsentUserId, parser);
+        var conversation = session.Conversation;
+        await conversation.OpenAsync();
+        await conversation.DeclineConsentAsync();
+
+        // Agree with no pending request only records consent, as before.
+        var count = conversation.Messages.Count;
+        await conversation.GiveConsentAsync();
+
+        Assert.Equal(count, conversation.Messages.Count);
+        Assert.Null(conversation.ActionMessageIndex);
+        Assert.False(conversation.ConsentPending);
+        Assert.True(await ConsentGivenAsync(session, NoConsentUserId));
+
+        await conversation.SendAsync(BalanceSentence);
+
+        Assert.Single(parser.Calls);
+        Assert.IsType<AgentReply.BalanceReply>(conversation.LastReply);
+        Assert.Equal(ConversationKind.Balance, LastAgentMessage(conversation).Kind);
+        Assert.DoesNotContain(session.Trace.Entries, e => e.Step == TraceSteps.ConsentRequiredBlocked);
+    }
+
+    [Fact]
+    public async Task WithoutNoATypedMessageUnderTheConsentScreenIsReadAsBefore()
+    {
+        // The runner never taps consent: a message typed under the gate's consent screen still reaches the parse call.
+        var parser = new CapturingParser(new Dictionary<string, ParsedRequest>(StringComparer.Ordinal)
+        {
+            [BalanceSentence] = ParsedRequest.Balance(),
+        });
+        var session = await StartAsync(NoConsentUserId, parser);
+        var conversation = session.Conversation;
+
+        await conversation.SendAsync(BalanceSentence);
+        await conversation.SendAsync(BalanceSentence);
+
+        Assert.Equal(2, parser.Calls.Count);
+        Assert.IsType<AgentReply.ConsentScreen>(conversation.LastReply);
+        Assert.DoesNotContain(session.Trace.Entries, e => e.Step == TraceSteps.ConsentRequiredBlocked);
+    }
+
+    [Fact]
+    public async Task ADeclineWithNoConsentScreenLiveIsRejected()
+    {
+        var session = await StartAsync(NoConsentUserId);
+        var conversation = session.Conversation;
+
+        // Nothing shown yet.
+        await conversation.DeclineConsentAsync();
+
+        Assert.Empty(conversation.Messages);
+        Assert.False(conversation.ConsentPending);
+        Assert.Contains(session.Trace.Entries, e => e.Step == "option_rejected");
+        Assert.Equal(0, await AuditRowsAsync(session, NoConsentUserId, AuditEvents.ConsentDeclined));
+        Assert.DoesNotContain(session.Trace.Entries, e => e.Step == "error");
+        Assert.False(conversation.Busy);
+    }
+
+    [Fact]
+    public async Task ADeclineWithAConsentedUsersCardLiveIsRejected()
+    {
+        var session = await StartAsync();
+        var conversation = session.Conversation;
+        await conversation.SendAsync(HammoudiSentence);
+        var count = conversation.Messages.Count;
+
+        await conversation.DeclineConsentAsync();
+
+        Assert.Equal(count, conversation.Messages.Count);
+        Assert.Equal(CardStatus.Live, conversation.CardState);
+        Assert.False(conversation.ConsentPending);
+        Assert.Contains(session.Trace.Entries, e => e.Step == "option_rejected");
+        Assert.Equal(0, await AuditRowsAsync(session, SeedFacts.DemoUserId, AuditEvents.ConsentDeclined));
+    }
+
     [Theory]
     [InlineData(NoConsentUserId)]
     [InlineData(SeedFacts.DemoUserId)]
@@ -1117,6 +1273,21 @@ public sealed class ConversationTests(AgentHost host) : IAsyncDisposable
         await using var scope = session.Provider.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<AgentDbContext>();
         return await db.AuditEntries.AsNoTracking().CountAsync(a => a.UserId == userId && a.Event == AuditEvents.ConsentShown, Token);
+    }
+
+    private static async Task<int> AuditRowsAsync(Session session, int userId, string @event)
+    {
+        await using var scope = session.Provider.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<AgentDbContext>();
+        return await db.AuditEntries.AsNoTracking().CountAsync(a => a.UserId == userId && a.Event == @event, Token);
+    }
+
+    /// <summary>The wallet's own consent flag for <paramref name="userId"/>, read over HTTP.</summary>
+    private static async Task<bool> ConsentGivenAsync(Session session, int userId)
+    {
+        await using var scope = session.Provider.CreateAsyncScope();
+        var read = await scope.ServiceProvider.GetRequiredService<WalletClient>().GetUserAsync(userId, Token);
+        return Assert.IsType<WalletResult<WalletUser>.Ok>(read).Value.ConsentGiven;
     }
 
     /// <summary>Drops the first <c>GET users/{id}</c> of <paramref name="userId"/> as a lost connection; every other call passes.</summary>

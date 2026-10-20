@@ -37,20 +37,26 @@ public sealed class ConsoleJourneys(JourneyHost host) : JourneyBase(host)
     }
 
     /// <summary>
-    /// The first request's consent gate, kept as the fallback (milestone 7, post-tag): the balance typed under the open
-    /// screen's button shows the gate's consent screen again, and the tap then answers the balance.
+    /// The first request's consent gate, kept as the fallback (milestone 7, post-tag): consent withdrawn in the wallet
+    /// after the open check, the balance typed shows the gate's consent screen, the message box closes (Khalil, 20 Oct
+    /// 2026), and the tap then answers the balance.
     /// </summary>
     [Fact]
     public async Task ConsentScreenComesBeforeTheBalance()
     {
-        var page = await OpenAsync(Host.UserWebAddress(U5));
-        var balance = await Host.BalanceAsync(U5);
-        Assert.False((await Host.UserAsync(U5)).ConsentGiven);
+        var page = await OpenAsync(Host.WebAddress);
+        var balance = await Host.BalanceAsync(U1);
+
+        // The open check found U1 consented; the plain reset now leaves every user not consented.
+        using (var reset = await Host.Wallet.PostAsync("/admin/reset", null, Token))
+            Assert.True(reset.IsSuccessStatusCode, reset.StatusCode.ToString());
+        Assert.False((await Host.UserAsync(U1)).ConsentGiven);
 
         await SayAsync(page, DevSet.Say("CLN-31"));
 
         await Expect(LastAgentMessage(page)).ToContainTextAsync(Text["Reply_consent"].Value);
         await Expect(page.GetByTestId("consent-button")).ToBeVisibleAsync();
+        await Expect(page.GetByTestId("phone-input")).ToBeDisabledAsync();
         var figures = new[] { PhoneFormat.Amount(balance, Text), PhoneFormat.Number(balance), PhoneFormat.Console(balance), balance.ToString(CultureInfo.InvariantCulture) };
         Assert.All(await TextsAsync(page, "chat-message"), message => Assert.All(figures, f => Assert.DoesNotContain(f, message, StringComparison.Ordinal)));
 
@@ -58,7 +64,8 @@ public sealed class ConsoleJourneys(JourneyHost host) : JourneyBase(host)
 
         await Expect(LastAgentMessage(page)).ToHaveTextAsync(WithAmount("Reply_balance", balance));
         await Expect(page.GetByTestId("consent-button")).ToHaveCountAsync(0);
-        Assert.True((await Host.UserAsync(U5)).ConsentGiven);
+        await Expect(page.GetByTestId("phone-input")).ToBeEnabledAsync();
+        Assert.True((await Host.UserAsync(U1)).ConsentGiven);
     }
 
     /// <summary>The open check (milestone 7, post-tag; Khalil, 18 Oct 2026): the consent screen before any typing.</summary>
@@ -85,6 +92,42 @@ public sealed class ConsoleJourneys(JourneyHost host) : JourneyBase(host)
         await Expect(LastAgentMessage(page)).ToHaveTextAsync(WithAmount("Reply_balance", balance));
         await Expect(page.GetByTestId("consent-button")).ToHaveCountAsync(0);
         Assert.Equal(1, await AuditCountAsync(AuditEvents.ConsentShown));
+    }
+
+    /// <summary>
+    /// The consent screen's No button (Khalil, 20 Oct 2026): nothing sent to the wallet, the refusal line, both buttons
+    /// kept and the message box disabled until Agree; Agree enables it and a request is answered.
+    /// </summary>
+    [Fact]
+    public async Task DecliningConsentSendsNothingAndTheBoxStaysClosedUntilAgree()
+    {
+        var page = await OpenAsync(Host.UserWebAddress(U5));
+        var balance = await Host.BalanceAsync(U5);
+        await Expect(page.GetByTestId("consent-decline")).ToBeVisibleAsync();
+        await Expect(page.GetByTestId("consent-decline")).ToHaveTextAsync(Text["Reply_consent_decline_button"].Value);
+        await Expect(page.GetByTestId("phone-input")).ToBeDisabledAsync();
+
+        await page.GetByTestId("consent-decline").ClickAsync();
+
+        await Expect(page.Locator("[data-testid=chat-message][data-role=user]").Last).ToHaveTextAsync(Text["Reply_consent_decline_button"].Value);
+        await Expect(LastAgentMessage(page)).ToHaveTextAsync(Text["Refusal_consent_required"].Value);
+        await Expect(page.GetByTestId("consent-button")).ToBeVisibleAsync();
+        await Expect(page.GetByTestId("consent-decline")).ToBeVisibleAsync();
+        await Expect(page.GetByTestId("phone-input")).ToBeDisabledAsync();
+        await Expect(page.GetByTestId("phone-send")).ToBeDisabledAsync();
+        Assert.False((await Host.UserAsync(U5)).ConsentGiven);
+        Assert.Equal(1, await AuditCountAsync(AuditEvents.ConsentDeclined));
+
+        await page.GetByTestId("consent-button").ClickAsync();
+
+        await Expect(page.GetByTestId("consent-button")).ToHaveCountAsync(0);
+        await Expect(page.GetByTestId("consent-decline")).ToHaveCountAsync(0);
+        await Expect(page.GetByTestId("phone-input")).ToBeEnabledAsync();
+        Assert.True((await Host.UserAsync(U5)).ConsentGiven);
+
+        await SayAsync(page, DevSet.Say("CLN-31"));
+
+        await Expect(LastAgentMessage(page)).ToHaveTextAsync(WithAmount("Reply_balance", balance));
     }
 
     /// <summary>

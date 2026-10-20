@@ -144,7 +144,8 @@ Each action below is the conversation's action of the same name ([agent-core.md]
 | `SendAsync(text)` | The send button and Enter | D6 first (below), then parse, then `Orchestrator.HandleAsync(DemoUserId, request)`; the reply becomes messages |
 | `TapOptionAsync(value)` | A question option | Checks the value against the open question's options, then sends the request again with the slot filled (below) |
 | `OpenAsync()` | `PhoneFrame.OnAfterRenderAsync(firstRender)`, once per circuit; `RestartAsync` | The open check (milestone 7 post-tag): a user who has not consented sees the consent message (`Reply_consent`, `consent-button`) before any typing, with one `consent_shown` audit row; a consented user, or a wallet that does not answer, sees nothing (the first request's gate still runs) |
-| `GiveConsentAsync()` | The consent button (`consent-button`) | `WalletClient.GiveConsentAsync(DemoUserId)`, then answers the last request again; on the open screen, with no request yet, it only records consent |
+| `GiveConsentAsync()` | The consent button (`consent-button`) | `WalletClient.GiveConsentAsync(DemoUserId)`, then answers the last request again; on the open screen, with no request yet, or after No, it only records consent; the message box is enabled again |
+| `DeclineConsentAsync()` | The consent screen's No (`consent-decline`, outlined, beside `consent-button`; Khalil, 20 Oct 2026) | Nothing sent to the wallet: the tap shows as the user's `Reply_consent_decline_button`, the pending request and queue are cleared, the reply is `Refusal_consent_required`, one `consent_declined` audit row. Both buttons stay; a second No repeats the refusal; with no consent message live it does nothing |
 | `ConfirmAsync(cardId, pin)` | The card's Confirm button only, with the id its panel captured (ruling 8 of milestone 9c) | `ConfirmHandler.ConfirmAsync(DemoUserId, Card.PendingId, pin)` when `cardId` is the card shown; otherwise `already_handled` and nothing moves |
 | `SettleAsync()` | The "check again" button (`check-again`) of a Checking outcome only | `ConfirmHandler.SettleCheckingAsync(DemoUserId, Card.PendingId)`: the same body under the same key (rule 6) |
 | `CancelAsync(cardId)` | The card's Cancel button, with the id its panel captured | `PendingStore.CancelAsync` when `cardId` is the card shown; otherwise `already_handled` |
@@ -165,7 +166,7 @@ The conversation turns each reply into a `ConversationMessage` of codes and figu
 | `Refusal(code, detail, amount)` | `Refusal_<code>`, filled with the figure when there is one; an unknown code falls back to `Refusal_not_done_nothing_taken`. The detail is never shown. A parser that is unavailable gives `Refusal_model_unavailable` |
 | `Question(kind, answer, options)` | `Question_<kind>`, with the options under it |
 | `BalanceReply(balance)` | `Reply_balance` |
-| `ConsentScreen` | `Reply_consent`, with the consent button |
+| `ConsentScreen` | `Reply_consent`, with the consent button and the No button. While they show (`ChatSession.ConsentPending`), `phone-input` and `phone-send` are disabled and Enter sends nothing (Khalil, 20 Oct 2026): no request is sent until Agree |
 | `CardIssued` | `Card_Title`, with the card under it |
 | `Unsupported(reason)` | `Unsupported_<reason>`, or `Refusal_not_supported` for a reason without a key |
 | The parts beyond the cap (`Info` `max_three_requests` with `NotPrepared`; rule 22, milestone 9c), after the last prepared part of a compound message finished | Two chat lines: Khalil's `Refusal_max_three_requests` as it is, then `Refusal_not_prepared` with the names as `{0}`. Each name is the part's text (the user's own words, ruling 2 of milestone 9c), or, when it has none, its type's word: `Type_transfer`, `Type_bill`, `Type_purchase`, else `Type_request`. Names are joined in the order spoken by the template `List_joiner` (`{0}` the names so far, `{1}` the next), so the joiner carries no edge space. Both lines are ordinary agent text messages (`chat-message`, `data-kind="text"`) |
@@ -294,7 +295,7 @@ Person or bill (Khalil, 20 Oct 2026): the `person_or_bill` question (`Question_p
 | Model | `Conversation` | `parse:<parser name>` (`parse:scripted`, `parse:claude:haiku`; the intent), `parse:unavailable` |
 | Model | `ClaudeParser` | `more_than_one_request` (the count) |
 | Code | `Orchestrator` (`TraceSteps`) | `parse_received`, `consent_checked`, `recipient_resolved`, `amount_resolved`, `checks_passed`, `check_failed:<reason>`, `card_created`, `question:<kind>`, `refusal:<code>`, `balance_shown` |
-| Code | `Conversation` | `points_to_confirm`, `option_rejected`, `consent_given`, `error` (the exception type), `model_invalid_reply` (the field), `model_refusal` (no detail), `learning_logged` (the reason) |
+| Code | `Conversation` | `points_to_confirm`, `option_rejected`, `consent_given`, `consent_declined`, `consent_required_blocked`, `error` (the exception type), `model_invalid_reply` (the field), `model_refusal` (no detail), `learning_logged` (the reason) |
 | Write | `ConfirmHandler` (`TraceSteps`) | `begin_execute`, `recheck_ok`, `recheck_failed:<reason>`, `execute_sent`, `outcome:<name>`, `settle_sent`, `settle_outcome:<name>` |
 
 The outcome names are `done`, `not_done`, `checking`, `expired`, `already_handled`, `not_found`, `pin_required`, `pin_wrong`, `pin_malformed`, `cancelled` and `exception`.
@@ -409,6 +410,7 @@ The seventeen keys of milestone 9a (`Offer_save_alias`, `Offer_save_alias_button
 | `Reply_balance` | Your balance is {0} | |
 | `Reply_consent` | Before I can help, please allow me to act on your wallet | |
 | `Reply_consent_button` | I agree | |
+| `Reply_consent_decline_button` | I do not agree | The consent screen's No; Khalil's Arabic, 20 Oct 2026 |
 | `Question_which_contact` | Which person do you mean? | |
 | `Question_did_you_mean` | Did you mean | |
 | `Question_which_product` | Which product? | |
@@ -648,7 +650,7 @@ The journeys locate elements only by these attributes. The two lines of the "not
 | Question option | `question-option` | `data-value` |
 | Question's final option (none of these, or cancel) | `question-decline` | `data-value` (`none_of_these`, `cancel_question`) |
 | Contact option's last-sent line | `option-last-sent` (inside a `which_contact` or `did_you_mean` option, and the person option of `person_or_bill`) | |
-| Consent and settle buttons | `consent-button`, `check-again` (in the chat), `card-check-again` (on the card while Checking) | |
+| Consent and settle buttons | `consent-button`, `consent-decline` (the consent screen's No, 20 Oct 2026), `check-again` (in the chat), `card-check-again` (on the card while Checking) | |
 | Alias offer's Save button (milestone 9a) | `save-alias` (under the open offer only) | |
 | Phone header: open the directory, back to the chat | `phone-directory`, `phone-directory-back` | |
 | Phone header: open My orders, back to the chat (milestone 9b) | `phone-orders`, `phone-orders-back` | |
@@ -715,7 +717,8 @@ The journeys locate elements only by these attributes. The two lines of the "not
 | `TryAgainAfterExpiry` | 4-second console, CLN-01: after the expired outcome `card-try-again` shows (no `card-send-again`); the tap gives a new live card with its timer and a second `created` row, nothing moved; Confirm gives done and exactly one new history row |
 | `SendAgainAfterDone` | CLN-01, Confirm, `card-send-again`: a live card with `card-warning` `Card_Warning_repeat`; Cancel; exactly one new history row |
 | `BalanceAnswersAfterConsentAndTheLogKeepsNoFigure` | CLN-31: the reply is `Reply_balance` with 750,000; the log has one `balance_shown` row with an empty Amount; no trace entry holds `750` |
-| `ConsentScreenComesBeforeTheBalance` | The first request's gate, kept as the fallback: CLN-31 on U5's console, typed under the open screen's button, shows the gate's `Reply_consent` with `consent-button` again, no chat message holds U5's balance in any digit form; the tap gives `Reply_balance`; the wallet reports consent given |
+| `ConsentScreenComesBeforeTheBalance` | The first request's gate, kept as the fallback: U1's console opens consented, then the wallet's plain reset withdraws consent; CLN-31 shows the gate's `Reply_consent` with `consent-button`, `phone-input` is disabled, no chat message holds the balance in any digit form; the tap gives `Reply_balance` and enables the box; the wallet reports consent given |
+| `DecliningConsentSendsNothingAndTheBoxStaysClosedUntilAgree` | Khalil, 20 Oct 2026: U5's console opens on the consent screen with `consent-decline` (`Reply_consent_decline_button`) and `phone-input` disabled; the No tap shows the user's `Reply_consent_decline_button` line and `Refusal_consent_required`, both buttons stay, input and send stay disabled, the wallet reports no consent and one `consent_declined` audit row; Agree removes both buttons and enables the box; CLN-31 then gives `Reply_balance` |
 | `AFreshUserSeesTheConsentScreenBeforeTyping` | Milestone 7 post-tag (Khalil, 18 Oct 2026), the open check: U5's console, nothing typed: the last agent message is `Reply_consent` with `consent-button` and the wallet reports no consent; the tap removes the button and the wallet reports consent given; CLN-31 then gives `Reply_balance` straight away; exactly one `consent_shown` audit row |
 | `ResetClearsConsentAndThePhoneStartsAgain` | Milestone 7 post-tag, the reset control: CLN-01 gives a live card; `reset-wallet`; `reset-result` shows and no `reset-error`; the wallet reports U1 not consented; the phone shows no card and exactly one chat message, `Reply_consent` with `consent-button`; the tap gives consent and CLN-01 gives a live card again |
 | `AChangedCapTakesEffectWithoutARestart` | `PerTransactionCapIqd` saved as 40,000: CLN-01 is refused with 40,000 and no card; after `setting-reset` CLN-01 gives a live card; `Wallet:PinRequiredAboveIqd` shows 1,000,000 |

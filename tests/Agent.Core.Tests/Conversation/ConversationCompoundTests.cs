@@ -416,6 +416,31 @@ public sealed class ConversationCompoundTests(AgentHost host)
     }
 
     [Fact]
+    public async Task DecliningTheConsentScreenOnPartOneDropsTheQueuedParts()
+    {
+        await using var harness = await StartAsync();
+        var conversation = harness.Conversation;
+
+        // The plain reset leaves every user not consented.
+        using (var reset = await host.Wallet.Client.PostAsync("/admin/reset", null, Token))
+            Assert.True(reset.IsSuccessStatusCode, reset.StatusCode.ToString());
+
+        await conversation.SendAsync(DevSetText.Say("CMP-01"));
+        Assert.IsType<AgentReply.ConsentScreen>(conversation.LastReply);
+        Assert.Equal(1, conversation.QueuedRequests);
+
+        // Khalil, 20 Oct 2026: No clears the request and the parts queued behind it; nothing runs after the refusal.
+        await conversation.DeclineConsentAsync();
+
+        Assert.Equal(0, conversation.QueuedRequests);
+        Assert.Null(conversation.Card);
+        Assert.True(conversation.ConsentPending);
+        Assert.Equal(ReasonCodes.ConsentRequired, Assert.IsType<AgentReply.Refusal>(conversation.LastReply).Code);
+        Assert.Equal(1, CountOf(conversation, ConversationKind.Refusal, ReasonCodes.ConsentRequired));
+        Assert.True(Traced(harness, TraceSteps.RequestsDropped, "1"));
+    }
+
+    [Fact]
     public async Task AnAmountRefusalOnAMiddlePartDoesNotOpenTheRetry()
     {
         const string sentence = "send six million to my brother and what is my balance";
