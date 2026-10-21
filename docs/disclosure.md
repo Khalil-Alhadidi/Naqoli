@@ -68,4 +68,6 @@ Configured as parse-call candidates in the `Model` section (`src/Agent.Web/appse
 
 ## External resources
 
+- Noto Naskh Arabic, regular (400) and bold (700), by the Noto Project Authors, under the SIL Open Font License 1.1 (`src/Agent.Web/wwwroot/fonts/OFL.txt`). It is self-hosted as `src/Agent.Web/wwwroot/fonts/NotoNaskhArabic-Regular.woff2` and `NotoNaskhArabic-Bold.woff2`: the Arabic subset woff2 files Google Fonts serves (version v44) for `https://fonts.googleapis.com/css2?family=Noto+Naskh+Arabic:wght@400` and `:wght@700`, downloaded on 21 Oct 2026. The licence came from `https://github.com/google/fonts/blob/main/ofl/notonaskharabic/OFL.txt` the same day. The phone's font (decision 5, UI pass task 7); nothing is loaded from the network at run time.
+
 - Roboto from Google Fonts (stylesheet link in src/Agent.Web/Components/App.razor; MudBlazor's default font; falls back to system fonts offline). Removed on 21 Oct 2026 (UI pass, task 1): the console uses the system font stack (`--font-console`, also MudBlazor's typography through `ConsoleTheme`), and no font or stylesheet is loaded from another host (`DesignTokensTests.NoFontIsLoadedFromTheNetwork`).

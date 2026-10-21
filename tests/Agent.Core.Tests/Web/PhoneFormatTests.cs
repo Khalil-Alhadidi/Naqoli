@@ -17,4 +17,13 @@ public class PhoneFormatTests
         // dd/MM/yyyy (security review R2 of milestone 9b).
         Assert.Equal(ArabicDigits.ToArabicIndic("19/10/2026"), PhoneFormat.Date(instant));
     }
+
+    [Fact]
+    public void TheStatusBarTimeIsTheIraqTimeInArabicIndicDigits()
+    {
+        // UI pass task 7: 23:05 UTC is 02:05 in Iraq (UTC+3), 24-hour, two digits each.
+        var instant = new DateTimeOffset(2026, 10, 18, 23, 5, 0, TimeSpan.Zero);
+
+        Assert.Equal(ArabicDigits.ToArabicIndic("02:05"), PhoneFormat.Time(instant));
+    }
 }

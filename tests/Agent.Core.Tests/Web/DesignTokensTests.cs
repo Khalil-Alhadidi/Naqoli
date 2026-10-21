@@ -276,6 +276,37 @@ public partial class DesignTokensTests
         }
     }
 
+    [GeneratedRegex(@"@font-face\s*\{(?<body>[^}]*)\}")]
+    private static partial Regex FontFace();
+
+    [GeneratedRegex(@"url\(\s*['""]?(?<path>[^'"")]+)['""]?\s*\)")]
+    private static partial Regex UrlPath();
+
+    [Fact]
+    public void ThePhoneFontIsSelfHosted()
+    {
+        // UI pass task 7 (decision 5): the first family of --font-phone has @font-face rules whose sources are files under
+        // wwwroot/fonts, so the phone's Arabic loads offline.
+        var family = FontStack(Tokens()["--font-phone"])[0];
+        var css = WithoutComments(File.ReadAllText(AppCssPath));
+        var faces = FontFace().Matches(css)
+            .Select(m => m.Groups["body"].Value)
+            .Where(body => Declaration().Matches(body).Any(d =>
+                d.Groups["property"].Value == "font-family" && FontStack(d.Groups["value"].Value)[0] == family))
+            .ToList();
+        Assert.NotEmpty(faces);
+
+        var sources = faces.SelectMany(body => UrlPath().Matches(body).Select(m => m.Groups["path"].Value)).ToList();
+        Assert.Equal(2, sources.Count);
+        foreach (var source in sources)
+        {
+            Assert.StartsWith("fonts/", source, StringComparison.Ordinal);
+            Assert.True(File.Exists(Path.Combine(WebRoot, "wwwroot", source)), source + " does not exist");
+        }
+
+        Assert.True(File.Exists(Path.Combine(WebRoot, "wwwroot", "fonts", "OFL.txt")), "the font's licence is missing");
+    }
+
     private static string[] FontStack(string value)
         => value.Split(',').Select(f => f.Trim().Trim('"', '\'')).ToArray();
 

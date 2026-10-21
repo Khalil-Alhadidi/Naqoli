@@ -9,7 +9,7 @@
     <MudCard Class="phone-card" Elevation="2" data-testid="card" data-state="@StateName">
         <MudCardContent>
             <div class="phone-card-title">@Text["Card_Title"] <small>@Text["Type_" + card.Type]</small></div>
-            <div class="phone-card-row">
+            <div class="phone-card-row phone-card-recipient">
                 <span>@Text["Card_To"]</span>
                 <span>
                     <span data-testid="card-display"><bdi>@PhoneFormat.Digits(card.DisplayName ?? string.Empty)</bdi></span>
@@ -22,12 +22,12 @@
             </div>
             @if (card.RegisteredName is not null)
             {
-                <div class="phone-card-row">
+                <div class="phone-card-row phone-card-registered">
                     <span>@Text["Card_Registered"]</span>
                     <span data-testid="card-registered"><bdi>@card.RegisteredName</bdi></span>
                 </div>
             }
-            <div class="phone-card-row">
+            <div class="phone-card-row phone-card-amount">
                 <span>@Text["Card_Amount"]</span>
                 <span data-testid="card-amount">@PhoneFormat.Amount(card.AmountIqd, Text)</span>
             </div>
@@ -36,7 +36,7 @@
             {
                 <div class="phone-card-words"><span data-testid="card-amount-words">@Text["Card_AmountWords", words]</span></div>
             }
-            <div class="phone-card-row">
+            <div class="phone-card-row phone-card-minor">
                 <span>@Text["Card_Fee"]</span>
                 <span data-testid="card-fee">@PhoneFormat.Amount(card.FeeIqd, Text)</span>
             </div>
@@ -44,23 +44,27 @@
                 <span>@Text["Card_Total"]</span>
                 <span data-testid="card-total">@PhoneFormat.Amount(card.TotalIqd, Text)</span>
             </div>
-            <div class="phone-card-row">
+            <div class="phone-card-row phone-card-minor">
                 <span>@Text["Card_BalanceAfter"]</span>
                 <span data-testid="card-balance-after">@PhoneFormat.Amount(card.BalanceAfterIqd, Text)</span>
             </div>
             @if (card.FirstTime)
             {
-                <div class="phone-card-note" data-testid="card-first-time">@Text["Card_FirstTime"]</div>
+                <div class="phone-card-band" data-testid="card-first-time">
+                    <MudIcon Icon="@Icons.Material.Filled.Warning" Size="Size.Small" Class="phone-card-band-icon" />
+                    <span>@Text["Card_FirstTime"]</span>
+                </div>
             }
             @if (card.Warning is not null)
             {
-                <div class="phone-card-warning" data-testid="card-warning">@Text["Card_Warning_" + card.Warning]</div>
+                <div class="phone-card-band" data-testid="card-warning">
+                    <MudIcon Icon="@Icons.Material.Filled.Warning" Size="Size.Small" Class="phone-card-band-icon" />
+                    <span>@Text["Card_Warning_" + card.Warning]</span>
+                </div>
             }
 
             @if (IsLive)
             {
-                <div class="phone-card-timer" data-testid="card-timer">@Text["Card_Timer", PhoneFormat.Number(remaining)]</div>
-                <MudProgressLinear Value="@Progress" Color="@(remaining <= 10 ? Color.Warning : Color.Primary)" />
                 @if (Session.PinVisible)
                 {
                     <PinField Label="@Text["Card_Pin"]" @bind-Value="pin" />
@@ -77,7 +81,14 @@
             @* Rule 6: while Checking the card has no state line of its own (Khalil, 16 Oct 2026); the chat's
                Outcome_checking carries the message, and the card shows no countdown and never "failed". *@
         </MudCardContent>
-        <MudCardActions>
+        @* Decision 8, option B (Khalil, 21 Oct 2026): the countdown and its bar sit in the action block, under the rule that
+           closes the fields, directly above Confirm and Cancel; the timer, the bar and the buttons share one parent. *@
+        <MudCardActions Class="phone-card-actions">
+            @if (IsLive)
+            {
+                <div class="phone-card-timer" data-testid="card-timer">@Text["Card_Timer", PhoneFormat.Number(remaining)]</div>
+                <MudProgressLinear Class="phone-card-progress" Value="@Progress" Color="@(remaining <= 10 ? Color.Warning : Color.Primary)" />
+            }
             <MudButton data-testid="card-confirm" Variant="Variant.Filled" Color="Color.Primary"
                        Disabled="@(!CanAct)" OnClick="ConfirmAsync">@Text["Card_Confirm"]</MudButton>
             <MudButton data-testid="card-cancel" Variant="Variant.Text"

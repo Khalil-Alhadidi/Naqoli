@@ -34,6 +34,10 @@ public static class PhoneFormat
     public static string Date(DateTimeOffset instant)
         => ArabicDigits.ToArabicIndic(instant.ToOffset(AgentClock.IraqOffset).ToString("dd/MM/yyyy", CultureInfo.InvariantCulture));
 
+    /// <summary>The Iraq time of <paramref name="instant"/>, <c>HH:mm</c>, with Arabic-Indic digits: the phone's status bar (UI pass task 7).</summary>
+    public static string Time(DateTimeOffset instant)
+        => ArabicDigits.ToArabicIndic(instant.ToOffset(AgentClock.IraqOffset).ToString("HH:mm", CultureInfo.InvariantCulture));
+
     /// <summary>
     /// The label of a question option: the store option's string; else the option's name (<see cref="OptionName"/>), then
     /// the product type's word (<c>Product_type_credit</c>, <c>Product_type_internet</c>) when the option is a product

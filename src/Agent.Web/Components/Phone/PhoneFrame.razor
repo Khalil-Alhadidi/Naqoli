@@ -3,6 +3,7 @@
 @* The phone (D20): right to left, Arabic, Arabic-Indic digits. Every text comes from the resource file (rule 4). *@
 <MudRTLProvider RightToLeft="true">
     <div class="phone-frame" data-testid="phone-frame" dir="rtl" lang="ar" data-interactive="@(interactive ? "true" : "false")">
+        <PhoneStatusBar />
         @* The header's buttons open the alias directory (milestone 9a) or My orders (milestone 9b) in place of the chat;
            Back returns to the chat. *@
         <div class="phone-header">

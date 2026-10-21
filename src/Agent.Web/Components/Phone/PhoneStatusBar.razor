@@ -1,0 +1,27 @@
+@implements IDisposable
+@inject TimeProvider Clock
+
+@* The phone's status bar (UI pass task 7): the Iraq time in Arabic-Indic digits from the clock the session uses,
+   refreshed every minute, and three icons. It holds no string, so the phone's resource file is unchanged (rule 4). *@
+<div class="phone-status-bar" data-testid="phone-status-bar">
+    <span class="phone-status-time" dir="ltr">@PhoneFormat.Time(Clock.GetUtcNow())</span>
+    <span class="phone-status-icons">
+        <MudIcon Icon="@Icons.Material.Filled.SignalCellularAlt" Size="Size.Small" />
+        <MudIcon Icon="@Icons.Material.Filled.Wifi" Size="Size.Small" />
+        <MudIcon Icon="@Icons.Material.Filled.BatteryFull" Size="Size.Small" />
+    </span>
+</div>
+
+@code {
+    private Timer? timer;
+
+    protected override void OnInitialized()
+    {
+        // The next tick lands on the next whole minute, then one a minute.
+        var now = Clock.GetUtcNow();
+        var toNextMinute = TimeSpan.FromMinutes(1) - TimeSpan.FromTicks(now.Ticks % TimeSpan.TicksPerMinute);
+        timer = new Timer(_ => _ = InvokeAsync(StateHasChanged), null, toNextMinute, TimeSpan.FromMinutes(1));
+    }
+
+    public void Dispose() => timer?.Dispose();
+}

@@ -168,4 +168,20 @@ public sealed class CardJourneys(JourneyHost host) : JourneyBase(host)
         Assert.Equal(historyBefore + 1, (await Host.HistoryAsync(U1)).Count);
         Assert.Equal(U1Balance - 51_000, await Host.BalanceAsync(U1));
     }
+
+    [Fact]
+    public async Task ThePhoneHasAStatusBarAndTheCardShowsTheTimerByConfirm()
+    {
+        // UI pass task 7: the status bar sits inside the phone frame, and the countdown is in the action block beside
+        // Confirm (decision 8, option B).
+        var page = await OpenAsync(Host.WebAddress);
+        await Expect(page.GetByTestId("phone-frame").GetByTestId("phone-status-bar")).ToBeVisibleAsync();
+
+        await SayAsync(page, DevSet.Say("CLN-01"));
+        await Expect(page.GetByTestId("card")).ToHaveAttributeAsync("data-state", "live");
+        await Expect(page.GetByTestId("card-timer")).ToBeVisibleAsync();
+        Assert.True(await page.EvaluateAsync<bool>(
+            "() => document.querySelector('[data-testid=card-timer]').parentElement === document.querySelector('[data-testid=card-confirm]').parentElement"),
+            "card-timer and card-confirm do not share one parent element");
+    }
 }
