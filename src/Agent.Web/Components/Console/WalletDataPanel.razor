@@ -3,10 +3,13 @@
 @inject IServiceScopeFactory Scopes
 @inject WalletChanges WalletChanges
 @inject IOptions<AgentOptions> Options
+@inject IOptionsMonitor<ConsoleOptions> ConsoleSettings
 
 @* Read only: the demo user's wallet as the mock wallet reports it. Each read goes through a fresh scope's client. It
    reloads on every WalletChanges notification for its user or for every user: a payment or an alias change from any
-   tab's phone or console, the fault panel's external debit, the console's reset. *@
+   tab's phone or console, the fault panel's external debit, the console's reset. Each grid shows one page of
+   Console:GridPageSize rows (UI pass, task 4b): contacts and bills keep their page across a reload (clamped when the list
+   shrank), and the history, read newest first, returns to page 1 on every reload so the newest payment is on screen. *@
 <MudPaper Class="pa-3" Elevation="1">
     <MudText Typo="Typo.h6">Wallet data, user @userId</MudText>
 
@@ -28,10 +31,11 @@
     <MudText Typo="Typo.subtitle1" Class="mt-3">Contacts</MudText>
     @if (contacts is WalletResult<WalletContacts>.Ok { Value: var directory })
     {
+        var contactRows = PagedList<WalletContact>.Of(directory.Contacts, contactsPage, PageSize);
         <MudSimpleTable Dense="true" Hover="true">
             <thead><tr><th>Code</th><th>Saved name</th><th>Registered name</th><th>Last sent</th></tr></thead>
             <tbody>
-                @foreach (var contact in directory.Contacts)
+                @foreach (var contact in contactRows.Rows)
                 {
                     <tr>
                         <td>@contact.Code</td>
@@ -42,6 +46,8 @@
                 }
             </tbody>
         </MudSimpleTable>
+        <GridPager Grid="contacts" Total="@contactRows.Total" Page="@contactRows.Page" PageSize="@PageSize"
+                   PageChanged="@((int page) => contactsPage = page)" />
     }
     else if (contacts is not null)
     {
@@ -51,10 +57,11 @@
     <MudText Typo="Typo.subtitle1" Class="mt-3">Bills</MudText>
     @if (bills is WalletResult<IReadOnlyList<WalletBill>>.Ok { Value: var list })
     {
+        var billRows = PagedList<WalletBill>.Of(list, billsPage, PageSize);
         <MudSimpleTable Dense="true" Hover="true">
             <thead><tr><th>Code</th><th>Biller</th><th>Label</th><th>Due</th></tr></thead>
             <tbody>
-                @foreach (var bill in list)
+                @foreach (var bill in billRows.Rows)
                 {
                     <tr>
                         <td>@bill.Code</td>
@@ -65,19 +72,22 @@
                 }
             </tbody>
         </MudSimpleTable>
+        <GridPager Grid="bills" Total="@billRows.Total" Page="@billRows.Page" PageSize="@PageSize"
+                   PageChanged="@((int page) => billsPage = page)" />
     }
     else if (bills is not null)
     {
         <MudText Color="Color.Error">@Unavailable(bills)</MudText>
     }
 
-    <MudText Typo="Typo.subtitle1" Class="mt-3">History (last @HistoryRows)</MudText>
+    <MudText Typo="Typo.subtitle1" Class="mt-3">History</MudText>
     @if (history is WalletResult<IReadOnlyList<WalletHistoryItem>>.Ok { Value: var rows })
     {
+        var historyRows = PagedList<WalletHistoryItem>.Of(rows, historyPage, PageSize);
         <MudSimpleTable Dense="true" Hover="true">
             <thead><tr><th>Reference</th><th>Type</th><th>Status</th><th>Amount</th><th>Fee</th><th>To</th><th>When</th></tr></thead>
             <tbody>
-                @foreach (var row in rows)
+                @foreach (var row in historyRows.Rows)
                 {
                     <tr data-testid="wallet-history-row" data-reference="@row.Reference">
                         <td>@row.Reference</td>
@@ -91,6 +101,8 @@
                 }
             </tbody>
         </MudSimpleTable>
+        <GridPager Grid="history" Total="@historyRows.Total" Page="@historyRows.Page" PageSize="@PageSize"
+                   PageChanged="@((int page) => historyPage = page)" />
     }
     else if (history is not null)
     {
@@ -99,9 +111,6 @@
 </MudPaper>
 
 @code {
-    /// <summary>How many history rows the panel shows.</summary>
-    private const int HistoryRows = 20;
-
     private readonly CancellationTokenSource disposed = new();
     private int userId;
     private bool loading;
@@ -110,6 +119,14 @@
     private WalletResult<WalletContacts>? contacts;
     private WalletResult<IReadOnlyList<WalletBill>>? bills;
     private WalletResult<IReadOnlyList<WalletHistoryItem>>? history;
+
+    // The page shown in each grid, 1-based. PagedList.Of clamps one that no longer exists.
+    private int contactsPage = 1;
+    private int billsPage = 1;
+    private int historyPage = 1;
+
+    /// <summary>Rows to a page in every grid: <c>Console:GridPageSize</c>, read on each render.</summary>
+    private int PageSize => ConsoleSettings.CurrentValue.GridPageSize;
 
     protected override async Task OnInitializedAsync()
     {
@@ -160,7 +177,11 @@
                 balance = await wallet.GetBalanceAsync(userId, token);
                 contacts = await wallet.GetContactsAsync(userId, token);
                 bills = await wallet.GetBillsAsync(userId, token);
-                history = await wallet.GetHistoryAsync(userId, since: null, toPhone: null, HistoryRows, token);
+                // Agent:HistoryPageSize rows, newest first as the wallet returns them (decision 7); the grid pages them.
+                history = await wallet.GetHistoryAsync(userId, since: null, toPhone: null, Options.Value.HistoryPageSize, token);
+
+                // Every reload follows a wallet change (or the first open): the newest payment is the first row on screen.
+                historyPage = 1;
             }
             while (reloadRequested);
         }

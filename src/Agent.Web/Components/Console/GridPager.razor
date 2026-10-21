@@ -3,7 +3,7 @@
    list fits on one page. The grid owns the page number; the pager only asks for a new one through PageChanged. *@
 @if (Total > PageSize)
 {
-    <div data-testid="grid-pager" data-page="@current" data-pages="@pages" dir="ltr" class="d-flex align-center justify-end gap-2 mt-2">
+    <div data-testid="grid-pager" data-grid="@Grid" data-page="@current" data-pages="@pages" dir="ltr" class="d-flex align-center justify-end gap-2 mt-2">
         <MudText Typo="Typo.body2" data-testid="grid-pager-range">@RangeText</MudText>
         <MudIconButton Icon="@Icons.Material.Filled.ChevronLeft" Size="Size.Small" aria-label="Previous page"
                        data-testid="grid-pager-previous" Disabled="@(current <= 1)" OnClick="() => GoTo(current - 1)" />
@@ -21,6 +21,12 @@
 
     /// <summary>Rows to a page: <c>Console:GridPageSize</c>.</summary>
     [Parameter] public int PageSize { get; set; } = 10;
+
+    /// <summary>
+    /// Which grid the pager belongs to, rendered as <c>data-grid</c> (<c>contacts</c>, <c>bills</c>, <c>history</c>,
+    /// <c>log</c>, <c>aliases</c>) so that pagers in one panel can be told apart; no attribute when null.
+    /// </summary>
+    [Parameter] public string? Grid { get; set; }
 
     /// <summary>Raised with the page asked for by Previous or Next.</summary>
     [Parameter] public EventCallback<int> PageChanged { get; set; }

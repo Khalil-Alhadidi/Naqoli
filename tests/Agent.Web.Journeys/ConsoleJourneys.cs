@@ -189,6 +189,36 @@ public sealed class ConsoleJourneys(JourneyHost host) : JourneyBase(host)
         Assert.Equal(U1Balance, await Host.BalanceAsync(U1));
     }
 
+    /// <summary>
+    /// UI pass, task 4b (decision 7): the wallet panel's history is paged newest first and goes back to page 1 after a
+    /// payment, so the new reference is the first row on screen; Next shows only older rows.
+    /// </summary>
+    [Fact]
+    public async Task TheHistoryGridPagesNewestFirst()
+    {
+        const int pageSize = 10; // Console:GridPageSize in appsettings.json; U1's history holds more than two pages.
+        var page = await OpenAsync(Host.WebAddress);
+
+        await SayAsync(page, DevSet.Say("CLN-01"));
+        await page.GetByTestId("card-confirm").ClickAsync();
+        await Expect(page.Locator("[data-testid=outcome][data-outcome=done]")).ToHaveCountAsync(1);
+        var reference = (await Host.HistoryAsync(U1))[0].Reference;
+
+        var pager = page.Locator("[data-testid=grid-pager][data-grid=history]");
+        var rows = page.GetByTestId("wallet-history-row");
+        await Expect(rows.First).ToHaveAttributeAsync("data-reference", reference);
+        await Expect(pager).ToHaveAttributeAsync("data-page", "1");
+        await Expect(rows).ToHaveCountAsync(pageSize);
+
+        await pager.GetByTestId("grid-pager-next").ClickAsync();
+
+        await Expect(pager).ToHaveAttributeAsync("data-page", "2");
+        await Expect(rows).ToHaveCountAsync(pageSize);
+        await Expect(page.Locator($"[data-testid=wallet-history-row][data-reference='{reference}']")).ToHaveCountAsync(0);
+        Assert.All(await rows.EvaluateAllAsync<string[]>("rs => rs.map(r => r.dataset.reference)"),
+            shown => Assert.NotEqual(reference, shown));
+    }
+
     [Fact]
     public async Task PinFieldShowsForALargeAmountAndThePinIsNeverLogged()
     {

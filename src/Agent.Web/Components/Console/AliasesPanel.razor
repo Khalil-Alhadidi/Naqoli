@@ -4,21 +4,24 @@
 @inject ChatSession Session
 @inject WalletChanges WalletChanges
 @inject IOptions<AgentOptions> Options
+@inject IOptionsMonitor<ConsoleOptions> ConsoleSettings
 
 @* The console's Aliases panel (milestone 9a, ruling 5), in English: the demo user's aliases as the wallet holds them, a
    delete per row, and a form to add one for a contact or a typed number. It acts through the circuit's ChatSession and
    the agent's AliasDirectory, as the phone's directory does; the agent does every check. It reloads on every
    WalletChanges notification for its user or for every user (any tab's phone or console, the reset); the session's
-   Changed only re-renders the buttons while an action runs. *@
+   Changed only re-renders the buttons while an action runs. The list shows one page of Console:GridPageSize rows, in the
+   wallet's order, and keeps its page across a reload (clamped when a delete shrank it; UI pass, task 4b). *@
 <MudPaper Class="pa-3" Elevation="1" data-testid="aliases-panel">
     <MudText Typo="Typo.h6">Aliases, user @Options.Value.DemoUserId</MudText>
 
     @if (contacts is WalletResult<WalletContacts>.Ok { Value: var directory })
     {
+        var aliasRows = PagedList<WalletAlias>.Of(directory.Aliases, aliasesPage, PageSize);
         <MudSimpleTable Dense="true" Hover="true">
             <thead><tr><th>Alias</th><th>Phone</th><th>Registered name</th><th></th></tr></thead>
             <tbody>
-                @foreach (var alias in directory.Aliases)
+                @foreach (var alias in aliasRows.Rows)
                 {
                     <tr data-testid="console-alias" data-alias-id="@alias.AliasId">
                         <td><bdi>@alias.Text</bdi></td>
@@ -33,6 +36,8 @@
                 }
             </tbody>
         </MudSimpleTable>
+        <GridPager Grid="aliases" Total="@aliasRows.Total" Page="@aliasRows.Page" PageSize="@PageSize"
+                   PageChanged="@((int page) => aliasesPage = page)" />
         @if (directory.Aliases.Count == 0)
         {
             <MudText Typo="Typo.body2">No aliases.</MudText>
@@ -83,6 +88,12 @@
     private string aliasText = string.Empty;
     private string phone = string.Empty;
     private int? target;
+
+    // The page shown, 1-based; kept across a reload, and clamped by PagedList.Of when the list shrank.
+    private int aliasesPage = 1;
+
+    /// <summary>Rows to a page: <c>Console:GridPageSize</c>, read on each render.</summary>
+    private int PageSize => ConsoleSettings.CurrentValue.GridPageSize;
 
     // A code, never alias text: saved, deleted, the refusal's reason code, or unavailable.
     private string? result;
