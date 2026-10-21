@@ -1,6 +1,6 @@
 # Topic 04 · Bill Pay & Transfer Agent · Architecture
 
-**Version 0.11, agreed in brainstorm and updated with the test-set session of 05/10/2026. The build plan is in `docs/build-plan.md`.** Built from the two submitted slides. The diagrams show what the slides already commit to; the open questions at the end are what we still have to decide together.
+**Version 0.11, agreed in brainstorm and updated with the test-set session of 05/10/2026. The build plan is in `docs/build-plan.md`.** Built from the two submitted slides. The diagrams show what the slides already commit to; the decisions log at the end records how the open questions were settled.
 
 ## 1. What is already fixed
 
@@ -280,28 +280,24 @@ Already taken from the slide 2 cut list: account-number and QR entry (D21).
 
 Never cut: tap binding, idempotency, honest failure messages, consent screen, held-out test set.
 
-## 9. Open questions for our sessions
+## 9. Decisions log
 
-### Session 1: the model's job
+The questions this section once held, as they were settled. Items 1 to 10 were decided in the design sessions before the repository was created and are recorded in architecture v0.11 (5 Oct 2026), first committed in 763d870 (14 Oct 2026). Items 11 to 15 were settled during the build; the open items table of `docs/build-plan.md` records the same rulings. What is still open is in `docs/known-gaps.md`.
 
-1.  ~~Tool calling, or one parse call?~~ **Decided, see D1.**
-2.  ~~How does the user answer a question?~~ **Decided, see D3.**
-3.  ~~How much conversation does the model see?~~ **Decided, see D5.**
-
-### Session 2: wallet and write path
-
-4.  ~~A new message while a card is waiting.~~ **Decided, see D6.**
-5.  ~~Compound requests.~~ **Decided, see D7.**
-6.  ~~PIN above 1,000,000 IQD.~~ **Decided, see D8.**
-7.  ~~Bills and top-ups.~~ **Decided, see D9 and D11.**
-8.  ~~Purchase delivery rule.~~ **Decided, see D11: always a code.**
-
-### Session 3: evaluation and demo
-
-9.  ~~Simulating the tap in the test run.~~ **Decided, see D12.**
-10. ~~Judge-supplied input.~~ **Covered by D17:** the judge types in the phone and sees the wallet data, the log and the learning data beside it.
-11. **Where the demo runs.** Khalil's laptop or a hosted copy. Waits for the organisers' guidelines.
-12. **Results component in the page.** Keep it, or show results only in the repository and slides. Waits for the organisers' guidelines.
-13. **SQL Server for other people.** How a judge runs the repo without Khalil's instance. *Proposal:* the connection string is configuration; the README gives two routes, LocalDB on Windows or SQL Server in a container, and one command creates and seeds the database.
-14. **Rules for Claude Code without the held-out cases.** The Rules and Matching sheets sit in the test-set workbook, which also holds the held-out cases. *Proposal:* export the two sheets to `docs/matching-rules.md` before the resolver is built, and keep the workbook itself out of the coding sessions.
-15. **What the audit log keeps for a balance reply.** *Proposal:* it records that the balance was shown and when, not the figure.
+| # | Question | Resolved | Where decided |
+|---|---|---|---|
+| 1 | Tool calling, or one parse call? | 5 Oct 2026: one parse call | D1, this file (763d870) |
+| 2 | How does the user answer a question? | 5 Oct 2026: options to tap | D3, this file (763d870) |
+| 3 | How much conversation does the model see? | 5 Oct 2026: the new message and a one-line note of what is pending | D5, this file (763d870) |
+| 4 | A new message while a card is waiting | 5 Oct 2026 | D6, this file (763d870) |
+| 5 | Compound requests | 5 Oct 2026 | D7, this file (763d870) |
+| 6 | PIN above 1,000,000 IQD | 5 Oct 2026 | D8, this file (763d870) |
+| 7 | Bills and top-ups | 5 Oct 2026 | D9 and D11, this file (763d870) |
+| 8 | Purchase delivery rule | 5 Oct 2026: always a code | D11, this file (763d870) |
+| 9 | Simulating the tap in the test run | 5 Oct 2026 | D12, this file (763d870) |
+| 10 | Judge-supplied input | 5 Oct 2026: the judge types in the phone and sees the wallet data, the log and the learning data beside it | D17, this file (763d870) |
+| 11 | Where the demo runs: Khalil's laptop or a hosted copy | 16 Oct 2026: Khalil's laptop. Confirmation with the organisers is still open, see `docs/known-gaps.md` row 46 | `docs/build-plan.md`, open items (e65a2b2) |
+| 12 | Results component in the page | 16 Oct 2026: a console panel showing the latest report's targets table, built in milestone 10 (not yet built: `docs/known-gaps.md` row 20) | `docs/build-plan.md`, open items (e65a2b2) |
+| 13 | SQL Server for other people | 14 Oct 2026: the connection string is configuration; `README.md` gives two routes, LocalDB on Windows or SQL Server in a container, and one command creates and seeds the database | `README.md` (7d54c9d) |
+| 14 | Rules for Claude Code without the held-out cases | 14 Oct 2026: the Rules and Matching sheets exported to `docs/matching-rules.md`; the workbook stays out of the coding sessions (`CLAUDE.md` rule 7) | `docs/matching-rules.md` (462187f) |
+| 15 | What the audit log keeps for a balance reply | 14 Oct 2026: that the balance was shown and when, not the figure | `docs/plans/milestone-3-write-path.md` (8c730f1); built as the `balance_shown` audit event (dec55e4) |
