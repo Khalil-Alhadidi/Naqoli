@@ -208,10 +208,10 @@ zaincash-agent/
     Agent.Eval/         console: runs the test sets, writes the results report
   tests/
     Agent.Core.Tests/   normalisation, matching, expiry, idempotency
-    Agent.Web.Journeys/ Playwright: 10 to 15 screen journeys
+    Agent.Web.Journeys/ Playwright screen journeys on the scripted parser (70 tests on 21 Oct 2026)
   data/
     seed/               synthetic users, contacts, billers, history
-    requests.dev.jsonl        62 requests
+    requests.dev.jsonl        96 requests (Khalil's 72, ADD-01 to ADD-24)
     requests.heldout.jsonl    62 requests, committed before tuning
   docs/
     architecture.md     this file
@@ -220,6 +220,8 @@ zaincash-agent/
 ```
 
 ## 7. Mock wallet API, first draft
+
+The built contract, with every route, field and error code, is `docs/wallet-api.md`; this section is the first draft.
 
 | Endpoint | Purpose |
 |---|---|
@@ -253,15 +255,15 @@ These are limits we chose, not bugs. Each one fails safely today, is counted in 
 
 | Gap | What the agent does today | How it would be fixed |
 |---|---|---|
-| "Same as last time", "like last month" | Asks who and how much. "Send again" on the last receipt covers the commonest case | A small fixed set of references that code resolves from history |
-| Follow-ups that point back in the chat ("send him fifty more", "the same to Ali") | Asks who and how much | Code keeps a reference to the last completed transaction; wider context only if measured safe on the development set |
+| "Same as last time", "like last month" | Refused with no card; the reply asks for the whole request again and the reason is logged. "Send again" on the last receipt covers the commonest case | A small fixed set of references that code resolves from history |
+| Follow-ups that point back in the chat ("send him fifty more", "the same to Ali") | Refused with no card (`refers_back`); the reply asks for the whole request again | Code keeps a reference to the last completed transaction; wider context only if measured safe on the development set |
 | Amending a card in words ("make it sixty") | The user cancels and says it again | An amend intent that kills the old card and builds a new one with a new pending ID |
 | Users who cannot read the card | Not served in phase one | Voice input and a read-aloud card |
 | Other Iraqi varieties (Moslawi, southern) and Kurdish | The first build is written and tested in one variety. Others may already work but are not measured | Add test cases per variety, then choose or tune a model on them |
 | Several accounts and choosing where the money comes from | Uses the one default account | A "From" line on the card that the user taps to change; the data model already allows several accounts |
 | Moving money between the user's own accounts | Not offered | Reuses the transfer flow with the user's own account as recipient |
 | Paying part of a bill | No card. The reply says bills are paid in full and gives the full amount | An amount field on bill cards where the biller allows it |
-| Credit delivered straight to the user's own number | Returns a code like any other purchase | A delivery line on the card; code checks that the operator matches the number |
+| Credit delivered straight to the user's own number | Refused with no card; the reason `credit_to_own_number` is logged (GAP-06, milestone 10) | A delivery line on the card; code checks that the operator matches the number |
 | Other goods and services in the store | "Not available", logged | More catalogue rows; the mechanism is the same |
 | Scanning a QR code | Not offered. The user types the phone number, or uses a saved alias | Left to the wallet app's own QR feature. If wanted later, a scan feeds the same path as a typed phone number |
 | Sending to an account number | Not offered. No card; the reply asks for a phone number or a saved name | Resolve the account number in code to its registered name, then the same path as a typed phone number |
