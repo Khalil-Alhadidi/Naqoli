@@ -1,5 +1,18 @@
 # ZainCash Bill Pay and Transfer Agent
 
+## For the judges
+
+The agent reads one sentence in Iraqi Arabic (a transfer, a bill, a store purchase, or a balance question) and answers with one confirmation card built by code, which moves money only when the user taps Confirm; the model parses the sentence and nothing else, every reply is a template written by an Iraqi, and phone and account numbers are masked before the model sees the text. To run it on Windows with the .NET 10 SDK and a local SQL Server (other database routes under [Database](#database)): `dotnet tool restore`, then `dotnet run --project src/Wallet.MockApi -- migrate` and `dotnet run --project src/Agent.Web -- migrate`, then start the wallet (`dotnet run --project src/Wallet.MockApi`) and, in a second terminal, the console (`dotnet run --project src/Agent.Web`) and open http://localhost:5089. It runs on the scripted parser with no model key; [The model](#the-model-claude-parser) explains how to switch to Claude. The held-out set (`data/requests.heldout.jsonl`, 62 cases) was committed in `462187f` on 14 Oct 2026 and sealed on 15 Oct 2026 with SHA-256 `3e396362fd6cea5fa81e26ad9e4c17e9c4de2066ee186e963690a14c195ca1c1` ([docs/HELDOUT_SEAL.md](docs/HELDOUT_SEAL.md)); only `Agent.Eval` reads it, once, in milestone 11 (rule 7 in [CLAUDE.md](CLAUDE.md)).
+
+Reading guide, in order:
+
+1. [docs/architecture.md](docs/architecture.md): the design, decisions D1 to D22, and the decisions log.
+2. [docs/failure-modes.md](docs/failure-modes.md): every way the system can fail that we found, and how each is handled.
+3. [docs/known-gaps.md](docs/known-gaps.md): every known limit of the agent as built, and what would close it.
+4. [docs/reports/dev-claude-sonnet-m9c-repeat3-2026-10-19-2055.md](docs/reports/dev-claude-sonnet-m9c-repeat3-2026-10-19-2055.md): the latest Sonnet result on the development set, three runs, every target passed on the median.
+5. [docs/targets.md](docs/targets.md): the targets from the brief that every report grades against.
+6. [docs/disclosure.md](docs/disclosure.md): every library, tool, model and data source used, Claude Code included.
+
 An agent that turns one sentence in Iraqi Arabic into one confirmation card and one tap, against a mock wallet API, for transfers, bills, store purchases and the read-only balance question. It is an entry for the ZainCash Agentic AI Challenge Iraq, topic 04, and its design is in [docs/architecture.md](docs/architecture.md).
 
 Rules: the nine rules that are never broken are listed in [CLAUDE.md](CLAUDE.md).
