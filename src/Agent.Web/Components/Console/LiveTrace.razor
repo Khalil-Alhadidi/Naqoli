@@ -1,17 +1,29 @@
 @implements IDisposable
 @inject TraceLog Trace
 
-@* The live trace (D17): every step of this circuit, newest first, coloured by zone. Codes, states and amounts only. *@
+@* The live trace (D17): every step of this circuit, newest first, marked by zone. Codes, states and amounts only. Each
+   zone has its colour (the --zone-* tokens), its icon and its label, so the zones read without colour; the legend
+   under the title gives the four pairings (UI pass task 3). *@
 <MudPaper Class="pa-3 console-trace" Elevation="1">
     <div class="console-trace-head">
         <MudText Typo="Typo.h6">Live trace</MudText>
         <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="Trace.Clear">Clear</MudButton>
+    </div>
+    <div class="trace-legend">
+        @foreach (var zone in LegendOrder)
+        {
+            <span class="trace-legend-item zone-@ZoneName(zone)" data-testid="trace-legend" data-zone="@ZoneName(zone)">
+                <MudIcon Icon="@ZoneIcon(zone)" Size="Size.Small" Class="trace-icon" />
+                <span class="trace-zone">@zone</span>
+            </span>
+        }
     </div>
     <div class="console-trace-list">
         @foreach (var entry in Trace.Entries.Reverse())
         {
             <div class="trace-entry zone-@ZoneName(entry.Zone)" data-testid="trace-entry" data-zone="@ZoneName(entry.Zone)">
                 <span class="trace-time">@entry.At.ToLocalTime().ToString("HH:mm:ss", System.Globalization.CultureInfo.InvariantCulture)</span>
+                <MudIcon Icon="@ZoneIcon(entry.Zone)" Size="Size.Small" Class="trace-icon" />
                 <span class="trace-zone">@entry.Zone</span>
                 <span class="trace-step">@entry.Step</span>
                 @if (entry.Detail is not null)
@@ -24,6 +36,8 @@
 </MudPaper>
 
 @code {
+    private static readonly TraceZone[] LegendOrder = [TraceZone.User, TraceZone.Model, TraceZone.Code, TraceZone.Write];
+
     protected override void OnInitialized() => Trace.Changed += OnChanged;
 
     public void Dispose() => Trace.Changed -= OnChanged;
@@ -31,4 +45,13 @@
     private void OnChanged() => _ = InvokeAsync(StateHasChanged);
 
     private static string ZoneName(TraceZone zone) => zone.ToString().ToLowerInvariant();
+
+    private static string ZoneIcon(TraceZone zone) => zone switch
+    {
+        TraceZone.User => Icons.Material.Filled.Person,
+        TraceZone.Model => Icons.Material.Filled.AutoAwesome,
+        TraceZone.Code => Icons.Material.Filled.Code,
+        TraceZone.Write => Icons.Material.Filled.Payments,
+        _ => throw new ArgumentOutOfRangeException(nameof(zone), zone, "No icon for this zone."),
+    };
 }

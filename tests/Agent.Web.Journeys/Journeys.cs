@@ -102,6 +102,9 @@ public sealed class Journeys(JourneyHost host) : IAsyncLifetime
         foreach (var zone in new[] { "user", "model", "code", "write" })
             await Expect(page.Locator($"[data-testid=trace-entry][data-zone={zone}]").First).ToBeVisibleAsync();
 
+        // UI pass task 3: the legend gives the four zones with their icons and labels, so they read without colour.
+        await Expect(page.GetByTestId("trace-legend")).ToHaveCountAsync(4);
+
         // D20: the phone is right to left; the console left to right.
         await Expect(page.GetByTestId("phone-frame")).ToHaveAttributeAsync("dir", "rtl");
         await Expect(page.GetByTestId("console")).ToHaveAttributeAsync("dir", "ltr");

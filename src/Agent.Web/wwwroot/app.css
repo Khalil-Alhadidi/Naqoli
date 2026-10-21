@@ -267,21 +267,48 @@ h1:focus {
     font-size: var(--text-xs);
 }
 
+/* The zones (UI pass task 3): each entry and legend item sets --zone once; the bar, the icon and the label read it. */
+.trace-entry.zone-user,
+.trace-legend-item.zone-user { --zone: var(--zone-user); }
+.trace-entry.zone-model,
+.trace-legend-item.zone-model { --zone: var(--zone-model); }
+.trace-entry.zone-code,
+.trace-legend-item.zone-code { --zone: var(--zone-code); }
+.trace-entry.zone-write,
+.trace-legend-item.zone-write { --zone: var(--zone-write); }
+
+.trace-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-3);
+    margin-bottom: var(--space-2);
+    font-size: var(--text-xs);
+}
+
+.trace-legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+}
+
 .trace-entry {
     display: flex;
     flex-wrap: wrap;
+    align-items: center;
     gap: var(--space-2);
     padding: calc(var(--space-1) / 2) var(--space-2);
-    border-left: var(--size-zone-bar) solid transparent;
+    border-left: var(--size-zone-bar) solid var(--zone, transparent);
 }
 
-.trace-entry.zone-user { border-left-color: var(--zone-user); }
-.trace-entry.zone-code { border-left-color: var(--zone-code); }
-.trace-entry.zone-model { border-left-color: var(--zone-model); }
-.trace-entry.zone-write { border-left-color: var(--zone-write); }
+.trace-icon.mud-icon-root {
+    font-size: var(--text-lg);
+    color: var(--zone);
+}
 
 .trace-time { color: var(--color-text-muted); }
-.trace-zone { font-weight: 600; min-width: var(--size-zone-label-min); }
+.trace-zone { font-weight: 600; color: var(--zone); }
+.trace-entry .trace-zone { min-width: var(--size-zone-label-min); }
+.trace-step { color: var(--color-text); }
 .trace-detail { color: var(--color-text-muted); }
 
 /* The phone column, sticky below the bar, with the page's right gutter. */

@@ -396,7 +396,18 @@ Person or bill (Khalil, 20 Oct 2026): the `person_or_bill` question (`Question_p
 - The scoped `ITraceSink` registration returns `TraceLog.Current.Value` when it is set, and otherwise the scope's own `TraceLog`. That makes it the same instance as `TraceLog` in the circuit's scope.
 - An `AsyncLocal` value set in an async method flows into the calls it awaits and is gone when the method returns, so one circuit's steps never reach another's trace.
 
-`LiveTrace` lists the entries newest first. Each entry is a `trace-entry` with `data-zone`, and its colour marks the zone. Details hold codes, states and amounts only: never a PIN, an idempotency key, a purchase code, a phone or typed text. `TraceSinkTests.NoPinKeyCodeOrPhoneInAnyStep` and `ConversationTests.TheTraceKeepsNoPinKeyOrCodeAfterAPinPaymentAndAPurchase` check this, and `ChatSessionTests.ChangedIsRaisedAndTheAgentWritesToTheCircuitsTrace` checks that the agent's steps reach the circuit's log.
+`LiveTrace` lists the entries newest first. Each entry is a `trace-entry` with `data-zone`. Each zone has a colour, a Material icon and its label, so the zones read without colour (UI pass task 3, 21 Oct 2026); no zone is purple, the brand's colour:
+
+| Zone | `data-zone` | Colour (token) | Icon (`Icons.Material.Filled`) |
+|---|---|---|---|
+| User | `user` | blue, `--zone-user` `#1565c0` | `Person` |
+| Model | `model` | amber, `--zone-model` `#b45309` | `AutoAwesome` |
+| Code | `code` | green, `--zone-code` `#2e7d32` | `Code` |
+| Write | `write` | red, `--zone-write` `#b42318` (the danger colour: money leaves) | `Payments` |
+
+An entry shows the time (muted), the icon and the label (the zone's enum name) in the zone's colour, the step in body text and the detail muted, with a 4 px bar in the zone's colour on its left. Each entry and legend item sets `--zone` once from its `zone-<name>` class, and the bar, the icon and the label read it. The legend under the "Live trace" title gives the four pairings, one `trace-legend` item per zone with `data-zone`, in the order User, Model, Code, Write. `DesignTokensTests.NoZoneIsPurpleAndEachDiffersFromTheBrand` checks the hues (every zone at least 40 degrees from the brand's hue, every pair of zones at least 20 degrees apart: amber and red are 22 degrees apart and are told apart by lightness, icon and label) and `EveryTextPairingMeetsAA` the contrast on white; `HammoudiHappyPath` finds the four legend items.
+
+Details hold codes, states and amounts only: never a PIN, an idempotency key, a purchase code, a phone or typed text. `TraceSinkTests.NoPinKeyCodeOrPhoneInAnyStep` and `ConversationTests.TheTraceKeepsNoPinKeyOrCodeAfterAPinPaymentAndAPurchase` check this, and `ChatSessionTests.ChangedIsRaisedAndTheAgentWritesToTheCircuitsTrace` checks that the agent's steps reach the circuit's log.
 
 | Zone | Written by | Steps |
 |---|---|---|
@@ -771,6 +782,7 @@ The journeys locate elements only by these attributes. The two lines of the "not
 | Console Aliases panel: root, row, delete | `aliases-panel`, `console-alias`, `console-alias-delete` | `data-alias-id` |
 | Console Aliases form: text, contact select and its items, phone, Save, result | `console-alias-text`, `console-alias-target`, `console-alias-target-option`, `console-alias-phone`, `console-alias-save`, `console-alias-result` | items: `data-code`; result: `data-result` (`saved`, `deleted`, a reason code, `unavailable`) |
 | Trace entry | `trace-entry` | `data-zone` (`user`, `code`, `model`, `write`) |
+| Trace legend item (UI pass, 21 Oct 2026) | `trace-legend` | `data-zone` (`user`, `model`, `code`, `write`), four items in that order |
 | Wallet balance | `wallet-balance` | `data-value` (ASCII) |
 | Wallet history row | `wallet-history-row` | `data-reference` |
 | Settings row | `setting-row` | `data-name` |

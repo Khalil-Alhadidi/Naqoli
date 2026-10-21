@@ -190,6 +190,44 @@ public partial class DesignTokensTests
     }
 
     [Fact]
+    public void NoZoneIsPurpleAndEachDiffersFromTheBrand()
+    {
+        // UI pass task 3: the four zones read apart from the purple brand and from one another by hue.
+        const double FromTheBrand = 40;
+        // Amber and red are 22 degrees apart in hue and are told apart by lightness, icon and label (controller, 21 Oct 2026).
+        const double BetweenZones = 20;
+        var tokens = Tokens();
+        var zones = new[] { "--zone-user", "--zone-model", "--zone-code", "--zone-write" };
+        var brand = Hue(tokens["--color-brand"]);
+        var failures = new List<string>();
+
+        for (var i = 0; i < zones.Length; i++)
+        {
+            var hue = Hue(tokens[zones[i]]);
+            if (HueDistance(hue, brand) < FromTheBrand)
+                failures.Add($"{zones[i]} ({hue:F0}°) is within {FromTheBrand}° of --color-brand ({brand:F0}°)");
+            for (var j = i + 1; j < zones.Length; j++)
+            {
+                var other = Hue(tokens[zones[j]]);
+                if (HueDistance(hue, other) < BetweenZones)
+                    failures.Add($"{zones[i]} ({hue:F0}°) is within {BetweenZones}° of {zones[j]} ({other:F0}°)");
+            }
+        }
+
+        Assert.Empty(failures);
+    }
+
+    [Fact]
+    public void TheHueMatchesTheHslFormula()
+    {
+        Assert.Equal(0, Hue("#ff0000"), 1);
+        Assert.Equal(120, Hue("#00ff00"), 1);
+        Assert.Equal(240, Hue("#0000ff"), 1);
+        Assert.Equal(268, Hue("#673b98"), 0);
+        Assert.Equal(20, HueDistance(350, 10), 1);
+    }
+
+    [Fact]
     public void TheMudThemeUsesTheTokens()
     {
         var tokens = Tokens();
@@ -246,6 +284,26 @@ public partial class DesignTokensTests
         var a = RelativeLuminance(foreground);
         var b = RelativeLuminance(background);
         return (Math.Max(a, b) + 0.05) / (Math.Min(a, b) + 0.05);
+    }
+
+    /// <summary>The HSL hue of a <c>#rrggbb</c> colour, in degrees from 0 to 360 (0 for a grey).</summary>
+    private static double Hue(string hex)
+    {
+        Assert.Matches("^#[0-9a-fA-F]{6}$", hex);
+        double Channel(int offset) => int.Parse(hex.AsSpan(offset, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture) / 255.0;
+        var (r, g, b) = (Channel(1), Channel(3), Channel(5));
+        var max = Math.Max(r, Math.Max(g, b));
+        var delta = max - Math.Min(r, Math.Min(g, b));
+        if (delta == 0)
+            return 0;
+        var hue = max == r ? (g - b) / delta % 6 : max == g ? ((b - r) / delta) + 2 : ((r - g) / delta) + 4;
+        return ((hue * 60) + 360) % 360;
+    }
+
+    private static double HueDistance(double a, double b)
+    {
+        var d = Math.Abs(a - b) % 360;
+        return Math.Min(d, 360 - d);
     }
 
     private static double RelativeLuminance(string hex)
