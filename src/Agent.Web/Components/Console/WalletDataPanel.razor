@@ -59,7 +59,7 @@
                     </tbody>
                 </MudSimpleTable>
             </div>
-            <GridPager Grid="contacts" Total="@contactRows.Total" Page="@contactRows.Page" PageSize="@PageSize"
+            <GridPager Grid="contacts" Total="@contactRows.Total" Page="@contactRows.Page" PageCount="@contactRows.PageCount" PageSize="@PageSize"
                        PageChanged="@((int page) => contactsPage = page)" />
         }
     }
@@ -98,7 +98,7 @@
                     </tbody>
                 </MudSimpleTable>
             </div>
-            <GridPager Grid="bills" Total="@billRows.Total" Page="@billRows.Page" PageSize="@PageSize"
+            <GridPager Grid="bills" Total="@billRows.Total" Page="@billRows.Page" PageCount="@billRows.PageCount" PageSize="@PageSize"
                        PageChanged="@((int page) => billsPage = page)" />
         }
     }
@@ -140,7 +140,7 @@
                     </tbody>
                 </MudSimpleTable>
             </div>
-            <GridPager Grid="history" Total="@historyRows.Total" Page="@historyRows.Page" PageSize="@PageSize"
+            <GridPager Grid="history" Total="@historyRows.Total" Page="@historyRows.Page" PageCount="@historyRows.PageCount" PageSize="@PageSize"
                        PageChanged="@((int page) => historyPage = page)" />
         }
     }
@@ -242,7 +242,7 @@
         StateHasChanged();
     }
 
-    private static string? MutedWhenClosed(string status) => status == "closed" ? "row-muted" : null;
+    private static string? MutedWhenClosed(string status) => StatusBadge.IsClosed(status) ? "row-muted" : null;
 
     private static string Unavailable<T>(WalletResult<T> result) => result switch
     {

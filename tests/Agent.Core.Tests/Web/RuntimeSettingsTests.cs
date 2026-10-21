@@ -5,6 +5,7 @@ using AgentWeb::Agent.Web.Services;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Primitives;
 
 namespace Agent.Core.Tests.Web;
 
@@ -286,5 +287,75 @@ public sealed class RuntimeSettingsTests : IDisposable
         Assert.Contains("MinAmountIqd", error, StringComparison.Ordinal);
         Assert.Empty(Settings.Overrides);
         Assert.Equal(5_000_000, CapInANewScope());
+    }
+
+    /// <summary>
+    /// Security review of the UI pass (22 Oct 2026): each save builds a candidate configuration over the live one, which
+    /// registers a callback on the live configuration's reload token; the candidate is disposed after the check, so no
+    /// registration is left behind however many saves are made.
+    /// </summary>
+    [Fact]
+    public void ASaveLeavesNoChangeTokenRegistrationBehind()
+    {
+        var token = new CountingChangeToken();
+        var inner = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?> { ["Console:GridPageSize"] = "10" })
+            .Build();
+        var settings = new RuntimeSettings(new RuntimeSettingsProvider(), new CountingConfiguration(inner, token), [], [], [], []);
+
+        for (var save = 0; save < 50; save++)
+            Assert.True(settings.TrySet("Console:GridPageSize", (5 + (save % 10)).ToString(System.Globalization.CultureInfo.InvariantCulture), out var error), error);
+
+        Assert.True(token.Registered >= 50, $"the candidate registered {token.Registered} times");
+        Assert.Equal(0, token.Active);
+    }
+
+    /// <summary>A reload token that counts the callbacks registered on it and those still registered.</summary>
+    private sealed class CountingChangeToken : IChangeToken
+    {
+        private int registered;
+        private int active;
+
+        public int Registered => Volatile.Read(ref registered);
+
+        public int Active => Volatile.Read(ref active);
+
+        public bool HasChanged => false;
+
+        public bool ActiveChangeCallbacks => true;
+
+        public IDisposable RegisterChangeCallback(Action<object?> callback, object? state)
+        {
+            Interlocked.Increment(ref registered);
+            Interlocked.Increment(ref active);
+            return new Registration(this);
+        }
+
+        private sealed class Registration(CountingChangeToken owner) : IDisposable
+        {
+            private int disposed;
+
+            public void Dispose()
+            {
+                if (Interlocked.Exchange(ref disposed, 1) == 0)
+                    Interlocked.Decrement(ref owner.active);
+            }
+        }
+    }
+
+    /// <summary>A configuration that reads through to <paramref name="inner"/> and hands out <paramref name="token"/> as its reload token.</summary>
+    private sealed class CountingConfiguration(IConfiguration inner, IChangeToken token) : IConfiguration
+    {
+        public string? this[string key]
+        {
+            get => inner[key];
+            set => inner[key] = value;
+        }
+
+        public IEnumerable<IConfigurationSection> GetChildren() => inner.GetChildren();
+
+        public IChangeToken GetReloadToken() => token;
+
+        public IConfigurationSection GetSection(string key) => inner.GetSection(key);
     }
 }

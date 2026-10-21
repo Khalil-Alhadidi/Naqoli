@@ -29,7 +29,7 @@
                 </div>
             </div>
         }
-        <PhonePager Total="@orderRows.Total" Page="@orderRows.Page" PageSize="@PageSize"
+        <PhonePager Page="@orderRows.Page" PageCount="@orderRows.PageCount"
                     PageChanged="@((int shown) => ordersPage = shown)" />
     }
     else if (orders is not null)

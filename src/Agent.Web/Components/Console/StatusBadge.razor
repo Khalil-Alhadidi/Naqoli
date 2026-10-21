@@ -14,11 +14,17 @@
     /// <summary>The status string, <c>active</c> or <c>closed</c> in the seed.</summary>
     [Parameter] public string? Value { get; set; }
 
-    // The class suffix: the two known values by name, anything else "other".
+    /// <summary>
+    /// Whether an account status is closed, by the agent's own constant (<see cref="Checks.ClosedStatus"/>): the panels
+    /// mute such a row. Display only; the checks decide what a closed account may do.
+    /// </summary>
+    public static bool IsClosed(string? status) => string.Equals(status, Checks.ClosedStatus, StringComparison.OrdinalIgnoreCase);
+
+    // The class suffix: the known values by name, anything else "other".
     private string CssValue => Value?.ToLowerInvariant() switch
     {
         "active" => "active",
-        "closed" => "closed",
+        Checks.ClosedStatus => "closed",
         "done" => "done",
         "executing" => "executing",
         "failed" => "failed",
@@ -28,7 +34,7 @@
     private static string? IconFor(string value) => value switch
     {
         "active" => Icons.Material.Filled.CheckCircle,
-        "closed" => Icons.Material.Filled.Block,
+        Checks.ClosedStatus => Icons.Material.Filled.Block,
         _ => null,
     };
 }

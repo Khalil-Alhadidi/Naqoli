@@ -33,7 +33,7 @@
                 </MudButton>
             </div>
         }
-        <PhonePager Total="@aliasRows.Total" Page="@aliasRows.Page" PageSize="@PageSize"
+        <PhonePager Page="@aliasRows.Page" PageCount="@aliasRows.PageCount"
                     PageChanged="@((int shown) => aliasesPage = shown)" />
     }
     else if (contacts is not null)

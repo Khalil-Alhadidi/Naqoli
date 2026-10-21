@@ -58,9 +58,9 @@ public sealed class RuntimeSettingsProvider : ConfigurationProvider
 /// that reads <see cref="IOptionsMonitor{TOptions}"/> of <see cref="ConsoleOptions"/>. Only <c>Agent:</c> plus one of
 /// <see cref="EditableNames"/> and <c>Console:</c> plus one of <see cref="EditableConsoleNames"/> can be saved. A save is
 /// checked first on a candidate (the configuration as it is plus the one value, bound to a fresh options object of the
-/// key's section, then, for the agent, the registered post-configuration, and every registered validator of that
-/// section: the data annotations and the cross-field rules); only a valid value is published, so no other circuit ever
-/// sees an invalid one. Nothing is written to a file.
+/// key's section, then the section's registered post-configuration, and every registered validator of that section: the
+/// data annotations and the cross-field rules); only a valid value is published, so no other circuit ever sees an
+/// invalid one. Nothing is written to a file.
 /// </summary>
 public sealed class RuntimeSettings
 {
@@ -103,6 +103,7 @@ public sealed class RuntimeSettings
     private readonly IConfiguration configuration;
     private readonly IEnumerable<IPostConfigureOptions<AgentOptions>> postConfigures;
     private readonly IEnumerable<IValidateOptions<AgentOptions>> validators;
+    private readonly IEnumerable<IPostConfigureOptions<ConsoleOptions>> consolePostConfigures;
     private readonly IEnumerable<IValidateOptions<ConsoleOptions>> consoleValidators;
     private readonly Lock gate = new();
 
@@ -110,24 +111,28 @@ public sealed class RuntimeSettings
     /// <param name="configuration">The whole configuration, the runtime source included, that the options bind from.</param>
     /// <param name="postConfigures">The registered post-configuration of <see cref="AgentOptions"/>.</param>
     /// <param name="validators">The registered validators of <see cref="AgentOptions"/>.</param>
+    /// <param name="consolePostConfigures">The registered post-configuration of <see cref="ConsoleOptions"/> (none today).</param>
     /// <param name="consoleValidators">The registered validators of <see cref="ConsoleOptions"/>.</param>
     public RuntimeSettings(
         RuntimeSettingsProvider provider,
         IConfiguration configuration,
         IEnumerable<IPostConfigureOptions<AgentOptions>> postConfigures,
         IEnumerable<IValidateOptions<AgentOptions>> validators,
+        IEnumerable<IPostConfigureOptions<ConsoleOptions>> consolePostConfigures,
         IEnumerable<IValidateOptions<ConsoleOptions>> consoleValidators)
     {
         ArgumentNullException.ThrowIfNull(provider);
         ArgumentNullException.ThrowIfNull(configuration);
         ArgumentNullException.ThrowIfNull(postConfigures);
         ArgumentNullException.ThrowIfNull(validators);
+        ArgumentNullException.ThrowIfNull(consolePostConfigures);
         ArgumentNullException.ThrowIfNull(consoleValidators);
 
         this.provider = provider;
         this.configuration = configuration;
         this.postConfigures = postConfigures;
         this.validators = validators;
+        this.consolePostConfigures = consolePostConfigures;
         this.consoleValidators = consoleValidators;
     }
 
@@ -171,14 +176,23 @@ public sealed class RuntimeSettings
     /// </summary>
     private string? Validate(string key, string value)
     {
+        // The candidate registers a callback on the live configuration's reload token; disposing it removes that
+        // registration (security review of the UI pass), and shouldDisposeConfiguration: false keeps the live
+        // configuration itself alive.
         var candidate = new ConfigurationBuilder()
             .AddConfiguration(configuration, shouldDisposeConfiguration: false)
             .AddInMemoryCollection(new Dictionary<string, string?> { [key] = value })
             .Build();
-
-        return IsConsoleKey(key)
-            ? Check(key, candidate, ConsoleOptions.SectionName, new ConsoleOptions(), [], consoleValidators)
-            : Check(key, candidate, AgentOptions.SectionName, new AgentOptions(), postConfigures, validators);
+        try
+        {
+            return IsConsoleKey(key)
+                ? Check(key, candidate, ConsoleOptions.SectionName, new ConsoleOptions(), consolePostConfigures, consoleValidators)
+                : Check(key, candidate, AgentOptions.SectionName, new AgentOptions(), postConfigures, validators);
+        }
+        finally
+        {
+            (candidate as IDisposable)?.Dispose();
+        }
     }
 
     /// <summary>Binds <paramref name="options"/> from the candidate's section, post-configures and validates it.</summary>
@@ -255,6 +269,7 @@ public static class RuntimeSettingsExtensions
                 configuration,
                 sp.GetServices<IPostConfigureOptions<AgentOptions>>(),
                 sp.GetServices<IValidateOptions<AgentOptions>>(),
+                sp.GetServices<IPostConfigureOptions<ConsoleOptions>>(),
                 sp.GetServices<IValidateOptions<ConsoleOptions>>()));
         return services;
     }

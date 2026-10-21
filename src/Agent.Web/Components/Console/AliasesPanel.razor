@@ -32,7 +32,7 @@
                         @foreach (var alias in aliasRows.Rows)
                         {
                             @* UI pass task 5 (decision 1, "keep both"): the account status as a badge; a closed account's row is muted. *@
-                            <tr data-testid="console-alias" data-alias-id="@alias.AliasId" class="@(alias.AccountStatus == "closed" ? "row-muted" : null)">
+                            <tr data-testid="console-alias" data-alias-id="@alias.AliasId" class="@(StatusBadge.IsClosed(alias.AccountStatus) ? "row-muted" : null)">
                                 <td class="cell-name"><bdi>@alias.Text</bdi></td>
                                 <td class="cell-nowrap">@alias.Phone</td>
                                 <td class="cell-name"><bdi>@alias.RegisteredName</bdi></td>
@@ -47,7 +47,7 @@
                     </tbody>
                 </MudSimpleTable>
             </div>
-            <GridPager Grid="aliases" Total="@aliasRows.Total" Page="@aliasRows.Page" PageSize="@PageSize"
+            <GridPager Grid="aliases" Total="@aliasRows.Total" Page="@aliasRows.Page" PageCount="@aliasRows.PageCount" PageSize="@PageSize"
                        PageChanged="@((int page) => aliasesPage = page)" />
         }
     }

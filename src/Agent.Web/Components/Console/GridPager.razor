@@ -1,23 +1,26 @@
 @* The one pager under every console grid (UI pass, task 4a): English, left to right, console only. It shows the range
    of rows on the page ("1–10 of 42") and Previous and Next, each disabled at its end, and renders nothing when the whole
    list fits on one page. The grid owns the page number; the pager only asks for a new one through PageChanged. *@
-@if (Total > PageSize)
+@if (PageCount > 1)
 {
-    <div data-testid="grid-pager" data-grid="@Grid" data-page="@current" data-pages="@pages" dir="ltr" class="d-flex align-center justify-end gap-2 mt-2">
+    <div data-testid="grid-pager" data-grid="@Grid" data-page="@Page" data-pages="@PageCount" dir="ltr" class="d-flex align-center justify-end gap-2 mt-2">
         <MudText Typo="Typo.body2" data-testid="grid-pager-range">@RangeText</MudText>
         <MudIconButton Icon="@Icons.Material.Filled.ChevronLeft" Size="Size.Small" aria-label="Previous page"
-                       data-testid="grid-pager-previous" Disabled="@(current <= 1)" OnClick="() => GoTo(current - 1)" />
+                       data-testid="grid-pager-previous" Disabled="@(Page <= 1)" OnClick="() => GoTo(Page - 1)" />
         <MudIconButton Icon="@Icons.Material.Filled.ChevronRight" Size="Size.Small" aria-label="Next page"
-                       data-testid="grid-pager-next" Disabled="@(current >= pages)" OnClick="() => GoTo(current + 1)" />
+                       data-testid="grid-pager-next" Disabled="@(Page >= PageCount)" OnClick="() => GoTo(Page + 1)" />
     </div>
 }
 
 @code {
-    /// <summary>How many rows the whole list has.</summary>
+    /// <summary>How many rows the whole list has: the range text's total.</summary>
     [Parameter] public int Total { get; set; }
 
-    /// <summary>The page shown, 1-based; one outside 1 to the page count is shown as the nearest end.</summary>
+    /// <summary>The page shown, 1-based, as <see cref="PagedList{T}.Page"/> gives it (already clamped).</summary>
     [Parameter] public int Page { get; set; } = 1;
+
+    /// <summary>How many pages the list has, as <see cref="PagedList{T}.PageCount"/> gives it.</summary>
+    [Parameter, EditorRequired] public int PageCount { get; set; } = 1;
 
     /// <summary>Rows to a page: <c>Console:GridPageSize</c>.</summary>
     [Parameter] public int PageSize { get; set; } = 10;
@@ -31,26 +34,16 @@
     /// <summary>Raised with the page asked for by Previous or Next.</summary>
     [Parameter] public EventCallback<int> PageChanged { get; set; }
 
-    private int pages;
-    private int current;
-
-    protected override void OnParametersSet()
-    {
-        var size = Math.Max(1, PageSize);
-        pages = Math.Max(1, (Math.Max(0, Total) + size - 1) / size);
-        current = Math.Clamp(Page, 1, pages);
-    }
-
     private string RangeText
     {
         get
         {
             var size = Math.Max(1, PageSize);
-            var first = (current - 1) * size + 1;
-            var last = Math.Min(current * size, Total);
+            var first = (Page - 1) * size + 1;
+            var last = Math.Min(Page * size, Total);
             return PhoneFormat.Console(first) + "–" + PhoneFormat.Console(last) + " of " + PhoneFormat.Console(Total);
         }
     }
 
-    private Task GoTo(int page) => page < 1 || page > pages ? Task.CompletedTask : PageChanged.InvokeAsync(page);
+    private Task GoTo(int page) => page < 1 || page > PageCount ? Task.CompletedTask : PageChanged.InvokeAsync(page);
 }

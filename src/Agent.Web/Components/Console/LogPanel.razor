@@ -69,7 +69,7 @@
                 </tbody>
             </MudSimpleTable>
         </div>
-        <GridPager Grid="log" Total="@shown.Total" Page="@shown.Page" PageSize="@PageSize"
+        <GridPager Grid="log" Total="@shown.Total" Page="@shown.Page" PageCount="@shown.PageCount" PageSize="@PageSize"
                    PageChanged="@((int next) => page = next)" />
     }
 </MudPaper>
@@ -154,6 +154,8 @@
                 page = 1;
             }
             while (reloadRequested);
+
+            loaded = true;
         }
         catch (OperationCanceledException) when (token.IsCancellationRequested)
         {
@@ -163,11 +165,11 @@
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             failure = "log unavailable: " + ex.GetType().Name;
+            loaded = true;
         }
         finally
         {
             loading = false;
-            loaded = true;
         }
 
         StateHasChanged();
