@@ -56,22 +56,7 @@
 - Produces (namespace `Wallet.MockApi.Services`): `static class PinHasher { string Hash(string pin); bool Verify(string pin, string hash) }` using `Rfc2898DeriveBytes.Pbkdf2` (SHA-256, 100 000 iterations, 16-byte salt, output `pbkdf2$<iterations>$<saltBase64>$<hashBase64>`).
 - Produces (namespace `Wallet.MockApi.Data`): `SeedData` with `const int DemoUserId = 1`, `static readonly DateTimeOffset Anchor = new(2026, 10, 14, 9, 0, 0, TimeSpan.FromHours(3))`, `IReadOnlyList<User> Users()`, `IReadOnlyList<Biller> Billers()`, `IReadOnlyList<Product> Products()`, `void Apply(WalletDbContext db)` (idempotent: returns if `db.Users.Any()`; inserts users+accounts, billers, products, then contacts, aliases, bill accounts, transactions, orders, in that order so identities are deterministic), `string ComputeHash()` (SHA-256 over a canonical JSON of all seed rows, hex). `SeedReset.Reset(WalletDbContext db)`: in one database transaction, deletes all rows (Orders, Transactions, BillAccounts, Aliases, Contacts, Accounts, Users, Products, Billers), runs `DBCC CHECKIDENT ('<table>', RESEED, 0)` for each table, then `SeedData.Apply`. Pure data; no HTTP.
 
-Seed content (all synthetic; the demo user is Ahmed, id 1, the one the agent will use):
-
-| Id | Phone | Registered name (Arabic) | PIN | Balance |
-|---|---|---|---|---|
-| 1 | 07700001001 | أحمد كريم جاسم | 1234 | 300000 |
-| 2 | 07700001002 | سارة عبد الله حسن | 1234 | 1250000 |
-| 3 | 07700001003 | عمر سعد محمود | 1234 | 0 |
-| 4 | 07700001004 | محمود كريم جاسم (Hammoudi, Ahmed's brother) | 1234 | 80000 |
-| 5 | 07700001005 | علي حسن كاظم | 1234 | 45000 |
-| 6 | 07700001006 | علي كريم عبود | 1234 | 120000 |
-| 7 | 07700001007 | حسن علي رشيد | 1234 | 10000 |
-| 8 | 07700001008 | حسين علي رشيد | 1234 | 10000 |
-| 9 | 07700001009 | فاطمة جاسم محمد (Ahmed's mother) | 1234 | 500000 |
-| 10 | 07700001010 | نور صباح فاضل | 1234 | 25000 |
-| 11 | 07700001011 | أم محمد (registered: زينب طالب حميد) | 1234 | 60000 |
-| 12 | 07700001012 | أبو علي (registered: كاظم جبار علي) | 1234 | 15000 |
+The draft seed table of users (phones, registered names, PINs, balances) was replaced by the test-set seed in milestone 2b (`docs/plans/milestone-2b-adopt-test-seed.md`, `data/seed/*.json`).
 
 Contacts of user 1 (saved name → phone): `حمودي` → 07700001004; `علي` → 07700001005; `علي` → 07700001006 (planted duplicate); `حسن` → 07700001007; `حسين` → 07700001008 (planted similar); `ماما` → 07700001009; `نور` → 07700001010; `ام محمد` → 07700001011; `ابو علي` → 07700001012; `سارة` → 07700001002. User 2 has contacts `احمد` → 07700001001 and `عمر` → 07700001003. Aliases of user 1: `اخوي` → account of user 4; `البيت` → account of user 9; `الدكان` → account of user 12.
 
