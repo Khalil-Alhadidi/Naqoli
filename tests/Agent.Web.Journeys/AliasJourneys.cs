@@ -128,6 +128,54 @@ public sealed class AliasJourneys(JourneyHost host) : JourneyBase(host)
         Assert.DoesNotContain(await Host.AliasesAsync(U1), a => a.AliasId == added.AliasId);
     }
 
+    /// <summary>
+    /// UI pass task 4d (decision 3): the phone's directory shows one page of Console:GridPageSize aliases with the phone
+    /// pager. At 5 rows a page U1's aliases plus two more make two pages; Reset brings back 10 and one page.
+    /// </summary>
+    [Fact]
+    public async Task ThePhoneDirectoryPagesAtTheGridPageSize()
+    {
+        const string setting = "[data-name='Console:GridPageSize']";
+        var page = await OpenAsync(Host.WebAddress);
+        var before = await Host.AliasesAsync(U1);
+        var name = await SavedNameAsync("S03");
+
+        await page.GetByTestId("menu-settings").ClickAsync();
+        await page.Locator($"[data-testid=setting-input]{setting}").FillAsync("5");
+        await page.Locator($"[data-testid=setting-save]{setting}").ClickAsync();
+        await Expect(page.Locator($"[data-testid=setting-value]{setting}")).ToHaveTextAsync("5");
+
+        await OpenDirectoryAsync(page);
+        foreach (var text in new[] { name + " x", name + " y" })
+        {
+            var saved = (await Host.AliasesAsync(U1)).Count;
+            await AddInDirectoryAsync(page, text, "S03");
+            await Expect(page.GetByTestId("directory-result")).ToHaveAttributeAsync("data-key", "Reply_alias_saved");
+            await Expect(page.GetByTestId("directory-result")).ToContainTextAsync(text);
+            Assert.Equal(saved + 1, (await Host.AliasesAsync(U1)).Count);
+        }
+
+        var total = before.Count + 2;
+        Assert.Equal(total, (await Host.AliasesAsync(U1)).Count);
+        Assert.InRange(total, 6, 10);
+        var pager = page.GetByTestId("phone-pager");
+        await Expect(pager).ToHaveAttributeAsync("data-pages", "2");
+        await Expect(pager).ToHaveAttributeAsync("data-page", "1");
+        await Expect(page.GetByTestId("directory-alias")).ToHaveCountAsync(5);
+
+        await pager.GetByTestId("phone-pager-next").ClickAsync();
+        await Expect(pager).ToHaveAttributeAsync("data-page", "2");
+        await Expect(page.GetByTestId("directory-alias")).ToHaveCountAsync(total - 5);
+
+        // Reset brings back the file's 10: the directory, opened again, shows every alias on one page and no pager.
+        await page.Locator($"[data-testid=setting-reset]{setting}").ClickAsync();
+        await Expect(page.Locator($"[data-testid=setting-value]{setting}")).ToHaveTextAsync("10");
+        await page.GetByTestId("phone-directory-back").ClickAsync();
+        await OpenDirectoryAsync(page);
+        await Expect(page.GetByTestId("directory-alias")).ToHaveCountAsync(total);
+        await Expect(page.GetByTestId("phone-pager")).ToHaveCountAsync(0);
+    }
+
     [Fact]
     public async Task TheConsoleAliasesPanelListsAddsAndDeletes()
     {

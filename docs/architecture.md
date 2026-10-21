@@ -208,7 +208,7 @@ zaincash-agent/
     Agent.Eval/         console: runs the test sets, writes the results report
   tests/
     Agent.Core.Tests/   normalisation, matching, expiry, idempotency
-    Agent.Web.Journeys/ Playwright screen journeys on the scripted parser (74 tests on 22 Oct 2026, the screenshot helper among them)
+    Agent.Web.Journeys/ Playwright screen journeys on the scripted parser (75 tests on 22 Oct 2026, the screenshot helper among them)
   data/
     seed/               synthetic users, contacts, billers, history
     requests.dev.jsonl        96 requests (Khalil's 72, ADD-01 to ADD-24)

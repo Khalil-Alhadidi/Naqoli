@@ -1,6 +1,7 @@
 @inherits SessionComponent
 @using Agent.Core.Store
 @using Agent.Core.Wallet
+@inject IOptionsMonitor<ConsoleOptions> ConsoleSettings
 
 @* The phone's My orders screen (milestone 9b, ruling 5): every order the wallet returns for the user, newest first, with
    the product's operator name, type and price, the Iraq date, and the full code with a copy button. Every text is a
@@ -14,7 +15,10 @@
         {
             <div class="phone-directory-empty" data-testid="orders-empty">@Text["Orders_Empty"]</div>
         }
-        @foreach (var order in list)
+        @* UI pass task 4d (decision 3): one page of Console:GridPageSize orders, newest first as the wallet gives them;
+           every reload returns to page 1, so a new order is first on screen. *@
+        var orderRows = PagedList<PurchaseOrder>.Of(list, ordersPage, PageSize);
+        @foreach (var order in orderRows.Rows)
         {
             <div class="phone-order-row" data-testid="order-row" data-order-id="@order.OrderId">
                 <div class="phone-order-product" data-testid="order-product"><bdi>@ProductLine(order)</bdi></div>
@@ -25,6 +29,8 @@
                 </div>
             </div>
         }
+        <PhonePager Total="@orderRows.Total" Page="@orderRows.Page" PageSize="@PageSize"
+                    PageChanged="@((int shown) => ordersPage = shown)" />
     }
     else if (orders is not null)
     {
@@ -35,6 +41,12 @@
 @code {
     private WalletResult<IReadOnlyList<PurchaseOrder>>? orders;
     private int seenVersion;
+
+    // The page of the order list shown, 1-based; back to 1 on every reload.
+    private int ordersPage = 1;
+
+    /// <summary>Rows to a page, as in every console grid: <c>Console:GridPageSize</c>, read on each render.</summary>
+    private int PageSize => ConsoleSettings.CurrentValue.GridPageSize;
 
     protected override async Task OnInitializedAsync()
     {
@@ -63,6 +75,7 @@
         try
         {
             orders = await Session.ListOrdersAsync();
+            ordersPage = 1;
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {

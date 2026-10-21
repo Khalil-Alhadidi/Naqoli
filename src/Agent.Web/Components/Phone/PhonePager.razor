@@ -1,0 +1,41 @@
+@inject IStringLocalizer<PhoneStrings> Text
+
+@* The pager under the phone's two lists (UI pass task 4d, decision 3): right to left, chevrons only, their spoken labels
+   from the resource file (rule 4), and between them the page and the page count in Arabic-Indic digits. It renders
+   nothing when the whole list fits on one page; the list owns the page number, as GridPager's grids do. *@
+@if (pages > 1)
+{
+    <div class="phone-pager" data-testid="phone-pager" data-page="@current" data-pages="@pages">
+        <MudIconButton Icon="@Icons.Material.Filled.ChevronRight" Size="Size.Small" aria-label="@Text["Pager_Previous"]"
+                       data-testid="phone-pager-previous" Disabled="@(current <= 1)" OnClick="() => GoTo(current - 1)" />
+        <span class="phone-pager-indicator" data-testid="phone-pager-indicator">@PhoneFormat.Number(current) / @PhoneFormat.Number(pages)</span>
+        <MudIconButton Icon="@Icons.Material.Filled.ChevronLeft" Size="Size.Small" aria-label="@Text["Pager_Next"]"
+                       data-testid="phone-pager-next" Disabled="@(current >= pages)" OnClick="() => GoTo(current + 1)" />
+    </div>
+}
+
+@code {
+    /// <summary>How many rows the whole list has.</summary>
+    [Parameter] public int Total { get; set; }
+
+    /// <summary>The page shown, 1-based; one outside 1 to the page count is shown as the nearest end.</summary>
+    [Parameter] public int Page { get; set; } = 1;
+
+    /// <summary>Rows to a page: <c>Console:GridPageSize</c>.</summary>
+    [Parameter] public int PageSize { get; set; } = 10;
+
+    /// <summary>Raised with the page asked for by the previous or next chevron.</summary>
+    [Parameter] public EventCallback<int> PageChanged { get; set; }
+
+    private int pages;
+    private int current;
+
+    protected override void OnParametersSet()
+    {
+        var size = Math.Max(1, PageSize);
+        pages = Math.Max(1, (Math.Max(0, Total) + size - 1) / size);
+        current = Math.Clamp(Page, 1, pages);
+    }
+
+    private Task GoTo(int page) => page < 1 || page > pages ? Task.CompletedTask : PageChanged.InvokeAsync(page);
+}

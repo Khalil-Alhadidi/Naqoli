@@ -485,6 +485,15 @@ h1:focus {
     letter-spacing: 0.05em;
 }
 
+/* The phone pager (UI pass task 4d): centred under the directory and the orders. */
+.phone-pager {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: var(--space-2);
+    font-size: var(--text-sm);
+}
+
 .phone-directory-empty,
 .phone-directory-result {
     font-size: var(--text-sm);

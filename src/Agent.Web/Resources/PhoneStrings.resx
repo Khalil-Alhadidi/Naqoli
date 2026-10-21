@@ -185,4 +185,6 @@
   <data name="List_joiner" xml:space="preserve"><value>{0}، {1}</value></data>
   <data name="Type_request" xml:space="preserve"><value>طلب</value></data>
   <data name="Reply_queue_dropped" xml:space="preserve"><value>ألغيت باقي الطلبات</value></data>
+  <data name="Pager_Previous" xml:space="preserve"><value>الصفحة السابقة</value></data>
+  <data name="Pager_Next" xml:space="preserve"><value>الصفحة اللاحقة</value></data>
 </root>
