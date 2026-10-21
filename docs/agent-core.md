@@ -1,12 +1,12 @@
 # Agent.Core: the write path
 
-What `src/Agent.Core` does as built in milestones 3 to 6: the structured request and the parser seam that produces it, the pipeline that turns it into one reply, the resolvers, the ordered checks, the card and its view, the pending record and its states, the sweep, Confirm and Checking, the conversation that the phone and the test runner share, the live trace, the audit log,, the learning-log rule and table, the masker, the structure validator and the Claude parser. The model side (the parse call, its settings, faults and cost) is told whole in [agent-model.md](agent-model.md). The design it follows is sections 3 to 5 of [architecture.md](architecture.md); the matching and question rules are [matching-rules.md](matching-rules.md); the wallet it calls is [wallet-api.md](wallet-api.md).
+What `src/Agent.Core` does as built in milestones 3 to 9c and the changes of 20 Oct 2026: the structured request and the parser seam that produces it, the pipeline that turns it into one reply, the resolvers, the ordered checks, the card and its view, the pending record and its states, the sweep, Confirm and Checking, the conversation that the phone and the test runner share, the live trace, the audit log, the learning-log rule and table, the masker, the structure validator and the Claude parser. The model side (the parse call, its settings, faults and cost) is told whole in [agent-model.md](agent-model.md). The design it follows is sections 3 to 5 of [architecture.md](architecture.md); the matching and question rules are [matching-rules.md](matching-rules.md); the wallet it calls is [wallet-api.md](wallet-api.md).
 
 ## Hosts
 
 `Agent.Core` registers its services with `AddAgentCore` and leaves three choices to the host. The web console's choices, and the rule that every UI action opens its own DI scope, are in [agent-web.md](agent-web.md):
 
-- the parser (`IParser`; the console registers `ScriptedParser`);
+- the parser (`IParser`; the console calls `ParserFactory.AddAgentParser`, which picks by `Agent:Parser`);
 - the trace sink (`ITraceSink`; the console routes each action's steps to the circuit's `TraceLog`);
 - whether the sweeper runs (`SweepIntervalSeconds`);
 - the D6 yes and no words (`YesWords`, `NoWords`; the console sets them from its resource file).
@@ -71,12 +71,12 @@ A typed text that equals a say step gives every request of that step's parse, in
   The message names the case and the step, never the text (`ScriptedParserTests`).
 - **Lifetime.** It holds no per-user state, so one instance serves the whole app. `AddAgentCore` registers no parser, and `ParserFactory.AddAgentParser` registers the oracle as a singleton when `Agent:Parser` is `scripted` (the default). It is loaded on first use.
 
-The parses were drafted by Claude from Khalil's answer keys for his review (his ruling of 15 Oct 2026). On the oracle the development set scores 60 of 72 (`docs/reports/dev-scripted-oracle-2026-10-15-2052`); the 12 failures are the items deferred to milestones 8, 9b and 9c. A typed yes or no is not a sentence: D6 is the conversation's business.
+The parses were drafted by Claude from Khalil's answer keys for his review (his ruling of 15 Oct 2026). On the oracle the development set scored 60 of 72 on 15 Oct 2026 (`docs/reports/dev-scripted-oracle-2026-10-15-2052`), the 12 failures being the items deferred to milestones 8, 9b and 9c; on 20 Oct 2026 its 96 cases score 95 (`docs/reports/dev-scripted-person-or-bill-2026-10-20-1250`), the one failure GAP-06, deferred to milestone 10. A typed yes or no is not a sentence: D6 is the conversation's business.
 
 Two more pieces belong to the seam (milestone 5):
 
 - **`ParserUnavailableException`.** A parser throws it when the parse call could not be made or gave no answer (the model is down or timed out). The conversation answers it with the refusal `model_unavailable`, traces `parse:unavailable` in the Model zone, and moves nothing. Any other exception from the parser is handled as any other failure: `not_done_nothing_taken`.
-- **`IParserUsage`.** A parser may implement it to say what its last call cost: `LastUsage` is a `ParseUsage(InputTokens, OutputTokens, CostUsd, Duration)`, or null before the first call. The runner records it per case (D12). `ScriptedParser` implements it with zero tokens, zero cost and the time the lookup took.
+- **`IParserUsage`.** A parser may implement it to say what its last call cost: `LastUsage` is a `ParseUsage(InputTokens, OutputTokens, CacheWriteTokens, CacheReadTokens, CostUsd, Duration)`, or null before the first call. The runner records it per case (D12). `ScriptedParser` implements it with zero tokens, zero cost and the time the lookup took.
 
 ```mermaid
 flowchart LR
@@ -96,7 +96,7 @@ Rule 5 and review I3, in `src/Agent.Core/Masking/` and `src/Agent.Core/Parsing/P
 - **`Masker.Mask(text)`** returns `MaskedText(Text, Map)`. A number is a run of 7 or more digits (ASCII `0-9`, Arabic-Indic U+0660 to U+0669, Extended Arabic-Indic U+06F0 to U+06F9), with any separator between its digits counted inside the run (`NumberSeparators`, shared with `PhoneNumbers`: Unicode whitespace such as a no-break space, a tab or a line break, format characters such as the bidi marks, `-`, `.`, `(` and `)`; never a comma) and an optional leading `+`. Each run becomes `<NUM_1>`, `<NUM_2>`, ... in order of appearance; the map keeps each run exactly as typed (separators and `+` included). Six digits or fewer are never masked (`150000`, `1,000,000` with its commas). A seven-digit amount written without separators is masked (see [failure-modes.md](failure-modes.md)).
 - **`MaskMap.TryUnmask(token, out original)`** gives the number only for a token of that map; `MaskMap.IsToken` says whether a text is exactly one token.
 - **The conversation masks before the parse call** and passes the map in `ParseContext`. After the call, a `RecipientText` that is exactly a token of this message's map becomes the number as typed; any other token stays a token, so the contact resolver finds nothing. Un-masking happens there and nowhere else, for every parser. The orchestrator then reads the number as it always did (`PhoneNumbers.LooksLikeNumber`, `TryNormalize`, `invalid_number`).
-- **`ParsedRequestValidator.Validate(ParsedRequestDto dto, MaskMap map)`** returns `ValidationResult(Requests, Problem)`, whose `First` is the request (the single form gives a list of one). `ParsedRequestDto` is the strict structure on the wire (snake_case; a field it does not name is refused when the reply is read, `JsonUnmappedMemberHandling.Disallow`); `ParsedRequestsDto` is the reply's list (D7). The checks, in order: `intent` in `transfer`, `bill`, `purchase`, `balance`, `unsupported`, `unclear`; `amount_unit` in `none`, `dinars`, `thousand`, `million`; `biller_code` null or in `electricity`, `water`, `internet`, `school_fees`; `product_type` null or in `credit`, `internet`; `unsupported_reason` null or one of the ten documented reasons; every text at most 100 characters; `amount_value` null, or finite and not below zero; `product_value` null or above zero; `recipient_text` exactly one token of this message's map, or words with no run of 7 or more digits, nothing `PhoneNumbers.LooksLikeNumber` would take for a phone number, and no token the map does not hold (the user typed no such number: the parse call invented it). Sets are exact and lower case. A blank text is null. The first violation gives `ParsedRequest { Intent = Unclear, Problem = <field> }` as the one request of the result; nothing throws. `Validate(ParsedRequestsDto reply, MaskMap map)`, the list form (D7), checks every entry in order and stops at the first that breaks a rule: one broken entry anywhere in the list refuses the whole message, so `Requests` is that one `Unclear` request with the entry's field as `Problem` (`ParsedRequestValidatorTests.AListWithABrokenSecondEntryIsOneUnclearRequest`). An empty or missing list, or a null entry, is the problem `requests`. A clean list gives every request, in the order spoken.
+- **`ParsedRequestValidator.Validate(ParsedRequestDto dto, MaskMap map)`** returns `ValidationResult(Requests, Problem)`, whose `First` is the request (the single form gives a list of one). `ParsedRequestDto` is the strict structure on the wire (snake_case; a field it does not name is refused when the reply is read, `JsonUnmappedMemberHandling.Disallow`); `ParsedRequestsDto` is the reply's list (D7). The checks, in order: `intent` in `transfer`, `bill`, `purchase`, `balance`, `unsupported`, `unclear`; `amount_unit` in `none`, `dinars`, `thousand`, `million`; `biller_code` null or in `electricity`, `water`, `internet`, `school_fees`; `product_type` null or in `credit`, `internet`; `unsupported_reason` null or one of the reasons of `ParsedRequestValidator.UnsupportedReasons`; every text at most 100 characters; `amount_value` null, or finite and not below zero; `product_value` null or above zero; `recipient_text` exactly one token of this message's map, or words with no run of 7 or more digits, nothing `PhoneNumbers.LooksLikeNumber` would take for a phone number, and no token the map does not hold (the user typed no such number: the parse call invented it). Sets are exact and lower case. A blank text is null. The first violation gives `ParsedRequest { Intent = Unclear, Problem = <field> }` as the one request of the result; nothing throws. `Validate(ParsedRequestsDto reply, MaskMap map)`, the list form (D7), checks every entry in order and stops at the first that breaks a rule: one broken entry anywhere in the list refuses the whole message, so `Requests` is that one `Unclear` request with the entry's field as `Problem` (`ParsedRequestValidatorTests.AListWithABrokenSecondEntryIsOneUnclearRequest`). An empty or missing list, or a null entry, is the problem `requests`. A clean list gives every request, in the order spoken.
 - **An invalid structure** reaches the orchestrator as `Unclear`, so the reply is the `not_understood` refusal. The conversation traces `model_invalid_reply` with the field name and writes the learning entry `model_invalid_reply` with the field as detail (in place of `not_understood`). A message the model refused to parse (`Problem` `refusal`, the API's refusal stop reason) takes its own path: the same `not_understood` reply, traced and logged as `model_refusal` with no detail.
 
 ```mermaid
@@ -121,10 +121,10 @@ flowchart TD
 
 `ClaudeParser` (`src/Agent.Core/Parsing/ClaudeParser.cs`) is the model parser: one read-only call per message through `IChatClient` (`Microsoft.Extensions.AI` 10.11.0 over the official `Anthropic` 12.56.0 SDK, `AnthropicClient.AsIChatClient(modelId, maxOutputTokens)`), so a candidate model is a configuration change.
 
-- **What it sends.** A system message, the prompt `parse-prompt.md` (embedded; first line `version: 4` (16 Oct 2026; version 1 frozen for the milestone 6 baselines, versions 2 and 3 of 15 and 16 Oct 2026); `ClaudeParser.PromptVersion`; English, with the full-request examples of `docs/matching-rules.md` rules 1 to 17 that name no seed contact), and one user message: `Pending: <the pending note, or none>` and `Message: <the masked text>`. Nothing else: no history, no name, no balance, no purchase code (rule 5; `OutboundPayloadTests` drives the whole conversation and checks the captured payload).
+- **What it sends.** A system message, the prompt `parse-prompt.md` (embedded; first line `version: 5` (16 Oct 2026, 4d10f21; version 1 frozen for the milestone 6 baselines, versions 2 to 4 of 15 and 16 Oct 2026); `ClaudeParser.PromptVersion`; English, with the full-request examples of `docs/matching-rules.md` rules 1 to 17 that name no seed contact), and one user message: `Pending: <the pending note, or none>` and `Message: <the masked text>`. Nothing else: no history, no name, no balance, no purchase code (rule 5; `OutboundPayloadTests` drives the whole conversation and checks the captured payload). The frozen prompt is marked cacheable for the candidate's `PromptCacheTtl`; the user message never is.
 - **The options.** `ModelId`, `MaxOutputTokens` (1,500: the 5.5 models think by default and thinking tokens count against it), the candidate's `Effort` (`low` by default; `low`, `medium`, `high`, `xhigh` or `max`) sent as `output_config.effort` through `ChatOptions.RawRepresentationFactory` (the SDK's `MessageCreateParams` with `OutputConfig.Effort`; the adapter has no other way to say it and merges the schema format into the same `output_config`), `Temperature` only when a candidate sets it (none does: the Claude 5.5 models reject a non-default temperature, and Opus 5.5 any), and `ResponseFormat = ChatResponseFormat.ForJsonSchema(ClaudeParser.Schema, "parse", ...)`. The schema is `JsonSchemaExporter`'s schema of `ParsedRequestsDto`, every object closed (`additionalProperties: false`) with every field required, and each enum string limited to its set. The Anthropic adapter maps it to the API's `output_config.format` (`json_schema`); `AnthropicAdapterTests` proves it offline by reading the request body the real adapter sends to a stub handler, so no `RawRepresentationFactory` fallback is built.
 - **What it reads.** A reply cut off at `MaxOutputTokens` (`FinishReason` `Length`) is `Unclear` with `Problem` `truncated`. Otherwise the reply text, deserialised strictly (an unknown field, a wrong type or text that is not JSON gives `Unclear` with `Problem` `json`), then `ParsedRequestValidator.Validate` with the message's `MaskMap` from `ParseContext.Map`, which checks every request of the list. The parser returns the validated list as a `ParsedMessage`, in the order spoken (D7); a reply with more than one request also traces `more_than_one_request` (Model zone, the count). Each of the parser's own problems (`truncated`, `json`, `refusal`) is a message of one `Unclear` request.
-- **Usage.** `LastUsage` (`IParserUsage`): the input and output tokens of `ChatResponse.Usage` (`InputTokenCount`, `OutputTokenCount`), the cost at the candidate's prices per million tokens, and the time.
+- **Usage.** `LastUsage` (`IParserUsage`): the uncached input, output, cache-write and cache-read tokens, the cost at the candidate's prices per million tokens for each, and the time ([agent-model.md](agent-model.md), cost).
 - **Failures.** The candidate's `TimeoutSeconds` (20) ends the call (`timeout`); an HTTP answer with a status (401 bad key, 400 bad request, 429 rate limit, 5xx, 529 overloaded) gives `http_<status>`; a transport failure gives `connection`; any other exception its type. Each is a `ParserUnavailableException` (the reply `model_unavailable`) whose message holds the reason only, never the key or the response body. The caller's own cancellation propagates. The Anthropic client never retries (`MaxRetries = 0`): one parse call per message, and a 429 or 529 shows the handover message at once.
 - **Logs.** Model id, duration, tokens, cost and finish reason at Information; the reason and duration of a failure at Warning. Never the text.
 - **Name.** `claude:<candidate>`, on the trace (`parse:claude:haiku`) and in the report name (`dev-claude-haiku-...`). The scripted parser is `scripted`.
@@ -262,7 +262,7 @@ The phone path is matching rule 20: a country code makes no difference, spaces a
 
 ### Bill and product
 
-`BillResolver.Resolve` (rules 13, 14, 17, D9) and `ProductResolver.Resolve` (rules 11, 12) are pure. They were built at code level in milestone 3 because the checks need them; their screens come in milestones 8 and 9b.
+`BillResolver.Resolve` (rules 13, 14, 17, D9) and `ProductResolver.Resolve` (rules 11, 12) are pure. They were built at code level in milestone 3 because the checks need them; their screens were built in milestones 8 and 9b.
 
 ```mermaid
 flowchart TD
@@ -465,7 +465,7 @@ sequenceDiagram
     H->>P: StopAsync (stop token): the loop ends
 ```
 
-- **For Khalil:** section 5 of the architecture has no Executing to Pending edge. The code needs it, because a wrong PIN keeps the card (and a cancelled Confirm before the execute sent nothing). With it, a record can leave Pending more than once, but only one Executing at a time and always under the same key. Section 5 also says Checking settles by "status found by key"; the code settles by resending the same body under the same key (below), and uses by-key for display only. Suggest adding the edge and that wording to section 5.
+- Section 5 of the architecture has the Executing to Pending edge (a wrong PIN keeps the card, and a cancelled Confirm before the execute sent nothing) and the resend-under-the-same-key settle (14 Oct 2026). A record can leave Pending more than once, but only one Executing at a time and always under the same key; by-key is for display only.
 
 ## The kill switch
 
@@ -614,7 +614,7 @@ As in `ConfirmHandler.cs`.
 - `IServiceScopeFactory`;
 - `IParser`;
 - `TimeProvider`;
-- `IOptions<AgentOptions>`;
+- `IOptionsMonitor<AgentOptions>`;
 - an `ITraceSink` for its own steps;
 - the user ID.
 
@@ -645,7 +645,7 @@ When the Confirm handler throws, the conversation reads the record:
 
 Any other exception in an action is traced as `error` (the exception type) and answered with `not_done_nothing_taken`. A directory action is the exception: it is traced as `error` and returns null, with no message.
 
-The alias offer (milestone 9a) adds two message kinds, neither with a code: `AliasOffer`, shown under the Done outcome (the text is `Conversation.AliasOffer`), and `AliasSaved`, after the Save tap. Every action that starts something new clears the open offer first: `SendAsync`, `TapOptionAsync`, `DeclineQuestionAsync`, `ReissueAsync` and `SaveAliasAsync`. `ConfirmAsync`, `SettleAsync`, `CancelAsync` and `RefreshAsync` leave it.
+The alias offer (milestone 9a) adds two message kinds, neither with a code: `AliasOffer`, shown under the Done outcome (the text is `Conversation.AliasOffer`), and `AliasSaved`, after the Save tap. Every action that starts something new clears the open offer first: `SendAsync`, `TapOptionAsync`, `DeclineQuestionAsync`, `DeclineConsentAsync`, `ReissueAsync` and `SaveAliasAsync`. `ConfirmAsync`, `SettleAsync`, `CancelAsync` and `RefreshAsync` leave it.
 
 ### State
 
@@ -655,7 +655,7 @@ The alias offer (milestone 9a) adds two message kinds, neither with a code: `Ali
 | `Card`, `CardState` | The card as a `CardView`, and its `CardStatus`: Live, Done, NotDone, Checking, Expired or Cancelled |
 | `Question` | The open `AgentReply.Question` |
 | `PinVisible`, `Busy` | Whether the card needs a PIN field; whether an action runs |
-| `WalletVersion` | Goes up by one on every Done |
+| `WalletVersion` | Goes up by one on every Done and every alias saved or deleted; `LastWalletChange` says which |
 | `CardMessageIndex`, `QuestionMessageIndex`, `ActionMessageIndex` | The positions in `Messages` of the card's message, the open question's message, and the message whose button (consent, or check again) is live |
 | `CardsIssued` | Every card issued, in order (for the grader) |
 | `QuestionsAsked` | Every question, in order, as `ConversationQuestion(Kind, Answer, OptionValues)` (for the grader) |
@@ -664,7 +664,7 @@ The alias offer (milestone 9a) adds two message kinds, neither with a code: `Ali
 | `LastLearningEntry` | The learning-log entry the conversation wrote for its last reply (`model_invalid_reply` for a refused structure, `model_refusal` for a message the model refused, else `LearningLogRule.EntryFor`), or null; the runner grades it |
 | `ConsentShown` | True once the consent screen has been shown |
 | `ConsentPending` | True while the message at `ActionMessageIndex` is the consent message (on open, after a request from a user who has not consented, after No); the phone disables its message box and send button while it is true |
-| `QueuedRequests` | The parts of the last message still to run after the one running (D7, milestone 9c; below) |
+| `QueuedRequests` | The number of parts of the last message still to run after the one running (D7, milestone 9c; below) |
 
 `Changed` is raised on every new message, and at the start and end of every action. It is raised while the action still holds its turn, so a handler sees each message on the async flow of the action that added it.
 
@@ -776,7 +776,7 @@ A `ConversationMessage(Role, Kind, Code, AmountIqd, Reference, PurchaseCode, Att
 
 | Kind | Role | Code | Figures |
 |---|---|---|---|
-| `Typed` | User | none | none |
+| `Typed` | User | none, or `pin_masked` for four to six digits typed while a PIN card is live | `MaskedDigits` on `pin_masked` |
 | `Option` | User | The option's value, `none_of_these` / `cancel_question` for the question's final option, or `decline_consent` for the consent screen's No | none |
 | `Refusal` | Agent | The reason code (`ReasonCodes`), including `model_unavailable`, `not_done_nothing_taken` and `question_cancelled` | `AmountIqd`: the refusal's figure, if any; `QuestionKind` on a repeated question |
 | `Unsupported` | Agent | The parsed unsupported reason | none |
@@ -785,7 +785,7 @@ A `ConversationMessage(Role, Kind, Code, AmountIqd, Reference, PurchaseCode, Att
 | `Consent` | Agent | none | none |
 | `Card` | Agent | none | none; the card is `Card` |
 | `Outcome` | Agent | `done`, `checking`, `not_done`, `expired`, `cancelled`, `pin_required`, `pin_wrong`, `pin_malformed`, `already_handled` or `not_found` (`OutcomeCodes`) | `done`: `Reference`, `AmountIqd` (the balance after), `PurchaseCode`; `not_done`: `Reason`, `AmountIqd`; `pin_wrong`: `AttemptsLeft` |
-| `Info` | Agent | `points_to_confirm`, a card's note (`account_choice_unavailable`), added just before the card's message, or `max_three_requests` (rule 22) after the last prepared part of a message finished | `NotPrepared` on `max_three_requests` |
+| `Info` | Agent | `points_to_confirm`, a card's note (`account_choice_unavailable`), added just before the card's message, or `max_three_requests` (rule 22) after the last prepared part of a message finished, or `queue_dropped` (a typed answer merged into the pending transfer dropped the queue) | `NotPrepared` on `max_three_requests` |
 
 ```mermaid
 stateDiagram-v2
@@ -1051,6 +1051,7 @@ sequenceDiagram
 | `Parser` | `scripted` | `ParserFactory.AddAgentParser`: `scripted` (the oracle) or `claude` |
 | `DevSetPath` | `data/requests.dev.jsonl` | The oracle: the development set, relative to the repository root unless rooted; its file name must be `requests.dev.jsonl` (rule 7) |
 | `YesWords`, `NoWords` | empty | `Conversation`, D6. Phone text, so not set in `Agent.Core`: the console post-configures them from `Word_yes` and `Word_no` in its resource file, and the test host sets `yes` and `no` |
+| `Endearments`, `FillerWords` | empty in code; Khalil's eight words each in both `appsettings.json` files | `ContactResolver` (rule 1) and the conversation's answers read in code; phone text, so not editable, the settings component shows the count |
 
 The settings component shows them ([agent-web.md](agent-web.md), "The settings component"). It edits exactly `RuntimeSettings.EditableNames`: `MinAmountIqd`, `PerTransactionCapIqd`, `PerDayCapIqd`, `CardTimerSeconds`, `MaxProductsInOneQuestion`, `RepeatWarningWindowMinutes`, `HistoryDays`, `MinSubstringWordLength`, `MaxYesNoWords`, `LogPageSize`, `CheckingRetrySeconds`, `MaxAliasLength`, `MaxMessageChars`, `MaxRequestsPerMessage` and `MaxNamedNotPrepared`. The runtime store refuses any other key. The rest is read only. `MaxRequestsPerMessage` is editable from milestone 9c (ruling 11), `MaxNamedNotPrepared` from its close-out (review R1). The client key goes in user secrets or the environment, never in a committed file.
 
@@ -1084,12 +1085,12 @@ Khalil answered the milestone 3 questions on 14 Oct 2026. Items marked *mileston
 | Operator text that matches no operator | Refuse with `product_not_found`, so the learning log sees it (*milestone 4*) | Done 14 Oct: `product_not_found`; a text naming several providers asks among those |
 | Rule 9 readings below the minimum | Dropped from the question; a bare number with no valid reading is refused with `amount_below_minimum` (*milestone 4*) | Done 14 Oct: `0.5` offered only 500,000; `0.0005` was refused with the minimum as the figure. Superseded 16 Oct (Khalil): a bare number below 1,000 is thousands with no question; `0.5` is 500 and the checks refuse it `amount_below_minimum`; `0.0005` is `not_understood` |
 | Architecture section 5 | Updated with the Executing to Pending edge and the resend-under-the-same-key settle note | Done |
+| Rule 4 vs rule 6 | Near comes before partial (Khalil, 15 Oct 2026, CLN-03-v1): a name one edit from a saved name is asked as `did_you_mean` | Done |
 
 Still open:
 
 | Question | Today |
 |---|---|
-| Rule 4 vs rule 6 | Partial comes before near, so a typed name inside a longer saved name is a card even when another contact is one edit away |
 | Display names for bills and purchases | A bill shows its label, else its biller name; a purchase shows the operator's Arabic name |
 
 ## Known limits
@@ -1099,7 +1100,6 @@ Still open:
 | A record strands in Executing if the process dies between `TryBeginExecuteAsync` and the store write after the execute call | Handled by `PendingStore.MarkStaleExecutingAsync` (Executing older than `StaleExecutingAfterSeconds` to Checking, reason `stale_executing`), which the hosted `PendingSweeper` runs every `SweepIntervalSeconds`, and, for an exception in the process, by the catch-all in `ConfirmAsync` (back to Pending before the execute call, Checking after it, reason `exception`) |
 | Two concurrent settles of one Checking record: both resend (the wallet replays, so money moves once) | Handled: `CompleteAsync` returns `AlreadyLeft` to the second, and the handler answers `AlreadyHandled(Done)` instead of throwing (`ConfirmHandlerTests.ConcurrentSettlesSettleOnce`) |
 | The daily cap and the recheck read one page of `HistoryPageSize` (200) history rows; rows beyond it are not counted | Fail closed on a full page, or read further pages; the seed has at most two rows a day |
-| `UnsupportedReason` is stored and returned verbatim | Milestone 6 validates the parsed structure against the allowed list |
 | Checking rows are not counted toward the daily cap (only `done` rows) | Decide whether an open Checking record blocks new cards |
 | A reissued `choose_account` card (GAP-04) does not carry the `account_choice_unavailable` note | Deferred, minor |
 | `Attempts` counts Confirm taps that began an execute, not settle resends | Display only |

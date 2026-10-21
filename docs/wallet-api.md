@@ -306,7 +306,7 @@ A transfer to a closed account (`07805550120`, behind contact S20 of U1, or `078
 
 ### `POST /transactions`
 
-The only endpoint that moves money. Header `Idempotency-Key` is required. A missing, empty or whitespace key is 400 `missing_idempotency_key`; a key that does not match `^[A-Za-z0-9_-]{1,64}$` (ASCII letters, digits, `_` and `-`, 1 to 64 characters) is 400 `invalid_idempotency_key`, and so is a key that starts with `seed-` (the seeded rows' keys; see Idempotency). Both are checked before anything else, before the fault switch, so a 400 does not use up a `once` fault. Use a lower-case GUID (`Guid.NewGuid().ToString("N")`).
+The only endpoint that moves money. Header `Idempotency-Key` is required. A missing, empty or whitespace key is 400 `missing_idempotency_key`; a key that does not match `^[A-Za-z0-9_-]{1,64}$` (ASCII letters, digits, `_` and `-`, 1 to 64 characters) is 400 `invalid_idempotency_key`, and so is a key that starts with `seed-` or `admin-`, in any case (the keys of the seeded rows and of the external debits; see Idempotency). Both are checked before anything else, before the fault switch, so a 400 does not use up a `once` fault. Use a lower-case GUID (`Guid.NewGuid().ToString("N")`).
 
 | Status | When | Body |
 |---|---|---|
@@ -414,7 +414,7 @@ stateDiagram-v2
 
 ### `GET /transactions/by-key/{key}`
 
-`userId` (query, integer) is required: the user whose key it is. Without it the answer is 400 `missing_user_id`. Returns 200 with the `TransactionResponse` stored under the key, whatever its status (`executing`, `done` or `failed`; a failed one carries the amounts, no purchase code, and its `errorCode`), with the stored `balanceAfterIqd`. An unknown key, a key that does not match the key format, a `seed-` key, or a key whose row belongs to another user is 404 `unknown_key`: a wrong user cannot tell another user's key from an unknown one (`ReplayFingerprintTests.ByKeyNeedsTheOwnersUserId`, `SeedKeysAreRejected`).
+`userId` (query, integer) is required: the user whose key it is. Without it the answer is 400 `missing_user_id`. Returns 200 with the `TransactionResponse` stored under the key, whatever its status (`executing`, `done` or `failed`; a failed one carries the amounts, no purchase code, and its `errorCode`), with the stored `balanceAfterIqd`. An unknown key, a key that does not match the key format, a `seed-` or `admin-` key, or a key whose row belongs to another user is 404 `unknown_key`: a wrong user cannot tell another user's key from an unknown one (`ReplayFingerprintTests.ByKeyNeedsTheOwnersUserId`, `SeedKeysAreRejected`).
 
 A 404 is final only once the original call has definitely ended. It means the key has not been written yet: with the `slow` fault the delay comes before the insert, and a request still in transit behaves the same, so a client that gave up early can see 404 and then, a moment later, a `done` row. The safe way to settle an unknown outcome is to resend the same body with the same key (above); by-key is for display while the record is Checking (CLAUDE.md, rule 6).
 
@@ -454,6 +454,7 @@ Every code is the `code` extension of a ProblemDetails. Source: `PaymentErrors` 
 | `admin_key_required` | 403 | `/admin/*` | Admin header missing, or wrong key, or no key configured outside Development | |
 | `invalid_fault_mode` | 422 | `POST /admin/faults` | Unknown mode name | |
 | `invalid_fault_delay` | 422 | `POST /admin/faults` | `delayMs` below 0 or above 600,000 | |
+| `invalid_consent` | 422 | `POST /admin/reset` | `consent` is neither `cleared` nor `seed` (exact match) | |
 
 A ProblemDetails without `code` comes from ASP.NET Core, not from the wallet's rules (see Conventions). On execute, a 500 without `code` means the outcome is unknown; a 5xx with `injected_error` or `injected_timeout` means the wallet refused before writing (see Unknown outcomes above); any other code on a 5xx is unknown.
 
