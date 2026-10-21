@@ -17,32 +17,38 @@
 
     @if (contacts is WalletResult<WalletContacts>.Ok { Value: var directory })
     {
-        var aliasRows = PagedList<WalletAlias>.Of(directory.Aliases, aliasesPage, PageSize);
-        <MudSimpleTable Dense="true" Hover="true">
-            <thead><tr><th>Alias</th><th>Phone</th><th>Registered name</th><th>Status</th><th></th></tr></thead>
-            <tbody>
-                @foreach (var alias in aliasRows.Rows)
-                {
-                    @* UI pass task 5 (decision 1, "keep both"): the account status as a badge; a closed account's row is muted. *@
-                    <tr data-testid="console-alias" data-alias-id="@alias.AliasId" class="@(alias.AccountStatus == "closed" ? "row-muted" : null)">
-                        <td><bdi>@alias.Text</bdi></td>
-                        <td>@alias.Phone</td>
-                        <td><bdi>@alias.RegisteredName</bdi></td>
-                        <td><StatusBadge Value="@alias.AccountStatus" /></td>
-                        <td>
-                            <MudButton data-testid="console-alias-delete" data-alias-id="@alias.AliasId" Size="Size.Small"
-                                       Variant="Variant.Text" Color="Color.Error" Disabled="@Session.Busy"
-                                       OnClick="@(() => DeleteAsync(alias.AliasId))">Delete</MudButton>
-                        </td>
-                    </tr>
-                }
-            </tbody>
-        </MudSimpleTable>
-        <GridPager Grid="aliases" Total="@aliasRows.Total" Page="@aliasRows.Page" PageSize="@PageSize"
-                   PageChanged="@((int page) => aliasesPage = page)" />
+        @* UI pass task 8: an empty list shows its empty state; the table scrolls sideways inside the panel. *@
         @if (directory.Aliases.Count == 0)
         {
-            <MudText Typo="Typo.body2">No aliases.</MudText>
+            <EmptyState Icon="@Icons.Material.Filled.Badge" Text="No aliases." />
+        }
+        else
+        {
+            var aliasRows = PagedList<WalletAlias>.Of(directory.Aliases, aliasesPage, PageSize);
+            <div class="grid-scroll">
+                <MudSimpleTable Dense="true" Hover="true">
+                    <thead><tr><th>Alias</th><th>Phone</th><th>Registered name</th><th>Status</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var alias in aliasRows.Rows)
+                        {
+                            @* UI pass task 5 (decision 1, "keep both"): the account status as a badge; a closed account's row is muted. *@
+                            <tr data-testid="console-alias" data-alias-id="@alias.AliasId" class="@(alias.AccountStatus == "closed" ? "row-muted" : null)">
+                                <td class="cell-name"><bdi>@alias.Text</bdi></td>
+                                <td class="cell-nowrap">@alias.Phone</td>
+                                <td class="cell-name"><bdi>@alias.RegisteredName</bdi></td>
+                                <td><StatusBadge Value="@alias.AccountStatus" /></td>
+                                <td>
+                                    <MudButton data-testid="console-alias-delete" data-alias-id="@alias.AliasId" Size="Size.Small"
+                                               Variant="Variant.Outlined" Color="Color.Error" Disabled="@Session.Busy"
+                                               OnClick="@(() => DeleteAsync(alias.AliasId))">Delete</MudButton>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </MudSimpleTable>
+            </div>
+            <GridPager Grid="aliases" Total="@aliasRows.Total" Page="@aliasRows.Page" PageSize="@PageSize"
+                       PageChanged="@((int page) => aliasesPage = page)" />
         }
     }
     else if (contacts is WalletResult<WalletContacts>.Unavailable unavailable)
@@ -73,7 +79,7 @@
             <input data-testid="console-alias-phone" aria-label="Phone number" type="text" inputmode="tel" autocomplete="off"
                    placeholder="07XXXXXXXXX" @bind="phone" @bind:event="oninput" />
         }
-        <MudButton data-testid="console-alias-save" Size="Size.Small" Variant="Variant.Outlined" Disabled="@(!CanSave)"
+        <MudButton data-testid="console-alias-save" Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" Disabled="@(!CanSave)"
                    OnClick="SaveAsync">Save</MudButton>
     </div>
     @if (result is not null)

@@ -1,0 +1,16 @@
+@* What a console grid or list shows when it has nothing (UI pass task 8): an icon and one line of muted text, centred,
+   in place of an empty table body. English, left to right, console only. *@
+<div class="empty-state" data-testid="empty-state">
+    <MudIcon Icon="@Icon" Class="empty-state-icon" />
+    <span>@Text</span>
+</div>
+
+@code {
+    /// <summary>A Material icon (<c>Icons.Material.Filled.*</c>).</summary>
+    [Parameter, EditorRequired]
+    public string Icon { get; set; } = string.Empty;
+
+    /// <summary>The line shown, a full sentence.</summary>
+    [Parameter, EditorRequired]
+    public string Text { get; set; } = string.Empty;
+}

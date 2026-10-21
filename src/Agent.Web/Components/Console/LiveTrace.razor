@@ -7,7 +7,7 @@
 <MudPaper Class="pa-3 console-trace" Elevation="1">
     <div class="console-trace-head">
         <MudText Typo="Typo.h6">Live trace</MudText>
-        <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="Trace.Clear">Clear</MudButton>
+        <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="Trace.Clear">Clear</MudButton>
     </div>
     <div class="trace-legend">
         @foreach (var zone in LegendOrder)
@@ -19,6 +19,10 @@
         }
     </div>
     <div class="console-trace-list">
+        @if (Trace.Entries.Count == 0)
+        {
+            <EmptyState Icon="@Icons.Material.Filled.Timeline" Text="No steps yet. Type in the phone." />
+        }
         @foreach (var entry in Trace.Entries.Reverse())
         {
             <div class="trace-entry zone-@ZoneName(entry.Zone)" data-testid="trace-entry" data-zone="@ZoneName(entry.Zone)">

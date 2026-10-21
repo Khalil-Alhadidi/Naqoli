@@ -4,15 +4,18 @@
 
 <PageTitle>Error</PageTitle>
 
-<h1>Error.</h1>
-<h2>An error occurred while processing your request.</h2>
+@* One element, so the layout's grid places the page in one area (UI pass task 8). *@
+<section class="console-page">
+    <h1>Error.</h1>
+    <h2>An error occurred while processing your request.</h2>
 
-@if (ShowRequestId)
-{
-    <p>
-        <strong>Request ID:</strong> <code>@RequestId</code>
-    </p>
-}
+    @if (ShowRequestId)
+    {
+        <p>
+            <strong>Request ID:</strong> <code>@RequestId</code>
+        </p>
+    }
+</section>
 
 @code{
     [CascadingParameter]

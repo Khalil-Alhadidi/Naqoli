@@ -13,7 +13,8 @@
 <MudPaper Class="pa-3" Elevation="1">
     <MudText Typo="Typo.h6">Wallet data, user @userId</MudText>
 
-    @if (loading)
+    @* The bar on a reload; the first read shows skeleton rows in each grid instead. *@
+    @if (loading && contacts is not null)
     {
         <MudProgressLinear Indeterminate="true" />
     }
@@ -28,87 +29,128 @@
         <MudText Color="Color.Error">@Unavailable(balance)</MudText>
     }
 
+    @* UI pass task 8: before the first read a grid shows skeleton rows; an empty list shows its empty state; a table
+       scrolls sideways inside its panel rather than squeezing its name columns. *@
     <MudText Typo="Typo.subtitle1" Class="mt-3">Contacts</MudText>
     @if (contacts is WalletResult<WalletContacts>.Ok { Value: var directory })
     {
-        var contactRows = PagedList<WalletContact>.Of(directory.Contacts, contactsPage, PageSize);
-        <MudSimpleTable Dense="true" Hover="true">
-            <thead><tr><th>Code</th><th>Saved name</th><th>Registered name</th><th>Last sent</th><th>Status</th></tr></thead>
-            <tbody>
-                @foreach (var contact in contactRows.Rows)
-                {
-                    @* UI pass task 5 (decision 1): the account status as a badge; a closed contact's row is muted. *@
-                    <tr data-testid="wallet-contact-row" data-code="@contact.Code" class="@MutedWhenClosed(contact.AccountStatus)">
-                        <td>@contact.Code</td>
-                        <td><bdi>@contact.SavedName</bdi></td>
-                        <td><bdi>@contact.RegisteredName</bdi></td>
-                        <td>@(contact.LastSentAmountIqd is { } last ? PhoneFormat.Console(last) + " IQD" : "-")</td>
-                        <td><StatusBadge Value="@contact.AccountStatus" /></td>
-                    </tr>
-                }
-            </tbody>
-        </MudSimpleTable>
-        <GridPager Grid="contacts" Total="@contactRows.Total" Page="@contactRows.Page" PageSize="@PageSize"
-                   PageChanged="@((int page) => contactsPage = page)" />
+        @if (directory.Contacts.Count == 0)
+        {
+            <EmptyState Icon="@Icons.Material.Filled.People" Text="No contacts yet." />
+        }
+        else
+        {
+            var contactRows = PagedList<WalletContact>.Of(directory.Contacts, contactsPage, PageSize);
+            <div class="grid-scroll">
+                <MudSimpleTable Dense="true" Hover="true">
+                    <thead><tr><th>Code</th><th>Saved name</th><th>Registered name</th><th>Last sent</th><th>Status</th></tr></thead>
+                    <tbody>
+                        @foreach (var contact in contactRows.Rows)
+                        {
+                            @* UI pass task 5 (decision 1): the account status as a badge; a closed contact's row is muted. *@
+                            <tr data-testid="wallet-contact-row" data-code="@contact.Code" class="@MutedWhenClosed(contact.AccountStatus)">
+                                <td>@contact.Code</td>
+                                <td class="cell-name"><bdi>@contact.SavedName</bdi></td>
+                                <td class="cell-name"><bdi>@contact.RegisteredName</bdi></td>
+                                <td class="cell-nowrap">@(contact.LastSentAmountIqd is { } last ? PhoneFormat.Console(last) + " IQD" : "-")</td>
+                                <td><StatusBadge Value="@contact.AccountStatus" /></td>
+                            </tr>
+                        }
+                    </tbody>
+                </MudSimpleTable>
+            </div>
+            <GridPager Grid="contacts" Total="@contactRows.Total" Page="@contactRows.Page" PageSize="@PageSize"
+                       PageChanged="@((int page) => contactsPage = page)" />
+        }
     }
     else if (contacts is not null)
     {
         <MudText Color="Color.Error">@Unavailable(contacts)</MudText>
     }
+    else
+    {
+        <TableSkeleton />
+    }
 
     <MudText Typo="Typo.subtitle1" Class="mt-3">Bills</MudText>
     @if (bills is WalletResult<IReadOnlyList<WalletBill>>.Ok { Value: var list })
     {
-        var billRows = PagedList<WalletBill>.Of(list, billsPage, PageSize);
-        <MudSimpleTable Dense="true" Hover="true">
-            <thead><tr><th>Code</th><th>Biller</th><th>Label</th><th>Due</th></tr></thead>
-            <tbody>
-                @foreach (var bill in billRows.Rows)
-                {
-                    <tr>
-                        <td>@bill.Code</td>
-                        <td>@bill.BillerNameEn</td>
-                        <td><bdi>@bill.Label</bdi></td>
-                        <td>@PhoneFormat.Console(bill.AmountDueIqd) IQD</td>
-                    </tr>
-                }
-            </tbody>
-        </MudSimpleTable>
-        <GridPager Grid="bills" Total="@billRows.Total" Page="@billRows.Page" PageSize="@PageSize"
-                   PageChanged="@((int page) => billsPage = page)" />
+        @if (list.Count == 0)
+        {
+            <EmptyState Icon="@Icons.Material.Filled.Receipt" Text="No bills due." />
+        }
+        else
+        {
+            var billRows = PagedList<WalletBill>.Of(list, billsPage, PageSize);
+            <div class="grid-scroll">
+                <MudSimpleTable Dense="true" Hover="true">
+                    <thead><tr><th>Code</th><th>Biller</th><th>Label</th><th>Due</th></tr></thead>
+                    <tbody>
+                        @foreach (var bill in billRows.Rows)
+                        {
+                            <tr>
+                                <td>@bill.Code</td>
+                                <td>@bill.BillerNameEn</td>
+                                <td class="cell-name"><bdi>@bill.Label</bdi></td>
+                                <td class="cell-nowrap">@PhoneFormat.Console(bill.AmountDueIqd) IQD</td>
+                            </tr>
+                        }
+                    </tbody>
+                </MudSimpleTable>
+            </div>
+            <GridPager Grid="bills" Total="@billRows.Total" Page="@billRows.Page" PageSize="@PageSize"
+                       PageChanged="@((int page) => billsPage = page)" />
+        }
     }
     else if (bills is not null)
     {
         <MudText Color="Color.Error">@Unavailable(bills)</MudText>
     }
+    else
+    {
+        <TableSkeleton />
+    }
 
     <MudText Typo="Typo.subtitle1" Class="mt-3">History</MudText>
     @if (history is WalletResult<IReadOnlyList<WalletHistoryItem>>.Ok { Value: var rows })
     {
-        var historyRows = PagedList<WalletHistoryItem>.Of(rows, historyPage, PageSize);
-        <MudSimpleTable Dense="true" Hover="true">
-            <thead><tr><th>Reference</th><th>Type</th><th>Status</th><th>Amount</th><th>Fee</th><th>To</th><th>When</th></tr></thead>
-            <tbody>
-                @foreach (var row in historyRows.Rows)
-                {
-                    <tr data-testid="wallet-history-row" data-reference="@row.Reference">
-                        <td>@row.Reference</td>
-                        <td>@row.Type</td>
-                        <td>@row.Status</td>
-                        <td>@PhoneFormat.Console(row.AmountIqd)</td>
-                        <td>@PhoneFormat.Console(row.FeeIqd)</td>
-                        <td><bdi>@row.CounterpartyName</bdi></td>
-                        <td>@row.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm", System.Globalization.CultureInfo.InvariantCulture)</td>
-                    </tr>
-                }
-            </tbody>
-        </MudSimpleTable>
-        <GridPager Grid="history" Total="@historyRows.Total" Page="@historyRows.Page" PageSize="@PageSize"
-                   PageChanged="@((int page) => historyPage = page)" />
+        @if (rows.Count == 0)
+        {
+            <EmptyState Icon="@Icons.Material.Filled.ReceiptLong" Text="No payments yet." />
+        }
+        else
+        {
+            var historyRows = PagedList<WalletHistoryItem>.Of(rows, historyPage, PageSize);
+            <div class="grid-scroll">
+                <MudSimpleTable Dense="true" Hover="true">
+                    <thead><tr><th>Reference</th><th>Type</th><th>Status</th><th>Amount</th><th>Fee</th><th>To</th><th>When</th></tr></thead>
+                    <tbody>
+                        @foreach (var row in historyRows.Rows)
+                        {
+                            <tr data-testid="wallet-history-row" data-reference="@row.Reference">
+                                <td class="cell-nowrap">@row.Reference</td>
+                                <td>@row.Type</td>
+                                <td><StatusBadge Value="@row.Status" /></td>
+                                <td>@PhoneFormat.Console(row.AmountIqd)</td>
+                                <td>@PhoneFormat.Console(row.FeeIqd)</td>
+                                <td class="cell-name"><bdi>@row.CounterpartyName</bdi></td>
+                                <td class="cell-nowrap">@row.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm", System.Globalization.CultureInfo.InvariantCulture)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </MudSimpleTable>
+            </div>
+            <GridPager Grid="history" Total="@historyRows.Total" Page="@historyRows.Page" PageSize="@PageSize"
+                       PageChanged="@((int page) => historyPage = page)" />
+        }
     }
     else if (history is not null)
     {
         <MudText Color="Color.Error">@Unavailable(history)</MudText>
+    }
+    else
+    {
+        <TableSkeleton />
     }
 </MudPaper>
 

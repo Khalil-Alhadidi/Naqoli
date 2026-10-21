@@ -338,6 +338,28 @@ public sealed class ConsoleJourneys(JourneyHost host) : JourneyBase(host)
     }
 
     /// <summary>
+    /// UI pass task 8: an empty grid shows its empty state in place of an empty table. The per-test reset empties the
+    /// agent tables, so the log starts empty; after one payment it shows its rows and no empty state.
+    /// </summary>
+    [Fact]
+    public async Task EmptyStatesShowOnAFreshConsole()
+    {
+        var page = await OpenAsync(Host.WebAddress);
+        var log = page.GetByTestId("log-panel");
+
+        await page.GetByTestId("menu-log").ClickAsync();
+        await Expect(log.GetByTestId("empty-state")).ToBeVisibleAsync();
+        await Expect(log.GetByTestId("log-row")).ToHaveCountAsync(0);
+
+        await SayAsync(page, DevSet.Say("CLN-01"));
+        await page.GetByTestId("card-confirm").ClickAsync();
+        await Expect(Outcomes(page, "done")).ToHaveCountAsync(1);
+
+        await Expect(log.GetByTestId("log-row").First).ToBeVisibleAsync();
+        await Expect(log.GetByTestId("empty-state")).ToHaveCountAsync(0);
+    }
+
+    /// <summary>
     /// UI pass task 5 (decision 1): the wallet data's Contacts grid shows each contact's account status as a badge, a
     /// closed contact's row muted. S20 is U1's closed contact, on page 2 at ten rows a page; the count of closed badges
     /// across every page is the wallet's own count.

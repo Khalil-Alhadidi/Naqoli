@@ -1,7 +1,8 @@
 @* A console component that arrives in a later milestone. *@
 <MudPaper Class="pa-3" Elevation="1">
     <MudText Typo="Typo.h6">@Title</MudText>
-    <MudText Typo="Typo.body2">Arrives in milestone @Milestone.</MudText>
+    @* UI pass task 8: the same look as an empty grid. *@
+    <EmptyState Icon="@Icons.Material.Filled.Schedule" Text="@($"Arrives in milestone {Milestone}.")" />
 </MudPaper>
 
 @code {

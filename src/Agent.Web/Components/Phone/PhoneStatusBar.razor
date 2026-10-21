@@ -15,13 +15,34 @@
 @code {
     private Timer? timer;
 
+    /// <summary>
+    /// Set first in <see cref="Dispose"/>, read by the timer thread and the dispatcher: a tick already queued when the bar
+    /// went away does nothing (the CardPanel pattern, review M2 of milestone 8).
+    /// </summary>
+    private volatile bool disposed;
+
     protected override void OnInitialized()
     {
         // The next tick lands on the next whole minute, then one a minute.
         var now = Clock.GetUtcNow();
         var toNextMinute = TimeSpan.FromMinutes(1) - TimeSpan.FromTicks(now.Ticks % TimeSpan.TicksPerMinute);
-        timer = new Timer(_ => _ = InvokeAsync(StateHasChanged), null, toNextMinute, TimeSpan.FromMinutes(1));
+        timer = new Timer(_ =>
+        {
+            if (!disposed)
+                _ = InvokeAsync(Refresh);
+        }, null, toNextMinute, TimeSpan.FromMinutes(1));
     }
 
-    public void Dispose() => timer?.Dispose();
+    private void Refresh()
+    {
+        if (!disposed)
+            StateHasChanged();
+    }
+
+    public void Dispose()
+    {
+        // The flag first: a callback already running sees it and queues nothing, and a queued tick returns at once.
+        disposed = true;
+        timer?.Dispose();
+    }
 }

@@ -12,7 +12,7 @@
    audit log is the agent's), and on every WalletChanges notification for its user or for every user (another tab's
    actions, the reset). It loads the latest Agent:LogPageSize rows and shows one page of Console:GridPageSize of them;
    every reload returns to page 1, so the newest row is on screen (UI pass, task 4b). *@
-<MudPaper Class="pa-3" Elevation="1">
+<MudPaper Class="pa-3" Elevation="1" data-testid="log-panel">
     <div class="d-flex align-center">
         <MudText Typo="Typo.h6">Log</MudText>
         <MudSpacer />
@@ -20,7 +20,8 @@
                    OnClick="LoadAsync">Refresh</MudButton>
     </div>
 
-    @if (loading)
+    @* UI pass task 8: the bar on a reload; the first read shows skeleton rows instead of the table. *@
+    @if (loading && loaded)
     {
         <MudProgressLinear Indeterminate="true" />
     }
@@ -30,34 +31,47 @@
         <MudText Color="Color.Error">@failure</MudText>
     }
 
-    @{ var shown = PagedList<AuditEntry>.Of(rows, page, PageSize); }
-    <MudSimpleTable Dense="true" Hover="true">
-        <thead>
-            <tr>
-                <th>At (UTC)</th><th>User</th><th>Event</th><th>Pending</th><th>From → To</th><th>Reason</th>
-                <th>Reference</th><th>Amount</th><th>Detail</th>
-            </tr>
-        </thead>
-        <tbody>
-            @foreach (var row in shown.Rows)
-            {
-                var pending = ShortId(row.PendingId);
-                <tr data-testid="log-row" data-event="@row.Event" data-reason="@(row.Reason ?? string.Empty)" data-pending="@pending">
-                    <td>@row.At.UtcDateTime.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture)</td>
-                    <td>@row.UserId</td>
-                    <td>@row.Event</td>
-                    <td>@pending</td>
-                    <td>@Transition(row)</td>
-                    <td>@row.Reason</td>
-                    <td>@row.Reference</td>
-                    <td>@(row.AmountIqd is { } amount ? PhoneFormat.Console(amount) : string.Empty)</td>
-                    <td>@row.Detail</td>
-                </tr>
-            }
-        </tbody>
-    </MudSimpleTable>
-    <GridPager Grid="log" Total="@shown.Total" Page="@shown.Page" PageSize="@PageSize"
-               PageChanged="@((int next) => page = next)" />
+    @if (!loaded)
+    {
+        <TableSkeleton />
+    }
+    else if (rows.Count == 0 && failure is null)
+    {
+        <EmptyState Icon="@Icons.Material.Filled.ListAlt" Text="No audit rows yet." />
+    }
+    else if (rows.Count > 0)
+    {
+        var shown = PagedList<AuditEntry>.Of(rows, page, PageSize);
+        <div class="grid-scroll">
+            <MudSimpleTable Dense="true" Hover="true">
+                <thead>
+                    <tr>
+                        <th>At (UTC)</th><th>User</th><th>Event</th><th>Pending</th><th>From → To</th><th>Reason</th>
+                        <th>Reference</th><th>Amount</th><th>Detail</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var row in shown.Rows)
+                    {
+                        var pending = ShortId(row.PendingId);
+                        <tr data-testid="log-row" data-event="@row.Event" data-reason="@(row.Reason ?? string.Empty)" data-pending="@pending">
+                            <td>@row.At.UtcDateTime.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture)</td>
+                            <td>@row.UserId</td>
+                            <td>@row.Event</td>
+                            <td>@pending</td>
+                            <td>@Transition(row)</td>
+                            <td>@row.Reason</td>
+                            <td>@row.Reference</td>
+                            <td>@(row.AmountIqd is { } amount ? PhoneFormat.Console(amount) : string.Empty)</td>
+                            <td>@row.Detail</td>
+                        </tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+        </div>
+        <GridPager Grid="log" Total="@shown.Total" Page="@shown.Page" PageSize="@PageSize"
+                   PageChanged="@((int next) => page = next)" />
+    }
 </MudPaper>
 
 @code {
@@ -70,6 +84,9 @@
     // The page shown, 1-based; every reload sets it back to 1.
     private int page = 1;
     private bool loading;
+
+    // False until the first read has ended (rows or a failure): the skeleton shows until then.
+    private bool loaded;
     private bool reloadRequested;
     private string? failure;
 
@@ -150,6 +167,7 @@
         finally
         {
             loading = false;
+            loaded = true;
         }
 
         StateHasChanged();

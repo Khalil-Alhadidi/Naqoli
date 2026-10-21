@@ -307,6 +307,32 @@ public partial class DesignTokensTests
         Assert.True(File.Exists(Path.Combine(WebRoot, "wwwroot", "fonts", "OFL.txt")), "the font's licence is missing");
     }
 
+    [GeneratedRegex(@"(?<selectors>[^{}]+)\{(?<body>[^{}]*)\}")]
+    private static partial Regex Rule();
+
+    [GeneratedRegex(@"outline\s*:\s*(none|0)\s*(;|$)")]
+    private static partial Regex OutlineRemoved();
+
+    [Fact]
+    public void FocusIsVisible()
+    {
+        // UI pass task 8: a :focus-visible rule draws the focus ring token, and no rule of ours takes the outline away.
+        var css = WithoutComments(File.ReadAllText(AppCssPath));
+        var focusRules = Rule().Matches(css)
+            .Where(m => m.Groups["selectors"].Value.Contains(":focus-visible", StringComparison.Ordinal))
+            .ToList();
+        Assert.Contains(focusRules, m => m.Groups["body"].Value.Contains("var(--focus-ring)", StringComparison.Ordinal));
+
+        var stylesheets = new[] { AppCssPath }
+            .Concat(Directory.EnumerateFiles(Path.Combine(WebRoot, "Components"), "*.razor.css", SearchOption.AllDirectories));
+        var removed = stylesheets
+            .SelectMany(file => Rule().Matches(WithoutComments(File.ReadAllText(file)))
+                .Where(m => OutlineRemoved().IsMatch(m.Groups["body"].Value))
+                .Select(m => Path.GetFileName(file) + ": " + m.Groups["selectors"].Value.Trim()))
+            .ToList();
+        Assert.Empty(removed);
+    }
+
     private static string[] FontStack(string value)
         => value.Split(',').Select(f => f.Trim().Trim('"', '\'')).ToArray();
 

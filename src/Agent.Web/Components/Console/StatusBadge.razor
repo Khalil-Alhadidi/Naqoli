@@ -1,6 +1,7 @@
-@* An account status as the wallet reports it (UI pass task 5, decision 1), display only: active in success on the
-   success tint, closed in muted on the neutral tint, any other value muted on the neutral tint with no icon, so a value
-   the wallet adds later still shows. The text is the value, lower case. *@
+@* A status as the wallet reports it, display only: an account's (UI pass task 5, decision 1) active in success on the
+   success tint, closed in muted on the neutral tint; a payment's in the history (task 8) done in success, executing in
+   warning, failed in danger, each on its tint. Any other value is muted on the neutral tint, so a value the wallet adds
+   later still shows. Only active and closed carry an icon. The text is the value, lower case. *@
 <span class="badge badge-@CssValue" data-testid="status-badge" data-status="@Value">
     @if (IconFor(CssValue) is { } icon)
     {
@@ -18,6 +19,9 @@
     {
         "active" => "active",
         "closed" => "closed",
+        "done" => "done",
+        "executing" => "executing",
+        "failed" => "failed",
         _ => "other",
     };
 

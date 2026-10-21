@@ -801,6 +801,37 @@ sequenceDiagram
     A-->>L: rows, newest first (At, then Id)
 ```
 
+## Empty and loading states
+
+These came in the UI pass, task 8 (22 Oct 2026). They are English, console only.
+
+- **Empty.** A grid with nothing to show renders `EmptyState` (`Components/Console/EmptyState.razor`; parameters `Icon` and `Text`; root `empty-state`) in place of an empty table: an icon and one muted line, centred, `--space-6` padding.
+
+  | Where | Icon (`Icons.Material.Filled`) | Text |
+  |---|---|---|
+  | Wallet data, Contacts | `People` | No contacts yet. |
+  | Wallet data, Bills | `Receipt` | No bills due. |
+  | Wallet data, History | `ReceiptLong` | No payments yet. |
+  | Log | `ListAlt` | No audit rows yet. |
+  | Aliases | `Badge` | No aliases. |
+  | Live trace | `Timeline` | No steps yet. Type in the phone. |
+  | Learning data (`Placeholder`) | `Schedule` | Arrives in milestone 10. |
+
+- **Loading.** Before their first read ends, the wallet data's three grids and the log show `TableSkeleton` (`Components/Console/TableSkeleton.razor`): three `MudSkeleton` rows of `--size-table-row` (33 px, a dense row). A later reload keeps the table and shows `MudProgressLinear` above it, as before.
+- **Wide tables.** Each `MudSimpleTable` sits in `div.grid-scroll` (`overflow-x: auto`), so a wide table scrolls sideways inside its panel. Name cells (`cell-name`) and figures, references and dates (`cell-nowrap`) do not wrap. Table headers are muted, uppercase, `--text-xs`, with a little letter-spacing.
+- **The trace's detail** takes its own full-width line under the step (`flex-basis: 100%`, indented by `--space-8`, `overflow-wrap: anywhere`), so a long detail never squeezes the row. The other way was to keep it on the line with `min-width: 0`; it was not chosen because at a 320 px trace column it left about 50 px for the detail.
+- **Buttons.** At most one filled brand button per panel: the Aliases form's Save. The phone's Send and Confirm stay filled. Every other console action is outlined and `Size.Small`. Delete, Reset wallet and Clear all are in the danger colour. The live trace's Clear and the settings' Reset are outlined.
+- **Captions.** The settings' descriptions and ranges use `console-muted` (the muted text colour), not MudBlazor's `Color.Secondary`. The theme does not set Secondary, so it would show MudBlazor's default pink.
+- **Focus.** One `:focus-visible` rule draws `--focus-ring` with `--focus-ring-offset` on buttons, inputs, selects, links, `[tabindex]` elements, the menu links and the phone's input. The template's `h1:focus { outline: none }` is gone, and no rule of ours sets `outline: none` (`DesignTokensTests.FocusIsVisible`). The Error page's heading, focused by `FocusOnNavigate`, therefore shows the ring.
+- **The history's Status column** is a `StatusBadge` too: `done` success, `executing` warning, `failed` danger, each on its tint. Any other value is muted.
+- **Other pages.** The Error and NotFound pages wrap their content in one `section.console-page`, which the layout places from main to phone in the second row (checked at 1,440 x 900, no horizontal scroll).
+- **The status bar's timer** has the `CardPanel` disposed flag: a tick queued after `Dispose` does nothing.
+
+The journey `EmptyStatesShowOnAFreshConsole` checks the log:
+
+- the per-test reset empties the agent tables, so `log-panel` shows `empty-state` and no `log-row`;
+- after CLN-01 and Confirm, the panel shows a `log-row` and no `empty-state`.
+
 ## Account status badges
 
 `StatusBadge` (`Components/Console/StatusBadge.razor`, UI pass task 5, Khalil's decision 1, "keep both") shows an account status in two console grids:
@@ -901,6 +932,8 @@ The journeys locate elements only by these attributes. The two lines of the "not
 | Account status badge (UI pass, 21 Oct 2026), in the Contacts and Aliases grids | `status-badge` | `data-status` (`active`, `closed`, or whatever the wallet reports) |
 | Grid pager: root, range text, Previous, Next | `grid-pager`, `grid-pager-range`, `grid-pager-previous`, `grid-pager-next` | root: `data-grid` (`contacts`, `bills`, `history`, `log`, `aliases`), `data-page`, `data-pages` |
 | Settings row | `setting-row` | `data-name` |
+| Log panel root (UI pass, 22 Oct 2026) | `log-panel` | |
+| Empty state of a grid or list (UI pass, 22 Oct 2026) | `empty-state` | inside the panel it belongs to |
 | Log row, log refresh button | `log-row`, `log-refresh` | `log-row`: `data-event`, `data-reason` (empty when null), `data-pending` (the first 8 characters of the pending ID, empty when null) |
 | Settings value, input, Save, Reset, error (editable agent rows) | `setting-value`, `setting-input`, `setting-save`, `setting-reset`, `setting-error` | `data-name` (the setting's name, as on its row) |
 | Menu items | `menu-wallet`, `menu-settings`, `menu-log`, `menu-aliases`, `menu-learning` | |
@@ -980,6 +1013,7 @@ The journeys locate elements only by these attributes. The two lines of the "not
 | `APaymentWithoutAQuestionOffersNoAlias` | CLN-01, Confirm: one done outcome and no `save-alias` |
 | `ANearSpellingOfASavedAliasShowsItAsAnOption` | The directory saves AMB-19-v1's step 2 `alias_offer` for S08 (`directory-result` `data-key` `Reply_alias_saved`); back to the chat; AMB-19's step 3 sentence gives exactly one `question-option` holding that alias; the tap gives a live card with that alias as `card-display` |
 | `ThePhoneDirectoryListsAddsAndDeletes` | The directory's `directory-alias` rows equal the wallet's alias count for U1, and the compose row is gone; S03's saved name plus " x" saved for S03 adds a row and an alias on S03's account in the wallet; its `directory-delete` gives `Reply_alias_deleted` and removes it on screen and in the wallet |
+| `EmptyStatesShowOnAFreshConsole` | UI pass task 8: on U1's console after the per-test reset, `menu-log` shows `empty-state` in `log-panel` and no `log-row`; after CLN-01 and Confirm, a `log-row` and no `empty-state` |
 | `AClosedContactShowsItsStatusInTheWalletData` | UI pass task 5: on U1's wallet data, S01's `wallet-contact-row` holds `status-badge[data-status=active]`; through the contacts pager's `grid-pager-next`, S20's row holds `status-badge[data-status=closed]` and has `row-muted`; the closed badges counted on every page equal U1's contacts with `AccountStatus` `closed` as the host's wallet client reports |
 | `ThePhoneDirectoryPagesAtTheGridPageSize` | UI pass task 4d: `Console:GridPageSize` saved as 5; two aliases of S03 added in the phone's directory (6 in all); `phone-pager` has `data-pages` 2 and 5 `directory-alias` rows; `phone-pager-next` gives page 2 and the sixth row; `setting-reset` gives 10, and the directory opened again shows every row and no pager |
 | `TheConsoleAliasesPanelListsAddsAndDeletes` | The same through `menu-aliases`: `console-alias` rows equal the wallet's count; save gives `console-alias-result` `saved` and one more row on S03's account; `console-alias-delete` gives `deleted` and the row and the wallet's alias go |
@@ -1007,7 +1041,7 @@ The journeys locate elements only by these attributes. The two lines of the "not
 | `TappingThePersonGivesTheTransferPath` | The same question; the tap on S04 gives `Question_which_amount` (CLN-10 names no amount) and no card; BS2 still due and the balance 750,000 |
 | `ANewMessageCancelsTheRest` | CMP-01, then CLN-01 while card 1 waits: one cancelled outcome; CLN-01's card live for its amount; Confirm gives done and the card stays done (no purchase card follows); two card messages; CLN-01's final balance |
 
-- **Run:** `dotnet test tests/Agent.Web.Journeys`. The 75 tests (73 journeys, the host test, and the screenshot helper `Screenshots.CaptureTheConsoleAndThePhone`, skipped unless `ZAINCASH_SCREENSHOTS` is `1`) take about two minutes (72 in 2 min 1 s on 22 Oct 2026 with the UI pass; 69 in 2 min 29 s on 20 Oct 2026 with the three of person or bill; the 66 in 2 min 24 s on 19 Oct 2026 with the eight of milestone 9c; the 58 in 2 min 10 s on 19 Oct 2026 with the eight of milestone 9b; the 50 in 2 min 6 s on 19 Oct 2026, 49 in 2 min 31 s on 18 Oct 2026; 1 min 57 s and 1 min 52 s in two runs of the 32 of 16 Oct 2026; the two timeout journeys take about 20 s each). The 20 of milestone 7 took about a minute.
+- **Run:** `dotnet test tests/Agent.Web.Journeys`. The 76 tests (74 journeys, the host test, and the screenshot helper `Screenshots.CaptureTheConsoleAndThePhone`, skipped unless `ZAINCASH_SCREENSHOTS` is `1`) take about two minutes (72 in 2 min 1 s on 22 Oct 2026 with the UI pass; 69 in 2 min 29 s on 20 Oct 2026 with the three of person or bill; the 66 in 2 min 24 s on 19 Oct 2026 with the eight of milestone 9c; the 58 in 2 min 10 s on 19 Oct 2026 with the eight of milestone 9b; the 50 in 2 min 6 s on 19 Oct 2026, 49 in 2 min 31 s on 18 Oct 2026; 1 min 57 s and 1 min 52 s in two runs of the 32 of 16 Oct 2026; the two timeout journeys take about 20 s each). The 20 of milestone 7 took about a minute.
 - **Screenshots (UI pass, Khalil, 21 Oct 2026):** `Screenshots.CaptureTheConsoleAndThePhone` is a camera, not a journey. With `ZAINCASH_SCREENSHOTS=1` it opens U1's console at 1,440 x 900 and writes `console-at-rest.png`, `card-live.png` (CLN-01's live card), `phone-card.png` (the phone frame alone), `settings.png`, `log.png` and `wallet-data.png` into `ZAINCASH_SCREENSHOTS_DIR` (created; default `screenshots` under the current directory); it asserts only that the files exist. PowerShell: `$env:ZAINCASH_SCREENSHOTS='1'; $env:ZAINCASH_SCREENSHOTS_DIR='<folder>'; dotnet test tests/Agent.Web.Journeys -- --filter-class "Agent.Web.Journeys.Screenshots"`, then `Remove-Item Env:ZAINCASH_SCREENSHOTS, Env:ZAINCASH_SCREENSHOTS_DIR`.
 - **Install Chromium once,** after the first build: `pwsh tests/Agent.Web.Journeys/bin/Debug/net10.0/playwright.ps1 install chromium`.
 - **Skips:** the journeys skip when SQL Server does not answer a 3-second probe on `master`, and when Chromium cannot be launched. The skip message gives the install command.

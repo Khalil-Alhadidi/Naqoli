@@ -523,7 +523,7 @@ The biller alias stays the later item below.
 
 **Delivers**
 
-- The finished console in layout B.
+- The finished console in layout B. The UI pass of 21 and 22 Oct 2026 (tokens, grid, zones, paging, badges, settings descriptions, phone polish, empty and loading states) is planned and recorded in [docs/plans/ui-pass.md](plans/ui-pass.md).
 - `docs/disclosure.md` complete: every model, tool, library, data source and AI coding assistant.
 - A script for the first minute of the demo.
 - A rehearsal where someone other than Khalil supplies the input.

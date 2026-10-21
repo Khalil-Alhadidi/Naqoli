@@ -126,8 +126,8 @@
         @<tr data-testid="setting-row" data-name="@name">
             <td>
                 <MudText Typo="Typo.body2"><strong>@about.Label</strong> <small><code>@name</code></small></MudText>
-                <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block" id="@describedBy">@about.Description</MudText>
-                <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block">@RangeLine(about)</MudText>
+                <MudText Typo="Typo.caption" Class="d-block console-muted" id="@describedBy">@about.Description</MudText>
+                <MudText Typo="Typo.caption" Class="d-block console-muted">@RangeLine(about)</MudText>
             </td>
             <td data-testid="setting-value" data-name="@name">@Number(value)</td>
             <td>
@@ -138,7 +138,7 @@
                            OnClick="() => Save(name)">Save</MudButton>
                 @if (Runtime.Overrides.ContainsKey(Key(name)))
                 {
-                    <MudButton data-testid="setting-reset" data-name="@name" Size="Size.Small" Variant="Variant.Text"
+                    <MudButton data-testid="setting-reset" data-name="@name" Size="Size.Small" Variant="Variant.Outlined"
                                OnClick="() => Reset(name)">Reset</MudButton>
                 }
                 @if (errors.TryGetValue(name, out var error))

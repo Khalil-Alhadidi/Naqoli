@@ -1,0 +1,13 @@
+@* What a console grid shows while it loads for the first time (UI pass task 8): skeleton rows the height of a table
+   row. Later reloads keep the grid and show MudProgressLinear above it. *@
+<div class="table-skeleton" aria-busy="true">
+    @for (var row = 0; row < Rows; row++)
+    {
+        <MudSkeleton SkeletonType="SkeletonType.Rectangle" Class="table-skeleton-row" />
+    }
+</div>
+
+@code {
+    /// <summary>How many skeleton rows to show.</summary>
+    [Parameter] public int Rows { get; set; } = 3;
+}
