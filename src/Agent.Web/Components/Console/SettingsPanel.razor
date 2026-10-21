@@ -7,11 +7,12 @@
 @inject IOptions<ModelOptions> Model
 @inject RuntimeSettings Runtime
 @inject KillSwitch Kill
-@inject IOptions<ConsoleOptions> ConsoleSettings
+@inject IOptionsMonitor<ConsoleOptions> ConsoleSettings
 @using Agent.Core.Audit
 
-@* D8: the agent's limits are edited here and apply to the next action, without a restart. A saved value lives in memory
-   only (RuntimeSettings); the other rows are read only. No key (wallet or Anthropic) is ever shown. *@
+@* D8: the agent's limits are edited here and apply to the next action, without a restart; the console's grid page size
+   applies to the next render of every grid (task 4c). A saved value lives in memory only (RuntimeSettings); the other
+   rows are read only. No key (wallet or Anthropic) is ever shown. *@
 <MudPaper Class="pa-3" Elevation="1">
     <MudText Typo="Typo.h6">Settings</MudText>
     <MudText Typo="Typo.body2" Class="mb-2">A saved value applies to the next action and is forgotten when the console restarts.</MudText>
@@ -31,26 +32,7 @@
             @{ var current = Options.CurrentValue; }
             @foreach (var (name, read) in Editable)
             {
-                var key = Key(name);
-                <tr data-testid="setting-row" data-name="@name">
-                    <td>@name</td>
-                    <td data-testid="setting-value" data-name="@name">@Number(read(current))</td>
-                    <td>
-                        <input data-testid="setting-input" data-name="@name" type="text" inputmode="numeric" aria-label="@name"
-                               value="@Draft(name)" @oninput="e => drafts[name] = e.Value?.ToString() ?? string.Empty" />
-                        <MudButton data-testid="setting-save" data-name="@name" Size="Size.Small" Variant="Variant.Outlined"
-                                   OnClick="() => Save(name)">Save</MudButton>
-                        @if (Runtime.Overrides.ContainsKey(key))
-                        {
-                            <MudButton data-testid="setting-reset" data-name="@name" Size="Size.Small" Variant="Variant.Text"
-                                       OnClick="() => Reset(name)">Reset</MudButton>
-                        }
-                        @if (errors.TryGetValue(name, out var error))
-                        {
-                            <MudText data-testid="setting-error" data-name="@name" Typo="Typo.caption" Color="Color.Error">@error</MudText>
-                        }
-                    </td>
-                </tr>
+                @EditableRow(name, read(current))
             }
             @foreach (var (name, value) in ReadOnly(current))
             {
@@ -59,19 +41,21 @@
             @* The key itself is never shown: set or not set. *@
             <tr data-testid="setting-row" data-name="Console:WalletAdminKey">
                 <td>Console:WalletAdminKey</td>
-                <td colspan="2">@(string.IsNullOrEmpty(ConsoleSettings.Value.WalletAdminKey) ? "not set" : "set")</td>
+                <td colspan="2">@(string.IsNullOrEmpty(ConsoleSettings.CurrentValue.WalletAdminKey) ? "not set" : "set")</td>
             </tr>
         </tbody>
     </MudSimpleTable>
 
-    @* The console's own display settings: nothing in Agent.Core reads them, so they never change a check, a card or a reply. *@
+    @* The console's own display settings: nothing in Agent.Core reads them, so they never change a check, a card or a reply.
+       Each row's name is its full key (Console:...), exactly RuntimeSettings.EditableConsoleNames. *@
     <MudText Typo="Typo.subtitle1" Class="mt-4">Console</MudText>
     <MudSimpleTable Dense="true">
         <tbody>
-            <tr data-testid="setting-row" data-name="Console:GridPageSize">
-                <td>Console:GridPageSize</td>
-                <td>@Number(ConsoleSettings.Value.GridPageSize)</td>
-            </tr>
+            @{ var console = ConsoleSettings.CurrentValue; }
+            @foreach (var (name, read) in EditableConsole)
+            {
+                @EditableRow(name, read(console))
+            }
         </tbody>
     </MudSimpleTable>
 
@@ -114,6 +98,44 @@
     /// </summary>
     private static readonly (string Name, Func<AgentOptions, long> Read)[] Editable =
         [.. RuntimeSettings.EditableNames.Select(name => (name, Reader(name)))];
+
+    /// <summary>
+    /// The console settings that can be changed while the console runs, by full key: exactly
+    /// <see cref="RuntimeSettings.EditableConsoleNames"/> under <c>Console:</c>.
+    /// </summary>
+    private static readonly (string Name, Func<ConsoleOptions, long> Read)[] EditableConsole =
+        [.. RuntimeSettings.EditableConsoleNames.Select(name => (ConsoleOptions.SectionName + ":" + name, ConsoleReader(name)))];
+
+    private static Func<ConsoleOptions, long> ConsoleReader(string name) => name switch
+    {
+        nameof(ConsoleOptions.GridPageSize) => o => o.GridPageSize,
+        _ => throw new InvalidOperationException("No reader for the editable console setting " + name + "."),
+    };
+
+    /// <summary>
+    /// One editable row: the value in force, an input, Save, Reset once a value is saved, and the refusal. Every element
+    /// carries <c>data-name</c> = <paramref name="name"/> (an agent setting's bare name, or a console setting's full key).
+    /// </summary>
+    private RenderFragment EditableRow(string name, long value) =>
+        @<tr data-testid="setting-row" data-name="@name">
+            <td>@name</td>
+            <td data-testid="setting-value" data-name="@name">@Number(value)</td>
+            <td>
+                <input data-testid="setting-input" data-name="@name" type="text" inputmode="numeric" aria-label="@name"
+                       value="@Draft(name)" @oninput="e => drafts[name] = e.Value?.ToString() ?? string.Empty" />
+                <MudButton data-testid="setting-save" data-name="@name" Size="Size.Small" Variant="Variant.Outlined"
+                           OnClick="() => Save(name)">Save</MudButton>
+                @if (Runtime.Overrides.ContainsKey(Key(name)))
+                {
+                    <MudButton data-testid="setting-reset" data-name="@name" Size="Size.Small" Variant="Variant.Text"
+                               OnClick="() => Reset(name)">Reset</MudButton>
+                }
+                @if (errors.TryGetValue(name, out var error))
+                {
+                    <MudText data-testid="setting-error" data-name="@name" Typo="Typo.caption" Color="Color.Error">@error</MudText>
+                }
+            </td>
+        </tr>;
 
     private static Func<AgentOptions, long> Reader(string name) => name switch
     {
@@ -167,7 +189,9 @@
     };
     private readonly Dictionary<string, string> errors = new(StringComparer.Ordinal);
 
-    private static string Key(string name) => AgentOptions.SectionName + ":" + name;
+    /// <summary>The runtime key of a row: a console row's name is already its key; an agent row's gets <c>Agent:</c>.</summary>
+    private static string Key(string name)
+        => name.StartsWith(ConsoleOptions.SectionName + ":", StringComparison.Ordinal) ? name : AgentOptions.SectionName + ":" + name;
 
     private string Draft(string name) => drafts.TryGetValue(name, out var draft) ? draft : string.Empty;
 

@@ -31,9 +31,10 @@ public sealed class ConsoleOptions
     /// How many rows every console grid (contacts, bills, history, log, aliases) shows on one page, 5 to 100, default 10.
     /// It splits what a panel has already loaded into pages; it is not <c>Agent:LogPageSize</c> or
     /// <c>Agent:HistoryPageSize</c>, which say how much is loaded. Nothing in <c>Agent.Core</c> reads it. It stays 10 or
-    /// more because three journeys count every row of U1's aliases and orders on the first page.
+    /// more because three journeys count every row of U1's aliases and orders on the first page. It can be changed in the
+    /// settings component while the console runs (task 4c); the message names the setting as the component shows it.
     /// </summary>
-    [Range(5, 100)]
+    [Range(5, 100, ErrorMessage = "Console:GridPageSize must be between 5 and 100.")]
     public int GridPageSize { get; set; } = 10;
 
     /// <summary>True when <paramref name="key"/> may be used outside Development: set, not the placeholder, long enough.</summary>

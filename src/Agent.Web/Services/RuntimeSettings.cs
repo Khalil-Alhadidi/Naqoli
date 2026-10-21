@@ -53,12 +53,14 @@ public sealed class RuntimeSettingsProvider : ConfigurationProvider
 }
 
 /// <summary>
-/// Saves agent settings while the console runs (D8): a saved value applies to the next action, whose scope reads a fresh
-/// <see cref="IOptionsSnapshot{TOptions}"/>. Only the keys of <see cref="EditableNames"/> can be saved. A save is checked
-/// first on a candidate (the configuration as it is plus the one value, bound to a fresh <see cref="AgentOptions"/>, then
-/// the registered post-configuration and every registered validator: the data annotations and the cross-field rules of
-/// <c>AddAgentCore</c>); only a valid value is published, so no other circuit ever sees an invalid one. Nothing is
-/// written to a file.
+/// Saves agent and console settings while the console runs (D8): a saved agent value applies to the next action, whose
+/// scope reads a fresh <see cref="IOptionsSnapshot{TOptions}"/>; a saved console value to the next render of a panel
+/// that reads <see cref="IOptionsMonitor{TOptions}"/> of <see cref="ConsoleOptions"/>. Only <c>Agent:</c> plus one of
+/// <see cref="EditableNames"/> and <c>Console:</c> plus one of <see cref="EditableConsoleNames"/> can be saved. A save is
+/// checked first on a candidate (the configuration as it is plus the one value, bound to a fresh options object of the
+/// key's section, then, for the agent, the registered post-configuration, and every registered validator of that
+/// section: the data annotations and the cross-field rules); only a valid value is published, so no other circuit ever
+/// sees an invalid one. Nothing is written to a file.
 /// </summary>
 public sealed class RuntimeSettings
 {
@@ -85,43 +87,58 @@ public sealed class RuntimeSettings
         nameof(AgentOptions.MaxNamedNotPrepared),
     ];
 
+    /// <summary>
+    /// The console settings the console may change while it runs (UI pass, task 4c): the grids' page size. The wallet
+    /// admin key is never editable.
+    /// </summary>
+    public static IReadOnlyList<string> EditableConsoleNames { get; } =
+    [
+        nameof(ConsoleOptions.GridPageSize),
+    ];
+
     private const string Prefix = AgentOptions.SectionName + ":";
+    private const string ConsolePrefix = ConsoleOptions.SectionName + ":";
 
     private readonly RuntimeSettingsProvider provider;
     private readonly IConfiguration configuration;
     private readonly IEnumerable<IPostConfigureOptions<AgentOptions>> postConfigures;
     private readonly IEnumerable<IValidateOptions<AgentOptions>> validators;
+    private readonly IEnumerable<IValidateOptions<ConsoleOptions>> consoleValidators;
     private readonly Lock gate = new();
 
     /// <param name="provider">Where a saved value is published.</param>
     /// <param name="configuration">The whole configuration, the runtime source included, that the options bind from.</param>
     /// <param name="postConfigures">The registered post-configuration of <see cref="AgentOptions"/>.</param>
     /// <param name="validators">The registered validators of <see cref="AgentOptions"/>.</param>
+    /// <param name="consoleValidators">The registered validators of <see cref="ConsoleOptions"/>.</param>
     public RuntimeSettings(
         RuntimeSettingsProvider provider,
         IConfiguration configuration,
         IEnumerable<IPostConfigureOptions<AgentOptions>> postConfigures,
-        IEnumerable<IValidateOptions<AgentOptions>> validators)
+        IEnumerable<IValidateOptions<AgentOptions>> validators,
+        IEnumerable<IValidateOptions<ConsoleOptions>> consoleValidators)
     {
         ArgumentNullException.ThrowIfNull(provider);
         ArgumentNullException.ThrowIfNull(configuration);
         ArgumentNullException.ThrowIfNull(postConfigures);
         ArgumentNullException.ThrowIfNull(validators);
+        ArgumentNullException.ThrowIfNull(consoleValidators);
 
         this.provider = provider;
         this.configuration = configuration;
         this.postConfigures = postConfigures;
         this.validators = validators;
+        this.consoleValidators = consoleValidators;
     }
 
-    /// <summary>The values saved since the start, by key (<c>Agent:PerTransactionCapIqd</c>).</summary>
+    /// <summary>The values saved since the start, by key (<c>Agent:PerTransactionCapIqd</c>, <c>Console:GridPageSize</c>).</summary>
     public IReadOnlyDictionary<string, string> Overrides => provider.Values;
 
     /// <summary>
     /// Saves <paramref name="value"/> under <paramref name="key"/> when the options it gives are valid; otherwise publishes
     /// nothing and returns false with the failure messages, which name the setting.
     /// </summary>
-    /// <exception cref="ArgumentException"><paramref name="key"/> is not <c>Agent:</c> and one of <see cref="EditableNames"/>.</exception>
+    /// <exception cref="ArgumentException"><paramref name="key"/> is neither <c>Agent:</c> and one of <see cref="EditableNames"/> nor <c>Console:</c> and one of <see cref="EditableConsoleNames"/>.</exception>
     public bool TrySet(string key, string value, [NotNullWhen(false)] out string? error)
     {
         RequireEditableKey(key);
@@ -139,7 +156,7 @@ public sealed class RuntimeSettings
     }
 
     /// <summary>Removes the saved value of <paramref name="key"/>: the value of the other sources applies again.</summary>
-    /// <exception cref="ArgumentException"><paramref name="key"/> is not <c>Agent:</c> and one of <see cref="EditableNames"/>.</exception>
+    /// <exception cref="ArgumentException"><paramref name="key"/> is neither <c>Agent:</c> and one of <see cref="EditableNames"/> nor <c>Console:</c> and one of <see cref="EditableConsoleNames"/>.</exception>
     public void Reset(string key)
     {
         RequireEditableKey(key);
@@ -159,10 +176,24 @@ public sealed class RuntimeSettings
             .AddInMemoryCollection(new Dictionary<string, string?> { [key] = value })
             .Build();
 
-        var options = new AgentOptions();
+        return IsConsoleKey(key)
+            ? Check(key, candidate, ConsoleOptions.SectionName, new ConsoleOptions(), [], consoleValidators)
+            : Check(key, candidate, AgentOptions.SectionName, new AgentOptions(), postConfigures, validators);
+    }
+
+    /// <summary>Binds <paramref name="options"/> from the candidate's section, post-configures and validates it.</summary>
+    private static string? Check<TOptions>(
+        string key,
+        IConfiguration candidate,
+        string section,
+        TOptions options,
+        IEnumerable<IPostConfigureOptions<TOptions>> postConfigures,
+        IEnumerable<IValidateOptions<TOptions>> validators)
+        where TOptions : class
+    {
         try
         {
-            candidate.GetSection(AgentOptions.SectionName).Bind(options);
+            candidate.GetSection(section).Bind(options);
         }
         catch (InvalidOperationException ex) when (ex.Message.Contains(key, StringComparison.OrdinalIgnoreCase))
         {
@@ -181,12 +212,20 @@ public sealed class RuntimeSettings
         return failures.Count == 0 ? null : string.Join(" ", failures);
     }
 
+    private static bool IsConsoleKey(string key) => key.StartsWith(ConsolePrefix, StringComparison.OrdinalIgnoreCase);
+
     private static void RequireEditableKey(string key)
     {
         ArgumentNullException.ThrowIfNull(key);
-        var name = key.StartsWith(Prefix, StringComparison.OrdinalIgnoreCase) ? key[Prefix.Length..] : null;
-        if (name is null || !EditableNames.Contains(name, StringComparer.OrdinalIgnoreCase))
-            throw new ArgumentException("Only the editable keys of the " + AgentOptions.SectionName + " section can be saved.", nameof(key));
+        var editable =
+            (key.StartsWith(Prefix, StringComparison.OrdinalIgnoreCase)
+                && EditableNames.Contains(key[Prefix.Length..], StringComparer.OrdinalIgnoreCase))
+            || (IsConsoleKey(key)
+                && EditableConsoleNames.Contains(key[ConsolePrefix.Length..], StringComparer.OrdinalIgnoreCase));
+        if (!editable)
+            throw new ArgumentException(
+                "Only the editable keys of the " + AgentOptions.SectionName + " and " + ConsoleOptions.SectionName + " sections can be saved.",
+                nameof(key));
     }
 }
 
@@ -215,7 +254,8 @@ public static class RuntimeSettingsExtensions
                 provider,
                 configuration,
                 sp.GetServices<IPostConfigureOptions<AgentOptions>>(),
-                sp.GetServices<IValidateOptions<AgentOptions>>()));
+                sp.GetServices<IValidateOptions<AgentOptions>>(),
+                sp.GetServices<IValidateOptions<ConsoleOptions>>()));
         return services;
     }
 }

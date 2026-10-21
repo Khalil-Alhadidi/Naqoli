@@ -217,6 +217,30 @@ public sealed class ConsoleJourneys(JourneyHost host) : JourneyBase(host)
         await Expect(page.Locator($"[data-testid=wallet-history-row][data-reference='{reference}']")).ToHaveCountAsync(0);
         Assert.All(await rows.EvaluateAllAsync<string[]>("rs => rs.map(r => r.dataset.reference)"),
             shown => Assert.NotEqual(reference, shown));
+
+        // Task 4c (decision 2): a page size saved in the settings applies at the next render, without a restart.
+        var pagesAtTen = int.Parse((await pager.GetAttributeAsync("data-pages"))!, CultureInfo.InvariantCulture);
+        const string setting = "[data-name='Console:GridPageSize']";
+        await page.GetByTestId("menu-settings").ClickAsync();
+        await page.Locator($"[data-testid=setting-input]{setting}").FillAsync("5");
+        await page.Locator($"[data-testid=setting-save]{setting}").ClickAsync();
+        await Expect(page.Locator($"[data-testid=setting-value]{setting}")).ToHaveTextAsync("5");
+
+        await page.GetByTestId("menu-wallet").ClickAsync();
+
+        await Expect(pager).ToHaveAttributeAsync("data-page", "1");
+        await Expect(rows).ToHaveCountAsync(5);
+        await Expect(rows.First).ToHaveAttributeAsync("data-reference", reference);
+        var pagesAtFive = int.Parse((await pager.GetAttributeAsync("data-pages"))!, CultureInfo.InvariantCulture);
+        Assert.True(pagesAtFive > pagesAtTen, $"{pagesAtFive} pages at 5 rows, {pagesAtTen} at 10");
+
+        // Reset brings back the file's 10 and the earlier page count.
+        await page.GetByTestId("menu-settings").ClickAsync();
+        await page.Locator($"[data-testid=setting-reset]{setting}").ClickAsync();
+        await Expect(page.Locator($"[data-testid=setting-value]{setting}")).ToHaveTextAsync("10");
+        await page.GetByTestId("menu-wallet").ClickAsync();
+        await Expect(pager).ToHaveAttributeAsync("data-pages", pagesAtTen.ToString(CultureInfo.InvariantCulture));
+        await Expect(rows).ToHaveCountAsync(pageSize);
     }
 
     [Fact]

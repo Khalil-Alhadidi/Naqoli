@@ -40,6 +40,11 @@ public sealed class RuntimeSettingsTests : IDisposable
         var services = new ServiceCollection();
         services.AddLogging();
         services.AddAgentCore(configuration);
+
+        // The console's own section, validated as AddAgentWebServices registers it (the data annotations).
+        services.AddOptions<ConsoleOptions>()
+            .Bind(configuration.GetSection(ConsoleOptions.SectionName))
+            .ValidateDataAnnotations();
         services.AddRuntimeSettings(configuration);
         provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true, ValidateOnBuild = true });
     }
@@ -134,6 +139,10 @@ public sealed class RuntimeSettingsTests : IDisposable
     [InlineData("Agent:DevSetPath")]
     [InlineData("Agent:Parser")]
     [InlineData("Agent:DemoUserId")]
+    [InlineData("Console:WalletAdminKey")]
+    [InlineData("Console:")]
+    [InlineData("Agent:GridPageSize")]
+    [InlineData("Console:PerTransactionCapIqd")]
     public void AKeyThatIsNotEditableIsRefused(string key)
     {
         Assert.Throws<ArgumentException>(() => Settings.TrySet(key, "1", out _));
@@ -199,6 +208,47 @@ public sealed class RuntimeSettingsTests : IDisposable
             var value = typeof(AgentOptions).GetProperty(name)!.GetValue(current)!.ToString()!;
             Assert.True(Settings.TrySet("Agent:" + name, value, out var error), name + ": " + error);
         }
+
+        var console = provider.GetRequiredService<IOptionsMonitor<ConsoleOptions>>().CurrentValue;
+        foreach (var name in RuntimeSettings.EditableConsoleNames)
+        {
+            var value = typeof(ConsoleOptions).GetProperty(name)!.GetValue(console)!.ToString()!;
+            Assert.True(Settings.TrySet("Console:" + name, value, out var error), name + ": " + error);
+        }
+    }
+
+    /// <summary>
+    /// UI pass, task 4c (decision 2): the console grids' page size is editable within its range, 5 to 100; a refused value
+    /// names the setting and the value in force stays; Reset brings back the file's 10.
+    /// </summary>
+    [Theory]
+    [InlineData("5", true)]
+    [InlineData("100", true)]
+    [InlineData("4", false)]
+    [InlineData("101", false)]
+    [InlineData("ten", false)]
+    public void GridPageSizeIsEditableWithinItsRange(string value, bool accepted)
+    {
+        const string key = "Console:" + nameof(ConsoleOptions.GridPageSize);
+        Assert.Equal([nameof(ConsoleOptions.GridPageSize)], RuntimeSettings.EditableConsoleNames);
+        var monitor = provider.GetRequiredService<IOptionsMonitor<ConsoleOptions>>();
+
+        Assert.Equal(accepted, Settings.TrySet(key, value, out var error));
+
+        if (accepted)
+        {
+            Assert.Null(error);
+            Assert.Equal(int.Parse(value, System.Globalization.CultureInfo.InvariantCulture), monitor.CurrentValue.GridPageSize);
+            Settings.Reset(key);
+        }
+        else
+        {
+            Assert.NotNull(error);
+            Assert.Contains(key, error, StringComparison.Ordinal);
+            Assert.Empty(Settings.Overrides);
+        }
+
+        Assert.Equal(10, monitor.CurrentValue.GridPageSize);
     }
 
     /// <summary>
