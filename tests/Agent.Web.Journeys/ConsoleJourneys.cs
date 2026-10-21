@@ -336,4 +336,38 @@ public sealed class ConsoleJourneys(JourneyHost host) : JourneyBase(host)
         await page.GetByTestId("menu-log").ClickAsync();
         await Expect(page.Locator("[data-testid=log-row][data-event=kill_switch]")).ToHaveCountAsync(2);
     }
+
+    /// <summary>
+    /// UI pass task 5 (decision 1): the wallet data's Contacts grid shows each contact's account status as a badge, a
+    /// closed contact's row muted. S20 is U1's closed contact, on page 2 at ten rows a page; the count of closed badges
+    /// across every page is the wallet's own count.
+    /// </summary>
+    [Fact]
+    public async Task AClosedContactShowsItsStatusInTheWalletData()
+    {
+        var page = await OpenAsync(Host.WebAddress);
+        var closedInTheWallet = (await Host.ContactsAsync(U1)).Contacts.Count(c => c.AccountStatus == "closed");
+        Assert.True(closedInTheWallet > 0, "U1 has no closed contact in the seed");
+
+        var s01 = page.Locator("[data-testid=wallet-contact-row][data-code=S01]");
+        await Expect(s01.Locator("[data-testid=status-badge][data-status=active]")).ToHaveCountAsync(1);
+
+        var closedBadges = page.Locator("[data-testid=wallet-contact-row] [data-testid=status-badge][data-status=closed]");
+        var pager = page.Locator("[data-testid=grid-pager][data-grid=contacts]");
+        var next = pager.GetByTestId("grid-pager-next");
+        var closedOnScreen = await closedBadges.CountAsync();
+        var lastPage = int.Parse(await pager.GetAttributeAsync("data-pages") ?? "1", CultureInfo.InvariantCulture);
+        for (var shown = 2; shown <= lastPage; shown++)
+        {
+            await next.ClickAsync();
+            await Expect(pager).ToHaveAttributeAsync("data-page", shown.ToString(CultureInfo.InvariantCulture));
+            closedOnScreen += await closedBadges.CountAsync();
+        }
+
+        // On the last page now, where S20 sits at ten rows a page.
+        var s20 = page.Locator("[data-testid=wallet-contact-row][data-code=S20]");
+        await Expect(s20.Locator("[data-testid=status-badge][data-status=closed]")).ToHaveCountAsync(1);
+        await Expect(s20).ToHaveClassAsync(new System.Text.RegularExpressions.Regex(@"(^|\s)row-muted(\s|$)"));
+        Assert.Equal(closedInTheWallet, closedOnScreen);
+    }
 }

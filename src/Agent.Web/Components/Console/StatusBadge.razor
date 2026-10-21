@@ -1,0 +1,30 @@
+@* An account status as the wallet reports it (UI pass task 5, decision 1), display only: active in success on the
+   success tint, closed in muted on the neutral tint, any other value muted on the neutral tint with no icon, so a value
+   the wallet adds later still shows. The text is the value, lower case. *@
+<span class="badge badge-@CssValue" data-testid="status-badge" data-status="@Value">
+    @if (IconFor(CssValue) is { } icon)
+    {
+        <MudIcon Icon="@icon" Size="Size.Small" Class="badge-icon" />
+    }
+    @Value?.ToLowerInvariant()
+</span>
+
+@code {
+    /// <summary>The status string, <c>active</c> or <c>closed</c> in the seed.</summary>
+    [Parameter] public string? Value { get; set; }
+
+    // The class suffix: the two known values by name, anything else "other".
+    private string CssValue => Value?.ToLowerInvariant() switch
+    {
+        "active" => "active",
+        "closed" => "closed",
+        _ => "other",
+    };
+
+    private static string? IconFor(string value) => value switch
+    {
+        "active" => Icons.Material.Filled.CheckCircle,
+        "closed" => Icons.Material.Filled.Block,
+        _ => null,
+    };
+}

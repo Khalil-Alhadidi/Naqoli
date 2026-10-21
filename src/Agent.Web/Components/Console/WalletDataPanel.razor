@@ -33,15 +33,17 @@
     {
         var contactRows = PagedList<WalletContact>.Of(directory.Contacts, contactsPage, PageSize);
         <MudSimpleTable Dense="true" Hover="true">
-            <thead><tr><th>Code</th><th>Saved name</th><th>Registered name</th><th>Last sent</th></tr></thead>
+            <thead><tr><th>Code</th><th>Saved name</th><th>Registered name</th><th>Last sent</th><th>Status</th></tr></thead>
             <tbody>
                 @foreach (var contact in contactRows.Rows)
                 {
-                    <tr>
+                    @* UI pass task 5 (decision 1): the account status as a badge; a closed contact's row is muted. *@
+                    <tr data-testid="wallet-contact-row" data-code="@contact.Code" class="@MutedWhenClosed(contact.AccountStatus)">
                         <td>@contact.Code</td>
                         <td><bdi>@contact.SavedName</bdi></td>
                         <td><bdi>@contact.RegisteredName</bdi></td>
                         <td>@(contact.LastSentAmountIqd is { } last ? PhoneFormat.Console(last) + " IQD" : "-")</td>
+                        <td><StatusBadge Value="@contact.AccountStatus" /></td>
                     </tr>
                 }
             </tbody>
@@ -197,6 +199,8 @@
 
         StateHasChanged();
     }
+
+    private static string? MutedWhenClosed(string status) => status == "closed" ? "row-muted" : null;
 
     private static string Unavailable<T>(WalletResult<T> result) => result switch
     {

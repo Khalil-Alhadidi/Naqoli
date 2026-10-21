@@ -466,7 +466,7 @@ The phone's header has a button (`phone-directory`, `Directory_Open`) that shows
 
 The agent's `AliasDirectory` does every check. The list reloads when `WalletVersion` changes (also after a restart, see "Wallet changes").
 
-The console's Aliases panel (`menu-aliases`, `AliasesPanel`, English) is the same list as a table (`console-alias`, `data-alias-id`; alias, phone, registered name, `console-alias-delete`). It has the same add form (`console-alias-text`, `console-alias-target` with items `console-alias-target-option`, `console-alias-phone`, `console-alias-save`) and a result line (`console-alias-result`, `data-result` `saved`, `deleted`, the refusal's code, or `unavailable`). Both act through the circuit's `ChatSession` on the demo user. The console's list reloads on every `WalletChanges` notification for the demo user or for every user, so an alias saved or deleted from any tab's phone or console, and the reset, show in every tab without a click; the session's `Changed` only re-renders its buttons while an action runs. The table shows one page of `Console:GridPageSize` aliases in the wallet's order, with a `grid-pager` (`data-grid="aliases"`) once there are more; a reload keeps the page, clamped when a delete shrank the list ([Paging the grids](#paging-the-grids)).
+The console's Aliases panel (`menu-aliases`, `AliasesPanel`, English) is the same list as a table (`console-alias`, `data-alias-id`; alias, phone, registered name, the account's status badge (`status-badge`, a closed account's row muted; UI pass task 5), `console-alias-delete`). It has the same add form (`console-alias-text`, `console-alias-target` with items `console-alias-target-option`, `console-alias-phone`, `console-alias-save`) and a result line (`console-alias-result`, `data-result` `saved`, `deleted`, the refusal's code, or `unavailable`). Both act through the circuit's `ChatSession` on the demo user. The console's list reloads on every `WalletChanges` notification for the demo user or for every user, so an alias saved or deleted from any tab's phone or console, and the reset, show in every tab without a click; the session's `Changed` only re-renders its buttons while an action runs. The table shows one page of `Console:GridPageSize` aliases in the wallet's order, with a `grid-pager` (`data-grid="aliases"`) once there are more; a reload keeps the page, clamped when a delete shrank the list ([Paging the grids](#paging-the-grids)).
 
 ```mermaid
 flowchart TD
@@ -776,6 +776,29 @@ sequenceDiagram
     A-->>L: rows, newest first (At, then Id)
 ```
 
+## Account status badges
+
+`StatusBadge` (`Components/Console/StatusBadge.razor`, UI pass task 5, Khalil's decision 1, "keep both") shows an account status in two console grids:
+
+- **Wallet data, Contacts:** a Status column, last. Each contact row is now `wallet-contact-row` with `data-code`; both are additive.
+- **Aliases:** a Status column before Delete.
+
+The badge reads the `AccountStatus` string the panel already receives (`WalletContact.AccountStatus`, `WalletAlias.AccountStatus`; `active` or `closed`, the only values the seed loader accepts). The wallet, the database and `Agent.Core` are unchanged, and no new read is made. It is display only: nothing about how the agent treats a closed account changes.
+
+The badge is `span.badge` with `data-testid="status-badge"` and `data-status` (the value). Its text is the value in lower case, shown in capitals by CSS:
+
+| Value | Badge |
+|---|---|
+| `active` | `CheckCircle` icon, `--color-success` on `--color-success-tint` |
+| `closed` | `Block` icon, `--color-text-muted` on `--color-neutral-tint` |
+| any other value | no icon, `--color-text-muted` on `--color-neutral-tint` (a value the wallet adds later still shows) |
+
+The row of a closed account gets `class="row-muted"` (muted text); its `data-testid` and `data-*` attributes stay as they were. In U1's seed, S20 is the closed contact, on page 2 of the Contacts grid at ten rows a page. The journey `AClosedContactShowsItsStatusInTheWalletData` checks:
+
+- S01's badge is `active`;
+- S20's badge is `closed` and its row is muted;
+- the closed badges across every page equal the wallet's count.
+
 ## Paging the grids
 
 Every console grid shows one page of the list it has already loaded, `Console:GridPageSize` rows to a page (5 to 100, default 10, validated at start; UI pass, task 4a). That setting only splits what was loaded: `LogPageSize` (100) is still how many of the newest audit rows the log loads, and `HistoryPageSize` (200) how many history rows are read from the wallet in one call. The default stays 10 or more because three journeys count every row of U1's aliases and orders on the first page. The tables stay `MudSimpleTable` with their row attributes (`data-reference`, `data-event`, `data-alias-id`) as they are, which is why QuickGrid and `MudTable` were not used.
@@ -838,6 +861,8 @@ The journeys locate elements only by these attributes. The two lines of the "not
 | Trace legend item (UI pass, 21 Oct 2026) | `trace-legend` | `data-zone` (`user`, `model`, `code`, `write`), four items in that order |
 | Wallet balance | `wallet-balance` | `data-value` (ASCII) |
 | Wallet history row | `wallet-history-row` | `data-reference` |
+| Wallet contact row (UI pass, 21 Oct 2026) | `wallet-contact-row` | `data-code`; `class="row-muted"` when the account is closed |
+| Account status badge (UI pass, 21 Oct 2026), in the Contacts and Aliases grids | `status-badge` | `data-status` (`active`, `closed`, or whatever the wallet reports) |
 | Grid pager: root, range text, Previous, Next | `grid-pager`, `grid-pager-range`, `grid-pager-previous`, `grid-pager-next` | root: `data-grid` (`contacts`, `bills`, `history`, `log`, `aliases`), `data-page`, `data-pages` |
 | Settings row | `setting-row` | `data-name` |
 | Log row, log refresh button | `log-row`, `log-refresh` | `log-row`: `data-event`, `data-reason` (empty when null), `data-pending` (the first 8 characters of the pending ID, empty when null) |
@@ -919,6 +944,7 @@ The journeys locate elements only by these attributes. The two lines of the "not
 | `APaymentWithoutAQuestionOffersNoAlias` | CLN-01, Confirm: one done outcome and no `save-alias` |
 | `ANearSpellingOfASavedAliasShowsItAsAnOption` | The directory saves AMB-19-v1's step 2 `alias_offer` for S08 (`directory-result` `data-key` `Reply_alias_saved`); back to the chat; AMB-19's step 3 sentence gives exactly one `question-option` holding that alias; the tap gives a live card with that alias as `card-display` |
 | `ThePhoneDirectoryListsAddsAndDeletes` | The directory's `directory-alias` rows equal the wallet's alias count for U1, and the compose row is gone; S03's saved name plus " x" saved for S03 adds a row and an alias on S03's account in the wallet; its `directory-delete` gives `Reply_alias_deleted` and removes it on screen and in the wallet |
+| `AClosedContactShowsItsStatusInTheWalletData` | UI pass task 5: on U1's wallet data, S01's `wallet-contact-row` holds `status-badge[data-status=active]`; through the contacts pager's `grid-pager-next`, S20's row holds `status-badge[data-status=closed]` and has `row-muted`; the closed badges counted on every page equal U1's contacts with `AccountStatus` `closed` as the host's wallet client reports |
 | `TheConsoleAliasesPanelListsAddsAndDeletes` | The same through `menu-aliases`: `console-alias` rows equal the wallet's count; save gives `console-alias-result` `saved` and one more row on S03's account; `console-alias-delete` gives `deleted` and the row and the wallet's alias go |
 | `AnAliasSavedOnThePhoneShowsInTheConsoleDirectory` | Milestone 7 post-tag (18 Oct 2026): two pages on U1's console, both with `menu-aliases` open; the first page's phone directory saves AMB-19's step 2 `alias_offer` for S08; both pages' `console-alias` rows gain it (`data-alias-id` of the wallet's new alias) without a click, and the phone's list shows it; the directory's delete removes the row on both pages and the alias in the wallet |
 | `ANamedProductGoesStraightToTheCardAndTheCodeShowsWithACopyButton` | CLN-13 (milestone 9b): a live card, no question; `card-display` is ZN-NET-25's operator name from the catalogue, `card-product-type` its type word (`Product_type_internet`) and `card-amount` 25,000; Confirm gives two done outcomes, the second holding the digits of the new order's code (the wallet's newest order, one more than before); `purchase-code-copy` shows with `data-copied` `false`, the click sets it `true` and the clipboard holds the code |
@@ -944,7 +970,7 @@ The journeys locate elements only by these attributes. The two lines of the "not
 | `TappingThePersonGivesTheTransferPath` | The same question; the tap on S04 gives `Question_which_amount` (CLN-10 names no amount) and no card; BS2 still due and the balance 750,000 |
 | `ANewMessageCancelsTheRest` | CMP-01, then CLN-01 while card 1 waits: one cancelled outcome; CLN-01's card live for its amount; Confirm gives done and the card stays done (no purchase card follows); two card messages; CLN-01's final balance |
 
-- **Run:** `dotnet test tests/Agent.Web.Journeys`. The 72 tests (70 journeys, the host test, and the screenshot helper `Screenshots.CaptureTheConsoleAndThePhone`, skipped unless `ZAINCASH_SCREENSHOTS` is `1`) take about two and a half minutes (69 in 2 min 29 s on 20 Oct 2026 with the three of person or bill; the 66 in 2 min 24 s on 19 Oct 2026 with the eight of milestone 9c; the 58 in 2 min 10 s on 19 Oct 2026 with the eight of milestone 9b; the 50 in 2 min 6 s on 19 Oct 2026, 49 in 2 min 31 s on 18 Oct 2026; 1 min 57 s and 1 min 52 s in two runs of the 32 of 16 Oct 2026; the two timeout journeys take about 20 s each). The 20 of milestone 7 took about a minute.
+- **Run:** `dotnet test tests/Agent.Web.Journeys`. The 74 tests (72 journeys, the host test, and the screenshot helper `Screenshots.CaptureTheConsoleAndThePhone`, skipped unless `ZAINCASH_SCREENSHOTS` is `1`) take about two minutes (72 in 2 min 1 s on 22 Oct 2026 with the UI pass; 69 in 2 min 29 s on 20 Oct 2026 with the three of person or bill; the 66 in 2 min 24 s on 19 Oct 2026 with the eight of milestone 9c; the 58 in 2 min 10 s on 19 Oct 2026 with the eight of milestone 9b; the 50 in 2 min 6 s on 19 Oct 2026, 49 in 2 min 31 s on 18 Oct 2026; 1 min 57 s and 1 min 52 s in two runs of the 32 of 16 Oct 2026; the two timeout journeys take about 20 s each). The 20 of milestone 7 took about a minute.
 - **Screenshots (UI pass, Khalil, 21 Oct 2026):** `Screenshots.CaptureTheConsoleAndThePhone` is a camera, not a journey. With `ZAINCASH_SCREENSHOTS=1` it opens U1's console at 1,440 x 900 and writes `console-at-rest.png`, `card-live.png` (CLN-01's live card), `phone-card.png` (the phone frame alone), `settings.png`, `log.png` and `wallet-data.png` into `ZAINCASH_SCREENSHOTS_DIR` (created; default `screenshots` under the current directory); it asserts only that the files exist. PowerShell: `$env:ZAINCASH_SCREENSHOTS='1'; $env:ZAINCASH_SCREENSHOTS_DIR='<folder>'; dotnet test tests/Agent.Web.Journeys -- --filter-class "Agent.Web.Journeys.Screenshots"`, then `Remove-Item Env:ZAINCASH_SCREENSHOTS, Env:ZAINCASH_SCREENSHOTS_DIR`.
 - **Install Chromium once,** after the first build: `pwsh tests/Agent.Web.Journeys/bin/Debug/net10.0/playwright.ps1 install chromium`.
 - **Skips:** the journeys skip when SQL Server does not answer a 3-second probe on `master`, and when Chromium cannot be launched. The skip message gives the install command.

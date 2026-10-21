@@ -19,14 +19,16 @@
     {
         var aliasRows = PagedList<WalletAlias>.Of(directory.Aliases, aliasesPage, PageSize);
         <MudSimpleTable Dense="true" Hover="true">
-            <thead><tr><th>Alias</th><th>Phone</th><th>Registered name</th><th></th></tr></thead>
+            <thead><tr><th>Alias</th><th>Phone</th><th>Registered name</th><th>Status</th><th></th></tr></thead>
             <tbody>
                 @foreach (var alias in aliasRows.Rows)
                 {
-                    <tr data-testid="console-alias" data-alias-id="@alias.AliasId">
+                    @* UI pass task 5 (decision 1, "keep both"): the account status as a badge; a closed account's row is muted. *@
+                    <tr data-testid="console-alias" data-alias-id="@alias.AliasId" class="@(alias.AccountStatus == "closed" ? "row-muted" : null)">
                         <td><bdi>@alias.Text</bdi></td>
                         <td>@alias.Phone</td>
                         <td><bdi>@alias.RegisteredName</bdi></td>
+                        <td><StatusBadge Value="@alias.AccountStatus" /></td>
                         <td>
                             <MudButton data-testid="console-alias-delete" data-alias-id="@alias.AliasId" Size="Size.Small"
                                        Variant="Variant.Text" Color="Color.Error" Disabled="@Session.Busy"
