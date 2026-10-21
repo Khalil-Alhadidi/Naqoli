@@ -286,16 +286,16 @@ The questions this section once held, as they were settled. Items 1 to 10 were d
 
 | # | Question | Resolved | Where decided |
 |---|---|---|---|
-| 1 | Tool calling, or one parse call? | 5 Oct 2026: one parse call | D1, this file (763d870) |
-| 2 | How does the user answer a question? | 5 Oct 2026: options to tap | D3, this file (763d870) |
-| 3 | How much conversation does the model see? | 5 Oct 2026: the new message and a one-line note of what is pending | D5, this file (763d870) |
-| 4 | A new message while a card is waiting | 5 Oct 2026 | D6, this file (763d870) |
-| 5 | Compound requests | 5 Oct 2026 | D7, this file (763d870) |
-| 6 | PIN above 1,000,000 IQD | 5 Oct 2026 | D8, this file (763d870) |
-| 7 | Bills and top-ups | 5 Oct 2026 | D9 and D11, this file (763d870) |
-| 8 | Purchase delivery rule | 5 Oct 2026: always a code | D11, this file (763d870) |
-| 9 | Simulating the tap in the test run | 5 Oct 2026 | D12, this file (763d870) |
-| 10 | Judge-supplied input | 5 Oct 2026: the judge types in the phone and sees the wallet data, the log and the learning data beside it | D17, this file (763d870) |
+| 1 | Tool calling, or one parse call? | 5 Oct 2026, first committed 14 Oct (763d870): one parse call | D1, this file |
+| 2 | How does the user answer a question? | 5 Oct 2026, first committed 14 Oct (763d870): options to tap | D3, this file |
+| 3 | How much conversation does the model see? | 5 Oct 2026, first committed 14 Oct (763d870): the new message and a one-line note of what is pending | D5, this file |
+| 4 | A new message while a card is waiting | 5 Oct 2026, first committed 14 Oct (763d870) | D6, this file |
+| 5 | Compound requests | 5 Oct 2026, first committed 14 Oct (763d870) | D7, this file |
+| 6 | PIN above 1,000,000 IQD | 5 Oct 2026, first committed 14 Oct (763d870) | D8, this file |
+| 7 | Bills and top-ups | 5 Oct 2026, first committed 14 Oct (763d870) | D9 and D11, this file |
+| 8 | Purchase delivery rule | 5 Oct 2026, first committed 14 Oct (763d870): always a code | D11, this file |
+| 9 | Simulating the tap in the test run | 5 Oct 2026, first committed 14 Oct (763d870) | D12, this file |
+| 10 | Judge-supplied input | 5 Oct 2026, first committed 14 Oct (763d870): the judge types in the phone and sees the wallet data, the log and the learning data beside it | D17, this file |
 | 11 | Where the demo runs: Khalil's laptop or a hosted copy | 16 Oct 2026: Khalil's laptop. Confirmation with the organisers is still open, see `docs/known-gaps.md` row 46 | `docs/build-plan.md`, open items (e65a2b2) |
 | 12 | Results component in the page | 16 Oct 2026: a console panel showing the latest report's targets table, built in milestone 10 (not yet built: `docs/known-gaps.md` row 20) | `docs/build-plan.md`, open items (e65a2b2) |
 | 13 | SQL Server for other people | 14 Oct 2026: the connection string is configuration; `README.md` gives two routes, LocalDB on Windows or SQL Server in a container, and one command creates and seeds the database | `README.md` (7d54c9d) |
