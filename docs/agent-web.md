@@ -16,24 +16,42 @@ The agent's logic is in [agent-core.md](agent-core.md). `Agent.Web` references `
 
 ## Layout B
 
-`Components/Layout/MainLayout.razor` holds the app bar and the side menu, a persistent `MudDrawer`. `Components/Pages/Home.razor` holds the three columns. The menu sets `ConsoleNavigation.Selected` (one per circuit), and the middle column shows that component.
+Layout B is one CSS grid with named areas (`.layout-b` in `wwwroot/app.css`, UI pass, 21 Oct 2026). `Components/Layout/MainLayout.razor` renders the grid, the bar and the side menu; `Components/Pages/Home.razor` renders the `console` element and the phone column as the grid's other items. There is no `MudLayout`, `MudAppBar` or `MudDrawer`: the menu is a `MudNavMenu` in a fixed 200 px `<nav class="console-menu">` column (Khalil, decision 4). The menu sets `ConsoleNavigation.Selected` (one per circuit), and the main area shows that component.
 
-```mermaid
-flowchart LR
-    subgraph ltr["Console: English, left to right (data-testid console, dir ltr)"]
-        menu["Side menu (MudDrawer)<br/>Wallet data, Settings, Log, Aliases, Learning data"]
-        middle["Middle component<br/>WalletDataPanel (default), SettingsPanel,<br/>LogPanel (milestone 7), AliasesPanel (milestone 9a),<br/>Placeholder Learning data (milestone 10)"]
-        trace["ResetPanel, then FaultPanel, above LiveTrace<br/>always visible, the trace newest first"]
-    end
-    subgraph rtl["Phone: Iraqi Arabic, right to left (data-testid phone-frame, dir rtl, lang ar)"]
-        phone["PhoneFrame 390 x 780<br/>ChatPanel, CardPanel, QuestionPanel, PinField, input;<br/>DirectoryPanel, OrdersPanel in place of the chat"]
-    end
-    menu --> middle
-    middle --- trace
-    trace --- phone
+```text
+grid-template-columns: 200px (menu) | minmax(0, 3fr) (main) | minmax(320px, 2fr) (trace) | 390px + gutter (phone)
+grid-template-rows:    48px (bar) | auto
+grid-template-areas:   "bar  bar  bar   bar"
+                       "menu main trace phone"
 ```
 
-The side menu sits in the layout outside the `console` element, and it is English and left to right like the rest of the page.
+```mermaid
+flowchart TB
+    bar["bar (sticky): Agentic AI Challenge Iraq : Pay and Bill Agent<br/>chip Mock wallet · synthetic data (data-testid mock-label)"]
+    subgraph row["the second row"]
+        direction LR
+        menu["menu (sticky, 200 px)<br/>Wallet data, Settings, Log, Aliases, Learning data"]
+        subgraph ltr["console: English, left to right (data-testid console, dir ltr, lang en), a sub-grid of main and trace"]
+            direction LR
+            middle["main<br/>WalletDataPanel (default), SettingsPanel,<br/>LogPanel, AliasesPanel,<br/>Placeholder Learning data (milestone 10)"]
+            trace["trace (sticky, the window's height less the bar)<br/>ResetPanel, FaultPanel, then LiveTrace<br/>filling the rest and scrolling inside"]
+        end
+        subgraph rtl["phone (sticky): Iraqi Arabic, right to left (data-testid phone-frame, dir rtl, lang ar)"]
+            phone["PhoneFrame 390 x 780<br/>ChatPanel, CardPanel, QuestionPanel, PinField, input;<br/>DirectoryPanel, OrdersPanel in place of the chat"]
+        end
+        menu --> middle
+        middle --- trace
+        trace --- phone
+    end
+    bar --- row
+```
+
+- **The bar** spans the page and stays on screen: the title (also the page's `PageTitle`) and the chip "Mock wallet · synthetic data" (`data-testid="mock-label"`), brand text on the brand tint.
+- **The menu** sits in the layout outside the `console` element, English and left to right like the rest of the page. The active item has the brand bar on its left, the brand-tint background and a bold label; the icons are unchanged.
+- **The `console` element** keeps `dir="ltr"` and `lang="en"` and wraps main and trace, as a sub-grid (`grid-template-columns: subgrid`) with the areas `main trace`.
+- **The trace column** is `calc(100vh - bar height - 2 x 12 px)` high and sticky under the bar: Reset and Faults keep their height, and the live trace's list fills what they leave (`flex: 1 1 auto; min-height: 0; overflow-y: auto`) and scrolls inside, so the column never grows past the window.
+- **Below 1,280 px** (a `@media` rule, a safety net: the demo laptop is wider) the phone column drops under the console.
+- **No horizontal scroll** at 1,280 x 720, 1,440 x 900 and 1,920 x 1,080 on every menu item (checked on 21 Oct 2026); `HammoudiHappyPath` checks it at the journeys' 1,600 x 950.
 
 ## Design tokens
 
@@ -121,7 +139,7 @@ No zone is purple; each is paired with a Material icon and its label, so the zon
 
 ### Layout sizes and the backdrop
 
-Fixed sizes of the layout are tokens too, so no rule holds a bare length: `--size-phone-width` 390 px, `--size-phone-height` 780 px, `--size-phone-bezel` 12 px, `--size-trace-column-min` 260 px, `--size-trace-offset` 100 px (the trace's height is the viewport less this), `--size-appbar-offset` 64 px (the phone's sticky top), `--size-zone-bar` 4 px, `--size-zone-label-min` 44 px, `--size-error-icon` 1.8 rem (the error boundary's icon), and `--focus-ring-offset` 2 px. `--color-backdrop` (`rgba(31,35,40,.4)`) is the reconnect dialog's backdrop. Half a step, `calc(var(--space-1) / 2)`, keeps the 2 px rows of the trace and the card.
+Fixed sizes of the layout are tokens too, so no rule holds a bare length: `--size-phone-width` 390 px, `--size-phone-height` 780 px, `--size-phone-bezel` 12 px, `--size-bar-height` 48 px (the bar; the menu, trace and phone stick below it), `--size-menu-width` 200 px, `--size-trace-column-min` 320 px, `--size-zone-bar` 4 px, `--size-zone-label-min` 44 px, `--size-error-icon` 1.8 rem (the error boundary's icon), and `--focus-ring-offset` 2 px. `--color-backdrop` (`rgba(31,35,40,.4)`) is the reconnect dialog's backdrop. Half a step, `calc(var(--space-1) / 2)`, keeps the 2 px rows of the trace and the card.
 
 ## Services
 
@@ -731,6 +749,7 @@ The journeys locate elements only by these attributes. The two lines of the "not
 |---|---|---|
 | Phone frame root | `phone-frame` | `dir="rtl"`, `lang="ar"`, `data-interactive` (`true` after the first interactive render and the open check) |
 | Console root | `console` | `dir="ltr"` |
+| The bar's mock chip (UI pass, 21 Oct 2026) | `mock-label` | the text "Mock wallet · synthetic data" |
 | Phone input, send button | `phone-input`, `phone-send` | |
 | Chat message | `chat-message` | `data-role` (`user`, `agent`), `data-kind` (`text`, `card`, `question`, `outcome`) |
 | Outcome text inside a message | `outcome` | `data-outcome` (`done`, `checking`, `not_done`, `expired`, `cancelled`, `pin`, `already_handled`) |
@@ -857,7 +876,8 @@ The journeys locate elements only by these attributes. The two lines of the "not
 | `TappingThePersonGivesTheTransferPath` | The same question; the tap on S04 gives `Question_which_amount` (CLN-10 names no amount) and no card; BS2 still due and the balance 750,000 |
 | `ANewMessageCancelsTheRest` | CMP-01, then CLN-01 while card 1 waits: one cancelled outcome; CLN-01's card live for its amount; Confirm gives done and the card stays done (no purchase card follows); two card messages; CLN-01's final balance |
 
-- **Run:** `dotnet test tests/Agent.Web.Journeys`. The 70 tests (69 journeys and the host test) take about two and a half minutes (69 in 2 min 29 s on 20 Oct 2026 with the three of person or bill; the 66 in 2 min 24 s on 19 Oct 2026 with the eight of milestone 9c; the 58 in 2 min 10 s on 19 Oct 2026 with the eight of milestone 9b; the 50 in 2 min 6 s on 19 Oct 2026, 49 in 2 min 31 s on 18 Oct 2026; 1 min 57 s and 1 min 52 s in two runs of the 32 of 16 Oct 2026; the two timeout journeys take about 20 s each). The 20 of milestone 7 took about a minute.
+- **Run:** `dotnet test tests/Agent.Web.Journeys`. The 71 tests (69 journeys, the host test, and the screenshot helper `Screenshots.CaptureTheConsoleAndThePhone`, skipped unless `ZAINCASH_SCREENSHOTS` is `1`) take about two and a half minutes (69 in 2 min 29 s on 20 Oct 2026 with the three of person or bill; the 66 in 2 min 24 s on 19 Oct 2026 with the eight of milestone 9c; the 58 in 2 min 10 s on 19 Oct 2026 with the eight of milestone 9b; the 50 in 2 min 6 s on 19 Oct 2026, 49 in 2 min 31 s on 18 Oct 2026; 1 min 57 s and 1 min 52 s in two runs of the 32 of 16 Oct 2026; the two timeout journeys take about 20 s each). The 20 of milestone 7 took about a minute.
+- **Screenshots (UI pass, Khalil, 21 Oct 2026):** `Screenshots.CaptureTheConsoleAndThePhone` is a camera, not a journey. With `ZAINCASH_SCREENSHOTS=1` it opens U1's console at 1,440 x 900 and writes `console-at-rest.png`, `card-live.png` (CLN-01's live card), `phone-card.png` (the phone frame alone), `settings.png`, `log.png` and `wallet-data.png` into `ZAINCASH_SCREENSHOTS_DIR` (created; default `screenshots` under the current directory); it asserts only that the files exist. PowerShell: `$env:ZAINCASH_SCREENSHOTS='1'; $env:ZAINCASH_SCREENSHOTS_DIR='<folder>'; dotnet test tests/Agent.Web.Journeys -- --filter-class "Agent.Web.Journeys.Screenshots"`, then `Remove-Item Env:ZAINCASH_SCREENSHOTS, Env:ZAINCASH_SCREENSHOTS_DIR`.
 - **Install Chromium once,** after the first build: `pwsh tests/Agent.Web.Journeys/bin/Debug/net10.0/playwright.ps1 install chromium`.
 - **Skips:** the journeys skip when SQL Server does not answer a 3-second probe on `master`, and when Chromium cannot be launched. The skip message gives the install command.
 - **Database names:** both databases must end in `_Test`; the host refuses any other name, because it drops them.
@@ -872,5 +892,4 @@ The journeys locate elements only by these attributes. The two lines of the "not
 | A Checking record whose circuit is gone has no "check again" button in a new circuit | Still open after milestone 8: the Checking card and its automatic settle live in the card's own circuit. The record stays Checking and is never shown as failed |
 | The live trace keeps every entry for the life of the circuit | A cap would be a new setting |
 | The reset control starts over only its own circuit's phone; another open console keeps its conversation, whose cards were closed by the reset | Refresh that page |
-| The live trace's height does not allow for the fault panel above it, so the trace column can be taller than the window | The page scrolls and the panel stays at the top; a layout change if it matters in the demo |
 | The model fault is per console process, the wallet's fault switch is shared by every console | Shown as read back on each panel; the demo runs one console |

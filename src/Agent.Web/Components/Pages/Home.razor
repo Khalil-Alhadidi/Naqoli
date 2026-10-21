@@ -2,40 +2,40 @@
 @implements IDisposable
 @inject ConsoleNavigation Navigation
 
-<PageTitle>ZainCash agent console</PageTitle>
+<PageTitle>Agentic AI Challenge Iraq : Pay and Bill Agent</PageTitle>
 
-<div class="layout-b">
-    <div class="console-columns" data-testid="console" dir="ltr" lang="en">
-        <section class="console-middle">
-            @switch (Navigation.Selected)
-            {
-                case ConsolePanel.Settings:
-                    <SettingsPanel />
-                    break;
-                case ConsolePanel.Log:
-                    <LogPanel />
-                    break;
-                case ConsolePanel.Aliases:
-                    <AliasesPanel />
-                    break;
-                case ConsolePanel.LearningData:
-                    <Placeholder Title="Learning data" Milestone="10" />
-                    break;
-                default:
-                    <WalletDataPanel />
-                    break;
-            }
-        </section>
-        <section class="console-trace-column">
-            <ResetPanel />
-            <FaultPanel />
-            <LiveTrace />
-        </section>
-    </div>
-    <section class="phone-column">
-        <PhoneFrame />
+@* The console and the phone are grid items of the layout (MainLayout.razor, .layout-b in app.css): the console takes
+   the areas main and trace as a sub-grid, the phone column the area phone. *@
+<div class="console-columns" data-testid="console" dir="ltr" lang="en">
+    <section class="console-middle">
+        @switch (Navigation.Selected)
+        {
+            case ConsolePanel.Settings:
+                <SettingsPanel />
+                break;
+            case ConsolePanel.Log:
+                <LogPanel />
+                break;
+            case ConsolePanel.Aliases:
+                <AliasesPanel />
+                break;
+            case ConsolePanel.LearningData:
+                <Placeholder Title="Learning data" Milestone="10" />
+                break;
+            default:
+                <WalletDataPanel />
+                break;
+        }
+    </section>
+    <section class="console-trace-column">
+        <ResetPanel />
+        <FaultPanel />
+        <LiveTrace />
     </section>
 </div>
+<section class="phone-column">
+    <PhoneFrame />
+</section>
 
 @code {
     protected override void OnInitialized() => Navigation.Changed += OnNavigationChanged;

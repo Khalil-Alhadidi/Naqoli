@@ -105,6 +105,13 @@ public sealed class Journeys(JourneyHost host) : IAsyncLifetime
         // D20: the phone is right to left; the console left to right.
         await Expect(page.GetByTestId("phone-frame")).ToHaveAttributeAsync("dir", "rtl");
         await Expect(page.GetByTestId("console")).ToHaveAttributeAsync("dir", "ltr");
+
+        // UI pass task 2: the bar's chip says the wallet is a mock with synthetic data, and layout B fits the window
+        // with no horizontal scroll.
+        await Expect(page.GetByTestId("mock-label")).ToHaveTextAsync("Mock wallet · synthetic data");
+        Assert.True(
+            await page.EvaluateAsync<bool>("() => document.documentElement.scrollWidth <= document.documentElement.clientWidth"),
+            "the page scrolls horizontally");
     }
 
     [Fact]

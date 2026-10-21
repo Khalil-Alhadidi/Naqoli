@@ -73,9 +73,9 @@
     --size-phone-width: 390px;
     --size-phone-height: 780px;
     --size-phone-bezel: 12px;
-    --size-trace-column-min: 260px;
-    --size-trace-offset: 100px;
-    --size-appbar-offset: 64px;
+    --size-bar-height: 48px;
+    --size-menu-width: 200px;
+    --size-trace-column-min: 320px;
     --size-zone-bar: 4px;
     --size-zone-label-min: 44px;
     --size-error-icon: 1.8rem;
@@ -116,35 +116,112 @@ h1:focus {
         content: "An error has occurred."
     }
 
-/* Layout B (D17): the console (middle component and live trace) on the left, the phone frame fixed on the right. */
+/* Layout B (D17) on one CSS grid with named areas: the bar across the top, then the menu, the main component, the
+   trace column and the phone. The console element (Home.razor, dir ltr) spans main and trace as a sub-grid. */
 .layout-b {
+    display: grid;
+    grid-template-columns:
+        var(--size-menu-width)
+        minmax(0, 3fr)
+        minmax(var(--size-trace-column-min), 2fr)
+        calc(var(--size-phone-width) + var(--space-4));
+    grid-template-rows: var(--size-bar-height) auto;
+    grid-template-areas:
+        "bar bar bar bar"
+        "menu main trace phone";
+    column-gap: var(--space-4);
+    min-height: 100vh;
+}
+
+/* The bar: the title and the mock chip, always on screen. */
+.console-bar {
+    grid-area: bar;
+    position: sticky;
+    top: 0;
+    z-index: var(--mud-zindex-appbar);
     display: flex;
-    gap: var(--space-4);
-    align-items: flex-start;
+    align-items: center;
+    gap: var(--space-3);
+    min-width: 0;
+    padding: 0 var(--space-4);
+    background: var(--color-brand);
+    color: var(--color-on-brand);
+    box-shadow: var(--shadow-1);
+}
+
+.console-bar-title {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.console-bar-chip {
+    flex: 0 0 auto;
+    padding: var(--space-1) var(--space-2);
+    border-radius: var(--radius-md);
+    background: var(--color-brand-tint);
+    color: var(--color-brand);
+    font-size: var(--text-xs);
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+/* The side menu (decision 4): a fixed column, not a drawer. */
+.console-menu {
+    grid-area: menu;
+    position: sticky;
+    top: var(--size-bar-height);
+    align-self: start;
+    height: calc(100vh - var(--size-bar-height));
+    overflow-y: auto;
+    padding-block: var(--space-2);
+    background: var(--color-surface);
+    border-right: 1px solid var(--color-border);
+}
+
+.console-menu .console-menu-active {
+    background: var(--color-brand-tint);
+    box-shadow: inset var(--size-zone-bar) 0 0 var(--color-brand);
+}
+
+.console-menu .console-menu-active .mud-nav-link-text {
+    font-weight: 600;
 }
 
 .console-columns {
-    flex: 1 1 auto;
+    grid-column: main-start / trace-end;
+    grid-row: 2;
     display: grid;
-    grid-template-columns: minmax(0, 3fr) minmax(var(--size-trace-column-min), 2fr);
-    gap: var(--space-4);
+    grid-template-columns: subgrid;
+    grid-template-areas: "main trace";
+    min-width: 0;
+    padding-block: var(--space-3);
+}
+
+.console-middle {
+    grid-area: main;
     min-width: 0;
 }
 
-.console-middle,
+/* The trace column: Reset, then Faults, then the live trace filling what they leave and scrolling inside, so the
+   column never grows past the window. */
 .console-trace-column {
+    grid-area: trace;
     min-width: 0;
-}
-
-.console-menu-active {
-    background-color: var(--mud-palette-action-default-hover);
-}
-
-/* The fault panel (milestone 8): above the live trace, always at hand. */
-.console-trace-column {
+    position: sticky;
+    top: calc(var(--size-bar-height) + var(--space-3));
+    align-self: start;
+    height: calc(100vh - var(--size-bar-height) - 2 * var(--space-3));
+    overflow-y: auto;
     display: flex;
     flex-direction: column;
     gap: var(--space-3);
+}
+
+.console-reset,
+.console-faults {
+    flex: 0 0 auto;
 }
 
 .console-faults-head {
@@ -170,7 +247,8 @@ h1:focus {
 }
 
 .console-trace {
-    max-height: calc(100vh - var(--size-trace-offset));
+    flex: 1 1 auto;
+    min-height: 0;
     display: flex;
     flex-direction: column;
 }
@@ -182,6 +260,8 @@ h1:focus {
 }
 
 .console-trace-list {
+    flex: 1 1 auto;
+    min-height: 0;
     overflow-y: auto;
     font-family: var(--font-mono);
     font-size: var(--text-xs);
@@ -204,13 +284,35 @@ h1:focus {
 .trace-zone { font-weight: 600; min-width: var(--size-zone-label-min); }
 .trace-detail { color: var(--color-text-muted); }
 
-/* The phone frame (D20): 390 x 780, right to left, Arabic font stack. */
+/* The phone column, sticky below the bar, with the page's right gutter. */
 .phone-column {
-    flex: 0 0 auto;
+    grid-area: phone;
     position: sticky;
-    top: var(--size-appbar-offset);
+    top: var(--size-bar-height);
+    align-self: start;
+    padding: var(--space-3) var(--space-4) var(--space-3) 0;
 }
 
+/* The safety net below 1,280 px (a media query cannot read a token): the phone drops under the console. */
+@media (max-width: 1279.98px) {
+    .layout-b {
+        grid-template-columns:
+            var(--size-menu-width)
+            minmax(0, 3fr)
+            minmax(var(--size-trace-column-min), 2fr);
+        grid-template-rows: var(--size-bar-height) auto auto;
+        grid-template-areas:
+            "bar bar bar"
+            "menu main trace"
+            "menu phone phone";
+    }
+
+    .phone-column {
+        position: static;
+    }
+}
+
+/* The phone frame (D20): 390 x 780, right to left, Arabic font stack. */
 .phone-frame {
     width: var(--size-phone-width);
     height: var(--size-phone-height);

@@ -7,14 +7,15 @@
 <MudDialogProvider />
 <MudSnackbarProvider />
 
-@* Layout B (D17): side menu, the selected component in the middle, the live trace always visible, the phone on the
-   right. Everything outside the phone frame is English, left to right. *@
-<MudLayout>
-    <MudAppBar Elevation="1" Dense="true">
-        <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start" OnClick="ToggleDrawer" />
-        <MudText Typo="Typo.h6">ZainCash agent console</MudText>
-    </MudAppBar>
-    <MudDrawer @bind-Open="drawerOpen" Variant="DrawerVariant.Persistent" ClipMode="DrawerClipMode.Always" Elevation="1" Width="200px">
+@* Layout B (D17) on one CSS grid (wwwroot/app.css, .layout-b): the bar across the top, then the side menu, the
+   selected component in the middle, the live trace always visible, the phone on the right. The page (Home.razor) puts
+   the console and the phone in their areas. Everything outside the phone frame is English, left to right. *@
+<div class="layout-b">
+    <header class="console-bar">
+        <MudText Typo="Typo.h6" Class="console-bar-title">Agentic AI Challenge Iraq : Pay and Bill Agent</MudText>
+        <span class="console-bar-chip" data-testid="mock-label">Mock wallet · synthetic data</span>
+    </header>
+    <nav class="console-menu" aria-label="Console">
         <MudNavMenu>
             <MudNavLink data-testid="menu-wallet" Icon="@Icons.Material.Filled.AccountBalanceWallet"
                         Class="@ActiveClass(ConsolePanel.WalletData)" OnClick="@(() => Navigation.Select(ConsolePanel.WalletData))">Wallet data</MudNavLink>
@@ -27,12 +28,9 @@
             <MudNavLink data-testid="menu-learning" Icon="@Icons.Material.Filled.School"
                         Class="@ActiveClass(ConsolePanel.LearningData)" OnClick="@(() => Navigation.Select(ConsolePanel.LearningData))">Learning data</MudNavLink>
         </MudNavMenu>
-    </MudDrawer>
-    @* px and pb only: pa-3 would override the top padding that keeps the content below the fixed app bar. *@
-    <MudMainContent Class="px-3 pb-3">
-        @Body
-    </MudMainContent>
-</MudLayout>
+    </nav>
+    @Body
+</div>
 
 <div id="blazor-error-ui" data-nosnippet>
     An unhandled error has occurred.
@@ -41,13 +39,9 @@
 </div>
 
 @code {
-    private bool drawerOpen = true;
-
     protected override void OnInitialized() => Navigation.Changed += OnNavigationChanged;
 
     public void Dispose() => Navigation.Changed -= OnNavigationChanged;
-
-    private void ToggleDrawer() => drawerOpen = !drawerOpen;
 
     private void OnNavigationChanged() => _ = InvokeAsync(StateHasChanged);
 
