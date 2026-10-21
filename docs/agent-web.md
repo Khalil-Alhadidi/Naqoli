@@ -668,10 +668,11 @@ The parses were drafted by Claude from Khalil's answer keys for his review (his 
 
 ## The settings component
 
-`SettingsPanel` (`Components/Console/SettingsPanel.razor`, the side menu's Settings) has a kill switch (below) and four tables, all English and left to right:
+`SettingsPanel` (`Components/Console/SettingsPanel.razor`, the side menu's Settings) has a kill switch (below) and five tables, all English and left to right:
 
 - **Agent, editable (D8).** One row (`setting-row`, `data-name`) per agent limit, timer or count: `MinAmountIqd`, `PerTransactionCapIqd`, `PerDayCapIqd`, `CardTimerSeconds`, `MaxProductsInOneQuestion`, `RepeatWarningWindowMinutes`, `HistoryDays`, `MinSubstringWordLength`, `MaxYesNoWords`, `LogPageSize`, `CheckingRetrySeconds`, `MaxAliasLength`, `MaxMessageChars`, `MaxRequestsPerMessage` (1 to 20; milestone 9c, ruling 11: the conversation reads it when it splits the next message, and a queue already running keeps its own), `MaxNamedNotPrepared` (1 to 20, default 5; review R1 of milestone 9c, Khalil, 20 Oct 2026: the most parts the "not prepared" line names, read at the split as well): exactly `RuntimeSettings.EditableNames`, which the runtime store itself enforces (any other key, `Agent:WalletClientKey` or `Agent:DevSetPath` among them, is refused with an `ArgumentException`). Each shows its value in force (`setting-value`), an input (`setting-input`), Save (`setting-save`), and Reset (`setting-reset`) once a value has been saved. A refused value shows the validation message (`setting-error`), and the value in force does not change.
 - **Agent, read only.** `Parser`, `DevSetPath`, `DemoUserId`, `WalletBaseUrl`, `WalletTimeoutSeconds`, `SettleWindowSeconds`, `HistoryPageSize`, `SweepIntervalSeconds`, `StaleExecutingAfterSeconds`, `ProviderSpellings`, `Endearments` (rule 1's words of affection, Khalil, 17 Oct 2026) and `FillerWords` (the words dropped at either end of a typed answer, Khalil, 17 Oct 2026; all three are phone text, so only their counts are shown), and `Console:WalletAdminKey` as `set` or `not set`. No key is ever shown (wallet or Anthropic). One line above the tables (`settings-fault-pointer`) says the fault switch is in the Faults panel beside the live trace.
+- **Console, read only.** `Console:GridPageSize` (5 to 100, default 10): how many rows every console grid shows on one page ([Paging the grids](#paging-the-grids)); nothing in `Agent.Core` reads it, so it never changes a check, a card or a reply.
 - **Wallet, read only.** The wallet's own limits from `GET /settings` (`Wallet:PinRequiredAboveIqd`, `Wallet:MaxPinAttempts`, the transfer, bill and purchase fees and the rest; [wallet-api.md](wallet-api.md)), read once when the panel opens. A wallet that does not answer gives one `setting-error` row (`data-name="Wallet"`) with the reason.
 - **Model, read only.** The candidate in use and each candidate's model, output limit, effort, temperature, timeout and prices.
 
@@ -773,6 +774,22 @@ sequenceDiagram
     S-->>L: Changed (Busy false, the action ended)
     L->>A: ReadLatestAsync(LogPageSize)
     A-->>L: rows, newest first (At, then Id)
+```
+
+## Paging the grids
+
+Every console grid shows one page of the list it has already loaded, `Console:GridPageSize` rows to a page (5 to 100, default 10, validated at start; UI pass, task 4a). That setting only splits what was loaded: `LogPageSize` (100) is still how many of the newest audit rows the log loads, and `HistoryPageSize` (200) how many history rows are read from the wallet in one call. The default stays 10 or more because three journeys count every row of U1's aliases and orders on the first page. The tables stay `MudSimpleTable` with their row attributes (`data-reference`, `data-event`, `data-alias-id`) as they are, which is why QuickGrid and `MudTable` were not used.
+
+- `PagedList<T>.Of(rows, page, pageSize)` (`Services/Paging.cs`) returns `Rows`, `Page`, `PageCount`, `Total`, `First` and `Last` (1-based positions of the page's rows). A page beyond the end is the last page, so a list that shrank after a delete keeps a valid page; an empty list is one empty page with `First` and `Last` 0; a page size below 1 throws. `PagedListTests` covers it.
+- `GridPager` (`Components/Console/GridPager.razor`) takes `Total`, `Page`, `PageSize` and `PageChanged`. It shows the range (`1–10 of 42`) and Previous and Next (`aria-label` "Previous page" and "Next page"), each disabled at its end. Its root is `data-testid="grid-pager"` with `data-page` and `data-pages`, and it renders nothing when `Total <= PageSize`. The grid keeps the page number and passes it back in.
+
+```mermaid
+flowchart LR
+    loaded["The panel's loaded list"] --> of["PagedList.Of(rows, page, Console:GridPageSize)"]
+    of --> table["MudSimpleTable: the page's rows"]
+    of --> pager["GridPager: range, Previous, Next"]
+    pager -- "PageChanged(page)" --> state["The panel's page number"]
+    state --> of
 ```
 
 ## The `data-testid` contract

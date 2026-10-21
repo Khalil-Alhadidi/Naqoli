@@ -29,11 +29,13 @@ public class ConsoleOptionsTests
         public IFileProvider ContentRootFileProvider { get; set; } = new NullFileProvider();
     }
 
-    private static ServiceProvider Build(string environment, string? key)
+    private static ServiceProvider Build(string environment, string? key, string? gridPageSize = null)
     {
         var settings = new Dictionary<string, string?>();
         if (key is not null)
             settings[Setting] = key;
+        if (gridPageSize is not null)
+            settings["Console:" + nameof(ConsoleOptions.GridPageSize)] = gridPageSize;
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(settings).Build();
         var services = new ServiceCollection();
         services.AddLogging();
@@ -74,5 +76,32 @@ public class ConsoleOptionsTests
         using var provider = Build(Environments.Development, key: null);
 
         Assert.Equal("dev", provider.GetRequiredService<IOptions<ConsoleOptions>>().Value.WalletAdminKey);
+    }
+
+    /// <summary>
+    /// UI pass, task 4a: <c>Console:GridPageSize</c> is how many rows every console grid shows on one page, 5 to 100,
+    /// default 10 when unset (three journeys count all of U1's aliases and orders on the first page, so it stays 10 or
+    /// more). A value outside the range fails at start, naming the setting.
+    /// </summary>
+    [Theory]
+    [InlineData("4", null)]
+    [InlineData("101", null)]
+    [InlineData("5", 5)]
+    [InlineData("100", 100)]
+    [InlineData(null, 10)]
+    public void GridPageSizeIsBoundedFiveToOneHundred(string? value, int? expected)
+    {
+        using var provider = Build(Environments.Development, key: null, gridPageSize: value);
+        var options = provider.GetRequiredService<IOptions<ConsoleOptions>>();
+
+        if (expected is { } size)
+        {
+            Assert.Equal(size, options.Value.GridPageSize);
+        }
+        else
+        {
+            var ex = Assert.Throws<OptionsValidationException>(() => options.Value);
+            Assert.Contains(nameof(ConsoleOptions.GridPageSize), ex.Message, StringComparison.Ordinal);
+        }
     }
 }

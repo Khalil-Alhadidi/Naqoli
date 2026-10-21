@@ -27,6 +27,15 @@ public sealed class ConsoleOptions
     [Required]
     public string WalletAdminKey { get; set; } = DevelopmentWalletAdminKey;
 
+    /// <summary>
+    /// How many rows every console grid (contacts, bills, history, log, aliases) shows on one page, 5 to 100, default 10.
+    /// It splits what a panel has already loaded into pages; it is not <c>Agent:LogPageSize</c> or
+    /// <c>Agent:HistoryPageSize</c>, which say how much is loaded. Nothing in <c>Agent.Core</c> reads it. It stays 10 or
+    /// more because three journeys count every row of U1's aliases and orders on the first page.
+    /// </summary>
+    [Range(5, 100)]
+    public int GridPageSize { get; set; } = 10;
+
     /// <summary>True when <paramref name="key"/> may be used outside Development: set, not the placeholder, long enough.</summary>
     public static bool IsUsableOutsideDevelopment(string? key)
         => !string.IsNullOrWhiteSpace(key)

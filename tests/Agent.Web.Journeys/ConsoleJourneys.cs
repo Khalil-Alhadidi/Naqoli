@@ -185,6 +185,7 @@ public sealed class ConsoleJourneys(JourneyHost host) : JourneyBase(host)
         await Expect(page.GetByTestId("card")).ToHaveAttributeAsync("data-state", "live");
         await Expect(page.Locator("[data-testid=setting-row][data-name='Wallet:PinRequiredAboveIqd']"))
             .ToContainTextAsync(PhoneFormat.Console(1_000_000));
+        await Expect(page.Locator("[data-testid=setting-row][data-name='Console:GridPageSize']")).ToContainTextAsync("10");
         Assert.Equal(U1Balance, await Host.BalanceAsync(U1));
     }
 

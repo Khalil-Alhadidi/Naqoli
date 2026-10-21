@@ -64,6 +64,17 @@
         </tbody>
     </MudSimpleTable>
 
+    @* The console's own display settings: nothing in Agent.Core reads them, so they never change a check, a card or a reply. *@
+    <MudText Typo="Typo.subtitle1" Class="mt-4">Console</MudText>
+    <MudSimpleTable Dense="true">
+        <tbody>
+            <tr data-testid="setting-row" data-name="Console:GridPageSize">
+                <td>Console:GridPageSize</td>
+                <td>@Number(ConsoleSettings.Value.GridPageSize)</td>
+            </tr>
+        </tbody>
+    </MudSimpleTable>
+
     <MudText Typo="Typo.subtitle1" Class="mt-4">Wallet (read only)</MudText>
     <MudSimpleTable Dense="true">
         <tbody>
