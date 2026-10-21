@@ -1,15 +1,17 @@
 # Agent.Web: the console and the phone
 
-This document describes what `src/Agent.Web` does as built in milestones 4 to 9c and the changes of 20 Oct 2026 (person or bill, the consent screen's No). In milestone 5 the session's logic moved into `Agent.Core` as `Conversation` (see [agent-core.md](agent-core.md), "The conversation"), so the test runner drives the same logic; `ChatSession` is now the phone's adapter over it. It covers:
+This document describes what `src/Agent.Web` does as built in milestones 4 to 9c, the changes of 20 Oct 2026 (person or bill, the consent screen's No) and the UI pass of 21 to 22 Oct 2026 (the look of the console and the phone, no change of behaviour; [docs/plans/ui-pass.md](plans/ui-pass.md)). In milestone 5 the session's logic moved into `Agent.Core` as `Conversation` (see [agent-core.md](agent-core.md), "The conversation"), so the test runner drives the same logic; `ChatSession` is now the phone's adapter over it. It covers:
 
-- page layout B (D17);
+- page layout B (D17), on one CSS grid since the UI pass;
 - the design tokens and the MudBlazor theme;
-- the phone and its session;
-- the live trace;
+- the phone and its session, the phone frame and its status bar;
+- the live trace, its zones and their legend;
 - the phone strings for Khalil;
 - the oracle parser;
 - the settings component, the kill switch and the log component (milestone 7);
+- empty and loading states, account status badges and the paging of every grid (UI pass);
 - the screen journeys;
+- the UI pass of 21 to 22 Oct 2026, its "Done when" lines and what shows each;
 - known gaps.
 
 The agent's logic is in [agent-core.md](agent-core.md). `Agent.Web` references `Agent.Core` only and talks to the mock wallet over HTTP through `Agent.Core`'s `WalletClient`. The page has one route, `/`, and uses global interactive server rendering (Blazor Server, MudBlazor 9.11.0).
@@ -57,7 +59,17 @@ flowchart TB
 
 Every colour, spacing, type size, radius and shadow of the console is a token in the one `:root` block at the top of `wwwroot/app.css` (UI pass, 21 Oct 2026). No other rule there, in `Components/Layout/ReconnectModal.razor.css` or in any `.razor` file names one by value; every rule uses a token. The theme is light only. MudBlazor's palette is set from the same values by `Services/ConsoleTheme.cs` (`ConsoleTheme.Light`, the one `MudTheme`, passed as `<MudThemeProvider Theme="ConsoleTheme.Light" />` in `MainLayout.razor`), so `Color.Primary`, `Color.Error` and `Color.Warning` on the components carry the tokens with no markup change. The console font is the system stack: no font is loaded from another host.
 
-`DesignTokensTests` (`tests/Agent.Core.Tests/Web`) pins all of this: `EveryColourInTheStylesheetIsAToken` (no hex, `rgb(`, `hsl(` or named colour outside `:root`), `EveryTextPairingMeetsAA` (it parses `:root` and recomputes the WCAG 2.x ratios of the pairs below; each is 4.5 or more), `TheMudThemeUsesTheTokens` (every palette value equals its token) and `NoFontIsLoadedFromTheNetwork` (no `<link>` in `App.razor` to another host). A colour is changed in `app.css` and `ConsoleTheme.cs` together, or the third test fails.
+`DesignTokensTests` (`tests/Agent.Core.Tests/Web`) pins all of this:
+
+- `EveryColourInTheStylesheetIsAToken`: no hex, `rgb(`, `hsl(` or named colour outside `:root`.
+- `EveryTextPairingMeetsAA`: it parses `:root` and recomputes the WCAG 2.x ratios of the pairs below; each is 4.5 or more.
+- `TheMudThemeUsesTheTokens`: every palette value equals its token.
+- `NoFontIsLoadedFromTheNetwork`: no `<link>` in `App.razor` to another host.
+- `NoZoneIsPurpleAndEachDiffersFromTheBrand`: task 3, with `TheHueMatchesTheHslFormula`.
+- `ThePhoneFontIsSelfHosted`: task 7.
+- `FocusIsVisible`: task 8.
+
+A colour is changed in `app.css` and `ConsoleTheme.cs` together, or `TheMudThemeUsesTheTokens` fails.
 
 | `ConsoleTheme.Light` | Token |
 |---|---|
@@ -82,7 +94,7 @@ Contrast ratios are WCAG 2.x relative-luminance ratios. AA for normal text is 4.
 
 | Token | Value | Role | Pairing checked | Ratio |
 |---|---|---|---|---|
-| `--color-brand` | `#673b98` | Primary and accent: filled buttons, the app bar, links, the active menu item's bar, the phone's send button and progress bar, focus ring | white text on it | 7.91 (AA, AAA) |
+| `--color-brand` | `#673b98` | Primary and accent: filled buttons, the bar, links, the active menu item's bar, the phone's send button and progress bar, focus ring | white text on it | 7.91 (AA, AAA) |
 | | | | as text on white | 7.91 |
 | `--color-brand-hover` | `#5b3486` (brand + 12 % black) | Hover of a filled brand button | white text on it | 9.21 |
 | `--color-brand-pressed` | `#4e2d74` (brand + 24 % black) | Pressed or active state | white text on it | 10.76 |
@@ -139,7 +151,7 @@ No zone is purple; each is paired with a Material icon and its label, so the zon
 
 ### Layout sizes and the backdrop
 
-Fixed sizes of the layout are tokens too, so no rule holds a bare length: `--size-phone-width` 390 px, `--size-phone-height` 780 px, `--size-phone-bezel` 8 px (12 px until UI pass task 7), `--size-bar-height` 48 px (the bar; the menu, trace and phone stick below it), `--size-menu-width` 200 px, `--size-trace-column-min` 320 px, `--size-zone-bar` 4 px, `--size-zone-label-min` 44 px, `--size-error-icon` 1.8 rem (the error boundary's icon), and `--focus-ring-offset` 2 px. `--color-backdrop` (`rgba(31,35,40,.4)`) is the reconnect dialog's backdrop. Half a step, `calc(var(--space-1) / 2)`, keeps the 2 px rows of the trace and the card.
+Fixed sizes of the layout are tokens too, so no rule holds a bare length: `--size-phone-width` 390 px, `--size-phone-height` 780 px, `--size-phone-bezel` 8 px (12 px until UI pass task 7), `--size-bar-height` 48 px (the bar; the menu, trace and phone stick below it), `--size-menu-width` 200 px, `--size-trace-column-min` 320 px, `--size-zone-bar` 4 px, `--size-zone-label-min` 44 px, `--size-error-icon` 1.8 rem (the error boundary's icon), `--size-table-row` 33 px (a skeleton row, task 8), and `--focus-ring-offset` 2 px. `--color-backdrop` (`rgba(31,35,40,.4)`) is the reconnect dialog's backdrop. Half a step, `calc(var(--space-1) / 2)`, keeps the 2 px rows of the trace and the card.
 
 ## Services
 
@@ -966,7 +978,7 @@ The journeys locate elements only by these attributes. The two lines of the "not
 
 | Journey | Asserts |
 |---|---|
-| `HammoudiHappyPath` | The card's amount, fee, total and balance after equal `PhoneFormat.Amount` of 50,000, 1,000, 51,000 and 699,000, and `card-amount-words` is `Card_AmountWords` with the words of 50,000. The display and registered names equal S01's alias and registered name, read from the wallet. Confirm gives exactly one done outcome containing the reference `ZC-0000000087` in Arabic-Indic digits. The wallet panel shows 699,000 (ASCII) and the new history row. The wallet reports 699,000. The trace has entries in the user, model, code and write zones. The phone frame is `rtl` and the console `ltr` |
+| `HammoudiHappyPath` | The card's amount, fee, total and balance after equal `PhoneFormat.Amount` of 50,000, 1,000, 51,000 and 699,000, and `card-amount-words` is `Card_AmountWords` with the words of 50,000. The display and registered names equal S01's alias and registered name, read from the wallet. Confirm gives exactly one done outcome containing the reference `ZC-0000000087` in Arabic-Indic digits. The wallet panel shows 699,000 (ASCII) and the new history row. The wallet reports 699,000. The trace has entries in the user, model, code and write zones, and its legend has four `trace-legend` items. The phone frame is `rtl` and the console `ltr`. The bar's `mock-label` reads "Mock wallet · synthetic data", and the page does not scroll sideways at 1,600 x 950 |
 | `TimerKillsTheButton` | On the 4-second console, Confirm is enabled, then disabled within 8 seconds, and the expired outcome shows. The balance stays at 750,000 and no history row is added |
 | `DoubleTapExecutesOnce` | Two forced clicks on Confirm at once give exactly one done outcome, still one after another second. There is one new history row, the balance is 699,000, and there is exactly one `done` audit row |
 | `TypedNumberShowsTheRegisteredNameAndFirstTime` | ADD-01: `card-display` is the typed number in Arabic-Indic digits, `card-registered` the account's registered name read from the wallet by phone, `card-first-time` shows; Confirm gives one done outcome, the newest history row is to that number, balance 729,000 |
@@ -1041,11 +1053,92 @@ The journeys locate elements only by these attributes. The two lines of the "not
 | `TappingThePersonGivesTheTransferPath` | The same question; the tap on S04 gives `Question_which_amount` (CLN-10 names no amount) and no card; BS2 still due and the balance 750,000 |
 | `ANewMessageCancelsTheRest` | CMP-01, then CLN-01 while card 1 waits: one cancelled outcome; CLN-01's card live for its amount; Confirm gives done and the card stays done (no purchase card follows); two card messages; CLN-01's final balance |
 
-- **Run:** `dotnet test tests/Agent.Web.Journeys`. The 76 tests (74 journeys, the host test, and the screenshot helper `Screenshots.CaptureTheConsoleAndThePhone`, skipped unless `ZAINCASH_SCREENSHOTS` is `1`) take about two minutes (72 in 2 min 1 s on 22 Oct 2026 with the UI pass; 69 in 2 min 29 s on 20 Oct 2026 with the three of person or bill; the 66 in 2 min 24 s on 19 Oct 2026 with the eight of milestone 9c; the 58 in 2 min 10 s on 19 Oct 2026 with the eight of milestone 9b; the 50 in 2 min 6 s on 19 Oct 2026, 49 in 2 min 31 s on 18 Oct 2026; 1 min 57 s and 1 min 52 s in two runs of the 32 of 16 Oct 2026; the two timeout journeys take about 20 s each). The 20 of milestone 7 took about a minute.
-- **Screenshots (UI pass, Khalil, 21 Oct 2026):** `Screenshots.CaptureTheConsoleAndThePhone` is a camera, not a journey. With `ZAINCASH_SCREENSHOTS=1` it opens U1's console at 1,440 x 900 and writes `console-at-rest.png`, `card-live.png` (CLN-01's live card), `phone-card.png` (the phone frame alone), `settings.png`, `log.png` and `wallet-data.png` into `ZAINCASH_SCREENSHOTS_DIR` (created; default `screenshots` under the current directory); it asserts only that the files exist. PowerShell: `$env:ZAINCASH_SCREENSHOTS='1'; $env:ZAINCASH_SCREENSHOTS_DIR='<folder>'; dotnet test tests/Agent.Web.Journeys -- --filter-class "Agent.Web.Journeys.Screenshots"`, then `Remove-Item Env:ZAINCASH_SCREENSHOTS, Env:ZAINCASH_SCREENSHOTS_DIR`.
+- **Run:** `dotnet test tests/Agent.Web.Journeys`. The 76 tests (74 journeys, the host test, and the screenshot helper `Screenshots.CaptureTheConsoleAndThePhone`, skipped unless `ZAINCASH_SCREENSHOTS` is `1`) take about two minutes. Timings by run:
+  - 74 journeys: 2 min 19 s on 22 Oct 2026 after a clean build, and 2 min 7 s within a full `dotnet test`. The UI pass added five: `TheHistoryGridPagesNewestFirst`, `ThePhoneDirectoryPagesAtTheGridPageSize`, `AClosedContactShowsItsStatusInTheWalletData`, `ThePhoneHasAStatusBarAndTheCardShowsTheTimerByConfirm` and `EmptyStatesShowOnAFreshConsole`.
+  - Earlier: 69 in 2 min 29 s on 20 Oct 2026 with the three of person or bill; the 66 in 2 min 24 s on 19 Oct 2026 with the eight of milestone 9c; the 58 in 2 min 10 s on 19 Oct 2026 with the eight of milestone 9b; the 50 in 2 min 6 s on 19 Oct 2026, 49 in 2 min 31 s on 18 Oct 2026; 1 min 57 s and 1 min 52 s in two runs of the 32 of 16 Oct 2026; the two timeout journeys take about 20 s each. The 20 of milestone 7 took about a minute.
+- **Screenshots (UI pass, Khalil, 21 Oct 2026):** `Screenshots.CaptureTheConsoleAndThePhone` is a camera, not a journey. With `ZAINCASH_SCREENSHOTS=1` it opens U1's console at 1,440 x 900 and writes `console-at-rest.png`, `card-live.png` (CLN-01's live card), `phone-card.png` (the phone frame alone), `settings.png`, `log.png` and `wallet-data.png` into `ZAINCASH_SCREENSHOTS_DIR` (created; default `screenshots` under the current directory); it asserts only that the files exist. The checked set of the UI pass is committed in [docs/reports/ui-pass-2026-10-22/](reports/ui-pass-2026-10-22/): those six files, plus `phone-directory-paged.png` and `phone-directory-page-2.png` (the phone's directory at a page size of 5), taken on 22 Oct 2026 from the committed code with the seed's synthetic data. PowerShell: `$env:ZAINCASH_SCREENSHOTS='1'; $env:ZAINCASH_SCREENSHOTS_DIR='<folder>'; dotnet test tests/Agent.Web.Journeys -- --filter-class "Agent.Web.Journeys.Screenshots"`, then `Remove-Item Env:ZAINCASH_SCREENSHOTS, Env:ZAINCASH_SCREENSHOTS_DIR`.
 - **Install Chromium once,** after the first build: `pwsh tests/Agent.Web.Journeys/bin/Debug/net10.0/playwright.ps1 install chromium`.
 - **Skips:** the journeys skip when SQL Server does not answer a 3-second probe on `master`, and when Chromium cannot be launched. The skip message gives the install command.
 - **Database names:** both databases must end in `_Test`; the host refuses any other name, because it drops them.
+
+## UI pass, 21 to 22 Oct 2026
+
+The UI pass changed the console's and the phone's look and changed no behaviour: no change under `src/Agent.Core`, `src/Wallet.MockApi` or `data/`. Its only phone strings are the two pager labels Khalil wrote. The plan, with Khalil's nine answers, is [docs/plans/ui-pass.md](plans/ui-pass.md), and the checked screenshots are in [docs/reports/ui-pass-2026-10-22/](reports/ui-pass-2026-10-22/). Each task's "Done when" lines, with what shows each:
+
+**Task 1: design tokens, the MudBlazor theme, no hard-coded colours** (a241480)
+
+- No hex, `rgb(`, `hsl(` or named colour outside `:root` in `app.css` or any `.razor.css`, none in any `.razor`: `DesignTokensTests.EveryColourInTheStylesheetIsAToken`.
+- Every text pairing of the token table is 4.5 or more: `DesignTokensTests.EveryTextPairingMeetsAA` (21 pairings), with the formula checked by `TheContrastRatioMatchesTheWcagFormula`.
+- Every palette value of `ConsoleTheme.Light` equals its token: `DesignTokensTests.TheMudThemeUsesTheTokens`.
+- No `<link>` to another host in `App.razor`: `DesignTokensTests.NoFontIsLoadedFromTheNetwork`.
+- All tests and the journeys pass: the counts in the build plan's status line.
+
+**Task 2: layout B on one CSS grid** (5ab58ed)
+
+- `grid-template-areas` with exactly `bar`, `menu`, `main`, `trace`, `phone`, and the `console` element `dir="ltr"` wrapping main and trace: `.layout-b` and `.console-columns` in `wwwroot/app.css`, rendered by `MainLayout.razor` and `Home.razor`. The controller ruled the declaration belongs in `app.css`.
+- The chip's text: `HammoudiHappyPath` (`mock-label` is "Mock wallet · synthetic data").
+- `phone-frame` `rtl` and `console` `ltr`: `HammoudiHappyPath`.
+- No horizontal scrollbar at 1,440 x 900 and 1,920 x 1,080: checked by hand on every menu item and noted in 5ab58ed's message. `HammoudiHappyPath` checks it at 1,600 x 950.
+
+**Task 3: zone colours and a legend** (3ab74de)
+
+- The zones' hues are at least 40 degrees from the brand and at least 20 from each other (the 20 ruled by the controller: amber and red are 22 apart and are told apart by lightness, icon and label): `DesignTokensTests.NoZoneIsPurpleAndEachDiffersFromTheBrand`, with `TheHueMatchesTheHslFormula`.
+- The zone assertion unchanged: `HammoudiHappyPath` (`trace-entry[data-zone=…]`).
+- Four `trace-legend` items with `data-zone`: `HammoudiHappyPath`.
+
+**Task 4a: the page size setting and the shared pager** (746da75)
+
+- `PagedListTests.ASeedSizedListPagesByTen`, `APageBeyondTheEndClampsToTheLast`, `AnEmptyListIsOneEmptyPage` and `AShrunkListAfterADeleteKeepsAValidPage`.
+- `ConsoleOptionsTests.GridPageSizeIsBoundedFiveToOneHundred`.
+- `setting-row[data-name='Console:GridPageSize']` shows 10: `AChangedCapTakesEffectWithoutARestart`.
+
+**Task 4b: every console grid paged, newest first** (8deb2ef)
+
+- The journeys that read `wallet-history-row`, `wallet-balance` and `log-row` pass unchanged: `HammoudiHappyPath`, `DoubleTapExecutesOnce`, `TypedNumberShowsTheRegisteredNameAndFirstTime`, `BalanceAnswersAfterConsentAndTheLogKeepsNoFigure` and `KillSwitchStopsEverything`. So do the aliases panel's: `TheConsoleAliasesPanelListsAddsAndDeletes` and `AnAliasSavedOnThePhoneShowsInTheConsoleDirectory`.
+- The new reference is on page 1 and Next shows older rows: `TheHistoryGridPagesNewestFirst`.
+- No numeric literal for a row count in `WalletDataPanel.razor`: the file reads `Console:GridPageSize` through `PageSize`.
+
+**Task 4c: the page size editable live** (85fccc5)
+
+- `RuntimeSettingsTests.GridPageSizeIsEditableWithinItsRange`; `RuntimeSettingsTests.AKeyThatIsNotEditableIsRefused` still refuses `Console:WalletAdminKey`.
+- Saving 5 gives more pages with the new reference still on page 1, and `setting-reset` restores 10: `TheHistoryGridPagesNewestFirst`.
+
+**Task 4d: the two phone lists paged** (13af7bf)
+
+- `MyOrdersListsThePurchaseCodesNewestFirstAndCopies`, `ThePhoneDirectoryListsAddsAndDeletes` and the three alias-refusal journeys pass unchanged: `ADuplicateAliasIsRefusedInTheDirectory`, `AnAliasForAClosedContactIsRefusedInTheDirectory` and `ABareNameSharedBySeveralIsRefusedInTheDirectory`.
+- `PhoneStringsTests.NoValueIsAPlaceholderExceptTheKeysAwaitingKhalil` passes with `AwaitingKhalil` empty: `Pager_Previous` and `Pager_Next` are Khalil's words.
+- The phone pager at a page size of 5: `ThePhoneDirectoryPagesAtTheGridPageSize`.
+
+**Task 5: status badges** (b1e27b8)
+
+- S20 closed and muted, S01 active, the closed count equal to the wallet's: `AClosedContactShowsItsStatusInTheWalletData`.
+- `TheConsoleAliasesPanelListsAddsAndDeletes` unchanged.
+- The badge pairings: `DesignTokensTests.EveryTextPairingMeetsAA` (success on its tint, muted on the neutral tint).
+
+**Task 6: settings descriptions** (cff485e)
+
+- `SettingDescriptionsTests.EveryEditableSettingHasADescription`, `EveryRangeAndDefaultMatchesTheOptions` and `EveryDescriptionIsOneSentence`.
+- `AChangedCapTakesEffectWithoutARestart` unchanged.
+
+**Task 7: phone polish** (50d12bf)
+
+- `HammoudiHappyPath`, `TypedNumberShowsTheRegisteredNameAndFirstTime`, `TimerKillsTheButton`, `SendAgainAfterDone` and `PinFieldShowsForALargeAmountAndThePinIsNeverLogged` unchanged.
+- `DesignTokensTests.NoFontIsLoadedFromTheNetwork` and `DesignTokensTests.ThePhoneFontIsSelfHosted` (the `@font-face` rules and the two files under `wwwroot/fonts`, with `OFL.txt`).
+- `PhoneStringsTests` with no new key: the status bar has no text.
+- The status bar inside the frame, and the timer and Confirm under one parent: `ThePhoneHasAStatusBarAndTheCardShowsTheTimerByConfirm`. The status bar's time: `PhoneFormatTests.TheStatusBarTimeIsTheIraqTimeInArabicIndicDigits`.
+
+**Task 8: general polish** (e456c7c)
+
+- `DesignTokensTests.EveryColourInTheStylesheetIsAToken` and `EveryTextPairingMeetsAA` still pass.
+- A `:focus-visible` rule with `--focus-ring` and no `outline: none`: `DesignTokensTests.FocusIsVisible`.
+- The log's empty state, gone after one payment: `EmptyStatesShowOnAFreshConsole`.
+- `AnUnknownProductIsRefusedAndLoggedWithTheProviderCode` and every other journey unchanged.
+
+**Task 9: documentation sweep and the checked screenshots** (this file's commit)
+
+- Every "Done when" line of tasks 1 to 8 is listed with what shows it: this section.
+- The screenshots are committed and the README's console section links the one of the console at rest: [docs/reports/ui-pass-2026-10-22/](reports/ui-pass-2026-10-22/), and the README.
+- `dotnet test` and `dotnet test tests/Agent.Web.Journeys` pass from a clean build: the counts in the build plan's status line and the commit message.
 
 ## Known gaps
 
@@ -1058,3 +1151,4 @@ The journeys locate elements only by these attributes. The two lines of the "not
 | The live trace keeps every entry for the life of the circuit | A cap would be a new setting |
 | The reset control starts over only its own circuit's phone; another open console keeps its conversation, whose cards were closed by the reset | Refresh that page |
 | The model fault is per console process, the wallet's fault switch is shared by every console | Shown as read back on each panel; the demo runs one console |
+| Two journeys read the learning table once, right after the reply shows (`JourneyBase.LearningRowsAsync`): `RequestJourneys.NoneOfTheseOnWhichContactRefusesRecipientNotFound` and `FaultJourneys.ModelInvalidReplyIsNotUnderstood`. Each found no row once in the UI pass, because the conversation writes the row after the reply renders | A polling read in the base helper would fix both; awaiting Khalil. Each passed on rerun |

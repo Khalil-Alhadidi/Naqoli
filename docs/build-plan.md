@@ -534,6 +534,46 @@ The biller alias stays the later item below.
 - The Playwright suite has 10 to 15 journeys and passes.
 - The rehearsal has been done once and its surprises are fixed or written under known gaps.
 
+**UI pass before milestone 10 (21 to 22 Oct 2026):** a pass on the look of `Agent.Web` before milestone 10, with no change of behaviour. Nothing changed under `src/Agent.Core`, `src/Wallet.MockApi` or `data/`, and no package was added.
+
+What was built:
+
+1. Design tokens in one `:root` block and `ConsoleTheme.Light` from the same values.
+2. Layout B on one CSS grid with the bar, its title and the mock chip, and the menu as a fixed column.
+3. The trace's zones in blue, amber, green and red, with icons and a legend.
+4. Paging:
+   - 4a: `Console:GridPageSize` and the shared `GridPager`;
+   - 4b: every console grid paged, newest first;
+   - 4c: the page size editable live;
+   - 4d: the phone's directory and My orders paged, with Khalil's two pager labels.
+5. Account status badges on the Contacts and Aliases grids.
+6. A label, a description and a range on every editable setting.
+7. Phone polish: a status bar, the card's hierarchy, the timer by Confirm, and Noto Naskh Arabic self-hosted.
+8. Empty and loading states, button and focus polish, and the history's status badges.
+9. This documentation sweep, with the checked screenshots.
+
+The brand is `#673b98`. Khalil gave `#663b98` and asked for one digit changed.
+
+Khalil's nine answers of 21 Oct 2026:
+
+- the account status on the Contacts grid, and on the aliases too;
+- a page size of 10 taken as his working assumption;
+- his two pager labels;
+- the menu out of the drawer;
+- the system font for the console and Noto Naskh Arabic for the phone;
+- the title "Agentic AI Challenge Iraq : Pay and Bill Agent";
+- the history newest first, so the latest payment needs no scrolling;
+- the timer in the card's action block (option B);
+- light only.
+
+Last full runs, 22 Oct 2026, after a clean build:
+
+- `dotnet test tests/Agent.Core.Tests`: 1472 tests, 1464 passed, 8 skipped by gate.
+- `dotnet test tests/Agent.Web.Journeys`: 76 tests (74 journeys, the host test and the screenshot helper), 75 passed, 1 skipped (the screenshot helper without `ZAINCASH_SCREENSHOTS`).
+- `dotnet test`: 1548 tests, 1539 passed, 9 skipped.
+
+The plan, its decisions and its status are in [docs/plans/ui-pass.md](plans/ui-pass.md). Each task's "Done when" lines and what shows them are in [docs/agent-web.md](agent-web.md) ("UI pass, 21 to 22 Oct 2026"). The checked screenshots are in [docs/reports/ui-pass-2026-10-22/](reports/ui-pass-2026-10-22/).
+
 ## Stretch: voice
 
 Only after milestone 12, and only if the core meets its targets. Speech becomes text before step 1 of the pipeline, and nothing after that changes. It is reported at its measured level.

@@ -205,10 +205,11 @@ zaincash-agent/
     Agent.Core/         orchestrator, masker, parser client, validator, resolver,
                         checks, pending store, executor, templates
     Agent.Web/          Blazor Server with MudBlazor: phone chat, card, console components
+      wwwroot/fonts/    Noto Naskh Arabic regular and bold (woff2) and its OFL.txt, the phone's font, self-hosted
     Agent.Eval/         console: runs the test sets, writes the results report
   tests/
     Agent.Core.Tests/   normalisation, matching, expiry, idempotency
-    Agent.Web.Journeys/ Playwright screen journeys on the scripted parser (76 tests on 22 Oct 2026, the screenshot helper among them)
+    Agent.Web.Journeys/ Playwright screen journeys on the scripted parser (76 tests on 22 Oct 2026: 74 journeys, the host test and the screenshot helper)
   data/
     seed/               synthetic users, contacts, billers, history
     requests.dev.jsonl        96 requests (Khalil's 72, ADD-01 to ADD-24)

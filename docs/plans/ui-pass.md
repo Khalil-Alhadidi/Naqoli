@@ -394,3 +394,29 @@ Each task is one commit. "Files" names what changes; nothing outside `src/Agent.
 3. The settings panel's long Model table on a 900 px window: the middle column scrolls on its own, the phone stays in view.
 4. The phone status bar's clock on a circuit that outlives midnight: the timer re-renders the time; the `TimeProvider` is the one the session uses, so the tests can freeze it.
 5. A `closed` contact chosen as an option in `which_contact`: the question panel is unchanged by this pass; the refusal `account_closed` still comes from the checks, never from the badge.
+
+## Status, 22 Oct 2026
+
+Done. One commit per task, in Khalil's name:
+
+| Task | Commit |
+|---|---|
+| 1 Design tokens and the theme | a241480 |
+| 2 Layout B on one CSS grid | 5ab58ed |
+| 3 Zone colours and a legend | 3ab74de |
+| 4a The page size setting and the shared pager | 746da75 |
+| 4b Every console grid paged | 8deb2ef |
+| 4c The page size editable live | 85fccc5 |
+| 4d The two phone lists paged | 13af7bf |
+| 5 Status badges | b1e27b8 |
+| 6 Settings descriptions | cff485e |
+| 7 Phone polish | 50d12bf |
+| 8 General polish | e456c7c |
+| 9 Documentation sweep and the checked screenshots | the commit that adds this section |
+
+Each task's "Done when" lines and the test, journey or file that shows each are listed in [docs/agent-web.md](../agent-web.md) ("UI pass, 21 to 22 Oct 2026"). The checked screenshots are in [docs/reports/ui-pass-2026-10-22/](../reports/ui-pass-2026-10-22/).
+
+Left open:
+
+- Two journeys read the learning table once, right after the reply shows: `RequestJourneys.NoneOfTheseOnWhichContactRefusesRecipientNotFound` and `FaultJourneys.ModelInvalidReplyIsNotUnderstood`. Each failed once in a full run and passed on rerun. A polling read in `JourneyBase.LearningRowsAsync` would fix both. Awaiting Khalil.
+- The page size default of 10 is taken as Khalil's working assumption (question 2); he has not confirmed it.
