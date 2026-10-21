@@ -8,7 +8,7 @@
 
 **Tech Stack:** .NET 10 console (`Agent.Eval`), `System.Text.Json` (snake_case, strict), `Microsoft.Extensions.Hosting` for DI in the console, `TimeProvider`, xunit.v3; no new packages expected.
 
-**Spec:** `docs/build-plan.md` milestone 5 ("Done when" lines); `docs/architecture.md` D12, D13, D14, D22, section 5; `data/README.md` (the case format, step forms, reason codes, answer-key semantics, "A case passes when..."); `data/seed/settings.json` (learning-log reasons); `docs/agent-core.md` and `docs/agent-web.md` (what exists); the rulings in memory. Project rules: `CLAUDE.md`. Repository root: `C:\Users\Tech Line\source\repos\Naqoli`.
+**Spec:** `docs/build-plan.md` milestone 5 ("Done when" lines); `docs/architecture.md` D12, D13, D14, D22, section 5; `data/README.md` (the case format, step forms, reason codes, answer-key semantics, "A case passes when..."); `data/seed/settings.json` (learning-log reasons); `docs/agent-core.md` and `docs/agent-web.md` (what exists); the rulings in memory. Project rules: `CLAUDE.md`. Repository root: the clone folder.
 
 ## Global Constraints
 

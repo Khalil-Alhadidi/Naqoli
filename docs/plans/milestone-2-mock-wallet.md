@@ -8,7 +8,7 @@
 
 **Tech Stack:** .NET 10, ASP.NET Core minimal APIs with `TypedResults` and ProblemDetails, EF Core 10 SqlServer 10.0.13, options pattern with validation, `TimeProvider`, xunit.v3 4.0.2 with `WebApplicationFactory`, Microsoft.AspNetCore.Mvc.Testing 10.0.13.
 
-**Spec:** `docs/architecture.md` v0.11 (sections 1, 5, 7; decisions D8, D9, D10, D11, D15, D16, D19, D21, D22) and `docs/build-plan.md` milestone 2. Project rules: `CLAUDE.md`. Repository root: `C:\Users\Tech Line\source\repos\Naqoli`.
+**Spec:** `docs/architecture.md` v0.11 (sections 1, 5, 7; decisions D8, D9, D10, D11, D15, D16, D19, D21, D22) and `docs/build-plan.md` milestone 2. Project rules: `CLAUDE.md`. Repository root: the clone folder.
 
 ## Global Constraints
 

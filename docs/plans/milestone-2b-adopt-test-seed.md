@@ -8,7 +8,7 @@
 
 **Tech Stack:** .NET 10, ASP.NET Core minimal APIs, EF Core 10 SqlServer 10.0.13, `System.Text.Json` with `JsonNamingPolicy.SnakeCaseLower`, options pattern, `TimeProvider`, xunit.v3 4.0.2 with `WebApplicationFactory`.
 
-**Spec:** `docs/architecture.md` v0.11 (sections 6 and 7; D8, D9, D10, D11, D15, D16, D22), `docs/build-plan.md` milestone 2 ("Done when": seed frozen and tagged; answer keys depend on it), `data/README.md` (the export's own description of its files), `docs/matching-rules.md` (fees, limits, fault codes). Project rules: `CLAUDE.md`. Repository root: `C:\Users\Tech Line\source\repos\Naqoli`.
+**Spec:** `docs/architecture.md` v0.11 (sections 6 and 7; D8, D9, D10, D11, D15, D16, D22), `docs/build-plan.md` milestone 2 ("Done when": seed frozen and tagged; answer keys depend on it), `data/README.md` (the export's own description of its files), `docs/matching-rules.md` (fees, limits, fault codes). Project rules: `CLAUDE.md`. Repository root: the clone folder.
 
 ## Global Constraints
 

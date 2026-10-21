@@ -8,7 +8,7 @@
 
 **Tech Stack:** .NET 10, Blazor Server with global interactive server rendering, MudBlazor 9.11.0 (`MudRTLProvider`, `MudLayout`, `MudDrawer`, `MudCard`, `MudTextField`, `MudTimeline`/`MudList` for the trace), `Microsoft.Extensions.Localization` with a `.resx` resource (`IStringLocalizer`), `IHostedService`/`BackgroundService`, `IServiceScopeFactory`, Playwright for .NET 1.63.0, `Microsoft.AspNetCore.Mvc.Testing` 10.0.13 with `UseKestrel`.
 
-**Spec:** `docs/architecture.md` v0.11 (sections 2, 3, 4, 5; D2, D3, D6, D8, D16, D17 layout B, D19 groundwork, D20, D22), `docs/build-plan.md` milestone 4, `docs/agent-core.md` (the write path as built; "Decisions by Khalil (14 Oct 2026)" table), `docs/reviews/milestone-3-security-review.md` (forward-looking for milestone 4), the memory of Khalil's rulings. Project rules: `CLAUDE.md`. Repository root: `C:\Users\Tech Line\source\repos\Naqoli`.
+**Spec:** `docs/architecture.md` v0.11 (sections 2, 3, 4, 5; D2, D3, D6, D8, D16, D17 layout B, D19 groundwork, D20, D22), `docs/build-plan.md` milestone 4, `docs/agent-core.md` (the write path as built; "Decisions by Khalil (14 Oct 2026)" table), `docs/reviews/milestone-3-security-review.md` (forward-looking for milestone 4), the memory of Khalil's rulings. Project rules: `CLAUDE.md`. Repository root: the clone folder.
 
 ## Global Constraints
 
