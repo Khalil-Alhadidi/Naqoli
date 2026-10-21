@@ -113,15 +113,26 @@
     };
 
     /// <summary>
-    /// One editable row: the value in force, an input, Save, Reset once a value is saved, and the refusal. Every element
-    /// carries <c>data-name</c> = <paramref name="name"/> (an agent setting's bare name, or a console setting's full key).
+    /// One editable row: the setting's label, raw name, description and range (task 6, from
+    /// <see cref="SettingDescriptions.Editable"/>), the value in force, an input described by the description, Save, Reset
+    /// once a value is saved, and the refusal. Every element carries <c>data-name</c> = <paramref name="name"/> (an agent
+    /// setting's bare name, or a console setting's full key).
     /// </summary>
-    private RenderFragment EditableRow(string name, long value) =>
+    private RenderFragment EditableRow(string name, long value)
+    {
+        var about = SettingDescriptions.Editable[name];
+        var describedBy = "setting-description-" + name.Replace(':', '-');
+        return
         @<tr data-testid="setting-row" data-name="@name">
-            <td>@name</td>
+            <td>
+                <MudText Typo="Typo.body2"><strong>@about.Label</strong> <small><code>@name</code></small></MudText>
+                <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block" id="@describedBy">@about.Description</MudText>
+                <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block">@RangeLine(about)</MudText>
+            </td>
             <td data-testid="setting-value" data-name="@name">@Number(value)</td>
             <td>
-                <input data-testid="setting-input" data-name="@name" type="text" inputmode="numeric" aria-label="@name"
+                <input data-testid="setting-input" data-name="@name" type="text" inputmode="numeric" aria-label="@about.Label"
+                       aria-describedby="@describedBy"
                        value="@Draft(name)" @oninput="e => drafts[name] = e.Value?.ToString() ?? string.Empty" />
                 <MudButton data-testid="setting-save" data-name="@name" Size="Size.Small" Variant="Variant.Outlined"
                            OnClick="() => Save(name)">Save</MudButton>
@@ -136,6 +147,11 @@
                 }
             </td>
         </tr>;
+    }
+
+    /// <summary>"Unit · Range min to max · Default d", the numbers as the console writes them.</summary>
+    private static string RangeLine(SettingDescription about)
+        => about.Unit + " · Range " + Number(about.Min) + " to " + Number(about.Max) + " · Default " + Number(about.Default);
 
     private static Func<AgentOptions, long> Reader(string name) => name switch
     {
