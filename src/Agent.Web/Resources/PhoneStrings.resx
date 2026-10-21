@@ -32,7 +32,7 @@
   <data name="Outcome_pin_malformed" xml:space="preserve"><value>الرقم السري من ٤ لـ ٦ أرقام</value></data>
   <data name="Outcome_already_handled" xml:space="preserve"><value>هاي العملية تعالجت من قبل</value></data>
   <data name="Reply_balance" xml:space="preserve"><value>رصيدك هو {0}</value></data>
-  <data name="Reply_consent" xml:space="preserve"><value>قبل ما نبدي، شي مهم: ما أحرّك أي دينار من محفظتك إلا إذا إنت تضغط تأكد بنفسك، وبكل مرة. موافق؟</value></data>
+  <data name="Reply_consent" xml:space="preserve"><value>قبل ما نبدي، شي مهم: ما أحرّك أي دينار من محفظتك إلا إذا إنت تضغط تأكيد بنفسك، وبكل مرة. موافق؟</value></data>
   <data name="Reply_consent_button" xml:space="preserve"><value>موافق</value></data>
   <data name="Reply_consent_decline_button" xml:space="preserve"><value>لا اوافق</value></data>
   <data name="Question_which_contact" xml:space="preserve"><value>ياهو تقصد؟</value></data>
@@ -55,7 +55,7 @@
   <data name="Refusal_over_per_transaction_cap" xml:space="preserve"><value>أعلى مبلغ بعملية وحدة هو {0}</value></data>
   <data name="Refusal_over_daily_cap" xml:space="preserve"><value>هذا يتجاوز الحد اليومي. باقيلك اليوم {0}</value></data>
   <data name="Refusal_account_closed" xml:space="preserve"><value>هذا الحساب مغلق</value></data>
-  <data name="Refusal_consent_required" xml:space="preserve"><value>لازم توافق أول</value></data>
+  <data name="Refusal_consent_required" xml:space="preserve"><value>لازم توافق أول يلة تكدر تحول فلوس</value></data>
   <data name="Refusal_nothing_due" xml:space="preserve"><value>ماكو شي مطلوب على هاي الفاتورة</value></data>
   <data name="Refusal_bill_not_found" xml:space="preserve"><value>ما لكيت هاي الفاتورة</value></data>
   <data name="Refusal_biller_unavailable" xml:space="preserve"><value>هاي الجهة مو متوفرة هسه، جرب بعدين</value></data>
