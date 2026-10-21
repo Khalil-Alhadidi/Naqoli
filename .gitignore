@@ -500,8 +500,9 @@ appsettings.local.json
 secrets.json
 *.secrets.json
 
-# Spreadsheets under docs are working files (the Arabic workbook, the test-set workbook of rule 7); their content lives in the resx and in data/
-docs/*.xlsx
+# Spreadsheets outside data/ are working files (the Arabic workbook, the test-set workbook of rule 7, local exports); their content lives in the resx and in data/
+*.xlsx
+!/data/**/*.xlsx
 
 # Claude Code: project settings (.claude/settings.json) are committed; personal overrides are not
 .claude/settings.local.json
