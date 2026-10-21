@@ -3,6 +3,7 @@
 This document describes what `src/Agent.Web` does as built in milestones 4 to 9c and the changes of 20 Oct 2026 (person or bill, the consent screen's No). In milestone 5 the session's logic moved into `Agent.Core` as `Conversation` (see [agent-core.md](agent-core.md), "The conversation"), so the test runner drives the same logic; `ChatSession` is now the phone's adapter over it. It covers:
 
 - page layout B (D17);
+- the design tokens and the MudBlazor theme;
 - the phone and its session;
 - the live trace;
 - the phone strings for Khalil;
@@ -33,6 +34,94 @@ flowchart LR
 ```
 
 The side menu sits in the layout outside the `console` element, and it is English and left to right like the rest of the page.
+
+## Design tokens
+
+Every colour, spacing, type size, radius and shadow of the console is a token in the one `:root` block at the top of `wwwroot/app.css` (UI pass, 21 Oct 2026). No other rule there, in `Components/Layout/ReconnectModal.razor.css` or in any `.razor` file names one by value; every rule uses a token. The theme is light only. MudBlazor's palette is set from the same values by `Services/ConsoleTheme.cs` (`ConsoleTheme.Light`, the one `MudTheme`, passed as `<MudThemeProvider Theme="ConsoleTheme.Light" />` in `MainLayout.razor`), so `Color.Primary`, `Color.Error` and `Color.Warning` on the components carry the tokens with no markup change. The console font is the system stack: no font is loaded from another host.
+
+`DesignTokensTests` (`tests/Agent.Core.Tests/Web`) pins all of this: `EveryColourInTheStylesheetIsAToken` (no hex, `rgb(`, `hsl(` or named colour outside `:root`), `EveryTextPairingMeetsAA` (it parses `:root` and recomputes the WCAG 2.x ratios of the pairs below; each is 4.5 or more), `TheMudThemeUsesTheTokens` (every palette value equals its token) and `NoFontIsLoadedFromTheNetwork` (no `<link>` in `App.razor` to another host). A colour is changed in `app.css` and `ConsoleTheme.cs` together, or the third test fails.
+
+| `ConsoleTheme.Light` | Token |
+|---|---|
+| `Primary`, `AppbarBackground` | `--color-brand` |
+| `PrimaryDarken` | `--color-brand-hover` |
+| `PrimaryLighten` | `--color-brand-tint` |
+| `AppbarText` | `--color-on-brand` |
+| `Error` | `--color-danger` |
+| `Warning` | `--color-warning` |
+| `Success` | `--color-success` |
+| `Info` | `--zone-user` |
+| `TextPrimary` | `--color-text` |
+| `TextSecondary` | `--color-text-muted` |
+| `Background` | `--color-page` |
+| `Surface`, `DrawerBackground` | `--color-surface` |
+| `LinesDefault` | `--color-border` |
+| `Typography.Default.FontFamily` | `--font-console` |
+
+Contrast ratios are WCAG 2.x relative-luminance ratios. AA for normal text is 4.5:1, for large text 3:1.
+
+### Brand (Khalil, 21 Oct 2026: `#663b98`, then one digit away at his request: `#673b98`)
+
+| Token | Value | Role | Pairing checked | Ratio |
+|---|---|---|---|---|
+| `--color-brand` | `#673b98` | Primary and accent: filled buttons, the app bar, links, the active menu item's bar, the phone's send button and progress bar, focus ring | white text on it | 7.91 (AA, AAA) |
+| | | | as text on white | 7.91 |
+| `--color-brand-hover` | `#5b3486` (brand + 12 % black) | Hover of a filled brand button | white text on it | 9.21 |
+| `--color-brand-pressed` | `#4e2d74` (brand + 24 % black) | Pressed or active state | white text on it | 10.76 |
+| `--color-brand-tint` | `#f0ebf5` (brand + 90 % white) | Selected menu item, the user's chat bubble, the badge background of brand-coloured chips | brand text on it | 6.74 |
+| | | | body text on it | 13.47 |
+| `--color-on-brand` | `#ffffff` | Text and icons on brand | | as above |
+
+### Neutrals
+
+| Token | Value | Role | Pairing checked | Ratio |
+|---|---|---|---|---|
+| `--color-page` | `#f6f7f9` | The page behind the panels | body text on it | 14.74 |
+| `--color-surface` | `#ffffff` | Panels, cards, the phone's agent bubble | | |
+| `--color-text` | `#1f2328` | Body text | on white | 15.80 |
+| `--color-text-muted` | `#59636e` | Secondary text: trace time and detail, units, captions, fee and balance after on the card, input borders | on white | 6.11 |
+| `--color-border` | `#d0d7de` | Dividers, table rules, panel edges (decorative, not text) | | |
+| `--color-phone-bezel` | `#212121` | The phone's bezel | | |
+
+### Semantic
+
+| Token | Value | Role | Pairing checked | Ratio |
+|---|---|---|---|---|
+| `--color-success` | `#1a7f37` | `done` and `active` text, success icons | on white | 5.08 |
+| `--color-success-tint` | `#dafbe1` | Badge background for `done`, `active` | success text on it | 4.56 |
+| `--color-warning` | `#9a6700` | Warning text: the card's first-time and repeat lines, `executing` | on white | 4.87 |
+| `--color-warning-tint` | `#fff8c5` | The warning band's background | warning text on it | 4.52 |
+| `--color-danger` | `#b42318` | Error text, Delete and Reset and Clear all buttons, `failed`, `closed` text is **not** this (see badges) | on white | 6.57 |
+| `--color-danger-tint` | `#ffebe9` | Badge background for `failed`, error lines' background | danger text on it | 5.73 |
+| `--color-neutral-tint` | `#eaeef2` | Badge background for `closed` and other muted states | muted text on it | 5.24 |
+
+### Zones (the trace, its legend, and anywhere a zone is named)
+
+No zone is purple; each is paired with a Material icon and its label, so the zones read without colour. The colour is used the same way everywhere: a 4 px left bar on the entry, the icon and the label in the colour, the legend chip in the colour.
+
+| Token | Value | Zone | Icon (`Icons.Material.Filled`) | Text on white | Against brand `#673b98` |
+|---|---|---|---|---|---|
+| `--zone-user` | `#1565c0` (blue) | User | `Person` | 5.75 | different hue (blue vs purple) |
+| `--zone-model` | `#b45309` (amber) | Model | `AutoAwesome` | 5.02 | different hue |
+| `--zone-code` | `#2e7d32` (green) | Code | `Code` | 5.13 | different hue |
+| `--zone-write` | `#b42318` (red, the danger value: money leaves) | Write | `Payments` | 6.57 | different hue |
+
+### Spacing, type, radii, shadows, focus
+
+| Token | Value | Role |
+|---|---|---|
+| `--space-1` to `--space-8` | 4, 8, 12, 16, 20, 24, 32, 40 px | The only spacing values used in our CSS |
+| `--text-xs`, `--text-sm`, `--text-md`, `--text-lg`, `--text-xl`, `--text-2xl` | 12, 13, 14, 16, 20, 28 px | Trace and captions; table cells; body; phone body; panel titles; the card's amount |
+| `--font-console` | `system-ui, "Segoe UI", Roboto, Helvetica, Arial, sans-serif` | Everything outside the phone (also MudBlazor's typography) |
+| `--font-phone` | `"Noto Naskh Arabic", "Segoe UI", Tahoma, sans-serif` | Inside the phone; the first font self-hosted (decision 5) |
+| `--font-mono` | `Consolas, "Cascadia Mono", monospace` | The trace |
+| `--radius-sm`, `--radius-md`, `--radius-lg`, `--radius-phone` | 4, 8, 14, 36 px | Badges and inputs; panels and buttons; bubbles and the card; the phone |
+| `--shadow-1`, `--shadow-2` | `0 1px 2px rgba(31,35,40,.08)`, `0 4px 12px rgba(31,35,40,.12)` | Panels; the card and the phone |
+| `--focus-ring` | `2px solid var(--color-brand)`, offset 2 px | Every `:focus-visible` |
+
+### Layout sizes and the backdrop
+
+Fixed sizes of the layout are tokens too, so no rule holds a bare length: `--size-phone-width` 390 px, `--size-phone-height` 780 px, `--size-phone-bezel` 12 px, `--size-trace-column-min` 260 px, `--size-trace-offset` 100 px (the trace's height is the viewport less this), `--size-appbar-offset` 64 px (the phone's sticky top), `--size-zone-bar` 4 px, `--size-zone-label-min` 44 px, `--size-error-icon` 1.8 rem (the error boundary's icon), and `--focus-ring-offset` 2 px. `--color-backdrop` (`rgba(31,35,40,.4)`) is the reconnect dialog's backdrop. Half a step, `calc(var(--space-1) / 2)`, keeps the 2 px rows of the trace and the card.
 
 ## Services
 

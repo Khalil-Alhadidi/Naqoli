@@ -68,4 +68,4 @@ Configured as parse-call candidates in the `Model` section (`src/Agent.Web/appse
 
 ## External resources
 
-- Roboto from Google Fonts (stylesheet link in src/Agent.Web/Components/App.razor; MudBlazor's default font; falls back to system fonts offline).
+- Roboto from Google Fonts (stylesheet link in src/Agent.Web/Components/App.razor; MudBlazor's default font; falls back to system fonts offline). Removed on 21 Oct 2026 (UI pass, task 1): the console uses the system font stack (`--font-console`, also MudBlazor's typography through `ConsoleTheme`), and no font or stylesheet is loaded from another host (`DesignTokensTests.NoFontIsLoadedFromTheNetwork`).
