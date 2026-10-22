@@ -68,7 +68,7 @@ public class AmountRuleTests
     public void ABareQuarterIsLeftToTheChecks()
     {
         // A quarter alone is 0.25 bare, read in thousands: 250, below the minimum. The checks refuse it
-        // amount_below_minimum.
+        // amount_below_minimum. The refusal end to end is ADD-29 in the development set.
         Assert.Equal(new AmountResolution.Dinars(250), Resolve(0.25m, AmountUnit.None));
     }
 

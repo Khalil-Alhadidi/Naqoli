@@ -59,4 +59,4 @@ If you want the rule to record it, add to the examples column of rule 9 in `docs
 '2 وربع' is 2,250; 'مليون الا ربع' is 750,000; 'ربع مليون' is 250,000. Claude then updates
 `docs/rules-coverage.md`.
 
-Built 22 Oct 2026: prompt version 6, ADD-26 to ADD-30, Haiku run 5/5.
+Built 22 Oct 2026: prompt version 6, ADD-26 to ADD-30, Haiku run 5/5; live test 9 of 10 rows of the theory, Sonnet reads the typed ADD-30 amount as unclear (docs/agent-model.md, docs/tuning-backlog.md).
