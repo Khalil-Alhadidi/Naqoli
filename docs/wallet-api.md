@@ -13,7 +13,7 @@ dotnet run --project src/Wallet.MockApi              # serve on http://localhost
 
 `migrate` prints `Database ready: 5 users, 42 accounts, 34 contacts, 86 transactions`. On an empty database it seeds and then sets every user not consented (Khalil, 18 Oct 2026), so the demo starts with the consent screen for everyone; on a database that already has users it changes nothing. Both commands read the seed files first (see Seed); a missing or invalid file stops them with a message that names the file.
 
-The API serves plain HTTP on loopback and does not redirect to HTTPS. `GET /health` returns `ok`; it is the only wallet route that needs no client key (see Client key). In Development the OpenAPI document is at `/openapi/v1.json`; it is mapped outside the client-key group, so it needs no key either. The connection string and the database routes are in [README.md](../README.md#database).
+The API serves plain HTTP on loopback and does not redirect to HTTPS. `GET /health` returns `ok`; it is the only wallet route that needs no client key (see Client key). In Development the OpenAPI document is at `/openapi/v1.json`; it is mapped outside the client-key group, so it needs no key either. The reference page over it is at `/scalar` (Scalar; Khalil, 22 Oct 2026), mapped in the same Development block and outside the client-key group. The document declares the two headers as security schemes, `ClientKey` on every route but `/health` and `AdminKey` as well under `/admin`, so the page offers both fields; it pre-fills them with `dev`, which the Development rule accepts, and with a key configured the person types the real one. The `.http` file remains the route for Visual Studio and VS Code. Tests: `ApiReferenceTests` (the schemes, the routes' requirements, the page in Development, both routes 404 outside it). The connection string and the database routes are in [README.md](../README.md#database).
 
 ## Conventions
 
@@ -23,7 +23,7 @@ The API serves plain HTTP on loopback and does not redirect to HTTPS. `GET /heal
 - Every name the wallet puts on the wire for a type, status or kind is lower case: transaction types `transfer`, `bill`, `purchase` (and, in history and the debit's response only, `externalDebit`, camelCase like the fault modes); statuses `executing`, `done`, `failed`; product types `credit`, `internet`; account statuses `active`, `closed`; provider codes `zain`, `asiacell`, `korek`. Fault modes are camelCase (`timeoutAfterExecute`).
 - Every user has exactly one default account (D10), and payments are paid from it; the database enforces it with a filtered unique index on `Accounts.UserId` where `IsDefault = 1`. The wallet also holds accounts that belong to no user (the people behind contacts and other numbers); a phone number reaches the account with that number, whoever holds it. An account is `active` or `closed`; a closed account exists but takes no money. In the seed, user ids 1 to 5 and their account ids 1 to 5 coincide; other accounts start at 6.
 - Seeded rows carry the test set's id as `code` (`U1`, `S01`, `BS1`, `ZN-CR-5`) so answer keys can name them; integer ids are what payments take.
-- Every route except `GET /health` (and `/openapi/v1.json` in Development) needs the `X-Wallet-Client-Key` header (see Client key); without it, the answer is 403 `client_key_required` before any of the wallet's own checks.
+- Every route except `GET /health` (and `/openapi/v1.json` and `/scalar` in Development) needs the `X-Wallet-Client-Key` header (see Client key); without it, the answer is 403 `client_key_required` before any of the wallet's own checks.
 - Errors are RFC 7807 ProblemDetails (`application/problem+json`). Every error the wallet raises itself carries a machine-readable `code` extension and a fixed English `title`; nothing from the request is echoed back. The agent branches on `code`, never on `title`. The exceptions are errors raised by ASP.NET Core itself: a body that is not valid JSON (400, but 500 in Development; see Client key), a route that does not match (404), and an unhandled exception or a lost database connection (500). These are ProblemDetails too, but without `code`.
 
 ## Endpoints
@@ -51,7 +51,7 @@ The API serves plain HTTP on loopback and does not redirect to HTTPS. `GET /heal
 | `POST /admin/reset?consent=` | Restore the seed, clear faults; `consent` is `cleared` (default: every user not consented) or `seed` (the seed's values) | 200 `ResetResponse` | 403, 422 `invalid_consent` |
 | `POST /admin/debit` | Take money from a user's wallet from outside the agent (milestone 8) | 201 `TransactionResponse` | 403, 422 `invalid_amount`, `unknown_user`, `account_closed`, `insufficient_funds` |
 
-Every route in the table except `/health` (and `/openapi/v1.json` in Development) also answers 403 `client_key_required` (see Client key), and the `/admin` routes 403 `admin_key_required` as well (see Admin key).
+Every route in the table except `/health` (and `/openapi/v1.json` and `/scalar` in Development) also answers 403 `client_key_required` (see Client key), and the `/admin` routes 403 `admin_key_required` as well (see Admin key).
 
 `{id}` is an integer; a path with a non-integer id matches no route and returns a ProblemDetails 404 from ASP.NET Core, without `code`.
 
@@ -450,7 +450,7 @@ Every code is the `code` extension of a ProblemDetails. Source: `PaymentErrors` 
 | `unknown_key` | 404 | by-key | No transaction of this user has this key, or the key is malformed, a `seed-` key or an `admin-` key | |
 | `injected_error` | 500 | execute | Fault switch, mode `error` | |
 | `injected_timeout` | 504 | execute | Fault switch, mode `timeoutBeforeExecute` | |
-| `client_key_required` | 403 | every route except `/health` (and `/openapi/v1.json` in Development) | Client header missing, or wrong key, or no key configured outside Development | |
+| `client_key_required` | 403 | every route except `/health` (and `/openapi/v1.json` and `/scalar` in Development) | Client header missing, or wrong key, or no key configured outside Development | |
 | `admin_key_required` | 403 | `/admin/*` | Admin header missing, or wrong key, or no key configured outside Development | |
 | `invalid_fault_mode` | 422 | `POST /admin/faults` | Unknown mode name | |
 | `invalid_fault_delay` | 422 | `POST /admin/faults` | `delayMs` below 0 or above 600,000 | |
@@ -625,7 +625,7 @@ Tests: `ResetTests.ResetRestoresTheSeedExactly` (with `?consent=seed`: compares 
 
 ## Client key
 
-Every route except `GET /health` (and `/openapi/v1.json` in Development) is guarded by `ClientKeyFilter`, an endpoint filter on the route group that the read, transaction and admin endpoints hang off. Every request to them carries the `X-Wallet-Client-Key` header:
+Every route except `GET /health` (and `/openapi/v1.json` and `/scalar` in Development) is guarded by `ClientKeyFilter`, an endpoint filter on the route group that the read, transaction and admin endpoints hang off. Every request to them carries the `X-Wallet-Client-Key` header:
 
 - With no `Wallet:ClientKey` configured (unset or empty), they are open in the Development environment (what `dotnet run` uses) to any request whose header has a non-empty value, and closed with 403 `client_key_required` in any other environment. The header is required even then because a custom header makes a browser send a CORS preflight, which this API never grants, so a web page on the demo machine cannot move money, give consent or read a balance.
 - With a key configured, the header must equal it; a missing or wrong key is 403 `client_key_required`. The comparison is constant-time. The key must be at least 16 characters; a shorter one stops the API at start-up (options validation). The agent holds the same value (milestone 3, task 2).
