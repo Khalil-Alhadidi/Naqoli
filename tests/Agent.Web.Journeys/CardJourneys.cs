@@ -184,4 +184,43 @@ public sealed class CardJourneys(JourneyHost host) : JourneyBase(host)
             "() => document.querySelector('[data-testid=card-timer]').parentElement === document.querySelector('[data-testid=card-confirm]').parentElement"),
             "card-timer and card-confirm do not share one parent element");
     }
+    /// <summary>
+    /// Khalil, 22 Oct 2026: the phone's screen follows the chat. Each new message and each new card leaves the screen
+    /// scrolled to its end, once the chat is taller than the screen, without the user moving the scrollbar.
+    /// </summary>
+    [Fact]
+    public async Task TheScreenScrollsToTheNewestMessageAndCard()
+    {
+        var page = await OpenAsync(Host.WebAddress);
+        var screen = page.GetByTestId("phone-screen");
+
+        // Four cards and their outcomes: more than one screen of chat.
+        for (var round = 1; round <= 4; round++)
+        {
+            await SayAsync(page, DevSet.Say("CLN-01"));
+            await Expect(page.GetByTestId("card")).ToHaveAttributeAsync("data-state", "live");
+            await AssertScrolledToTheEndAsync(screen);
+
+            await page.GetByTestId("card-confirm").ClickAsync();
+            await Expect(Outcomes(page, "done")).ToHaveCountAsync(round);
+            await AssertScrolledToTheEndAsync(screen);
+        }
+
+        Assert.True(await screen.EvaluateAsync<bool>("s => s.scrollHeight > s.clientHeight"), "the chat is not taller than the screen, so the journey proves nothing");
+    }
+
+    /// <summary>Waits up to two seconds for the screen to be scrolled to its end (within one pixel).</summary>
+    private static async Task AssertScrolledToTheEndAsync(ILocator screen)
+    {
+        const string atTheEnd = "s => Math.abs(s.scrollHeight - s.clientHeight - s.scrollTop) <= 1";
+        for (var attempt = 0; attempt < 20; attempt++)
+        {
+            if (await screen.EvaluateAsync<bool>(atTheEnd))
+                return;
+            await Task.Delay(100, Token);
+        }
+
+        var position = await screen.EvaluateAsync<string>("s => `scrollTop ${s.scrollTop}, clientHeight ${s.clientHeight}, scrollHeight ${s.scrollHeight}`");
+        Assert.Fail($"the phone screen is not scrolled to its end: {position}");
+    }
 }

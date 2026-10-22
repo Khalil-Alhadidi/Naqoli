@@ -1,6 +1,10 @@
 @inherits SessionComponent
+@inject IJSRuntime JS
 
-<div class="phone-messages">
+@* The screen follows the chat (Khalil, 22 Oct 2026): after a render that added a message, a card or a question, the
+   panel scrolls the enclosing phone-screen to its end through ChatPanel.razor.js. A timer tick or a PIN keystroke
+   re-renders without a new message, so it does not scroll, and the user can read back up the chat. *@
+<div class="phone-messages" @ref="messages">
     @foreach (var message in Session.Messages)
     {
         <div class="phone-message @(message.Role == ChatRole.User ? "from-user" : "from-agent")"
@@ -72,4 +76,55 @@
 
     // The session, not the handler: the "check again" button reaches the Confirm handler only through it (rule 1).
     private Task CheckAgainAsync() => Session.SettleAsync();
+
+    private readonly CancellationTokenSource disposing = new();
+    private ElementReference messages;
+    // The import task is cached, not its result, as CopyButton does: renders before the import resolves share one import.
+    private Task<IJSObjectReference>? moduleTask;
+    // What the last scroll was for: the message count and the ids of the card and the question. A render that changes
+    // none of them (a timer tick, a typed PIN digit, a button's disabled state) leaves the scroll where the user put it.
+    private (int Messages, int? Card, int? Question)? scrolledFor;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        var shown = (Session.Messages.Count, Session.CardMessageId, Session.QuestionMessageId);
+        if (shown == scrolledFor || disposing.IsCancellationRequested)
+            return;
+
+        scrolledFor = shown;
+        try
+        {
+            moduleTask ??= JS.InvokeAsync<IJSObjectReference>("import", disposing.Token, "./Components/Phone/ChatPanel.razor.js").AsTask();
+            var module = await moduleTask;
+            await module.InvokeVoidAsync("scrollToEnd", disposing.Token, messages);
+        }
+        catch (Exception ex) when (ex is JSException or JSDisconnectedException or OperationCanceledException)
+        {
+            // The circuit is gone or the script failed: the chat still shows; the next change tries again. A failed
+            // import is not cached.
+            if (moduleTask is { IsFaulted: true } or { IsCanceled: true })
+                moduleTask = null;
+            scrolledFor = null;
+        }
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        this.disposing.Cancel();
+        if (moduleTask is { IsCompletedSuccessfully: true } loaded)
+            _ = DisposeModuleAsync(loaded.Result);
+        this.disposing.Dispose();
+    }
+
+    private static async Task DisposeModuleAsync(IJSObjectReference module)
+    {
+        try
+        {
+            await module.DisposeAsync();
+        }
+        catch (Exception ex) when (ex is JSDisconnectedException or JSException or ObjectDisposedException)
+        {
+            // The circuit closed first; the browser frees the module with the page.
+        }
+    }
 }
