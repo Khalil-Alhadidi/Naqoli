@@ -11,6 +11,7 @@ using Agent.Core.Requests;
 using Agent.Core.Tests.Agent;
 using Agent.Core.Tests.Wallet;
 using Agent.Core.Text;
+using Agent.Core.Trace;
 using Agent.Core.Wallet;
 using Microsoft.Extensions.DependencyInjection;
 using AgentConversation = Agent.Core.Conversation.Conversation;
@@ -235,6 +236,46 @@ public sealed class ConversationAliasTests(AgentHost host)
         Assert.Equal("error", unavailable.Reason);
         Assert.Contains(trace.Entries, e => e.Step == "error" && e.Detail == nameof(InvalidOperationException));
         Assert.False(conversation.Busy);
+    }
+
+    [Fact]
+    public async Task CancelOnTheOfferClosesItSavesNothingAndTheNextRequestAsksAgain()
+    {
+        await using var harness = await StartAsync();
+        var conversation = harness.Conversation;
+        var before = await ContactsAsync();
+        await PayS08Async(conversation, Say(Amb19, 0));
+        Assert.NotNull(conversation.AliasOffer);
+        var walletVersion = conversation.WalletVersion;
+        var auditRows = (await harness.AuditRowsAsync()).Count;
+
+        Assert.True(await conversation.DeclineAliasOfferAsync());
+
+        Assert.Null(conversation.AliasOffer);
+        Assert.Null(conversation.AliasOfferMessageIndex);
+        var last = conversation.Messages[^1];
+        Assert.Equal(ConversationRole.Agent, last.Role);
+        Assert.Equal(ConversationKind.Refusal, last.Kind);
+        Assert.Equal(ReasonCodes.QuestionCancelled, last.Code);
+        Assert.Equal(walletVersion, conversation.WalletVersion);
+        Assert.Equal(before.Aliases, (await ContactsAsync()).Aliases);
+        Assert.Equal(auditRows, (await harness.AuditRowsAsync()).Count);
+        Assert.Single(harness.Trace.Entries, e => e.Step == TraceSteps.DeclineAliasTapped && e.Zone == TraceZone.User && e.Detail is null);
+
+        // A second tap has no offer to close: nothing is added.
+        var messages = conversation.Messages.Count;
+        Assert.False(await conversation.DeclineAliasOfferAsync());
+        Assert.Equal(messages, conversation.Messages.Count);
+
+        // Save after the Cancel has no offer to save.
+        Assert.Null(await conversation.SaveAliasAsync());
+        Assert.Equal(messages, conversation.Messages.Count);
+        Assert.Equal(before.Aliases, (await ContactsAsync()).Aliases);
+
+        // Close only: the same recipient again asks again.
+        await conversation.SendAsync(Say(Amb19, 1));
+        var question = Assert.IsType<AgentReply.Question>(conversation.Question);
+        Assert.Equal(QuestionKinds.WhichContact, question.Kind);
     }
 
     private static string Say(string id, int step) => DevSetText.Say(id, step);

@@ -1167,6 +1167,45 @@ public sealed class Conversation : IDisposable
         }
     }
 
+    /// <summary>
+    /// The Cancel button of the open alias offer (Khalil, 22 Oct 2026, "close only"): the offer closes, nothing is saved
+    /// and the agent adds the <c>question_cancelled</c> reply. With no open offer it does nothing and returns false
+    /// (traced <c>option_rejected</c>), as a late Save. No wallet call, no audit row, <see cref="WalletVersion"/>
+    /// unchanged; the next transfer that needs a question offers its name again, as before.
+    /// </summary>
+    public async Task<bool> DeclineAliasOfferAsync()
+    {
+        if (!await EnterAsync())
+            return false;
+        try
+        {
+            SetBusy(true);
+            if (AliasOffer is null)
+            {
+                trace.Record(TraceZone.Code, "option_rejected", null);
+                return false;
+            }
+
+            trace.Record(TraceZone.User, TraceSteps.DeclineAliasTapped, null);
+            ClearAliasOffer();
+            AddRefusal(ReasonCodes.QuestionCancelled);
+            return true;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            Failed(ex);
+            return false;
+        }
+        catch (OperationCanceledException) when (stopping.IsCancellationRequested)
+        {
+            return false;
+        }
+        finally
+        {
+            Release();
+        }
+    }
+
     /// <summary>The directory (milestone 9a): the user's contacts and aliases, under the conversation's turn.</summary>
     public async Task<WalletResult<WalletContacts>> ListAliasesAsync()
     {
