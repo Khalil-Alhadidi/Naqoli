@@ -218,7 +218,7 @@ public sealed class CaseLoaderTests : IDisposable
     {
         var cases = CaseLoader.Load(Path.Combine(SeedHashTests.RepositoryRoot(), "data", "requests.dev.jsonl"));
 
-        Assert.Equal(96, cases.Count);
+        Assert.Equal(97, cases.Count);
         Assert.All(cases, c => Assert.Equal("dev", c.Set));
         Assert.All(cases, c => Assert.NotNull(c.Expect.Final));
 

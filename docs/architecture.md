@@ -214,7 +214,7 @@ zaincash-agent/
     Agent.Web.Journeys/ Playwright screen journeys on the scripted parser (76 tests on 22 Oct 2026: 74 journeys, the host test and the screenshot helper)
   data/
     seed/               synthetic users, contacts, billers, history
-    requests.dev.jsonl        96 requests (Khalil's 72, ADD-01 to ADD-24)
+    requests.dev.jsonl        97 requests (Khalil's 72, ADD-01 to ADD-25)
     requests.heldout.jsonl    62 requests, committed before tuning
   docs/
     architecture.md     this file
