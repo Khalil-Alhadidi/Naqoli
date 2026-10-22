@@ -26,7 +26,7 @@ if (string.IsNullOrWhiteSpace(connectionString))
 
 // Add services to the container.
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
-builder.Services.AddOpenApi();
+builder.Services.AddOpenApi(o => o.AddWalletSecurity());
 builder.Services.AddProblemDetails();
 builder.Services.AddDbContext<WalletDbContext>(o => o.UseSqlServer(connectionString));
 builder.Services.AddSingleton(TimeProvider.System);
