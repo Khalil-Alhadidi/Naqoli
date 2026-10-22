@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Agent.Core.Masking;
 using Agent.Core.Parsing;
+using Agent.Core.Pipeline;
 using Agent.Core.Requests;
 using Agent.Eval.Cases;
 using Agent.Eval.Running;
@@ -91,30 +92,34 @@ public class LiveModelTests(ITestOutputHelper output)
         }
     }
 
-    public static TheoryData<string, string, int, decimal, AmountUnit> QuarterCases => new()
+    /// <summary>The pending note <c>Conversation.PendingNote</c> sends while the which_amount question is open.</summary>
+    private const string WhichAmountNote = "open_question " + QuestionKinds.WhichAmount;
+
+    public static TheoryData<string, string, int, string?, decimal, AmountUnit> QuarterCases => new()
     {
-        // The message of each quarter case (dev set, Khalil-approved wording of 22 Oct 2026) and the parse its sidecar expects.
-        { "haiku", "ADD-26", 0, 2.25m, AmountUnit.None },
-        { "haiku", "ADD-27", 0, 0.75m, AmountUnit.Million },
-        { "haiku", "ADD-28", 0, 0.25m, AmountUnit.Million },
-        { "haiku", "ADD-29", 0, 0.25m, AmountUnit.None },
-        { "haiku", "ADD-30", 1, 3.25m, AmountUnit.Thousand },
-        { "sonnet", "ADD-26", 0, 2.25m, AmountUnit.None },
-        { "sonnet", "ADD-27", 0, 0.75m, AmountUnit.Million },
-        { "sonnet", "ADD-28", 0, 0.25m, AmountUnit.Million },
-        { "sonnet", "ADD-29", 0, 0.25m, AmountUnit.None },
-        { "sonnet", "ADD-30", 1, 3.25m, AmountUnit.Thousand },
+        // The message of each quarter case (dev set, Khalil-approved wording of 22 Oct 2026), the pending note the conversation
+        // sends with it (ADD-30 step 1 answers the which_amount question) and the parse its sidecar expects.
+        { "haiku", "ADD-26", 0, null, 2.25m, AmountUnit.None },
+        { "haiku", "ADD-27", 0, null, 0.75m, AmountUnit.Million },
+        { "haiku", "ADD-28", 0, null, 0.25m, AmountUnit.Million },
+        { "haiku", "ADD-29", 0, null, 0.25m, AmountUnit.None },
+        { "haiku", "ADD-30", 1, WhichAmountNote, 3.25m, AmountUnit.Thousand },
+        { "sonnet", "ADD-26", 0, null, 2.25m, AmountUnit.None },
+        { "sonnet", "ADD-27", 0, null, 0.75m, AmountUnit.Million },
+        { "sonnet", "ADD-28", 0, null, 0.25m, AmountUnit.Million },
+        { "sonnet", "ADD-29", 0, null, 0.25m, AmountUnit.None },
+        { "sonnet", "ADD-30", 1, WhichAmountNote, 3.25m, AmountUnit.Thousand },
     };
 
     [Theory]
     [MemberData(nameof(QuarterCases))]
-    public async Task AQuarterIsReadAsAFractionOfTheNumber(string candidate, string id, int step, decimal value, AmountUnit unit)
+    public async Task AQuarterIsReadAsAFractionOfTheNumber(string candidate, string id, int step, string? note, decimal value, AmountUnit unit)
     {
         var parser = Parser(candidate);
         var @case = CaseLoader.Load(Path.Combine(EvalPaths.RepositoryRoot(), "data", "requests.dev.jsonl")).Single(c => c.Id == id);
         var masked = Masker.Mask(@case.Steps[step].Say!);
 
-        var parsed = (await parser.ParseAsync(masked.Text, new ParseContext(null, masked.Map), Token)).First;
+        var parsed = (await parser.ParseAsync(masked.Text, new ParseContext(note, masked.Map), Token)).First;
 
         Print(candidate, parser);
         Assert.Equal(RequestIntent.Transfer, parsed.Intent);
