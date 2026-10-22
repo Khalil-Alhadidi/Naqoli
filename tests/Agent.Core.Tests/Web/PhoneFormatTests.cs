@@ -9,6 +9,17 @@ namespace Agent.Core.Tests.Web;
 public class PhoneFormatTests
 {
     [Fact]
+    public void ANumberHasArabicIndicDigitsAndACommaBetweenTheThousands()
+    {
+        // Khalil, 22 Oct 2026: the comma that hangs down (U+002C), not the raised ARABIC THOUSANDS SEPARATOR (U+066C).
+        var number = PhoneFormat.Number(1_250_000);
+
+        Assert.Equal(ArabicDigits.ToArabicIndic("1,250,000"), number);
+        Assert.DoesNotContain('٬', number);
+        Assert.Equal(',', PhoneFormat.ThousandsSeparator);
+    }
+
+    [Fact]
     public void ADateIsShownAsTheIraqDateInArabicIndicDigits()
     {
         // 23:30 UTC is 02:30 the next day in Iraq (UTC+3).

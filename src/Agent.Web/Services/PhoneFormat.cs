@@ -8,17 +8,18 @@ using Microsoft.Extensions.Localization;
 namespace Agent.Web.Services;
 
 /// <summary>
-/// Figures inside the phone frame (D20): Arabic-Indic digits, the Arabic thousands separator (U+066C), and the currency
+/// Figures inside the phone frame (D20): Arabic-Indic digits, a comma between the thousands (Khalil, 22 Oct 2026: the
+/// comma that hangs down, not the raised ARABIC THOUSANDS SEPARATOR U+066C the phone showed before), and the currency
 /// word from the resource file. The console outside the phone uses ASCII digits (<c>N0</c>, invariant).
 /// </summary>
 public static class PhoneFormat
 {
-    /// <summary>ARABIC THOUSANDS SEPARATOR.</summary>
-    public const char ThousandsSeparator = (char)0x066C;
+    /// <summary>The thousands separator inside the phone: the comma (U+002C), which hangs down.</summary>
+    public const char ThousandsSeparator = ',';
 
-    /// <summary>A whole number with Arabic-Indic digits and the Arabic thousands separator, no currency.</summary>
+    /// <summary>A whole number with Arabic-Indic digits and a comma between the thousands, no currency.</summary>
     public static string Number(long value)
-        => ArabicDigits.ToArabicIndic(value.ToString("N0", CultureInfo.InvariantCulture).Replace(',', ThousandsSeparator));
+        => ArabicDigits.ToArabicIndic(value.ToString("N0", CultureInfo.InvariantCulture));
 
     /// <summary>An amount in dinars: <see cref="Number"/> and the currency word (<c>Currency_iqd</c>).</summary>
     public static string Amount(long amountIqd, IStringLocalizer<PhoneStrings> text)

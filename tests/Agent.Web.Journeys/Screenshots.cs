@@ -52,6 +52,9 @@ public sealed class Screenshots(JourneyHost host) : IAsyncLifetime
         var page = await context!.NewPageAsync();
         await page.GotoAsync(host.WebAddress.ToString());
         await Expect(page.GetByTestId("phone-frame")).ToHaveAttributeAsync("data-interactive", "true");
+        // The wallet panel shows skeleton rows until its first load; the at-rest shot waits for the balance and a history row.
+        await Expect(page.GetByTestId("wallet-balance")).ToBeVisibleAsync();
+        await Expect(page.Locator("[data-testid=wallet-history-row]").First).ToBeVisibleAsync();
         await page.ScreenshotAsync(new PageScreenshotOptions { Path = At("console-at-rest.png"), FullPage = true });
 
         var input = page.GetByTestId("phone-input");

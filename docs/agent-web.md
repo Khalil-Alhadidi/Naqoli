@@ -141,7 +141,7 @@ No zone is purple; each is paired with a Material icon and its label, so the zon
 | Token | Value | Role |
 |---|---|---|
 | `--space-1` to `--space-8` | 4, 8, 12, 16, 20, 24, 32, 40 px | The only spacing values used in our CSS |
-| `--text-xs`, `--text-sm`, `--text-md`, `--text-lg`, `--text-xl`, `--text-2xl` | 12, 13, 14, 16, 20, 28 px | Trace and captions; table cells; body; phone body; panel titles; the card's amount |
+| `--text-xs`, `--text-sm`, `--text-md`, `--text-lg`, `--text-xl`, `--text-2xl` | 12, 13, 14, 16, 20, 24 px | Trace and captions; table cells; body; phone body; panel titles; the card's amount (24 px from 22 Oct 2026, Khalil: a little smaller than the 28 px of task 7) |
 | `--font-console` | `system-ui, "Segoe UI", Roboto, Helvetica, Arial, sans-serif` | Everything outside the phone (also MudBlazor's typography) |
 | `--font-phone` | `"Noto Naskh Arabic", "Segoe UI", Tahoma, sans-serif` | Inside the phone; the first font self-hosted (decision 5) |
 | `--font-mono` | `Consolas, "Cascadia Mono", monospace` | The trace |
@@ -413,7 +413,7 @@ The first-time note (`card-first-time`) and the repeat warning (`card-warning`) 
 
 `PhoneFormat` (`Services/PhoneFormat.cs`):
 
-- `Number(long)`: Arabic-Indic digits with U+066C (ARABIC THOUSANDS SEPARATOR).
+- `Number(long)`: Arabic-Indic digits with a comma (U+002C) between the thousands (Khalil, 22 Oct 2026: the comma that hangs down, in place of the raised ARABIC THOUSANDS SEPARATOR U+066C). `PhoneFormatTests.ANumberHasArabicIndicDigitsAndACommaBetweenTheThousands`.
 - `Amount(long, IStringLocalizer<PhoneStrings>)`: `Number` plus `Currency_iqd`.
 - `Digits(string)`: references, codes and phones with Arabic-Indic digits.
 - `Time(DateTimeOffset)`: the Iraq time, `HH:mm`, with Arabic-Indic digits (UI pass task 7, the status bar). 23:05 UTC is 02:05.

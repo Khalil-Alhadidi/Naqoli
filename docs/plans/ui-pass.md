@@ -20,7 +20,7 @@
 | 8 | The timer on Confirm | Saw the mock of three placements (<https://claude.ai/artifact/Juf6qEHp6LdoVXCbQdvGMA>) and chose option B, "timer in the action block" | Task 7: the countdown sentence and its bar move into the card's action block, directly above Confirm and Cancel, under a rule that closes the fields |
 | 9 | Light only | "Keep the light theme, no need for the dark theme yet" | Task 1 as written |
 
-**Parked by Khalil, 21 Oct 2026:** the amount's format on the card and the thousands separator (`PhoneFormat.Number`, the Arabic thousands separator U+066C) may be rethought later. This pass changes neither; the mock showed them as the code renders them today.
+**Parked by Khalil, 21 Oct 2026:** the amount's format on the card and the thousands separator (`PhoneFormat.Number`, the Arabic thousands separator U+066C) may be rethought later. This pass changes neither; the mock showed them as the code renders them today. **Decided at his review, 22 Oct 2026:** the separator becomes the comma that hangs down (U+002C) in place of the raised U+066C, and the card's amount drops from 28 px to 24 px (`--text-2xl`); the amount's format is otherwise unchanged.
 
 **Question 2, elaborated.** One number, `Console:GridPageSize`, says how many rows every console grid shows on one page: contacts, bills, history, log, aliases, and later the learning data. It lives in the console's own `Console` section of `appsettings.json` (next to `WalletAdminKey`), default 10, allowed 5 to 100. It is not an agent setting: nothing in `Agent.Core` reads it, so it never changes a check, a card or a reply. It appears in the settings component under a "Console" heading with its description, unit and range like the agent's limits (task 6), and can be changed there while the console runs (task 4c), the change applying at the next render and forgotten at restart, exactly as the agent's limits behave. Two existing settings stay separate and are described as such: `LogPageSize` (100) is how many of the newest audit rows the log loads from the database, and `HistoryPageSize` (200) is how many history rows the agent, and now the wallet panel, read from the wallet in one call; the grid page size splits whatever was loaded into pages. The default must stay 10 or more because three journeys count every row of U1's alias and order lists against the wallet; U1 has 4 aliases and at most 10 orders after a purchase, so a first page of 10 holds them all. Below 10 those journeys would need to page before counting.
 
@@ -133,7 +133,7 @@ No zone is purple; each is paired with a Material icon and its label, so the zon
 | Token | Value | Role |
 |---|---|---|
 | `--space-1` to `--space-8` | 4, 8, 12, 16, 20, 24, 32, 40 px | The only spacing values used in our CSS |
-| `--text-xs`, `--text-sm`, `--text-md`, `--text-lg`, `--text-xl`, `--text-2xl` | 12, 13, 14, 16, 20, 28 px | Trace and captions; table cells; body; phone body; panel titles; the card's amount |
+| `--text-xs`, `--text-sm`, `--text-md`, `--text-lg`, `--text-xl`, `--text-2xl` | 12, 13, 14, 16, 20, 28 px | Trace and captions; table cells; body; phone body; panel titles; the card's amount (28 px lowered to 24 px on 22 Oct 2026 at Khalil's review) |
 | `--font-console` | `system-ui, "Segoe UI", Roboto, Helvetica, Arial, sans-serif` | Everything outside the phone (also MudBlazor's typography) |
 | `--font-phone` | `"Noto Naskh Arabic", "Segoe UI", Tahoma, sans-serif` | Inside the phone; the first font self-hosted (decision 5) |
 | `--font-mono` | `Consolas, "Cascadia Mono", monospace` | The trace |
