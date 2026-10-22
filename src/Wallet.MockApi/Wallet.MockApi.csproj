@@ -11,6 +11,7 @@
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
     <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.13" />
+    <PackageReference Include="Scalar.AspNetCore" Version="2.18.2" />
     <!-- Lifts the 9.0.11 copy that Microsoft.Data.SqlClient brings in, which NuGet audit flags as vulnerable. -->
     <PackageReference Include="System.Security.Cryptography.Pkcs" Version="10.0.13" />
   </ItemGroup>

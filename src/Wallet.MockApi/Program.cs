@@ -1,6 +1,7 @@
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using Scalar.AspNetCore;
 using Wallet.MockApi;
 using Wallet.MockApi.Data;
 using Wallet.MockApi.Data.Seed;
@@ -91,6 +92,14 @@ app.UseStatusCodePages();
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
+
+    // The reference page over the document, at /scalar. Outside the client-key group, like the document. The two
+    // header fields are pre-filled with the README's Development placeholder; with a key configured, type the real one.
+    app.MapScalarApiReference(options => options
+        .WithTitle("ZainCash mock wallet")
+        .AddPreferredSecuritySchemes(OpenApiSecurity.ClientKeySchemeName, OpenApiSecurity.AdminKeySchemeName)
+        .AddApiKeyAuthentication(OpenApiSecurity.ClientKeySchemeName, key => key.Value = "dev")
+        .AddApiKeyAuthentication(OpenApiSecurity.AdminKeySchemeName, key => key.Value = "dev"));
 }
 
 // Only /health is open; every other route needs the client key (ClientKeyFilter), and /admin the admin key as well.

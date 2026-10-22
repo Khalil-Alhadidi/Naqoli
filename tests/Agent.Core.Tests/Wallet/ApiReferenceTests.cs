@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text.Json;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Wallet.MockApi;
 
@@ -38,6 +39,33 @@ public class ApiReferenceTests
         Assert.Equal(
             [OpenApiSecurity.ClientKeySchemeName, OpenApiSecurity.AdminKeySchemeName],
             SchemesOf(paths.GetProperty("/admin/reset").GetProperty("post")));
+    }
+
+    [Fact]
+    public async Task TheReferencePageIsServedInDevelopment()
+    {
+        await using var factory = new WebApplicationFactory<Program>();
+        using var client = factory.CreateClient();
+
+        var response = await client.GetAsync("/scalar", Token);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("text/html", response.Content.Headers.ContentType?.MediaType);
+    }
+
+    [Fact]
+    public async Task OutsideDevelopmentNeitherRouteExists()
+    {
+        await using var factory = new WebApplicationFactory<Program>().WithWebHostBuilder(host =>
+        {
+            host.UseEnvironment("Production");
+            // Never opened: no route in this test touches the database. The start only needs a non-empty value.
+            host.UseSetting("ConnectionStrings:Wallet", "Server=(none);Database=ZainCashWallet_Test");
+        });
+        using var client = factory.CreateClient();
+
+        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/scalar", Token)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/openapi/v1.json", Token)).StatusCode);
     }
 
     private static async Task<JsonDocument> ReadDocumentAsync(HttpClient client)
