@@ -58,3 +58,5 @@ Note (Claude, after Khalil's approval): ADD-27's 750,000 is below the PIN thresh
 If you want the rule to record it, add to the examples column of rule 9 in `docs/matching-rules.md`:
 '2 وربع' is 2,250; 'مليون الا ربع' is 750,000; 'ربع مليون' is 250,000. Claude then updates
 `docs/rules-coverage.md`.
+
+Built 22 Oct 2026: prompt version 6, ADD-26 to ADD-30, Haiku run 5/5.

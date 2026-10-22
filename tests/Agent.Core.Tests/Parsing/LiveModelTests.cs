@@ -90,4 +90,35 @@ public class LiveModelTests(ITestOutputHelper output)
             Assert.Equal(RequestIntent.Balance, parsed.Intent);
         }
     }
+
+    public static TheoryData<string, string, int, decimal, AmountUnit> QuarterCases => new()
+    {
+        // The message of each quarter case (dev set, Khalil-approved wording of 22 Oct 2026) and the parse its sidecar expects.
+        { "haiku", "ADD-26", 0, 2.25m, AmountUnit.None },
+        { "haiku", "ADD-27", 0, 0.75m, AmountUnit.Million },
+        { "haiku", "ADD-28", 0, 0.25m, AmountUnit.Million },
+        { "haiku", "ADD-29", 0, 0.25m, AmountUnit.None },
+        { "haiku", "ADD-30", 1, 3.25m, AmountUnit.Thousand },
+        { "sonnet", "ADD-26", 0, 2.25m, AmountUnit.None },
+        { "sonnet", "ADD-27", 0, 0.75m, AmountUnit.Million },
+        { "sonnet", "ADD-28", 0, 0.25m, AmountUnit.Million },
+        { "sonnet", "ADD-29", 0, 0.25m, AmountUnit.None },
+        { "sonnet", "ADD-30", 1, 3.25m, AmountUnit.Thousand },
+    };
+
+    [Theory]
+    [MemberData(nameof(QuarterCases))]
+    public async Task AQuarterIsReadAsAFractionOfTheNumber(string candidate, string id, int step, decimal value, AmountUnit unit)
+    {
+        var parser = Parser(candidate);
+        var @case = CaseLoader.Load(Path.Combine(EvalPaths.RepositoryRoot(), "data", "requests.dev.jsonl")).Single(c => c.Id == id);
+        var masked = Masker.Mask(@case.Steps[step].Say!);
+
+        var parsed = (await parser.ParseAsync(masked.Text, new ParseContext(null, masked.Map), Token)).First;
+
+        Print(candidate, parser);
+        Assert.Equal(RequestIntent.Transfer, parsed.Intent);
+        Assert.Equal(value, parsed.AmountValue);
+        Assert.Equal(unit, parsed.AmountUnit);
+    }
 }
