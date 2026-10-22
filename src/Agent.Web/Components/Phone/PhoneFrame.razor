@@ -28,7 +28,7 @@
                                OnClick="@(() => screen = PhoneScreen.Orders)">@Text["Orders_Open"]</MudButton>
                     @* The question mark sits alone at the far end of the header (the left in RTL). *@
                     <MudIconButton data-testid="phone-help" Class="phone-help-button" Icon="@Icons.Material.Outlined.HelpOutline"
-                                   Size="Size.Small" aria-label="@Text["Help_Open"]"
+                                   Size="Size.Small" aria-label="@Text["Help_Open"]" Title="@Text["Help_Open"].Value"
                                    OnClick="@(() => screen = PhoneScreen.Help)" />
                     break;
             }

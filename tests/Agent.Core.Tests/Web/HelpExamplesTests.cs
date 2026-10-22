@@ -1,6 +1,3 @@
-using System.Xml.Linq;
-using Agent.Eval.Running;
-
 namespace Agent.Core.Tests.Web;
 
 /// <summary>
@@ -32,12 +29,7 @@ public class HelpExamplesTests
         return data;
     }
 
-    private static Dictionary<string, string> Values()
-    {
-        var path = Path.Combine(EvalPaths.RepositoryRoot(), "src", "Agent.Web", "Resources", "PhoneStrings.resx");
-        return XDocument.Load(path).Root!.Elements("data")
-            .ToDictionary(d => (string)d.Attribute("name")!, d => d.Element("value")!.Value, StringComparer.Ordinal);
-    }
+    private static Dictionary<string, string> Values() => PhoneStringsFile.Values();
 
     [Theory]
     [MemberData(nameof(Examples))]

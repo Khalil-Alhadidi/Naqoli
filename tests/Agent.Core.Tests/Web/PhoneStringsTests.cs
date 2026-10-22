@@ -1,8 +1,6 @@
 extern alias AgentWeb;
 
 using System.Globalization;
-using System.Xml.Linq;
-using Agent.Eval.Running;
 using AgentWeb::Agent.Web.Services;
 
 namespace Agent.Core.Tests.Web;
@@ -12,12 +10,7 @@ public class PhoneStringsTests
 {
     private const string Placeholder = "TODO-AR";
 
-    private static Dictionary<string, string> Values()
-    {
-        var path = Path.Combine(EvalPaths.RepositoryRoot(), "src", "Agent.Web", "Resources", "PhoneStrings.resx");
-        return XDocument.Load(path).Root!.Elements("data")
-            .ToDictionary(d => (string)d.Attribute("name")!, d => d.Element("value")!.Value, StringComparer.Ordinal);
-    }
+    private static Dictionary<string, string> Values() => PhoneStringsFile.Values();
 
     /// <summary>
     /// Keys added after Khalil wrote the phone's wording and still English placeholders until he writes them (empty from
@@ -28,6 +21,16 @@ public class PhoneStringsTests
     /// </summary>
     private static readonly string[] AwaitingKhalil = [];
 
+    /// <summary>
+    /// Keys whose Arabic Claude drafted at Khalil's request and he has not yet reviewed (the Help screen, 22 Oct 2026:
+    /// "write the translation your self and I will modify it after"). They are real wording, not placeholders, so they
+    /// are not in <see cref="AwaitingKhalil"/>; this list is emptied when he has read them. In ordinal order.
+    /// </summary>
+    private static readonly string[] DraftedByClaudePendingReview =
+    [
+        "Help_Balance", "Help_Bill", "Help_Intro", "Help_NotDone", "Help_Open", "Help_Purchase", "Help_Title", "Help_Transfer",
+    ];
+
     [Fact]
     public void NoValueIsAPlaceholderExceptTheKeysAwaitingKhalil()
     {
@@ -37,6 +40,19 @@ public class PhoneStringsTests
             .Order(StringComparer.Ordinal)
             .ToArray();
         Assert.Equal(AwaitingKhalil, placeholders);
+    }
+
+    [Fact]
+    public void EveryKeyDraftedByClaudeExistsAndIsNoPlaceholder()
+    {
+        var values = Values();
+        Assert.Equal(DraftedByClaudePendingReview.Order(StringComparer.Ordinal), DraftedByClaudePendingReview);
+        Assert.Empty(DraftedByClaudePendingReview.Intersect(AwaitingKhalil, StringComparer.Ordinal));
+        foreach (var key in DraftedByClaudePendingReview)
+        {
+            Assert.True(values.ContainsKey(key), key + " is missing");
+            Assert.False(values[key].StartsWith(Placeholder, StringComparison.Ordinal), key + " is a placeholder");
+        }
     }
 
     [Fact]

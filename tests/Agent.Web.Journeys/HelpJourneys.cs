@@ -1,5 +1,6 @@
 extern alias AgentWeb;
 
+using System.Globalization;
 using AgentWeb::Agent.Web.Services;
 using Microsoft.Playwright;
 using static Microsoft.Playwright.Assertions;
@@ -38,7 +39,7 @@ public sealed class HelpJourneys(JourneyHost host) : JourneyBase(host)
         await Expect(transfer).ToHaveCountAsync(3);
         for (var i = 0; i < 3; i++)
         {
-            var line = PhoneFormat.Digits(Text["Help_Example_Transfer_" + (i + 1)].Value);
+            var line = PhoneFormat.Digits(Text["Help_Example_Transfer_" + (i + 1).ToString(CultureInfo.InvariantCulture)].Value);
             await Expect(transfer.Nth(i)).ToBeVisibleAsync();
             await Expect(transfer.Nth(i)).ToHaveTextAsync(line);
         }

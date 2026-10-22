@@ -620,7 +620,8 @@ a:focus-visible,
 }
 
 .phone-help-not-done::before {
-    content: "\2715";
+    /* The empty alternative text keeps the glyph off the accessibility tree (security review, 22 Oct 2026). */
+    content: "\2715" / "";
     color: var(--color-danger);
     font-size: var(--text-xs);
 }
