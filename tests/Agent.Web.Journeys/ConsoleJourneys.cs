@@ -83,6 +83,8 @@ public sealed class ConsoleJourneys(JourneyHost host) : JourneyBase(host)
 
         await page.GetByTestId("consent-button").ClickAsync();
 
+        // Agree is echoed in the user's bubble (Khalil, 22 Oct 2026), as No is.
+        await Expect(page.Locator("[data-testid=chat-message][data-role=user]").Last).ToHaveTextAsync(Text["Reply_consent_button"].Value);
         await Expect(page.GetByTestId("consent-button")).ToHaveCountAsync(0);
         Assert.True((await Host.UserAsync(U5)).ConsentGiven);
 
@@ -120,6 +122,7 @@ public sealed class ConsoleJourneys(JourneyHost host) : JourneyBase(host)
 
         await page.GetByTestId("consent-button").ClickAsync();
 
+        await Expect(page.Locator("[data-testid=chat-message][data-role=user]").Last).ToHaveTextAsync(Text["Reply_consent_button"].Value);
         await Expect(page.GetByTestId("consent-button")).ToHaveCountAsync(0);
         await Expect(page.GetByTestId("consent-decline")).ToHaveCountAsync(0);
         await Expect(page.GetByTestId("phone-input")).ToBeEnabledAsync();

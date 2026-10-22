@@ -67,6 +67,13 @@ public sealed record Option(
     /// <see cref="AgentReply.Question.Options"/>.
     /// </summary>
     public const string DeclineConsent = "decline_consent";
+
+    /// <summary>
+    /// The consent button (Agree), as the user's tap in the conversation
+    /// (<see cref="Conversation.Conversation.GiveConsentAsync"/>; echoed since 22 Oct 2026, as No is). Never in a
+    /// question's <see cref="AgentReply.Question.Options"/>.
+    /// </summary>
+    public const string GiveConsent = "give_consent";
 }
 
 /// <summary>

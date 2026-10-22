@@ -1035,10 +1035,11 @@ public sealed class ConversationTests(AgentHost host) : IAsyncDisposable
         Assert.Equal(1, await ConsentShownRowsAsync(session, NoConsentUserId));
         Assert.Equal(steps, session.Trace.Entries.Count);
 
-        // The tap with no pending request records consent and shows nothing more.
+        // The tap with no pending request records consent and echoes the tap (Khalil, 22 Oct 2026), nothing more.
         await conversation.GiveConsentAsync();
 
-        Assert.Single(conversation.Messages);
+        Assert.Equal(2, conversation.Messages.Count);
+        Assert.Equal(new ConversationMessage(ConversationRole.User, ConversationKind.Option, Option.GiveConsent), conversation.Messages[1]);
         Assert.Null(conversation.ActionMessageIndex);
         Assert.Contains(session.Trace.Entries, e => e.Step == "consent_given");
     }
@@ -1144,11 +1145,12 @@ public sealed class ConversationTests(AgentHost host) : IAsyncDisposable
         await conversation.OpenAsync();
         await conversation.DeclineConsentAsync();
 
-        // Agree with no pending request only records consent, as before.
+        // Agree with no pending request records consent and echoes the tap (Khalil, 22 Oct 2026), nothing more.
         var count = conversation.Messages.Count;
         await conversation.GiveConsentAsync();
 
-        Assert.Equal(count, conversation.Messages.Count);
+        Assert.Equal(count + 1, conversation.Messages.Count);
+        Assert.Equal(new ConversationMessage(ConversationRole.User, ConversationKind.Option, Option.GiveConsent), conversation.Messages[count]);
         Assert.Null(conversation.ActionMessageIndex);
         Assert.False(conversation.ConsentPending);
         Assert.True(await ConsentGivenAsync(session, NoConsentUserId));

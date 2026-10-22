@@ -334,6 +334,9 @@ public sealed class ChatSessionTests(AgentHost host) : IAsyncDisposable
 
         await session.GiveConsentAsync();
 
+        // Agree is echoed as No is (Khalil, 22 Oct 2026): the button's own text in the user's bubble.
+        Assert.Equal(4, session.Messages.Count);
+        Assert.Equal(new ChatMessage(4, ChatRole.User, circuit.Text["Reply_consent_button"].Value, ChatMessageKind.Text, null, ChatAction.None), session.Messages[3]);
         Assert.Null(session.ActionMessageId);
         Assert.False(session.ConsentPending);
     }

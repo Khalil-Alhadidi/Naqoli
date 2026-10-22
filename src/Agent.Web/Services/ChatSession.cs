@@ -615,6 +615,8 @@ public sealed class ChatSession : IDisposable
             return Text("Option_CancelQuestion");
         if (value == Option.DeclineConsent)
             return Text("Reply_consent_decline_button");
+        if (value == Option.GiveConsent)
+            return Text("Reply_consent_button");
         if (option is { ProductType: not null })
             return PhoneFormat.OptionLabel(option, text);
         if (option is not null && PhoneFormat.OptionName(option) is { } display)

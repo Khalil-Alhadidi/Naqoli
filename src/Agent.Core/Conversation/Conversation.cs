@@ -713,7 +713,8 @@ public sealed class Conversation : IDisposable
     }
 
     /// <summary>
-    /// The consent button: records consent in the wallet, then answers the pending request again, with what taps have
+    /// The consent button: echoes the tap (<see cref="Option.GiveConsent"/>; Khalil, 22 Oct 2026, so Agree shows in
+    /// the chat as No does), records consent in the wallet, then answers the pending request again, with what taps have
     /// answered for it. (The consent gate comes before any question, so a pending request normally has no answers here;
     /// they are passed all the same.)
     /// </summary>
@@ -725,6 +726,9 @@ public sealed class Conversation : IDisposable
         {
             SetBusy(true);
             var token = stopping;
+
+            // The tap in the user's bubble, before the wallet is asked: a refused consent then follows it as a refusal.
+            Add(new ConversationMessage(ConversationRole.User, ConversationKind.Option, Option.GiveConsent));
             WalletResult<bool> given;
             await using (var scope = scopes.CreateAsyncScope())
                 given = await scope.ServiceProvider.GetRequiredService<WalletClient>().GiveConsentAsync(userId, token);
