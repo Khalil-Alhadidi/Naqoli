@@ -51,6 +51,8 @@ Questions for Khalil:
 - ADD-27 uses U3 and the accountant so the PIN is required (amount over the PIN threshold).
   Fine, or prefer U1 and a smaller "less a quarter" amount?
 
+Note (Claude, after Khalil's approval): ADD-27's 750,000 is below the PIN threshold of 1,000,000 (`data/seed/settings.json`), so its key has `pin_required: false` and a plain Confirm.
+
 ## C. Matching rule 9 (Khalil's file)
 
 If you want the rule to record it, add to the examples column of rule 9 in `docs/matching-rules.md`:
