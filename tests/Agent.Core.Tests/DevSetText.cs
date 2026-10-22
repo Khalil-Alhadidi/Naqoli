@@ -12,6 +12,13 @@ internal static class DevSetText
 {
     private static string DataPath(string file) => Path.Combine(SeedHashTests.RepositoryRoot(), "data", file);
 
+    /// <summary>The <c>message</c> of case <paramref name="id"/>: the request as Khalil wrote it.</summary>
+    public static string Message(string id)
+    {
+        using var document = Line(ScriptedParser.DevSetFileName, root => root.GetProperty("id").GetString() == id);
+        return document.RootElement.GetProperty("message").GetString()!;
+    }
+
     /// <summary>The text of say step number <paramref name="step"/> (0 for the first say) of case <paramref name="id"/>.</summary>
     public static string Say(string id, int step = 0)
     {
