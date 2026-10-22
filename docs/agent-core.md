@@ -636,7 +636,7 @@ Every action opens its own DI scope (`CreateAsyncScope`) and resolves the agent'
 | `ReissueAsync()` | D19, the card's Try again or Send again: only with no question open, for a card shown as Expired, Cancelled or NotDone (`ReissueKind.TryAgain`) or Done (`ReissueKind.SendAgain`), and only when its stored record is not live, Executing or Checking (else traced `reissue_rejected`: `question_open`, or the card's or the record's state). Reads the record, then `Orchestrator.ReissueAsync`; the reply is shown as any reply (a new card, or a refusal that leaves the old card). Never the Confirm handler |
 | `RefreshAsync()` | Reads the record; marks the card expired when it is Pending past `ExpiresAt`, Expired, or gone |
 | `SaveAliasAsync()` | Milestone 9a, the Save tap of the open alias offer (rule 18): `AliasDirectory.SaveAsync` with the offer's text and account. With no open offer it returns null (traced `option_rejected`). `Saved` adds a `ConversationKind.AliasSaved` message and raises `WalletVersion`. `Refused` adds a refusal with its code. Both close the offer. `Unavailable` adds `not_done_nothing_taken` and keeps the offer open |
-| `DeclineAliasOfferAsync()` | 22 Oct 2026, the Cancel tap of the open alias offer ("close only"): traces `decline_alias_tapped` (User zone, no detail), closes the offer and adds the `question_cancelled` refusal message; returns true. With no open offer it returns false and adds nothing (traced `option_rejected`). No wallet call, no audit row, `WalletVersion` unchanged |
+| `DeclineAliasOfferAsync()` | 22 Oct 2026, the Cancel tap of the open alias offer ("close only"): traces `decline_alias_tapped` (User zone, no detail), closes the offer, writes the audit log's `question_cancelled` refusal row (the one a question's cancel writes; Khalil, 22 Oct 2026, so every tap that ends something leaves a row) and adds the `question_cancelled` refusal message; returns true. With no open offer it returns false and adds nothing (traced `option_rejected`). No wallet call, `WalletVersion` unchanged |
 | `ListAliasesAsync()`, `AddAliasAsync(text, accountId)`, `AddAliasForPhoneAsync(text, phone)`, `DeleteAliasAsync(aliasId)` | Milestone 9a, the alias directory under the conversation's turn, through `AliasDirectory`. `WalletVersion` goes up after a save or delete. They add no conversation message |
 
 When the Confirm handler throws, the conversation reads the record:
@@ -989,7 +989,7 @@ sequenceDiagram
     C->>C: AliasSaved message, WalletVersion up, offer closed
     Note over U,C: or the Cancel tap instead of Save
     U->>C: DeclineAliasOfferAsync, the Cancel tap
-    C->>C: decline_alias_tapped traced, offer closed, question_cancelled reply, no wallet call
+    C->>C: decline_alias_tapped traced, offer closed, audit refused question_cancelled, question_cancelled reply, no wallet call
 ```
 
 A saved alias never reaches the model: the parse call sees the user's masked words and the pending note, and the note carries no offer (`OutboundPayloadTests.ASavedAliasNeverReachesTheModel`, `ConversationAliasTests.ASavedAliasNeverReachesTheParser`). A biller alias (one word for one biller account) is a later item of the build plan and is not built; `AliasDirectory` takes an account only.

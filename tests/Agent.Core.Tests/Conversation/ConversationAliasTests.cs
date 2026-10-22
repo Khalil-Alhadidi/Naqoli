@@ -259,7 +259,12 @@ public sealed class ConversationAliasTests(AgentHost host)
         Assert.Equal(ReasonCodes.QuestionCancelled, last.Code);
         Assert.Equal(walletVersion, conversation.WalletVersion);
         Assert.Equal(before.Aliases, (await ContactsAsync()).Aliases);
-        Assert.Equal(auditRows, (await harness.AuditRowsAsync()).Count);
+        // The same refusal row as a question's cancel (Khalil, 22 Oct 2026): every tap that ends something leaves a row.
+        var rows = await harness.AuditRowsAsync();
+        Assert.Equal(auditRows + 1, rows.Count);
+        Assert.Equal(AuditEvents.Refused, rows[^1].Event);
+        Assert.Equal(ReasonCodes.QuestionCancelled, rows[^1].Reason);
+        Assert.Null(rows[^1].Detail);
         Assert.Single(harness.Trace.Entries, e => e.Step == TraceSteps.DeclineAliasTapped && e.Zone == TraceZone.User && e.Detail is null);
 
         // A second tap has no offer to close: nothing is added.

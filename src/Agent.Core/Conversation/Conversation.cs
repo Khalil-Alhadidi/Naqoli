@@ -1168,10 +1168,11 @@ public sealed class Conversation : IDisposable
     }
 
     /// <summary>
-    /// The Cancel button of the open alias offer (Khalil, 22 Oct 2026, "close only"): the offer closes, nothing is saved
-    /// and the agent adds the <c>question_cancelled</c> reply. With no open offer it does nothing and returns false
-    /// (traced <c>option_rejected</c>), as a late Save. No wallet call, no audit row, <see cref="WalletVersion"/>
-    /// unchanged; the next transfer that needs a question offers its name again, as before.
+    /// The Cancel button of the open alias offer (Khalil, 22 Oct 2026, "close only"): the offer closes, nothing is saved,
+    /// the audit log gets the same <c>question_cancelled</c> refusal row as a question's cancel (Khalil, the same day, so
+    /// every tap that ends something leaves a row) and the agent adds the <c>question_cancelled</c> reply. With no open
+    /// offer it does nothing and returns false (traced <c>option_rejected</c>), as a late Save. No wallet call,
+    /// <see cref="WalletVersion"/> unchanged; the next transfer that needs a question offers its name again, as before.
     /// </summary>
     public async Task<bool> DeclineAliasOfferAsync()
     {
@@ -1188,6 +1189,8 @@ public sealed class Conversation : IDisposable
 
             trace.Record(TraceZone.User, TraceSteps.DeclineAliasTapped, null);
             ClearAliasOffer();
+            await using (var scope = scopes.CreateAsyncScope())
+                await scope.ServiceProvider.GetRequiredService<AuditLog>().WriteRefusalAsync(userId, ReasonCodes.QuestionCancelled, null, stopping);
             AddRefusal(ReasonCodes.QuestionCancelled);
             return true;
         }
