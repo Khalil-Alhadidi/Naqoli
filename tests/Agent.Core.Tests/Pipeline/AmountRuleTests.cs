@@ -37,6 +37,46 @@ public class AmountRuleTests
     }
 
     [Fact]
+    public void BareTwoAndAQuarterIsTwoThousandTwoHundredFifty()
+        => Assert.Equal(new AmountResolution.Dinars(2_250), Resolve(2.25m, AmountUnit.None));
+
+    [Fact]
+    public void AQuarterAfterTheUnitIsAQuarterOfIt()
+    {
+        // Quarters (Khalil, 22 Oct 2026): twelve thousand and a quarter is 12.25 thousand, a million and a quarter
+        // is 1.25 million.
+        Assert.Equal(new AmountResolution.Dinars(12_250), Resolve(12.25m, AmountUnit.Thousand));
+        Assert.Equal(new AmountResolution.Dinars(1_250_000), Resolve(1.25m, AmountUnit.Million));
+    }
+
+    [Fact]
+    public void LessAQuarterOrAHalfTakesItAway()
+    {
+        // A million less a quarter is 0.75 million, two thousand less a quarter is 1.75 thousand, three less a
+        // quarter is 2.75 bare, a million less a half is 0.5 million.
+        Assert.Equal(new AmountResolution.Dinars(750_000), Resolve(0.75m, AmountUnit.Million));
+        Assert.Equal(new AmountResolution.Dinars(1_750), Resolve(1.75m, AmountUnit.Thousand));
+        Assert.Equal(new AmountResolution.Dinars(2_750), Resolve(2.75m, AmountUnit.None));
+        Assert.Equal(new AmountResolution.Dinars(500_000), Resolve(0.5m, AmountUnit.Million));
+    }
+
+    [Fact]
+    public void AQuarterOfAMillionIsTwoHundredFiftyThousand()
+        => Assert.Equal(new AmountResolution.Dinars(250_000), Resolve(0.25m, AmountUnit.Million));
+
+    [Fact]
+    public void ABareQuarterIsLeftToTheChecks()
+    {
+        // A quarter alone is 0.25 bare, read in thousands: 250, below the minimum. The checks refuse it
+        // amount_below_minimum.
+        Assert.Equal(new AmountResolution.Dinars(250), Resolve(0.25m, AmountUnit.None));
+    }
+
+    [Fact]
+    public void AQuarterOfADinarIsNotUnderstood()
+        => Assert.Equal(new AmountResolution.Invalid(ReasonCodes.NotUnderstood), Resolve(0.25m, AmountUnit.Dinars));
+
+    [Fact]
     public void AReadingThatIsNotWholeDinarsIsNotUnderstood()
     {
         // 0.0005 thousand is half a dinar.

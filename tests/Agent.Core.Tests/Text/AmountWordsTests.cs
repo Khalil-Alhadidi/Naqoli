@@ -46,6 +46,11 @@ public class AmountWordsTests
     [InlineData(11_000_000, "eleven million")]
     [InlineData(99_999_999, "nine &ninety million &nine-hundred &nine &ninety thousand &nine-hundred &nine &ninety")]
     [InlineData(1_000_150, "million &hundred &fifty")]
+    [InlineData(2_250, "two-thousand &two-hundred &fifty")]
+    [InlineData(3_250, "three-c thousands &two-hundred &fifty")]
+    [InlineData(250_000, "two-hundred &fifty thousand")]
+    [InlineData(750_000, "seven-hundred &fifty thousand")]
+    [InlineData(1_250_000, "million &two-hundred &fifty thousand")]
     public void TheAmountIsComposedAsKhalilsRulesSay(long dinars, string expected)
     {
         Assert.Equal(expected, AmountWords.Compose(dinars, Parts));
