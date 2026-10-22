@@ -1,0 +1,44 @@
+@inject IStringLocalizer<PhoneStrings> Text
+
+@* The phone's Help screen (22 Oct 2026): informational only. It reads nothing and nothing on it can be tapped; every line
+   is a resource key (rule 4). The examples are development-set messages, kept equal to them by HelpExamplesTests; the
+   "does not do" lines are the agent's own Unsupported_ replies, reused as they are. *@
+<div class="phone-help" data-testid="phone-help-screen">
+    <div class="phone-directory-title" data-testid="help-title">@Text["Help_Title"]</div>
+    <div class="phone-help-intro">@Text["Help_Intro"]</div>
+
+    @foreach (var section in Sections)
+    {
+        <div class="phone-help-section" data-testid="help-section" data-section="@section.Name">
+            <div class="phone-help-heading">@Text[section.Heading]</div>
+            @foreach (var key in section.Lines)
+            {
+                if (section.Examples)
+                {
+                    <div class="phone-help-example" data-testid="help-example"><bdi>@PhoneFormat.Digits(Text[key])</bdi></div>
+                }
+                else
+                {
+                    <div class="phone-help-not-done" data-testid="help-not-done"><bdi>@Text[key]</bdi></div>
+                }
+            }
+        </div>
+    }
+</div>
+
+@code {
+    // A section: its data-section value, its heading key, its line keys, and whether the lines are examples.
+    private sealed record HelpSection(string Name, string Heading, string[] Lines, bool Examples = true);
+
+    private static readonly HelpSection[] Sections =
+    [
+        new("transfer", "Help_Transfer", ["Help_Example_Transfer_1", "Help_Example_Transfer_2", "Help_Example_Transfer_3"]),
+        new("bill", "Help_Bill", ["Help_Example_Bill_1", "Help_Example_Bill_2", "Help_Example_Bill_3"]),
+        new("purchase", "Help_Purchase", ["Help_Example_Purchase_1", "Help_Example_Purchase_2"]),
+        new("balance", "Help_Balance", ["Help_Example_Balance_1"]),
+        new("not_done", "Help_NotDone",
+            ["Unsupported_withdrawal", "Unsupported_other_currency", "Unsupported_other_balance",
+             "Unsupported_part_of_bill", "Unsupported_credit_to_own_number"],
+            Examples: false),
+    ];
+}

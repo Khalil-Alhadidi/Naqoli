@@ -4,8 +4,8 @@
 <MudRTLProvider RightToLeft="true">
     <div class="phone-frame" data-testid="phone-frame" dir="rtl" lang="ar" data-interactive="@(interactive ? "true" : "false")">
         <PhoneStatusBar />
-        @* The header's buttons open the alias directory (milestone 9a) or My orders (milestone 9b) in place of the chat;
-           Back returns to the chat. *@
+        @* The header's buttons open the alias directory (milestone 9a), My orders (milestone 9b) or Help (22 Oct 2026)
+           in place of the chat; Back returns to the chat. *@
         <div class="phone-header">
             @switch (screen)
             {
@@ -17,11 +17,19 @@
                     <MudButton data-testid="phone-orders-back" Variant="Variant.Text" Size="Size.Small"
                                OnClick="@(() => screen = PhoneScreen.Chat)">@Text["Directory_Back"]</MudButton>
                     break;
+                case PhoneScreen.Help:
+                    <MudButton data-testid="phone-help-back" Variant="Variant.Text" Size="Size.Small"
+                               OnClick="@(() => screen = PhoneScreen.Chat)">@Text["Directory_Back"]</MudButton>
+                    break;
                 default:
                     <MudButton data-testid="phone-directory" Variant="Variant.Text" Size="Size.Small"
                                OnClick="@(() => screen = PhoneScreen.Directory)">@Text["Directory_Open"]</MudButton>
                     <MudButton data-testid="phone-orders" Variant="Variant.Text" Size="Size.Small"
                                OnClick="@(() => screen = PhoneScreen.Orders)">@Text["Orders_Open"]</MudButton>
+                    @* The question mark sits alone at the far end of the header (the left in RTL). *@
+                    <MudIconButton data-testid="phone-help" Class="phone-help-button" Icon="@Icons.Material.Outlined.HelpOutline"
+                                   Size="Size.Small" aria-label="@Text["Help_Open"]"
+                                   OnClick="@(() => screen = PhoneScreen.Help)" />
                     break;
             }
         </div>
@@ -33,6 +41,9 @@
                     break;
                 case PhoneScreen.Orders:
                     <OrdersPanel />
+                    break;
+                case PhoneScreen.Help:
+                    <HelpPanel />
                     break;
                 default:
                     <ChatPanel />
@@ -60,12 +71,13 @@
 @code {
     private string typed = string.Empty;
 
-    // What the phone shows: the chat, the alias directory (milestone 9a) or My orders (milestone 9b).
+    // What the phone shows: the chat, the alias directory (milestone 9a), My orders (milestone 9b) or Help (22 Oct 2026).
     private enum PhoneScreen
     {
         Chat,
         Directory,
         Orders,
+        Help,
     }
 
     private PhoneScreen screen = PhoneScreen.Chat;
