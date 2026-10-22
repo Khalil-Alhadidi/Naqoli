@@ -95,11 +95,16 @@ if (app.Environment.IsDevelopment())
 
     // The reference page over the document, at /scalar. Outside the client-key group, like the document. The two
     // header fields are pre-filled with the README's Development placeholder; with a key configured, type the real one.
+    // The default fonts, the AI agent and the hosted-client button are off: the page must load nothing from outside
+    // the machine (README Disclosure).
     app.MapScalarApiReference(options => options
         .WithTitle("ZainCash mock wallet")
+        .DisableDefaultFonts()
+        .DisableAgent()
+        .HideClientButton()
         .AddPreferredSecuritySchemes(OpenApiSecurity.ClientKeySchemeName, OpenApiSecurity.AdminKeySchemeName)
-        .AddApiKeyAuthentication(OpenApiSecurity.ClientKeySchemeName, key => key.Value = "dev")
-        .AddApiKeyAuthentication(OpenApiSecurity.AdminKeySchemeName, key => key.Value = "dev"));
+        .AddApiKeyAuthentication(OpenApiSecurity.ClientKeySchemeName, key => key.Value = OpenApiSecurity.DevelopmentPlaceholderKey)
+        .AddApiKeyAuthentication(OpenApiSecurity.AdminKeySchemeName, key => key.Value = OpenApiSecurity.DevelopmentPlaceholderKey));
 }
 
 // Only /health is open; every other route needs the client key (ClientKeyFilter), and /admin the admin key as well.

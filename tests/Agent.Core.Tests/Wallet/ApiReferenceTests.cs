@@ -47,10 +47,19 @@ public class ApiReferenceTests
         await using var factory = new WebApplicationFactory<Program>();
         using var client = factory.CreateClient();
 
-        var response = await client.GetAsync("/scalar", Token);
+        using var response = await client.GetAsync("/scalar", Token);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Equal("text/html", response.Content.Headers.ContentType?.MediaType);
+
+        var html = await response.Content.ReadAsStringAsync(Token);
+        Assert.Contains("ZainCash mock wallet", html);
+
+        // The page loads nothing from outside the machine (README Disclosure). Scalar writes these three settings into
+        // the configuration it embeds in the page: no fonts from Scalar's CDN, no AI agent, no link to the hosted client.
+        Assert.Contains("\"withDefaultFonts\":false", html);
+        Assert.Contains("\"agent\":{\"disabled\":true}", html);
+        Assert.Contains("\"hideClientButton\":true", html);
     }
 
     [Fact]
@@ -64,13 +73,15 @@ public class ApiReferenceTests
         });
         using var client = factory.CreateClient();
 
-        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/scalar", Token)).StatusCode);
-        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/openapi/v1.json", Token)).StatusCode);
+        using var page = await client.GetAsync("/scalar", Token);
+        Assert.Equal(HttpStatusCode.NotFound, page.StatusCode);
+        using var document = await client.GetAsync("/openapi/v1.json", Token);
+        Assert.Equal(HttpStatusCode.NotFound, document.StatusCode);
     }
 
     private static async Task<JsonDocument> ReadDocumentAsync(HttpClient client)
     {
-        var response = await client.GetAsync("/openapi/v1.json", Token);
+        using var response = await client.GetAsync("/openapi/v1.json", Token);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         return JsonDocument.Parse(await response.Content.ReadAsStringAsync(Token));
     }

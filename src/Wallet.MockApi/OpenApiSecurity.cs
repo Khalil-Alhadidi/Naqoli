@@ -12,6 +12,9 @@ public static class OpenApiSecurity
     public const string ClientKeySchemeName = "ClientKey";
     public const string AdminKeySchemeName = "AdminKey";
 
+    // The README's Development placeholder for both headers; with a key configured the person types the real one.
+    public const string DevelopmentPlaceholderKey = "dev";
+
     public static OpenApiOptions AddWalletSecurity(this OpenApiOptions options)
     {
         options.AddDocumentTransformer((document, _, _) =>
