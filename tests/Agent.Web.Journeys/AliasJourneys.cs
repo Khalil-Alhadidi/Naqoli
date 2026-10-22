@@ -1,4 +1,5 @@
 using Agent.Core.Audit;
+using Agent.Core.Pipeline;
 using Agent.Core.Wallet;
 using Microsoft.Playwright;
 using static Microsoft.Playwright.Assertions;
@@ -65,6 +66,28 @@ public sealed class AliasJourneys(JourneyHost host) : JourneyBase(host)
         await Expect(page.Locator("[data-testid=chat-message][data-kind=question]")).ToHaveCountAsync(questions);
         await Expect(page.GetByTestId("card-display")).ToHaveTextAsync(offered);
         await Expect(page.GetByTestId("card-registered")).ToHaveTextAsync(s08.RegisteredName!);
+    }
+
+    [Fact]
+    public async Task CancelOnTheOfferClosesItAndTheNextRequestAsksAgain()
+    {
+        var page = await OpenAsync(Host.WebAddress);
+        var aliasesBefore = (await Host.AliasesAsync(U1)).Count;
+        await PayS08Async(page);
+        await Expect(page.GetByTestId("save-alias")).ToBeVisibleAsync();
+        await Expect(page.GetByTestId("decline-alias")).ToBeVisibleAsync();
+
+        await page.GetByTestId("decline-alias").ClickAsync();
+
+        await Expect(page.GetByTestId("save-alias")).ToHaveCountAsync(0);
+        await Expect(page.GetByTestId("decline-alias")).ToHaveCountAsync(0);
+        await Expect(LastAgentMessage(page)).ToHaveTextAsync(Text["Refusal_" + ReasonCodes.QuestionCancelled].Value);
+        Assert.Equal(aliasesBefore, (await Host.AliasesAsync(U1)).Count);
+
+        // Step 3's sentence: close only, so the same recipient asks again and offers no Save yet.
+        await SayAsync(page, DevSet.Say(Amb19, 1));
+        await Expect(page.GetByTestId("question-option")).ToHaveCountAsync(2);
+        await Expect(page.GetByTestId("save-alias")).ToHaveCountAsync(0);
     }
 
     [Fact]

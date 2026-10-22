@@ -156,6 +156,7 @@
   <!-- Milestone 9a: the alias offer and the phone's directory. Khalil's wording, 18 Oct 2026. -->
   <data name="Offer_save_alias" xml:space="preserve"><value>تحب أحفظ "{0}" لـ {1} حتى المرة الجاية ما أسألك؟</value></data>
   <data name="Offer_save_alias_button" xml:space="preserve"><value>احفظ</value></data>
+  <data name="Offer_decline_alias_button" xml:space="preserve"><value>إلغاء</value></data>
   <data name="Reply_alias_saved" xml:space="preserve"><value>انحفظ "{0}". المرة الجاية اكتبه وبس</value></data>
   <data name="Reply_alias_deleted" xml:space="preserve"><value>انحذف الاسم</value></data>
   <data name="Refusal_alias_exists" xml:space="preserve"><value>هذا الاسم موجود عندك من قبل</value></data>

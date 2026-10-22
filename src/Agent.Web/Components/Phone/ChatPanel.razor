@@ -27,10 +27,13 @@
             }
             @if (message.Action == ChatAction.SaveAlias && message.Id == Session.AliasOfferMessageId && Session.AliasOffer is not null)
             {
-                @* Rule 18: the alias is saved only on this tap, never by words. *@
-                <div class="phone-message-action">
+                @* Rule 18: the alias is saved only on this tap, never by words. Cancel closes the offer and saves nothing
+                   (22 Oct 2026); after Save in markup, so the RTL row reads Save then Cancel, as the card's buttons do. *@
+                <div class="phone-message-action phone-message-action-pair">
                     <MudButton data-testid="save-alias" Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small"
                                Disabled="@Session.Busy" OnClick="Session.SaveAliasAsync">@Text["Offer_save_alias_button"]</MudButton>
+                    <MudButton data-testid="decline-alias" Variant="Variant.Outlined" Color="Color.Default" Size="Size.Small"
+                               Disabled="@Session.Busy" OnClick="Session.DeclineAliasOfferAsync">@Text["Offer_decline_alias_button"]</MudButton>
                 </div>
             }
             @if (message.Action == ChatAction.CopyCode && message.CopyText is { } copyText)

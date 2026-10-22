@@ -169,6 +169,16 @@ public sealed class ChatSession : IDisposable
         return await conversation.SaveAliasAsync();
     }
 
+    /// <summary>
+    /// The Cancel button of the alias offer (see <see cref="Conversation.DeclineAliasOfferAsync"/>): closes the offer and
+    /// saves nothing; never reaches the Confirm handler.
+    /// </summary>
+    public async Task<bool> DeclineAliasOfferAsync()
+    {
+        TraceLog.Current.Value = trace;
+        return await conversation.DeclineAliasOfferAsync();
+    }
+
     /// <summary>The alias directory: the user's contacts and aliases (see <see cref="Conversation.ListAliasesAsync"/>).</summary>
     public async Task<WalletResult<WalletContacts>> ListAliasesAsync()
     {

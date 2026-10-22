@@ -420,6 +420,28 @@ public sealed class ChatSessionTests(AgentHost host) : IAsyncDisposable
     }
 
     [Fact]
+    public async Task CancelOnTheOfferClosesItRaisesNoWalletChangeAndSavesNothing()
+    {
+        var circuit = await StartAsync(SeedFacts.DemoUserId, Amb19Sentence());
+        var session = circuit.Session;
+        await PayS08Async(session);
+        Assert.NotNull(session.AliasOffer);
+        var before = Assert.IsType<ContactsOk>(await session.ListAliasesAsync()).Value.Aliases.Count;
+        var version = session.WalletVersion;
+        var raised = Record(circuit);
+
+        Assert.True(await session.DeclineAliasOfferAsync());
+
+        Assert.Null(session.AliasOffer);
+        Assert.Null(session.AliasOfferMessageId);
+        Assert.Equal(circuit.Text["Refusal_" + ReasonCodes.QuestionCancelled].Value, LastAgentMessage(session).Text);
+        Assert.Equal(version, session.WalletVersion);
+        Assert.Empty(raised);
+        Assert.Equal(before, Assert.IsType<ContactsOk>(await session.ListAliasesAsync()).Value.Aliases.Count);
+        Assert.Empty(raised);
+    }
+
+    [Fact]
     public async Task RestartMakesTheWalletVersionLargerThanBefore()
     {
         var circuit = await StartAsync();
