@@ -196,14 +196,14 @@
   <data name="Help_Bill" xml:space="preserve"><value>دفع فاتورة</value></data>
   <data name="Help_Purchase" xml:space="preserve"><value>شراء كارت رصيد أو نت</value></data>
   <data name="Help_Balance" xml:space="preserve"><value>الاستفسار عن الرصيد</value></data>
-  <data name="Help_NotDone" xml:space="preserve"><value>شنو ما يسوي</value></data>
+  <data name="Help_NotDone" xml:space="preserve"><value>ملاحظات</value></data>
   <data name="Help_Example_Transfer_1" xml:space="preserve"><value>حول خمسين الف لاخوية حمودي</value></data>
   <data name="Help_Example_Transfer_2" xml:space="preserve"><value>دز ٧٥ الف لابو المولدة</value></data>
   <data name="Help_Example_Transfer_3" xml:space="preserve"><value>07805550190 حول عشرين الف لهذا الرقم</value></data>
   <data name="Help_Example_Bill_1" xml:space="preserve"><value>ادفع الكهرباء</value></data>
   <data name="Help_Example_Bill_2" xml:space="preserve"><value>سدد فاتورة الماي</value></data>
   <data name="Help_Example_Bill_3" xml:space="preserve"><value>ادفعلي اشتراك النت</value></data>
-  <data name="Help_Example_Purchase_1" xml:space="preserve"><value>اشتريلي كارت نت اسياسيل ابو ال 25</value></data>
-  <data name="Help_Example_Purchase_2" xml:space="preserve"><value>اريد كارت شحن زين ابو الخمسة</value></data>
+  <data name="Help_Example_Purchase_2" xml:space="preserve"><value>اشتريلي كارت نت اسياسيل ابو ال 25</value></data>
+  <data name="Help_Example_Purchase_1" xml:space="preserve"><value>اريد كارت شحن زين ابو الخمسة</value></data>
   <data name="Help_Example_Balance_1" xml:space="preserve"><value>شكد رصيدي</value></data>
 </root>

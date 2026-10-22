@@ -16,8 +16,8 @@ public class HelpExamplesTests
         ("Help_Example_Bill_1", "ADD-05"),
         ("Help_Example_Bill_2", "CLN-23"),
         ("Help_Example_Bill_3", "CLN-25"),
-        ("Help_Example_Purchase_1", "CLN-29"),
-        ("Help_Example_Purchase_2", "CLN-27"),
+        ("Help_Example_Purchase_1", "CLN-27"),
+        ("Help_Example_Purchase_2", "CLN-29"),
         ("Help_Example_Balance_1", "CLN-31"),
     ];
 

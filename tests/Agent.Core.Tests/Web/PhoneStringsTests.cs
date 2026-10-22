@@ -24,11 +24,12 @@ public class PhoneStringsTests
     /// <summary>
     /// Keys whose Arabic Claude drafted at Khalil's request and he has not yet reviewed (the Help screen, 22 Oct 2026:
     /// "write the translation your self and I will modify it after"). They are real wording, not placeholders, so they
-    /// are not in <see cref="AwaitingKhalil"/>; this list is emptied when he has read them. In ordinal order.
+    /// are not in <see cref="AwaitingKhalil"/>; a key leaves this list when he has reviewed it (<c>Help_NotDone</c> on
+    /// 22 Oct 2026). In ordinal order.
     /// </summary>
     private static readonly string[] DraftedByClaudePendingReview =
     [
-        "Help_Balance", "Help_Bill", "Help_Intro", "Help_NotDone", "Help_Open", "Help_Purchase", "Help_Title", "Help_Transfer",
+        "Help_Balance", "Help_Bill", "Help_Intro", "Help_Open", "Help_Purchase", "Help_Title", "Help_Transfer",
     ];
 
     [Fact]
