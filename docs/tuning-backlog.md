@@ -21,6 +21,7 @@ Prompt changes made outside the milestone 10 tuning pass, each for a defect foun
 | Date | Version | What changed | Why |
 |---|---|---|---|
 | 16 Oct 2026 | 4 (schema version 3) | One unsupported reason, `receive_from`, and one paragraph: a message that asks to receive, collect or pull money from someone else (من فلان لي / إلي / الية, or خلي فلان يحولي) is not a transfer; the structure is `unsupported` with `receive_from`, the other person in `recipient_text` and the amount if said. No example changed. | Khalil's manual testing, 16 Oct 2026: "حول من ابو المولدة الية فد 100 الف" asks to receive money from a contact; the model returned a transfer to him and a card was built in the wrong direction. Code now answers `Unsupported_receive_from`, no card, learning row `receive_from` (seed-v4). Dev cases ADD-08 and ADD-09 (red team) hold it. |
+| 22 Oct 2026 | 6 | Four sentences on the amount line: a fraction word after a number is added (وربع), after الا taken away, before a unit a fraction of it, alone 0.25 none; Khalil's forms. No example changed. | Khalil's manual testing, 22 Oct 2026: نص reached the card but ربع had no rule. Dev cases ADD-26 to ADD-30 hold it. |
 
 ## Not on this list
 
