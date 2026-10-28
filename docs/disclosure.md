@@ -34,6 +34,8 @@ Every model, tool, library, data source and AI coding assistant used in this ent
 - dotnet-ef 10.0.13 (EF Core command-line tool, pinned in .config/dotnet-tools.json).
 - Anthropic 12.56.0 (the official Anthropic C# SDK; its `AsIChatClient` adapter is the agent's model client in Agent.Core).
 - Microsoft.Extensions.AI 10.11.0 (the `IChatClient` abstraction the Claude parser calls, so a candidate model is a configuration change; brings Microsoft.Extensions.AI.Abstractions 10.11.0).
+- OpenAI 2.14.0 (the official OpenAI .NET SDK, used only as the client for a `compatible` candidate: an OpenAI-compatible vendor endpoint such as Gemini through Google AI Studio or OpenRouter, at the candidate's `BaseUrl`, with no retries; no OpenAI model is configured).
+- Microsoft.Extensions.AI.OpenAI 10.11.0 (its `AsIChatClient` adapter turns that client into the `IChatClient` the parser calls, so a `compatible` candidate is a configuration change too).
 
 ## Models
 

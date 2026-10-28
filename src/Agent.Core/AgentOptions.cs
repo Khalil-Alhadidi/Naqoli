@@ -188,10 +188,10 @@ public sealed class AgentOptions
     public string[] FillerWords { get; set; } = [];
 
     /// <summary>
-    /// The parse call: <c>scripted</c> (the default; no model) or <c>claude</c> (the <c>Model</c> section's candidate,
-    /// with a key in user secrets). Read by <see cref="Parsing.ParserFactory.AddAgentParser"/>.
+    /// The parse call: <c>scripted</c> (the default; no model) or <c>model</c> (the <c>Model</c> section's candidate,
+    /// with its key in user secrets; <c>claude</c> is a synonym). Read by <see cref="Parsing.ParserFactory.AddAgentParser"/>.
     /// </summary>
-    [RegularExpression("^(scripted|claude)$")]
+    [RegularExpression("^(scripted|claude|model)$")]
     public string Parser { get; set; } = Parsing.ParserFactory.Scripted;
 
     /// <summary>The default of <see cref="DevSetPath"/>.</summary>

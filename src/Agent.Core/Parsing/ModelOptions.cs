@@ -5,8 +5,10 @@ namespace Agent.Core.Parsing;
 
 /// <summary>
 /// The model candidates and the one in use, bound from the <c>Model</c> section. A candidate is a configuration change
-/// (CLAUDE.md, Stack). Validated at start only when <c>Agent:Parser</c> is <c>claude</c> (<see cref="ParserFactory"/>).
-/// The key is not here: it is read from <c>Anthropic:ApiKey</c> or <c>ANTHROPIC_API_KEY</c> and never shown.
+/// (CLAUDE.md, Stack). Validated at start only when <c>Agent:Parser</c> is <c>model</c> (or its synonym <c>claude</c>;
+/// <see cref="ParserFactory"/>). The key is not here and is never shown: an <c>anthropic</c> candidate's is read from
+/// <c>Anthropic:ApiKey</c> or <c>ANTHROPIC_API_KEY</c>, a <c>compatible</c> candidate's from the setting its
+/// <see cref="ModelCandidate.ApiKeySetting"/> names.
 /// </summary>
 public sealed partial class ModelOptions
 {

@@ -93,7 +93,7 @@ public sealed partial class ClaudeParser : IParser, IParserUsage
         var model = options.Value;
         candidate = model.Selected
             ?? throw new InvalidOperationException("Model:Candidate must name one of Model:Candidates.");
-        Name = "claude:" + model.Candidate;
+        Name = candidate.Label + ":" + model.Candidate;
         this.client = client;
         this.clock = clock;
         this.trace = trace;
