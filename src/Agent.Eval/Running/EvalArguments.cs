@@ -5,15 +5,18 @@ namespace Agent.Eval.Running;
 
 /// <summary>
 /// The runner's command line: <c>dev</c> or <c>heldout --milestone-11-run</c>, then <c>--only id,id</c>,
-/// <c>--wallet url</c>, <c>--out dir</c>, <c>--parser scripted|claude:&lt;candidate&gt;</c>, <c>--label text</c> and
-/// <c>--repeat N</c> in any order.
+/// <c>--wallet url</c>, <c>--out dir</c>, <c>--parser scripted|claude:&lt;candidate&gt;|compatible:&lt;candidate&gt;</c>,
+/// <c>--label text</c> and <c>--repeat N</c> in any order.
 /// </summary>
 /// <param name="Set"><see cref="HeldOutGuard.DevSet"/> or <see cref="HeldOutGuard.HeldOutSet"/>.</param>
 /// <param name="Milestone11Run">The held-out flag was given.</param>
 /// <param name="Only">The case ids to run, or null for all.</param>
 /// <param name="Wallet">The wallet's address, overriding <c>Agent:WalletBaseUrl</c>.</param>
 /// <param name="Out">The report directory, overriding <c>Eval:ReportDirectory</c>.</param>
-/// <param name="Parser">The parser measured: <c>scripted</c> (the default) or <c>claude:&lt;candidate&gt;</c>.</param>
+/// <param name="Parser">
+/// The parser measured: <c>scripted</c> (the default), <c>claude:&lt;candidate&gt;</c> for an <c>anthropic</c> candidate or
+/// <c>compatible:&lt;candidate&gt;</c> for a <c>compatible</c> one.
+/// </param>
 /// <param name="Label">A tag for the report name (lower-case letters, digits, <c>_</c> and <c>-</c>), or null.</param>
 /// <param name="Repeat">How many times the set is played, <see cref="MinRepeat"/> to <see cref="MaxRepeat"/>; 1 by default.</param>
 public sealed partial record EvalArguments(
@@ -28,7 +31,7 @@ public sealed partial record EvalArguments(
 {
     /// <summary>The usage line.</summary>
     public const string Usage =
-        "Usage: Agent.Eval dev | heldout --milestone-11-run  [--only <id,id,...>] [--wallet <url>] [--out <dir>] [--parser scripted|claude:<candidate>] [--label <a-z0-9_->] [--repeat <1-20>]";
+        "Usage: Agent.Eval dev | heldout --milestone-11-run  [--only <id,id,...>] [--wallet <url>] [--out <dir>] [--parser scripted|claude:<candidate>|compatible:<candidate>] [--label <a-z0-9_->] [--repeat <1-20>]";
 
     /// <summary>The fewest runs <c>--repeat</c> takes.</summary>
     public const int MinRepeat = 1;
@@ -39,11 +42,23 @@ public sealed partial record EvalArguments(
     /// <summary>The default parser.</summary>
     public const string ScriptedParser = "scripted";
 
-    /// <summary>The prefix of a model parser: <c>claude:</c> and a candidate name of the <c>Model</c> section.</summary>
+    /// <summary>The prefix of an <c>anthropic</c> model parser: <c>claude:</c> and a candidate name of the <c>Model</c> section.</summary>
     public const string ClaudePrefix = "claude:";
 
-    /// <summary>The candidate of a <c>claude:&lt;candidate&gt;</c> parser, or null for the scripted one.</summary>
-    public string? Candidate => Parser.StartsWith(ClaudePrefix, StringComparison.Ordinal) ? Parser[ClaudePrefix.Length..] : null;
+    /// <summary>The prefix of a <c>compatible</c> model parser: <c>compatible:</c> and a candidate name of the <c>Model</c> section.</summary>
+    public const string CompatiblePrefix = "compatible:";
+
+    /// <summary>The candidate of a <c>claude:</c> or <c>compatible:</c> parser, or null for the scripted one.</summary>
+    public string? Candidate => ProviderLabel is { } label ? Parser[(label.Length + 1)..] : null;
+
+    /// <summary>
+    /// The prefix's provider label, <c>claude</c> or <c>compatible</c> (<see cref="Agent.Core.Parsing.ModelOptions.LabelOf"/>),
+    /// or null for the scripted parser. Not the report tag, which is <see cref="Label"/>.
+    /// </summary>
+    public string? ProviderLabel
+        => Parser.StartsWith(ClaudePrefix, StringComparison.Ordinal) ? ClaudePrefix[..^1]
+            : Parser.StartsWith(CompatiblePrefix, StringComparison.Ordinal) ? CompatiblePrefix[..^1]
+            : null;
 
     /// <summary>Parses <paramref name="args"/>; null with <paramref name="error"/> set when they do not fit <see cref="Usage"/>.</summary>
     public static EvalArguments? Parse(IReadOnlyList<string> args, out string? error)
@@ -101,7 +116,7 @@ public sealed partial record EvalArguments(
                 case "--parser":
                     if (!ParserPattern().IsMatch(value))
                     {
-                        error = "--parser needs 'scripted' or 'claude:<candidate>', a candidate of the Model section (haiku, sonnet, opus).";
+                        error = "--parser needs 'scripted', 'claude:<candidate>' or 'compatible:<candidate>', a candidate of the Model section.";
                         return null;
                     }
 
@@ -139,7 +154,7 @@ public sealed partial record EvalArguments(
         return new EvalArguments(args[0], flag, only, wallet, output, parser, label, repeat);
     }
 
-    [GeneratedRegex("^(scripted|claude:[a-z0-9_-]+)$", RegexOptions.CultureInvariant)]
+    [GeneratedRegex("^(scripted|claude:[a-z0-9_-]+|compatible:[a-z0-9_-]+)$", RegexOptions.CultureInvariant)]
     private static partial Regex ParserPattern();
 
     [GeneratedRegex("^[a-z0-9_-]+$", RegexOptions.CultureInvariant)]

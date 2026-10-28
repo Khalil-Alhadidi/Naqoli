@@ -1,6 +1,8 @@
 using System.Security.Cryptography;
 using System.Text;
+using Agent.Core.Parsing;
 using Agent.Eval.Running;
+using Microsoft.Extensions.Configuration;
 
 namespace Agent.Core.Tests.Eval;
 
@@ -161,6 +163,7 @@ public sealed class HeldOutGuardTests : IDisposable
     [InlineData(new[] { "dev", "--parser", "scripted" }, "scripted")]
     [InlineData(new[] { "dev", "--parser", "claude:haiku" }, "claude:haiku")]
     [InlineData(new[] { "dev", "--only", "A-01", "--parser", "claude:opus" }, "claude:opus")]
+    [InlineData(new[] { "dev", "--parser", "compatible:gemini" }, "compatible:gemini")]
     public void TheParserIsReadFromTheCommandLine(string[] args, string expected)
     {
         var parsed = EvalArguments.Parse(args, out var error);
@@ -211,6 +214,105 @@ public sealed class HeldOutGuardTests : IDisposable
         Assert.Null(EvalArguments.Parse(["dev", "--parser", parser], out var error));
         Assert.NotNull(error);
     }
+
+    [Theory]
+    [InlineData("compatible:")]
+    [InlineData("gemini")]
+    [InlineData("model:gemini")]
+    public void AParserWithoutAKnownPrefixIsRefused(string parser)
+    {
+        Assert.Null(EvalArguments.Parse(["dev", "--parser", parser], out var error));
+        Assert.Equal("--parser needs 'scripted', 'claude:<candidate>' or 'compatible:<candidate>', a candidate of the Model section.", error);
+    }
+
+    [Fact]
+    public void TheCandidateAndLabelFollowThePrefix()
+    {
+        var compatible = EvalArguments.Parse(["dev", "--parser", "compatible:gemini"], out _);
+        var claude = EvalArguments.Parse(["dev", "--parser", "claude:haiku"], out _);
+        var scripted = EvalArguments.Parse(["dev"], out _);
+
+        Assert.Equal(("gemini", "compatible"), (compatible?.Candidate, compatible?.ProviderLabel));
+        Assert.Equal(("haiku", "claude"), (claude?.Candidate, claude?.ProviderLabel));
+        Assert.Equal(((string?)null, (string?)null), (scripted?.Candidate, scripted?.ProviderLabel));
+    }
+
+    [Fact]
+    public void TheHeaderOfACompatibleCandidateSaysProviderModeAndPacing()
+    {
+        var gemini = Gemini();
+
+        var header = EvalCommand.ModelSettings("gemini", gemini).ToDictionary();
+
+        Assert.Equal("compatible", header["Model:Provider"]);
+        Assert.Equal("json_schema", header["Model:OutputMode"]);
+        Assert.Equal("not sent", header["Model:Effort"]);
+        Assert.Equal("not sent", header["Model:PromptCacheTtl"]);
+        Assert.Equal("0", header["Model:MinMillisecondsBetweenCalls"]);
+        Assert.Equal("gemini-test", header["Model:ModelId"]);
+    }
+
+    [Fact]
+    public void TheHeaderOfAnAnthropicCandidateIsUnchangedPlusProviderAndTtl()
+    {
+        var haiku = new ModelCandidate { ModelId = "claude-haiku-5-5" };
+
+        var header = EvalCommand.ModelSettings("haiku", haiku).ToDictionary();
+
+        Assert.Equal(ClaudeParser.PromptVersion, header["Model:PromptVersion"]);
+        Assert.Equal("not sent", header["Model:Temperature"]);
+        Assert.Equal("low", header["Model:Effort"]);
+        Assert.Equal("anthropic", header["Model:Provider"]);
+        Assert.Equal("5m", header["Model:PromptCacheTtl"]);
+        Assert.Equal("not sent", header["Model:OutputMode"]);
+        Assert.Equal("0", header["Model:MinMillisecondsBetweenCalls"]);
+    }
+
+    [Fact]
+    public void TheRunnerCopiesOnlyAVendorKeyShapedSetting()
+    {
+        Assert.Equal("Gemini:ApiKey", EvalCommand.SecretToCopy(Runner(), "gemini"));
+        Assert.Null(EvalCommand.SecretToCopy(Runner(("Gemini:ApiKey", "runner-has-it")), "gemini"));
+        Assert.Null(EvalCommand.SecretToCopy(Runner(("Model:Candidates:gemini:ApiKeySetting", "ConnectionStrings:Agent")), "gemini"));
+        Assert.Equal(ParserFactory.ApiKeySetting, EvalCommand.SecretToCopy(Runner(), "haiku"));
+        Assert.Null(EvalCommand.SecretToCopy(Runner((ParserFactory.ApiKeySetting, "runner-has-it")), "haiku"));
+    }
+
+    [Fact]
+    public void APrefixThatDoesNotMatchTheProviderIsAUsageError()
+    {
+        var configuration = Runner();
+
+        Assert.Equal(
+            "--parser claude:gemini names 'gemini', whose provider is 'compatible'.",
+            EvalCommand.PrefixMismatch(configuration, EvalArguments.Parse(["dev", "--parser", "claude:gemini"], out _)!));
+        Assert.Equal(
+            "--parser compatible:haiku names 'haiku', whose provider is 'anthropic'.",
+            EvalCommand.PrefixMismatch(configuration, EvalArguments.Parse(["dev", "--parser", "compatible:haiku"], out _)!));
+        Assert.Null(EvalCommand.PrefixMismatch(configuration, EvalArguments.Parse(["dev", "--parser", "compatible:gemini"], out _)!));
+        Assert.Null(EvalCommand.PrefixMismatch(configuration, EvalArguments.Parse(["dev", "--parser", "claude:haiku"], out _)!));
+        Assert.Null(EvalCommand.PrefixMismatch(configuration, EvalArguments.Parse(["dev"], out _)!));
+    }
+
+    /// <summary>A runner configuration with the <c>haiku</c> and <c>gemini</c> candidates, plus <paramref name="extra"/>.</summary>
+    private static IConfiguration Runner(params (string Key, string Value)[] extra)
+    {
+        var settings = new Dictionary<string, string?>(StringComparer.Ordinal)
+        {
+            ["Model:Candidates:haiku:Provider"] = "anthropic",
+            ["Model:Candidates:haiku:ModelId"] = "claude-haiku-5-5",
+            ["Model:Candidates:gemini:Provider"] = "compatible",
+            ["Model:Candidates:gemini:BaseUrl"] = "https://generativelanguage.googleapis.com/v1beta/openai",
+            ["Model:Candidates:gemini:ApiKeySetting"] = "Gemini:ApiKey",
+            ["Model:Candidates:gemini:ModelId"] = "gemini-test",
+        };
+        foreach (var (key, value) in extra)
+            settings[key] = value;
+        return new ConfigurationBuilder().AddInMemoryCollection(settings).Build();
+    }
+
+    /// <summary>The valid <c>compatible</c> candidate <c>gemini</c> of <c>ModelOptionsTests</c>.</summary>
+    private static ModelCandidate Gemini() => Parsing.ModelOptionsTests.Compatible().Selected!;
 
     [Fact]
     public void TheReportNameAndTheEstimateFollowTheParser()

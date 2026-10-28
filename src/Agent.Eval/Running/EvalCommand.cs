@@ -50,19 +50,77 @@ public static class EvalCommand
     }
 
     /// <summary>
-    /// The report header's entries for the candidate measured: its name and model, the prompt version, and the sampling
-    /// settings the call sends with it (<c>Model:Temperature</c>, <c>not sent</c> when unset; <c>Model:Effort</c>).
+    /// The report header's entries for the candidate measured: its name, provider and model, the prompt version, and the
+    /// settings the call sends with it, <c>not sent</c> for one the provider's call leaves out: <c>Model:Temperature</c>
+    /// (unset), <c>Model:Effort</c> and <c>Model:PromptCacheTtl</c> (<c>anthropic</c> only), <c>Model:OutputMode</c>
+    /// (<c>compatible</c> only), and the pacing <c>Model:MinMillisecondsBetweenCalls</c>.
     /// </summary>
     public static IEnumerable<KeyValuePair<string, string>> ModelSettings(string candidateName, ModelCandidate candidate)
     {
+        const string NotSent = "not sent";
         ArgumentException.ThrowIfNullOrWhiteSpace(candidateName);
         ArgumentNullException.ThrowIfNull(candidate);
         yield return new("Model:Candidate", candidateName);
+        yield return new("Model:Provider", candidate.Provider);
         yield return new("Model:ModelId", candidate.ModelId);
         yield return new("Model:PromptVersion", ClaudeParser.PromptVersion);
-        yield return new("Model:Temperature", candidate.Temperature?.ToString(CultureInfo.InvariantCulture) ?? "not sent");
-        yield return new("Model:Effort", candidate.Effort);
+        yield return new("Model:Temperature", candidate.Temperature?.ToString(CultureInfo.InvariantCulture) ?? NotSent);
+        yield return new("Model:Effort", candidate.IsAnthropic ? candidate.Effort : NotSent);
+        yield return new("Model:PromptCacheTtl", candidate.IsAnthropic ? candidate.PromptCacheTtl : NotSent);
+        yield return new("Model:OutputMode", candidate.IsCompatible ? candidate.OutputMode : NotSent);
+        yield return new("Model:MinMillisecondsBetweenCalls", candidate.MinMillisecondsBetweenCalls.ToString(CultureInfo.InvariantCulture));
     }
+
+    /// <summary>
+    /// The one setting the runner copies from the web console's user secrets for <paramref name="candidateName"/>, or
+    /// null when it copies nothing: <c>Anthropic:ApiKey</c> for an <c>anthropic</c> candidate, the candidate's
+    /// <see cref="ModelCandidate.ApiKeySetting"/> for a <c>compatible</c> one, only when that has the shape
+    /// <c>&lt;Vendor&gt;:ApiKey</c>, and in both cases only when <paramref name="runnerConfiguration"/> has no value under
+    /// it. The console's other secrets (its own agent database) never reach the runner, which empties the tables of the
+    /// database it uses.
+    /// </summary>
+    public static string? SecretToCopy(IConfiguration runnerConfiguration, string candidateName)
+    {
+        ArgumentNullException.ThrowIfNull(runnerConfiguration);
+        ArgumentException.ThrowIfNullOrWhiteSpace(candidateName);
+        var setting = ProviderOf(runnerConfiguration, candidateName) switch
+        {
+            ModelOptions.AnthropicProvider => ParserFactory.ApiKeySetting,
+            ModelOptions.CompatibleProvider => runnerConfiguration[CandidateSetting(candidateName, nameof(ModelCandidate.ApiKeySetting))],
+            _ => null,
+        };
+        return setting is not null && ModelOptions.IsVendorKeySetting(setting) && runnerConfiguration[setting] is null ? setting : null;
+    }
+
+    /// <summary>
+    /// The usage error when the prefix of <c>--parser</c> is not the label of the named candidate's provider
+    /// (<c>claude:</c> for <c>anthropic</c>, <c>compatible:</c> for <c>compatible</c>), or null when it fits, when the
+    /// parser is the scripted one, or when the <c>Model</c> section has no such candidate (the start-up validation names
+    /// the candidates then).
+    /// </summary>
+    public static string? PrefixMismatch(IConfiguration configuration, EvalArguments parsed)
+    {
+        ArgumentNullException.ThrowIfNull(configuration);
+        ArgumentNullException.ThrowIfNull(parsed);
+        if (parsed.Candidate is not { } name
+            || !configuration.GetSection(ModelOptions.SectionName + ":" + nameof(ModelOptions.Candidates) + ":" + name).Exists())
+            return null;
+
+        var provider = ProviderOf(configuration, name);
+        var label = ModelOptions.Providers.Contains(provider, StringComparer.Ordinal) ? ModelOptions.LabelOf(provider) : null;
+        return label == parsed.ProviderLabel
+            ? null
+            : "--parser " + parsed.Parser + " names '" + name + "', whose provider is '" + provider + "'.";
+    }
+
+    /// <summary>The configured provider of a candidate; <c>anthropic</c> when unset, as <see cref="ModelCandidate.Provider"/> binds.</summary>
+    private static string ProviderOf(IConfiguration configuration, string candidateName)
+        => configuration[CandidateSetting(candidateName, nameof(ModelCandidate.Provider))] is { Length: > 0 } provider
+            ? provider
+            : ModelOptions.AnthropicProvider;
+
+    private static string CandidateSetting(string candidateName, string field)
+        => ModelOptions.SectionName + ":" + nameof(ModelOptions.Candidates) + ":" + candidateName + ":" + field;
 
     /// <summary>
     /// The prompt cache's hit rate over a run: the cache reads as a share of all input (uncached input, cache writes and
@@ -98,7 +156,14 @@ public static class EvalCommand
             return Refused;
         }
 
-        using var host = BuildHost(parsed);
+        using var host = BuildHost(parsed, out var mismatch);
+        if (host is null)
+        {
+            await errors.WriteLineAsync(mismatch);
+            await errors.WriteLineAsync(EvalArguments.Usage);
+            return Refused;
+        }
+
         EvalOptions options;
         try
         {
@@ -334,7 +399,11 @@ public static class EvalCommand
         }
     }
 
-    private static IHost BuildHost(EvalArguments parsed)
+    /// <summary>
+    /// The runner's host, or null with <paramref name="mismatch"/> set when <c>--parser</c>'s prefix does not fit the
+    /// candidate's provider (<see cref="PrefixMismatch"/>), checked on the runner's own configuration before anything is built.
+    /// </summary>
+    private static IHost? BuildHost(EvalArguments parsed, out string? mismatch)
     {
         // The parsed arguments are applied below; the raw ones are not handed to the configuration, so 'dev' or a flag
         // never becomes a setting. The runner works against the local mock wallet, so Development is the default
@@ -350,20 +419,24 @@ public static class EvalCommand
         if (parsed.Wallet is { } wallet)
             overrides[AgentOptions.SectionName + ":" + nameof(AgentOptions.WalletBaseUrl)] = wallet.ToString();
 
-        // --parser claude:<candidate> selects the Claude parser and the candidate; the key comes from the web console's
-        // user secrets (the same UserSecretsId) or ANTHROPIC_API_KEY, and is checked when the host starts.
-        overrides[ParserFactory.ParserSetting] = parsed.Candidate is null ? ParserFactory.Scripted : ParserFactory.Claude;
+        // --parser claude:<candidate> or compatible:<candidate> selects the model parser and the candidate, whose provider
+        // must be the prefix's; the key comes from the web console's user secrets (the same UserSecretsId) or, for
+        // anthropic, ANTHROPIC_API_KEY, and is checked when the host starts.
+        mismatch = PrefixMismatch(builder.Configuration, parsed);
+        if (mismatch is not null)
+            return null;
+
+        overrides[ParserFactory.ParserSetting] = parsed.Candidate is null ? ParserFactory.Scripted : ParserFactory.Model;
         if (parsed.Candidate is { } name)
         {
             overrides[ModelOptions.SectionName + ":" + nameof(ModelOptions.Candidate)] = name;
 
-            // Only the key is taken from the web console's user secrets: its other secrets (its own agent database)
-            // must never reach the runner, which empties the tables of the database it uses.
-            if (builder.Environment.IsDevelopment() && builder.Configuration[ParserFactory.ApiKeySetting] is null)
+            // Only the candidate's key is taken from the web console's user secrets (SecretToCopy).
+            if (builder.Environment.IsDevelopment() && SecretToCopy(builder.Configuration, name) is { } setting)
             {
-                var key = new ConfigurationBuilder().AddUserSecrets(WebUserSecretsId).Build()[ParserFactory.ApiKeySetting];
+                var key = new ConfigurationBuilder().AddUserSecrets(WebUserSecretsId).Build()[setting];
                 if (!string.IsNullOrWhiteSpace(key))
-                    overrides[ParserFactory.ApiKeySetting] = key;
+                    overrides[setting] = key;
             }
         }
         if (overrides.Count > 0)
