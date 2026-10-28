@@ -1,3 +1,4 @@
+using System.ClientModel;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Text.Json;
@@ -27,14 +28,19 @@ namespace Agent.Core.Parsing;
 /// <see cref="ParsedRequest.Problem"/>: the validator's field name, or one of the parser's own problems,
 /// <see cref="JsonProblem"/>, <see cref="TruncatedProblem"/> and <see cref="RefusalProblem"/>); a call that fails or outlasts the candidate's timeout throws
 /// <see cref="ParserUnavailableException"/>. Logs hold the model id, the time, the tokens (the cache writes and reads
-/// apart) and the cost, never the text. The frozen prompt is marked cacheable (<see cref="ModelCandidate.PromptCacheTtl"/>).
+/// apart) and the cost, never the text. For an <c>anthropic</c> candidate the frozen prompt is marked cacheable
+/// (<see cref="ModelCandidate.PromptCacheTtl"/>) and the effort is sent; a <c>compatible</c> candidate gets the plain
+/// prompt, no effort and no cache control, and its structure is asked for by <see cref="ModelCandidate.OutputMode"/>. Every
+/// call first waits on the shared <see cref="ParsePacer"/> (<see cref="ModelCandidate.MinMillisecondsBetweenCalls"/>).
 /// </summary>
 /// <remarks>
 /// Structured output: the Anthropic adapter (<c>AnthropicClientExtensions.AsIChatClient</c>, package <c>Anthropic</c>
 /// 12.56.0) maps <see cref="ChatResponseFormatJson"/> with a schema to the API's <c>output_config.format</c>
 /// (<c>json_schema</c>), transforming the schema to what the API supports. <c>AnthropicAdapterTests</c> proves it offline
 /// by reading the request body the adapter sends, so no <see cref="ChatOptions.RawRepresentationFactory"/> fallback is
-/// built.
+/// built. For <c>compatible</c>, the OpenAI adapter (<c>Microsoft.Extensions.AI.OpenAI</c>) maps the same format to
+/// <c>response_format</c> <c>json_schema</c>, strict through <see cref="StrictSchemaProperty"/>, or to
+/// <c>json_object</c> with <see cref="SchemaBlock"/> after the prompt; <c>CompatibleAdapterTests</c> proves both offline.
 /// </remarks>
 public sealed partial class ClaudeParser : IParser, IParserUsage
 {
@@ -52,6 +58,21 @@ public sealed partial class ClaudeParser : IParser, IParserUsage
 
     /// <summary>The Model-zone trace step when the reply listed more than one request (detail: how many, D7).</summary>
     public const string MoreThanOneRequestStep = "more_than_one_request";
+
+    /// <summary>The line that introduces the schema in <see cref="SchemaBlock"/>.</summary>
+    public const string SchemaBlockPrefix = "Reply with exactly one JSON object that matches this schema.\n";
+
+    /// <summary>The name of the structure asked for, in the response format.</summary>
+    private const string FormatName = "parse";
+
+    /// <summary>The description of the structure asked for, in the response format.</summary>
+    private const string FormatDescription = "The requests in the user's message, in the order spoken.";
+
+    /// <summary>
+    /// The <see cref="ChatOptions.AdditionalProperties"/> key the OpenAI adapter reads to mark a JSON-schema response format
+    /// strict (<c>response_format.json_schema.strict</c>).
+    /// </summary>
+    private const string StrictSchemaProperty = "strict";
 
     private const string PromptResource = "Agent.Core.Parsing.parse-prompt.md";
     private const string VersionPrefix = "version: ";
@@ -76,16 +97,20 @@ public sealed partial class ClaudeParser : IParser, IParserUsage
 
     private readonly IChatClient client;
     private readonly ModelCandidate candidate;
+    private readonly string candidateName;
+    private readonly ParsePacer pacer;
     private readonly TimeProvider clock;
     private readonly ITraceSink trace;
     private readonly ILogger<ClaudeParser> logger;
     private ParseUsage? lastUsage;
 
     /// <exception cref="InvalidOperationException">The options name no candidate (the start-up validation says which).</exception>
-    public ClaudeParser(IChatClient client, IOptions<ModelOptions> options, TimeProvider clock, ITraceSink trace, ILogger<ClaudeParser> logger)
+    public ClaudeParser(
+        IChatClient client, IOptions<ModelOptions> options, ParsePacer pacer, TimeProvider clock, ITraceSink trace, ILogger<ClaudeParser> logger)
     {
         ArgumentNullException.ThrowIfNull(client);
         ArgumentNullException.ThrowIfNull(options);
+        ArgumentNullException.ThrowIfNull(pacer);
         ArgumentNullException.ThrowIfNull(clock);
         ArgumentNullException.ThrowIfNull(trace);
         ArgumentNullException.ThrowIfNull(logger);
@@ -93,8 +118,10 @@ public sealed partial class ClaudeParser : IParser, IParserUsage
         var model = options.Value;
         candidate = model.Selected
             ?? throw new InvalidOperationException("Model:Candidate must name one of Model:Candidates.");
-        Name = candidate.Label + ":" + model.Candidate;
+        candidateName = model.Candidate!;
+        Name = candidate.Label + ":" + candidateName;
         this.client = client;
+        this.pacer = pacer;
         this.clock = clock;
         this.trace = trace;
         this.logger = logger;
@@ -111,6 +138,12 @@ public sealed partial class ClaudeParser : IParser, IParserUsage
     /// object closed (<c>additionalProperties: false</c>) with every field required, and each enum string limited to its set.
     /// </summary>
     public static JsonElement Schema => LazySchema.Value;
+
+    /// <summary>
+    /// The schema as text after <see cref="SchemaBlockPrefix"/>: the second part of the system message for a
+    /// <c>compatible</c> candidate in <c>json_object</c> mode, where the format itself carries no schema.
+    /// </summary>
+    public static string SchemaBlock => SchemaBlockPrefix + Schema.GetRawText();
 
     public string Name { get; }
 
@@ -148,26 +181,10 @@ public sealed partial class ClaudeParser : IParser, IParserUsage
         // user message, which holds the user's text and the pending note, never carries a cache control.
         List<ChatMessage> messages =
         [
-            SystemMessage(candidate.PromptCacheTtl),
+            candidate.IsCompatible ? CompatibleSystemMessage(candidate.OutputMode) : SystemMessage(candidate.PromptCacheTtl),
             new(ChatRole.User, "Pending: " + (context.PendingNote ?? "none") + "\nMessage: " + text),
         ];
-        var options = new ChatOptions
-        {
-            ModelId = candidate.ModelId,
-            MaxOutputTokens = candidate.MaxOutputTokens,
-            Temperature = candidate.Temperature,
-            ResponseFormat = ChatResponseFormat.ForJsonSchema(Schema, "parse", "The requests in the user's message, in the order spoken."),
-            // The adapter has no option for output_config.effort (ChatOptions.Reasoning cannot say max, and would also set
-            // the thinking mode), so the candidate's effort goes in the SDK's own parameters; the adapter fills in the rest,
-            // the JSON-schema format included (AnthropicAdapterTests reads both from the request body).
-            RawRepresentationFactory = _ => new MessageCreateParams
-            {
-                MaxTokens = candidate.MaxOutputTokens,
-                Messages = [],
-                Model = candidate.ModelId,
-                OutputConfig = new OutputConfig { Effort = EffortOf(candidate.Effort) },
-            },
-        };
+        var options = candidate.IsCompatible ? CompatibleOptions(candidate) : AnthropicOptions(candidate);
 
         var started = clock.GetTimestamp();
         ChatResponse response;
@@ -176,6 +193,9 @@ public sealed partial class ClaudeParser : IParser, IParserUsage
             timeout.CancelAfter(TimeSpan.FromSeconds(candidate.TimeoutSeconds));
             try
             {
+                // The wait is inside the timed section: it counts in the duration, and a pace longer than the timeout
+                // is model_unavailable (timeout) rather than a hang.
+                await pacer.WaitAsync(candidateName, candidate.MinMillisecondsBetweenCalls, timeout.Token);
                 response = await client.GetResponseAsync(messages, options, timeout.Token);
             }
             catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
@@ -227,6 +247,58 @@ public sealed partial class ClaudeParser : IParser, IParserUsage
     /// <summary>A reply with no structure to validate: one unclear request carrying the parser's own problem.</summary>
     private static ParsedMessage Unclear(string problem)
         => ParsedMessage.One(new ParsedRequest { Intent = RequestIntent.Unclear, Problem = problem });
+
+    /// <summary>The call's options for an <c>anthropic</c> candidate: the JSON-schema format and the effort.</summary>
+    private static ChatOptions AnthropicOptions(ModelCandidate candidate) => new()
+    {
+        ModelId = candidate.ModelId,
+        MaxOutputTokens = candidate.MaxOutputTokens,
+        Temperature = candidate.Temperature,
+        ResponseFormat = ChatResponseFormat.ForJsonSchema(Schema, FormatName, FormatDescription),
+        // The adapter has no option for output_config.effort (ChatOptions.Reasoning cannot say max, and would also set
+        // the thinking mode), so the candidate's effort goes in the SDK's own parameters; the adapter fills in the rest,
+        // the JSON-schema format included (AnthropicAdapterTests reads both from the request body).
+        RawRepresentationFactory = _ => new MessageCreateParams
+        {
+            MaxTokens = candidate.MaxOutputTokens,
+            Messages = [],
+            Model = candidate.ModelId,
+            OutputConfig = new OutputConfig { Effort = EffortOf(candidate.Effort) },
+        },
+    };
+
+    /// <summary>
+    /// The call's options for a <c>compatible</c> candidate: no effort and no raw request, the format by the output mode
+    /// (strict <c>json_schema</c>, or <c>json_object</c> with the schema in the system message).
+    /// </summary>
+    private static ChatOptions CompatibleOptions(ModelCandidate candidate)
+    {
+        var options = new ChatOptions
+        {
+            ModelId = candidate.ModelId,
+            MaxOutputTokens = candidate.MaxOutputTokens,
+            Temperature = candidate.Temperature,
+        };
+        if (candidate.OutputMode == ModelOptions.OutputModeJsonObject)
+        {
+            options.ResponseFormat = ChatResponseFormat.Json;
+        }
+        else
+        {
+            options.ResponseFormat = ChatResponseFormat.ForJsonSchema(Schema, FormatName, FormatDescription);
+            options.AdditionalProperties = new AdditionalPropertiesDictionary { [StrictSchemaProperty] = true };
+        }
+
+        return options;
+    }
+
+    /// <summary>
+    /// The system message for a <c>compatible</c> candidate: the frozen prompt as one plain text part, never marked
+    /// cacheable, followed in <c>json_object</c> mode by <see cref="SchemaBlock"/> as a second part.
+    /// </summary>
+    private static ChatMessage CompatibleSystemMessage(string outputMode) => outputMode == ModelOptions.OutputModeJsonObject
+        ? new ChatMessage(ChatRole.System, [new TextContent(Prompt), new TextContent(SchemaBlock)])
+        : new ChatMessage(ChatRole.System, [new TextContent(Prompt)]);
 
     /// <summary>
     /// The system message: the frozen prompt as one text block, marked cacheable with the candidate's lifetime
@@ -289,11 +361,14 @@ public sealed partial class ClaudeParser : IParser, IParserUsage
     /// <summary>
     /// The reason of a failed call: <c>http_NNN</c> for an answer with a status (a bad key is 401, a rate limit 429),
     /// <c>connection</c> for a transport failure, otherwise the exception's type. Never its message, which may hold the
-    /// response body.
+    /// response body. The OpenAI SDK reports a failed answer as <see cref="ClientResultException"/>, whose status is 0
+    /// when no answer came at all.
     /// </summary>
     private static string ReasonOf(Exception ex) => ex switch
     {
         AnthropicApiException api => "http_" + ((int)api.StatusCode).ToString(CultureInfo.InvariantCulture),
+        ClientResultException { Status: 0 } => "connection",
+        ClientResultException api => "http_" + api.Status.ToString(CultureInfo.InvariantCulture),
         HttpRequestException { StatusCode: { } status } => "http_" + ((int)status).ToString(CultureInfo.InvariantCulture),
         HttpRequestException or AnthropicIOException => "connection",
         _ => ex.GetType().Name,

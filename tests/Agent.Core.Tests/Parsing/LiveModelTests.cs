@@ -42,6 +42,7 @@ public class LiveModelTests(ITestOutputHelper output)
         return new ClaudeParser(
             ParserFactory.CreateChatClient(key, options.Candidates[candidate]),
             Microsoft.Extensions.Options.Options.Create(options),
+            new ParsePacer(TimeProvider.System),
             TimeProvider.System,
             new ClaudeParserTests.RecordingTrace(),
             NullLogger<ClaudeParser>.Instance);

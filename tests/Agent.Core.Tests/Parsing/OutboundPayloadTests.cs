@@ -96,7 +96,7 @@ public sealed class OutboundPayloadTests(AgentHost host)
         };
         var trace = new ClaudeParserTests.RecordingTrace();
         var parser = new ClaudeParser(
-            client, Microsoft.Extensions.Options.Options.Create(ClaudeParserTests.Options()), TimeProvider.System, trace, NullLogger<ClaudeParser>.Instance);
+            client, Microsoft.Extensions.Options.Options.Create(ClaudeParserTests.Options()), new ParsePacer(TimeProvider.System), TimeProvider.System, trace, NullLogger<ClaudeParser>.Instance);
         await using var session = await ConversationHarness.StartAsync(host, parser, SeedFacts.DemoUserId);
         var conversation = session.Conversation;
         if (saveAlias)

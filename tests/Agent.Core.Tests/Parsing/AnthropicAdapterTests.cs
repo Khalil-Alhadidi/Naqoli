@@ -25,9 +25,9 @@ public class AnthropicAdapterTests
 
     private static CancellationToken Token => TestContext.Current.CancellationToken;
 
-    private static (ClaudeParser Parser, StubHandler Handler) Start(string promptCacheTtl = ModelOptions.CacheTtl5m)
+    private static (ClaudeParser Parser, RecordingHandler Handler) Start(string promptCacheTtl = ModelOptions.CacheTtl5m)
     {
-        var handler = new StubHandler();
+        var handler = new RecordingHandler();
         var client = new AnthropicClient
         {
             ApiKey = FakeKey,
@@ -38,6 +38,7 @@ public class AnthropicAdapterTests
         var parser = new ClaudeParser(
             ParserFactory.CreateChatClient(client, options.Candidates["haiku"]),
             Microsoft.Extensions.Options.Options.Create(options),
+            new ParsePacer(TimeProvider.System),
             TimeProvider.System,
             new ClaudeParserTests.RecordingTrace(),
             NullLogger<ClaudeParser>.Instance);
@@ -187,7 +188,7 @@ public class AnthropicAdapterTests
     {
         // What the adapter itself reports in UsageDetails for a call that wrote and read the cache, read without the
         // parser: the parser prefers the SDK's message, so this pins the fallback's assumptions about the adapter.
-        var handler = new StubHandler { Answer = () => Message(Reply, inputTokens: 200, outputTokens: 80, cacheWriteTokens: 1_000, cacheReadTokens: 3_000) };
+        var handler = new RecordingHandler { Answer = () => Message(Reply, inputTokens: 200, outputTokens: 80, cacheWriteTokens: 1_000, cacheReadTokens: 3_000) };
         var client = new AnthropicClient { ApiKey = FakeKey, HttpClient = new HttpClient(handler), MaxRetries = 0 };
         var chat = ParserFactory.CreateChatClient(client, ClaudeParserTests.Options().Candidates["haiku"]);
 
@@ -228,20 +229,5 @@ public class AnthropicAdapterTests
         handler.Answer = () => throw new HttpRequestException("no route");
 
         await Assert.ThrowsAsync<ParserUnavailableException>(() => parser.ParseAsync("x", new ParseContext(null, MaskMap.Empty), Token));
-    }
-
-    /// <summary>Records each request body and answers with <see cref="Answer"/>.</summary>
-    private sealed class StubHandler : HttpMessageHandler
-    {
-        public List<JsonElement> Bodies { get; } = [];
-
-        public Func<HttpResponseMessage> Answer { get; set; } = () => new HttpResponseMessage(HttpStatusCode.InternalServerError);
-
-        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
-        {
-            if (request.Content is not null)
-                Bodies.Add(JsonDocument.Parse(await request.Content.ReadAsStringAsync(cancellationToken)).RootElement.Clone());
-            return Answer();
-        }
     }
 }

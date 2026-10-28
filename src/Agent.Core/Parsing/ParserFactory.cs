@@ -4,6 +4,7 @@ using Anthropic;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 using OpenAI;
 
@@ -111,6 +112,10 @@ public static class ParserFactory
                         ?? throw new InvalidOperationException(MissingKeyMessageFor(candidate));
                     return CreateChatClient(key, candidate);
                 });
+                // One pacer for the process, so a candidate's pace holds across conversations; TimeProvider.System
+                // unless the host registered its own clock.
+                services.TryAddSingleton(TimeProvider.System);
+                services.TryAddSingleton<ParsePacer>();
                 services.AddScoped<IParser, ClaudeParser>();
                 return services;
 

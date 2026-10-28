@@ -43,12 +43,41 @@ public class ClaudeParserTests
         },
     };
 
-    private static (ClaudeParser Parser, FakeChatClient Client, RecordingTrace Trace) Start(ModelOptions? options = null)
+    /// <summary>
+    /// <see cref="ModelOptionsTests.Compatible"/> with the output mode, the pacing and prices set: 0.10 USD in, 0.40 out
+    /// and 0.025 for a cached read, per million tokens.
+    /// </summary>
+    internal static ModelOptions OptionsCompatible(string outputMode = ModelOptions.OutputModeJsonSchema, int paceMs = 0)
+    {
+        var options = ModelOptionsTests.Compatible();
+        var candidate = options.Selected!;
+        candidate.OutputMode = outputMode;
+        candidate.MinMillisecondsBetweenCalls = paceMs;
+        candidate.InputPricePerMTok = 0.10m;
+        candidate.OutputPricePerMTok = 0.40m;
+        candidate.CacheReadPricePerMTok = 0.025m;
+        return options;
+    }
+
+    /// <summary>
+    /// The slack on a measured gap: the test reads the clock just after the pacer records a call's start, so a gap it
+    /// measures can be a little shorter than the pacer's own.
+    /// </summary>
+    private static readonly TimeSpan Slack = TimeSpan.FromMilliseconds(5);
+
+    private static readonly TimeSpan Pace = TimeSpan.FromMilliseconds(150);
+
+    private static (ClaudeParser Parser, FakeChatClient Client, RecordingTrace Trace) Start(ModelOptions? options = null, ParsePacer? pacer = null)
     {
         var client = new FakeChatClient();
         var trace = new RecordingTrace();
         var parser = new ClaudeParser(
-            client, Microsoft.Extensions.Options.Options.Create(options ?? Options()), TimeProvider.System, trace, NullLogger<ClaudeParser>.Instance);
+            client,
+            Microsoft.Extensions.Options.Options.Create(options ?? Options()),
+            pacer ?? new ParsePacer(TimeProvider.System),
+            TimeProvider.System,
+            trace,
+            NullLogger<ClaudeParser>.Instance);
         return (parser, client, trace);
     }
 
@@ -435,7 +464,122 @@ public class ClaudeParserTests
         options.Candidate = "gpt";
 
         Assert.Throws<InvalidOperationException>(() => new ClaudeParser(
-            new FakeChatClient(), Microsoft.Extensions.Options.Options.Create(options), TimeProvider.System, new RecordingTrace(), NullLogger<ClaudeParser>.Instance));
+            new FakeChatClient(), Microsoft.Extensions.Options.Options.Create(options), new ParsePacer(TimeProvider.System), TimeProvider.System, new RecordingTrace(), NullLogger<ClaudeParser>.Instance));
+    }
+
+    [Fact]
+    public async Task ACompatibleCandidateSendsNoCacheControlAndNoRawRequest()
+    {
+        var (parser, client, _) = Start(OptionsCompatible());
+        client.Reply = (_, _, _) => Task.FromResult(FakeChatClient.Json(Transfer));
+
+        await parser.ParseAsync("send fifty to Ali", new ParseContext(null, MaskMap.Empty), Token);
+
+        var (messages, options) = Assert.Single(client.Calls);
+        Assert.Equal(ChatRole.System, messages[0].Role);
+        var prompt = Assert.IsType<TextContent>(Assert.Single(messages[0].Contents));
+        Assert.Equal(ClaudeParser.Prompt, prompt.Text);
+        Assert.Null(prompt.AdditionalProperties);
+        Assert.Null(prompt.RawRepresentation);
+        Assert.Null(options!.RawRepresentationFactory);
+        Assert.Equal("compatible:gemini", parser.Name);
+    }
+
+    [Fact]
+    public async Task JsonObjectModeAddsTheSchemaBlockAndAsksForJson()
+    {
+        var (parser, client, _) = Start(OptionsCompatible(ModelOptions.OutputModeJsonObject));
+        client.Reply = (_, _, _) => Task.FromResult(FakeChatClient.Json(Transfer));
+
+        await parser.ParseAsync("send fifty to Ali", new ParseContext(null, MaskMap.Empty), Token);
+
+        var (messages, options) = Assert.Single(client.Calls);
+        Assert.Collection(
+            messages[0].Contents,
+            first => Assert.Equal(ClaudeParser.Prompt, Assert.IsType<TextContent>(first).Text),
+            second => Assert.Equal(ClaudeParser.SchemaBlock, Assert.IsType<TextContent>(second).Text));
+        Assert.StartsWith(ClaudeParser.SchemaBlockPrefix, ClaudeParser.SchemaBlock, StringComparison.Ordinal);
+        var format = Assert.IsType<ChatResponseFormatJson>(options!.ResponseFormat);
+        Assert.Null(format.Schema);
+    }
+
+    [Fact]
+    public async Task JsonSchemaModeSendsOnlyThePrompt()
+    {
+        var (parser, client, _) = Start(OptionsCompatible());
+        client.Reply = (_, _, _) => Task.FromResult(FakeChatClient.Json(Transfer));
+
+        await parser.ParseAsync("send fifty to Ali", new ParseContext(null, MaskMap.Empty), Token);
+
+        var (messages, options) = Assert.Single(client.Calls);
+        Assert.Equal(ClaudeParser.Prompt, Assert.IsType<TextContent>(Assert.Single(messages[0].Contents)).Text);
+        var format = Assert.IsType<ChatResponseFormatJson>(options!.ResponseFormat);
+        Assert.True(format.Schema is { } schema && JsonElement.DeepEquals(ClaudeParser.Schema, schema));
+        Assert.Equal(("gemini-test", 1500, (float?)null), (options.ModelId, options.MaxOutputTokens, options.Temperature));
+    }
+
+    [Fact]
+    public async Task ACompatibleCandidateReadsUsageFromUsageDetails()
+    {
+        var (parser, client, _) = Start(OptionsCompatible());
+        client.Reply = (_, _, _) =>
+        {
+            var response = FakeChatClient.Json(Transfer);
+            response.Usage = new UsageDetails { InputTokenCount = 1200, CachedInputTokenCount = 1000, OutputTokenCount = 40 };
+            return Task.FromResult(response);
+        };
+
+        await parser.ParseAsync("send fifty to Ali", new ParseContext(null, MaskMap.Empty), Token);
+
+        var usage = Assert.IsType<ParseUsage>(parser.LastUsage);
+        Assert.Equal((200, 40, 0, 1000), (usage.InputTokens, usage.OutputTokens, usage.CacheWriteTokens, usage.CacheReadTokens));
+        // 200 x 0.10 + 40 x 0.40 + 1,000 x 0.025, per million.
+        Assert.Equal(0.000061m, usage.CostUsd);
+    }
+
+    [Fact]
+    public async Task PacingHoldsTheSecondCallBack()
+    {
+        var (parser, client, _) = Start(OptionsCompatible(paceMs: 150));
+
+        await parser.ParseAsync("send fifty to Ali", new ParseContext(null, MaskMap.Empty), Token);
+        var secondAsked = TimeProvider.System.GetTimestamp();
+        await parser.ParseAsync("send fifty to Ali", new ParseContext(null, MaskMap.Empty), Token);
+
+        var times = client.CallTimes;
+        Assert.True(TimeProvider.System.GetElapsedTime(times[0], times[1]) >= Pace - Slack);
+        // The wait is inside the timed call, so the second call's duration holds it: the pace less what had already
+        // passed since the first call when the second was asked for (a busy test host can make that part long).
+        var alreadyPassed = TimeProvider.System.GetElapsedTime(times[0], secondAsked);
+        Assert.True(parser.LastUsage!.Duration + alreadyPassed >= Pace - Slack, "duration " + parser.LastUsage.Duration + ", already passed " + alreadyPassed);
+        Assert.True(parser.LastUsage.Duration > TimeSpan.Zero);
+    }
+
+    [Fact]
+    public async Task TwoParsersShareOnePacePerCandidate()
+    {
+        var pacer = new ParsePacer(TimeProvider.System);
+        var (first, firstClient, _) = Start(OptionsCompatible(paceMs: 150), pacer);
+        var (second, secondClient, _) = Start(OptionsCompatible(paceMs: 150), pacer);
+
+        await first.ParseAsync("send fifty to Ali", new ParseContext(null, MaskMap.Empty), Token);
+        await second.ParseAsync("send fifty to Ali", new ParseContext(null, MaskMap.Empty), Token);
+
+        var gap = TimeProvider.System.GetElapsedTime(Assert.Single(firstClient.CallTimes), Assert.Single(secondClient.CallTimes));
+        Assert.True(gap >= Pace - Slack, "gap " + gap);
+    }
+
+    [Fact]
+    public async Task PacingIsZeroByDefault()
+    {
+        var (parser, client, _) = Start(OptionsCompatible());
+
+        await parser.ParseAsync("send fifty to Ali", new ParseContext(null, MaskMap.Empty), Token);
+        await parser.ParseAsync("send fifty to Ali", new ParseContext(null, MaskMap.Empty), Token);
+
+        var times = client.CallTimes;
+        Assert.Equal(2, times.Count);
+        Assert.True(TimeProvider.System.GetElapsedTime(times[0], times[1]) < TimeSpan.FromMilliseconds(100));
     }
 
     /// <summary>A trace sink that keeps every step.</summary>
