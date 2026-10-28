@@ -245,6 +245,7 @@ public sealed class HeldOutGuardTests : IDisposable
         var header = EvalCommand.ModelSettings("gemini", gemini).ToDictionary();
 
         Assert.Equal("compatible", header["Model:Provider"]);
+        Assert.Equal("https://generativelanguage.googleapis.com/v1beta/openai", header["Model:BaseUrl"]);
         Assert.Equal("json_schema", header["Model:OutputMode"]);
         Assert.Equal("not sent", header["Model:Effort"]);
         Assert.Equal("not sent", header["Model:PromptCacheTtl"]);
@@ -263,9 +264,20 @@ public sealed class HeldOutGuardTests : IDisposable
         Assert.Equal("not sent", header["Model:Temperature"]);
         Assert.Equal("low", header["Model:Effort"]);
         Assert.Equal("anthropic", header["Model:Provider"]);
+        Assert.Equal("not sent", header["Model:BaseUrl"]);
         Assert.Equal("5m", header["Model:PromptCacheTtl"]);
         Assert.Equal("not sent", header["Model:OutputMode"]);
         Assert.Equal("0", header["Model:MinMillisecondsBetweenCalls"]);
+    }
+
+    [Theory]
+    [InlineData("scripted", "scripted")]
+    [InlineData("claude:haiku", "claude")]
+    [InlineData("compatible:gemini", "model")]
+    public void TheRunnerSetsAgentParserByThePrefix(string parser, string expected)
+    {
+        // Final review M3: a claude: run keeps Agent:Parser claude, so its report header matches the committed reports.
+        Assert.Equal(expected, EvalCommand.ParserSettingFor(EvalArguments.Parse(["dev", "--parser", parser], out _)!));
     }
 
     [Fact]
@@ -320,6 +332,7 @@ public sealed class HeldOutGuardTests : IDisposable
         var haiku = new global::Agent.Core.Parsing.ModelCandidate { ModelId = "claude-haiku-5-5", InputPricePerMTok = 0.10m, OutputPricePerMTok = 0.50m };
 
         Assert.Equal("claude-haiku", EvalCommand.ReportParserName("claude:haiku"));
+        Assert.Equal("compatible-gemini", EvalCommand.ReportParserName("compatible:gemini"));
         Assert.Equal("scripted", EvalCommand.ReportParserName("scripted"));
 
         // The label goes into the report stem after the parser (ReportWriterTests.TheLabelFollowsTheParserInTheName).

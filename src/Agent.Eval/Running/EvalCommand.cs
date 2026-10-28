@@ -51,7 +51,8 @@ public static class EvalCommand
 
     /// <summary>
     /// The report header's entries for the candidate measured: its name, provider and model, the prompt version, and the
-    /// settings the call sends with it, <c>not sent</c> for one the provider's call leaves out: <c>Model:Temperature</c>
+    /// settings the call sends with it, <c>not sent</c> for one the provider's call leaves out: <c>Model:BaseUrl</c>
+    /// (<c>compatible</c> only, the vendor's address, not a secret), <c>Model:Temperature</c>
     /// (unset), <c>Model:Effort</c> and <c>Model:PromptCacheTtl</c> (<c>anthropic</c> only), <c>Model:OutputMode</c>
     /// (<c>compatible</c> only), and the pacing <c>Model:MinMillisecondsBetweenCalls</c>.
     /// </summary>
@@ -62,6 +63,7 @@ public static class EvalCommand
         ArgumentNullException.ThrowIfNull(candidate);
         yield return new("Model:Candidate", candidateName);
         yield return new("Model:Provider", candidate.Provider);
+        yield return new("Model:BaseUrl", candidate.IsCompatible ? candidate.BaseUrl ?? "-" : NotSent);
         yield return new("Model:ModelId", candidate.ModelId);
         yield return new("Model:PromptVersion", ClaudeParser.PromptVersion);
         yield return new("Model:Temperature", candidate.Temperature?.ToString(CultureInfo.InvariantCulture) ?? NotSent);
@@ -111,6 +113,22 @@ public static class EvalCommand
         return label == parsed.ProviderLabel
             ? null
             : "--parser " + parsed.Parser + " names '" + name + "', whose provider is '" + provider + "'.";
+    }
+
+    /// <summary>
+    /// The <c>Agent:Parser</c> the runner sets for <c>--parser</c>: <c>scripted</c>, <c>claude</c> for a <c>claude:</c>
+    /// prefix (so an Anthropic report header reads as every report before the compatible provider did), or <c>model</c>
+    /// for a <c>compatible:</c> one. <c>claude</c> and <c>model</c> build the same parser.
+    /// </summary>
+    public static string ParserSettingFor(EvalArguments parsed)
+    {
+        ArgumentNullException.ThrowIfNull(parsed);
+        return parsed.ProviderLabel switch
+        {
+            null => ParserFactory.Scripted,
+            ParserFactory.Claude => ParserFactory.Claude,
+            _ => ParserFactory.Model,
+        };
     }
 
     /// <summary>The configured provider of a candidate; <c>anthropic</c> when unset, as <see cref="ModelCandidate.Provider"/> binds.</summary>
@@ -426,7 +444,7 @@ public static class EvalCommand
         if (mismatch is not null)
             return null;
 
-        overrides[ParserFactory.ParserSetting] = parsed.Candidate is null ? ParserFactory.Scripted : ParserFactory.Model;
+        overrides[ParserFactory.ParserSetting] = ParserSettingFor(parsed);
         if (parsed.Candidate is { } name)
         {
             overrides[ModelOptions.SectionName + ":" + nameof(ModelOptions.Candidate)] = name;
