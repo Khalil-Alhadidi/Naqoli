@@ -49,7 +49,7 @@ public class EvalSettingsTests
     [Fact]
     public void TheModelCandidatesMatchTheWebConsole()
     {
-        // The candidates, their prices (the cache prices included) and the prompt cache lifetime: the runner prices and
+        // The candidates, their prices (the cache prices included), the prompt cache lifetime and the compatible fields: the runner prices and
         // calls the model exactly as the console does.
         using var eval = JsonDocument.Parse(File.ReadAllText(Path.Combine(Root, "src", "Agent.Eval", "appsettings.json")));
         using var web = JsonDocument.Parse(File.ReadAllText(Path.Combine(Root, "src", "Agent.Web", "appsettings.json")));
@@ -63,7 +63,9 @@ public class EvalSettingsTests
         {
             Assert.True(candidate.Value.TryGetProperty("CacheWritePricePerMTok", out _), candidate.Name);
             Assert.True(candidate.Value.TryGetProperty("CacheReadPricePerMTok", out _), candidate.Name);
-            Assert.True(candidate.Value.TryGetProperty("PromptCacheTtl", out _), candidate.Name);
+            // The prompt cache lifetime is an anthropic setting; a compatible candidate sends no cache control.
+            if (candidate.Value.GetProperty("Provider").GetString() == "anthropic")
+                Assert.True(candidate.Value.TryGetProperty("PromptCacheTtl", out _), candidate.Name);
             foreach (var setting in candidate.Value.EnumerateObject())
                 Assert.Equal(setting.Value.GetRawText(), evalCandidates.GetProperty(candidate.Name).GetProperty(setting.Name).GetRawText());
         }

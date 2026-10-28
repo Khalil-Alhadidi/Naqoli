@@ -133,6 +133,8 @@ public sealed class RuntimeSettingsTests : IDisposable
     [InlineData("Model:Candidate")]
     [InlineData("ConnectionStrings:Agent")]
     [InlineData("Anthropic:ApiKey")]
+    [InlineData("Gemini:ApiKey")]
+    [InlineData("Model:Candidates:gemini:ApiKeySetting")]
     [InlineData("AgentX:PerTransactionCapIqd")]
     [InlineData("Agent:")]
     [InlineData("Agent:WalletClientKey")]

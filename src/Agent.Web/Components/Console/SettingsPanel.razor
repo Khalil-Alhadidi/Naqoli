@@ -284,7 +284,11 @@
         yield return (nameof(AgentOptions.FillerWords), o.FillerWords.Length == 0 ? "none" : Number(o.FillerWords.Length));
     }
 
-    /// <summary>The Model section: the candidate in use and each candidate's model, limits, prices and prompt cache lifetime.</summary>
+    /// <summary>
+    /// The Model section: the candidate in use and each candidate's provider and model, limits, pacing, prices and prompt
+    /// cache lifetime; for a <c>compatible</c> candidate also its address, the name of its key setting (never the key) and
+    /// its output mode. A setting the provider's call leaves out shows <c>not sent</c>.
+    /// </summary>
     private IEnumerable<(string Name, string Value)> ModelRows()
     {
         var m = Model.Value;
@@ -293,18 +297,28 @@
         {
             var prefix = "Model:" + name + ":";
             yield return (prefix + nameof(ModelCandidate.ModelId), c.Provider + " " + c.ModelId);
+            if (c.IsCompatible)
+            {
+                yield return (prefix + nameof(ModelCandidate.BaseUrl), c.BaseUrl ?? "-");
+                yield return (prefix + nameof(ModelCandidate.ApiKeySetting), c.ApiKeySetting ?? "-");
+                yield return (prefix + nameof(ModelCandidate.OutputMode), c.OutputMode);
+            }
+
             yield return (prefix + nameof(ModelCandidate.MaxOutputTokens), Number(c.MaxOutputTokens));
-            yield return (prefix + nameof(ModelCandidate.Effort), c.Effort);
-            yield return (prefix + nameof(ModelCandidate.Temperature), c.Temperature?.ToString(CultureInfo.InvariantCulture) ?? "not sent");
+            yield return (prefix + nameof(ModelCandidate.Effort), c.IsCompatible ? NotSent : c.Effort);
+            yield return (prefix + nameof(ModelCandidate.Temperature), c.Temperature?.ToString(CultureInfo.InvariantCulture) ?? NotSent);
             yield return (prefix + nameof(ModelCandidate.TimeoutSeconds), Number(c.TimeoutSeconds));
+            yield return (prefix + nameof(ModelCandidate.MinMillisecondsBetweenCalls), Number(c.MinMillisecondsBetweenCalls));
             yield return (prefix + "PricePerMTok",
                 c.InputPricePerMTok.ToString(CultureInfo.InvariantCulture) + " in, "
                 + c.OutputPricePerMTok.ToString(CultureInfo.InvariantCulture) + " out, "
                 + c.CacheWritePricePerMTok.ToString(CultureInfo.InvariantCulture) + " cache write, "
                 + c.CacheReadPricePerMTok.ToString(CultureInfo.InvariantCulture) + " cache read (USD)");
-            yield return (prefix + nameof(ModelCandidate.PromptCacheTtl), c.PromptCacheTtl);
+            yield return (prefix + nameof(ModelCandidate.PromptCacheTtl), c.IsCompatible ? NotSent : c.PromptCacheTtl);
         }
     }
+
+    private const string NotSent = "not sent";
 
     private static string Number(long value) => PhoneFormat.Console(value);
 }
