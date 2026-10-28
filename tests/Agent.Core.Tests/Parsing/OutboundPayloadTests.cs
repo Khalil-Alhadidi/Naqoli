@@ -70,24 +70,37 @@ public sealed class OutboundPayloadTests(AgentHost host)
         return Reply("\"intent\":\"balance\",\"amount_unit\":\"none\"," + Nulls());
     }
 
-    [Fact]
-    public Task NothingFromTheWalletReachesTheModel() => PlayAndCheckAsync(saveAlias: false);
+    /// <summary>
+    /// The candidates the checks run over (security review I1): the Anthropic one, and a <c>compatible</c> one in each
+    /// output mode, so every part of the system message each provider sends (the schema block of <c>json_object</c> mode
+    /// included) is checked with the user message.
+    /// </summary>
+    public static TheoryData<string> Shapes => new("anthropic", ModelOptions.OutputModeJsonSchema, ModelOptions.OutputModeJsonObject);
+
+    private static ModelOptions OptionsFor(string shape)
+        => shape == "anthropic" ? ClaudeParserTests.Options() : ClaudeParserTests.OptionsCompatible(shape);
+
+    [Theory]
+    [MemberData(nameof(Shapes))]
+    public Task NothingFromTheWalletReachesTheModel(string shape) => PlayAndCheckAsync(shape, saveAlias: false);
 
     /// <summary>
     /// Milestone 9a: with an alias saved in the wallet before the sentences, and one more transfer to it at the end, the
     /// alias text never reaches the model, nor does anything else the existing test checks.
     /// </summary>
-    [Fact]
-    public Task ASavedAliasNeverReachesTheModel() => PlayAndCheckAsync(saveAlias: true);
+    [Theory]
+    [MemberData(nameof(Shapes))]
+    public Task ASavedAliasNeverReachesTheModel(string shape) => PlayAndCheckAsync(shape, saveAlias: true);
 
     /// <summary>
     /// Milestone 9b: with the purchase confirmed and My orders read before the balance question, neither the new purchase
     /// code, nor any order code the wallet returns, nor any seeded purchase code reaches the model, in either digit form.
     /// </summary>
-    [Fact]
-    public Task APurchaseCodeNeverReachesTheModel() => PlayAndCheckAsync(saveAlias: false, confirmPurchase: true);
+    [Theory]
+    [MemberData(nameof(Shapes))]
+    public Task APurchaseCodeNeverReachesTheModel(string shape) => PlayAndCheckAsync(shape, saveAlias: false, confirmPurchase: true);
 
-    private async Task PlayAndCheckAsync(bool saveAlias, bool confirmPurchase = false)
+    private async Task PlayAndCheckAsync(string shape, bool saveAlias, bool confirmPurchase = false)
     {
         Assert.SkipUnless(host.DatabaseAvailable, host.SkipReason);
         var client = new FakeChatClient
@@ -96,7 +109,7 @@ public sealed class OutboundPayloadTests(AgentHost host)
         };
         var trace = new ClaudeParserTests.RecordingTrace();
         var parser = new ClaudeParser(
-            client, Microsoft.Extensions.Options.Options.Create(ClaudeParserTests.Options()), new ParsePacer(TimeProvider.System), TimeProvider.System, trace, NullLogger<ClaudeParser>.Instance);
+            client, Microsoft.Extensions.Options.Options.Create(OptionsFor(shape)), new ParsePacer(TimeProvider.System), TimeProvider.System, trace, NullLogger<ClaudeParser>.Instance);
         await using var session = await ConversationHarness.StartAsync(host, parser, SeedFacts.DemoUserId);
         var conversation = session.Conversation;
         if (saveAlias)

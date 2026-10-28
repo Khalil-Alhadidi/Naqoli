@@ -64,8 +64,13 @@ internal sealed class RecordingHandler : HttpMessageHandler
 
     public Func<HttpResponseMessage> Answer { get; set; } = () => new HttpResponseMessage(HttpStatusCode.InternalServerError);
 
+    /// <summary>How long to wait (honouring cancellation) before answering; none by default.</summary>
+    public TimeSpan Delay { get; set; }
+
     protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
     {
+        if (Delay > TimeSpan.Zero)
+            await Task.Delay(Delay, cancellationToken);
         Uris.Add(request.RequestUri);
         Authorizations.Add(request.Headers.Authorization?.ToString());
         if (request.Content is not null)

@@ -40,7 +40,8 @@ namespace Agent.Core.Parsing;
 /// by reading the request body the adapter sends, so no <see cref="ChatOptions.RawRepresentationFactory"/> fallback is
 /// built. For <c>compatible</c>, the OpenAI adapter (<c>Microsoft.Extensions.AI.OpenAI</c>) maps the same format to
 /// <c>response_format</c> <c>json_schema</c>, strict through <see cref="StrictSchemaProperty"/>, or to
-/// <c>json_object</c> with <see cref="SchemaBlock"/> after the prompt; <c>CompatibleAdapterTests</c> proves both offline.
+/// <c>json_object</c> with the prompt and <see cref="SchemaBlock"/> in one system string; <c>CompatibleAdapterTests</c>
+/// proves both offline.
 /// </remarks>
 public sealed partial class ClaudeParser : IParser, IParserUsage
 {
@@ -70,7 +71,9 @@ public sealed partial class ClaudeParser : IParser, IParserUsage
 
     /// <summary>
     /// The <see cref="ChatOptions.AdditionalProperties"/> key the OpenAI adapter reads to mark a JSON-schema response format
-    /// strict (<c>response_format.json_schema.strict</c>).
+    /// strict (<c>response_format.json_schema.strict</c>). The adapter's own constant (<c>OpenAIClientExtensions.StrictKey</c>
+    /// in Microsoft.Extensions.AI.OpenAI 10.11.0) is internal, so the literal is kept;
+    /// <c>CompatibleAdapterTests.TheRequestIsStrictJsonSchemaWithThePromptAlone</c> is the guard against a rename.
     /// </summary>
     private const string StrictSchemaProperty = "strict";
 
@@ -140,7 +143,7 @@ public sealed partial class ClaudeParser : IParser, IParserUsage
     public static JsonElement Schema => LazySchema.Value;
 
     /// <summary>
-    /// The schema as text after <see cref="SchemaBlockPrefix"/>: the second part of the system message for a
+    /// The schema as text after <see cref="SchemaBlockPrefix"/>: it follows the frozen prompt in the system message of a
     /// <c>compatible</c> candidate in <c>json_object</c> mode, where the format itself carries no schema.
     /// </summary>
     public static string SchemaBlock => SchemaBlockPrefix + Schema.GetRawText();
@@ -293,11 +296,12 @@ public sealed partial class ClaudeParser : IParser, IParserUsage
     }
 
     /// <summary>
-    /// The system message for a <c>compatible</c> candidate: the frozen prompt as one plain text part, never marked
-    /// cacheable, followed in <c>json_object</c> mode by <see cref="SchemaBlock"/> as a second part.
+    /// The system message for a <c>compatible</c> candidate: one plain text part, never marked cacheable, so it goes out
+    /// as a string (some OpenAI-compatible servers take only a string on the system role): the frozen prompt, followed in
+    /// <c>json_object</c> mode by a line break and <see cref="SchemaBlock"/>.
     /// </summary>
     private static ChatMessage CompatibleSystemMessage(string outputMode) => outputMode == ModelOptions.OutputModeJsonObject
-        ? new ChatMessage(ChatRole.System, [new TextContent(Prompt), new TextContent(SchemaBlock)])
+        ? new ChatMessage(ChatRole.System, [new TextContent(Prompt + "\n" + SchemaBlock)])
         : new ChatMessage(ChatRole.System, [new TextContent(Prompt)]);
 
     /// <summary>

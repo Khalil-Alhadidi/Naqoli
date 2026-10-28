@@ -494,10 +494,8 @@ public class ClaudeParserTests
         await parser.ParseAsync("send fifty to Ali", new ParseContext(null, MaskMap.Empty), Token);
 
         var (messages, options) = Assert.Single(client.Calls);
-        Assert.Collection(
-            messages[0].Contents,
-            first => Assert.Equal(ClaudeParser.Prompt, Assert.IsType<TextContent>(first).Text),
-            second => Assert.Equal(ClaudeParser.SchemaBlock, Assert.IsType<TextContent>(second).Text));
+        var system = Assert.IsType<TextContent>(Assert.Single(messages[0].Contents));
+        Assert.Equal(ClaudeParser.Prompt + "\n" + ClaudeParser.SchemaBlock, system.Text);
         Assert.StartsWith(ClaudeParser.SchemaBlockPrefix, ClaudeParser.SchemaBlock, StringComparison.Ordinal);
         var format = Assert.IsType<ChatResponseFormatJson>(options!.ResponseFormat);
         Assert.Null(format.Schema);

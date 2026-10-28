@@ -19,6 +19,9 @@ namespace Agent.Core.Tests.Parsing;
 /// </summary>
 public class LiveCompatibleTests(ITestOutputHelper output)
 {
+    /// <summary>One pacer for the class, so the candidate's pace holds across the four live calls, as in a real run.</summary>
+    private static readonly ParsePacer Pacer = new(TimeProvider.System);
+
     private static CancellationToken Token => TestContext.Current.CancellationToken;
 
     /// <summary>A transfer, a bill, a purchase and a balance question, with the sidecar field each is checked on (null: intent only).</summary>
@@ -42,14 +45,15 @@ public class LiveCompatibleTests(ITestOutputHelper output)
         var options = configuration.GetSection(ModelOptions.SectionName).Get<ModelOptions>() ?? throw new InvalidOperationException("No Model section.");
         var candidate = options.Selected;
         Assert.SkipUnless(candidate is { IsCompatible: true }, "Model:Candidate is not a compatible candidate: set it in user secrets (for example gemini).");
+        // The candidate is checked before any setting is read as its key.
+        Assert.Empty(options.Problems());
         var key = ParserFactory.ApiKey(configuration, candidate);
         Assert.SkipUnless(key is not null, "No key for the candidate: set " + candidate.ApiKeySetting + " in user secrets.");
-        Assert.Empty(options.Problems());
 
         var parser = new ClaudeParser(
             ParserFactory.CreateChatClient(key, candidate),
             Microsoft.Extensions.Options.Options.Create(options),
-            new ParsePacer(TimeProvider.System),
+            Pacer,
             TimeProvider.System,
             new ClaudeParserTests.RecordingTrace(),
             NullLogger<ClaudeParser>.Instance);

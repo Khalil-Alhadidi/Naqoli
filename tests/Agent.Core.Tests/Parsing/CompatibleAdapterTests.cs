@@ -27,10 +27,11 @@ public class CompatibleAdapterTests
 
     private static string Reply => "{\"requests\":[" + Item + "]}";
 
-    private static (ClaudeParser Parser, RecordingHandler Handler) Start(string outputMode = ModelOptions.OutputModeJsonSchema)
+    private static (ClaudeParser Parser, RecordingHandler Handler) Start(string outputMode = ModelOptions.OutputModeJsonSchema, int timeoutSeconds = 20)
     {
         var handler = new RecordingHandler();
         var options = ClaudeParserTests.OptionsCompatible(outputMode);
+        options.Selected!.TimeoutSeconds = timeoutSeconds;
         var parser = new ClaudeParser(
             ParserFactory.CreateCompatibleClient(FakeKey, options.Selected!, new HttpClient(handler)),
             Microsoft.Extensions.Options.Options.Create(options),
@@ -93,6 +94,8 @@ public class CompatibleAdapterTests
         var jsonSchema = format.GetProperty("json_schema");
         Assert.True(jsonSchema.GetProperty("strict").GetBoolean());
         Assert.False(jsonSchema.GetProperty("schema").GetProperty("additionalProperties").GetBoolean());
+        // The schema on the wire is the one the parser builds: an adapter that transformed it would change it silently.
+        Assert.True(JsonElement.DeepEquals(ClaudeParser.Schema, jsonSchema.GetProperty("schema")));
 
         Assert.Equal(1500, body.GetProperty("max_completion_tokens").GetInt32());
         Assert.False(body.TryGetProperty("temperature", out _));
@@ -111,7 +114,22 @@ public class CompatibleAdapterTests
 
         var body = Assert.Single(handler.Bodies);
         Assert.Equal("json_object", body.GetProperty("response_format").GetProperty("type").GetString());
-        Assert.Equal(ClaudeParser.Prompt + ClaudeParser.SchemaBlock, TextOf(body.GetProperty("messages")[0]));
+        // One system string, the prompt and the schema block, not an array of parts.
+        var content = body.GetProperty("messages")[0].GetProperty("content");
+        Assert.Equal(JsonValueKind.String, content.ValueKind);
+        Assert.Equal(ClaudeParser.Prompt + "\n" + ClaudeParser.SchemaBlock, content.GetString());
+    }
+
+    [Fact]
+    public async Task AVendorSlowerThanTheTimeoutIsUnavailableAsTimeout()
+    {
+        var (parser, handler) = Start(timeoutSeconds: 1);
+        handler.Delay = TimeSpan.FromSeconds(5);
+        handler.Answer = () => Completion(Reply);
+
+        var ex = await Assert.ThrowsAsync<ParserUnavailableException>(() => parser.ParseAsync("x", new ParseContext(null, MaskMap.Empty), Token));
+
+        Assert.Equal("The model did not answer (timeout).", ex.Message);
     }
 
     [Fact]
