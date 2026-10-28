@@ -124,8 +124,9 @@ public sealed partial class ModelOptions
                 problems.Add(prefix + "BaseUrl must be an absolute https address.");
             if (!IsVendorKeySetting(candidate.ApiKeySetting))
                 problems.Add(prefix + "ApiKeySetting must be '<Vendor>:ApiKey'.");
-            // The key goes as a bearer token to BaseUrl: the paid Anthropic key only to Anthropic's own endpoint.
-            else if (candidate.ApiKeySetting == AnthropicKeySetting
+            // The key goes as a bearer token to BaseUrl: the paid Anthropic key only to Anthropic's own endpoint. Configuration
+            // keys are case-insensitive, so any casing of the setting name reads the same key.
+            else if (string.Equals(candidate.ApiKeySetting, AnthropicKeySetting, StringComparison.OrdinalIgnoreCase)
                 && !(uri is not null && string.Equals(uri.Host, AnthropicHost, StringComparison.OrdinalIgnoreCase)))
                 problems.Add(prefix + "ApiKeySetting may be the Anthropic key only when BaseUrl is " + AnthropicHost + ".");
             if (!OutputModes.Contains(candidate.OutputMode, StringComparer.Ordinal))

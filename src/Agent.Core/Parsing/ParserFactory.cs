@@ -168,6 +168,7 @@ public static class ParserFactory
     /// </summary>
     /// <param name="httpClient">The HTTP client to send through (tests pass a stubbed one); the SDK's own when null.</param>
     /// <exception cref="ArgumentException">The base address is not an absolute <c>https</c> address (the key would go in clear).</exception>
+    /// <exception cref="ArgumentOutOfRangeException">The candidate's <see cref="ModelCandidate.TimeoutSeconds"/> is not above 0.</exception>
     public static IChatClient CreateCompatibleClient(string apiKey, ModelCandidate candidate, HttpClient? httpClient = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(apiKey);
@@ -175,6 +176,7 @@ public static class ParserFactory
         // Validated at start too (ModelOptions.Problems); checked again here for any other caller.
         if (!Uri.TryCreate(candidate.BaseUrl, UriKind.Absolute, out var endpoint) || endpoint.Scheme != Uri.UriSchemeHttps)
             throw new ArgumentException("The candidate's BaseUrl must be an absolute https address.", nameof(candidate));
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(candidate.TimeoutSeconds, nameof(candidate) + "." + nameof(candidate.TimeoutSeconds));
 
         // No retries, as for Anthropic: one parse call per message (rule 2); a 429 shows the handover message at once.
         // The SDK's network timeout is the candidate's, so one setting governs the call (the parser's own token too).

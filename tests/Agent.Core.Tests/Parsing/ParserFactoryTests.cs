@@ -176,6 +176,17 @@ public class ParserFactoryTests
         Assert.Throws<ArgumentException>(() => ParserFactory.CreateCompatibleClient(SecretLookingKey, candidate));
     }
 
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    public void TheCompatibleClientRefusesATimeoutThatIsNotAboveZero(int timeoutSeconds)
+    {
+        var candidate = ModelOptionsTests.Compatible().Selected!;
+        candidate.TimeoutSeconds = timeoutSeconds;
+
+        Assert.Throws<ArgumentOutOfRangeException>(() => ParserFactory.CreateCompatibleClient(SecretLookingKey, candidate));
+    }
+
     [Fact]
     public void TheMissingKeyMessageDoesNotAssumeTheParserValue()
     {

@@ -72,14 +72,18 @@ public class ModelOptionsTests
     }
 
     [Theory]
-    [InlineData("https://api.anthropic.com/v1", true)]
-    [InlineData("https://API.anthropic.com/v1", true)]
-    [InlineData("https://openrouter.ai/api/v1", false)]
-    [InlineData("https://api.anthropic.com.example.org/v1", false)]
-    public void TheAnthropicKeyGoesOnlyToAnthropicsHost(string baseUrl, bool allowed)
+    [InlineData("Anthropic:ApiKey", "https://api.anthropic.com/v1", true)]
+    [InlineData("Anthropic:ApiKey", "https://API.anthropic.com/v1", true)]
+    [InlineData("anthropic:ApiKey", "https://api.anthropic.com/v1", true)]
+    [InlineData("Anthropic:ApiKey", "https://openrouter.ai/api/v1", false)]
+    [InlineData("Anthropic:ApiKey", "https://api.anthropic.com.example.org/v1", false)]
+    // Configuration keys are case-insensitive: these read the Anthropic key too.
+    [InlineData("anthropic:ApiKey", "https://openrouter.ai/api/v1", false)]
+    [InlineData("ANTHROPIC:ApiKey", "https://openrouter.ai/api/v1", false)]
+    public void TheAnthropicKeyGoesOnlyToAnthropicsHost(string setting, string baseUrl, bool allowed)
     {
         var options = Compatible();
-        options.Selected!.ApiKeySetting = "Anthropic:ApiKey";
+        options.Selected!.ApiKeySetting = setting;
         options.Selected.BaseUrl = baseUrl;
 
         string[] expected = allowed ? [] : [Prefix + "ApiKeySetting may be the Anthropic key only when BaseUrl is api.anthropic.com."];
