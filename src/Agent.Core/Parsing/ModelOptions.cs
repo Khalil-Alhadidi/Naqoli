@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text.RegularExpressions;
 
 namespace Agent.Core.Parsing;
 
@@ -7,12 +8,33 @@ namespace Agent.Core.Parsing;
 /// (CLAUDE.md, Stack). Validated at start only when <c>Agent:Parser</c> is <c>claude</c> (<see cref="ParserFactory"/>).
 /// The key is not here: it is read from <c>Anthropic:ApiKey</c> or <c>ANTHROPIC_API_KEY</c> and never shown.
 /// </summary>
-public sealed class ModelOptions
+public sealed partial class ModelOptions
 {
     public const string SectionName = "Model";
 
-    /// <summary>The only provider built: Anthropic, through <c>Microsoft.Extensions.AI</c>.</summary>
+    /// <summary>Anthropic, through <c>Microsoft.Extensions.AI</c>; its key is <c>Anthropic:ApiKey</c> or <c>ANTHROPIC_API_KEY</c>.</summary>
     public const string AnthropicProvider = "anthropic";
+
+    /// <summary>
+    /// A vendor with an OpenAI-compatible chat endpoint (Gemini through AI Studio, OpenRouter), reached at
+    /// <see cref="ModelCandidate.BaseUrl"/> with the key read from <see cref="ModelCandidate.ApiKeySetting"/>.
+    /// </summary>
+    public const string CompatibleProvider = "compatible";
+
+    /// <summary>The providers a candidate may name.</summary>
+    public static IReadOnlyList<string> Providers { get; } = [AnthropicProvider, CompatibleProvider];
+
+    /// <summary>The <c>compatible</c> output mode that sends the structure as <c>response_format</c> <c>json_schema</c>.</summary>
+    public const string OutputModeJsonSchema = "json_schema";
+
+    /// <summary>
+    /// The <c>compatible</c> output mode that asks only for a JSON object (<c>response_format</c> <c>json_object</c>), for
+    /// a model that does not take a schema.
+    /// </summary>
+    public const string OutputModeJsonObject = "json_object";
+
+    /// <summary>The values <see cref="ModelCandidate.OutputMode"/> accepts.</summary>
+    public static IReadOnlyList<string> OutputModes { get; } = [OutputModeJsonSchema, OutputModeJsonObject];
 
     /// <summary>The effort levels the API accepts in <c>output_config.effort</c>.</summary>
     public static IReadOnlyList<string> EffortLevels { get; } = ["low", "medium", "high", "xhigh", "max"];
@@ -39,6 +61,25 @@ public sealed class ModelOptions
     public ModelCandidate? Selected
         => Candidate is not null && Candidates.TryGetValue(Candidate, out var candidate) ? candidate : null;
 
+    /// <summary>
+    /// The short name a provider gives in reports and parser labels: <c>claude</c> for <c>anthropic</c>, <c>compatible</c>
+    /// for <c>compatible</c>.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">The provider is not one of <see cref="Providers"/>.</exception>
+    public static string LabelOf(string provider) => provider switch
+    {
+        AnthropicProvider => "claude",
+        CompatibleProvider => "compatible",
+        _ => throw new InvalidOperationException("Unknown model provider '" + provider + "'."),
+    };
+
+    /// <summary>
+    /// Whether a setting name has the shape <c>&lt;Vendor&gt;:ApiKey</c> (a letter, then letters or digits, then
+    /// <c>:ApiKey</c>), so that a candidate can point only at a vendor key and never at another setting.
+    /// </summary>
+    public static bool IsVendorKeySetting(string? setting)
+        => setting is not null && VendorKeySetting().IsMatch(setting);
+
     /// <summary>What is wrong with the candidate in use, one sentence each; empty when it can be used.</summary>
     public IReadOnlyList<string> Problems()
     {
@@ -47,33 +88,80 @@ public sealed class ModelOptions
 
         var prefix = "Model:Candidates:" + Candidate + ":";
         var problems = new List<string>();
-        if (!string.Equals(candidate.Provider, AnthropicProvider, StringComparison.Ordinal))
-            problems.Add(prefix + "Provider must be '" + AnthropicProvider + "'.");
+        if (!Providers.Contains(candidate.Provider, StringComparer.Ordinal))
+            problems.Add(prefix + "Provider must be one of " + string.Join(", ", Providers) + ".");
         if (string.IsNullOrWhiteSpace(candidate.ModelId))
             problems.Add(prefix + "ModelId is required.");
         if (candidate.MaxOutputTokens <= 0)
             problems.Add(prefix + "MaxOutputTokens must be above 0.");
         if (candidate.TimeoutSeconds <= 0)
             problems.Add(prefix + "TimeoutSeconds must be above 0.");
-        if (!EffortLevels.Contains(candidate.Effort, StringComparer.Ordinal))
+        if (candidate.IsAnthropic && !EffortLevels.Contains(candidate.Effort, StringComparer.Ordinal))
             problems.Add(prefix + "Effort must be one of " + string.Join(", ", EffortLevels) + ".");
         if (candidate.Temperature is < 0f or > 1f)
             problems.Add(prefix + "Temperature must be from 0 to 1, or unset.");
         if (candidate.InputPricePerMTok < 0 || candidate.OutputPricePerMTok < 0
             || candidate.CacheWritePricePerMTok < 0 || candidate.CacheReadPricePerMTok < 0)
             problems.Add(prefix + "InputPricePerMTok, OutputPricePerMTok, CacheWritePricePerMTok and CacheReadPricePerMTok must not be below 0.");
-        if (!PromptCacheTtls.Contains(candidate.PromptCacheTtl, StringComparer.Ordinal))
+        if (candidate.IsAnthropic && !PromptCacheTtls.Contains(candidate.PromptCacheTtl, StringComparer.Ordinal))
             problems.Add(prefix + "PromptCacheTtl must be one of " + string.Join(", ", PromptCacheTtls) + ".");
+        if (candidate.MinMillisecondsBetweenCalls < 0)
+            problems.Add(prefix + "MinMillisecondsBetweenCalls must not be below 0.");
+        if (candidate.IsCompatible)
+        {
+            if (!(Uri.TryCreate(candidate.BaseUrl, UriKind.Absolute, out var uri) && uri.Scheme == Uri.UriSchemeHttps))
+                problems.Add(prefix + "BaseUrl must be an absolute https address.");
+            if (!IsVendorKeySetting(candidate.ApiKeySetting))
+                problems.Add(prefix + "ApiKeySetting must be '<Vendor>:ApiKey'.");
+            if (!OutputModes.Contains(candidate.OutputMode, StringComparer.Ordinal))
+                problems.Add(prefix + "OutputMode must be one of " + string.Join(", ", OutputModes) + ".");
+        }
+
         return problems;
     }
+
+    [GeneratedRegex("^[A-Za-z][A-Za-z0-9]*:ApiKey$", RegexOptions.CultureInvariant)]
+    private static partial Regex VendorKeySetting();
 }
 
 /// <summary>One model candidate: the provider, the model id, the call's limits and its prices.</summary>
 public sealed class ModelCandidate
 {
+    /// <summary>The provider: <c>anthropic</c> (the default) or <c>compatible</c> (<see cref="ModelOptions.Providers"/>).</summary>
     public string Provider { get; set; } = ModelOptions.AnthropicProvider;
 
+    /// <summary>The vendor's model id, sent as is.</summary>
     public string ModelId { get; set; } = string.Empty;
+
+    /// <summary>
+    /// For <c>compatible</c>: the vendor's OpenAI-compatible base address, absolute and <c>https</c>
+    /// (for example <c>https://openrouter.ai/api/v1</c>). Unused for <c>anthropic</c>.
+    /// </summary>
+    public string? BaseUrl { get; set; }
+
+    /// <summary>
+    /// For <c>compatible</c>: the name of the setting that holds the key, always <c>&lt;Vendor&gt;:ApiKey</c>
+    /// (<see cref="ModelOptions.IsVendorKeySetting"/>). The name only, never the key. Unused for <c>anthropic</c>.
+    /// </summary>
+    public string? ApiKeySetting { get; set; }
+
+    /// <summary>
+    /// For <c>compatible</c>: how the structure is asked for, <c>json_schema</c> (the default) or <c>json_object</c>
+    /// (<see cref="ModelOptions.OutputModes"/>). Unused for <c>anthropic</c>.
+    /// </summary>
+    public string OutputMode { get; set; } = ModelOptions.OutputModeJsonSchema;
+
+    /// <summary>The least time, in milliseconds, between the starts of two parse calls on this candidate; 0 (the default) waits not at all.</summary>
+    public int MinMillisecondsBetweenCalls { get; set; }
+
+    /// <summary>Whether the provider is <c>anthropic</c>.</summary>
+    public bool IsAnthropic => Provider == ModelOptions.AnthropicProvider;
+
+    /// <summary>Whether the provider is <c>compatible</c>.</summary>
+    public bool IsCompatible => Provider == ModelOptions.CompatibleProvider;
+
+    /// <summary>The provider's short name for reports and parser labels (<see cref="ModelOptions.LabelOf"/>).</summary>
+    public string Label => ModelOptions.LabelOf(Provider);
 
     /// <summary>
     /// The most tokens the model may write in one parse reply. The 5.5 models think by default and thinking counts against
