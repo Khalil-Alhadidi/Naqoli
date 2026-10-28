@@ -23,6 +23,12 @@ public sealed partial class ModelOptions
     /// </summary>
     public const string CompatibleProvider = "compatible";
 
+    /// <summary>The setting that holds the Anthropic key (<see cref="ParserFactory.ApiKeySetting"/>).</summary>
+    public const string AnthropicKeySetting = "Anthropic:ApiKey";
+
+    /// <summary>The only host a <c>compatible</c> candidate may send <see cref="AnthropicKeySetting"/> to.</summary>
+    public const string AnthropicHost = "api.anthropic.com";
+
     /// <summary>The providers a candidate may name.</summary>
     public static IReadOnlyList<string> Providers { get; } = [AnthropicProvider, CompatibleProvider];
 
@@ -109,12 +115,19 @@ public sealed partial class ModelOptions
             problems.Add(prefix + "PromptCacheTtl must be one of " + string.Join(", ", PromptCacheTtls) + ".");
         if (candidate.MinMillisecondsBetweenCalls < 0)
             problems.Add(prefix + "MinMillisecondsBetweenCalls must not be below 0.");
+        // The pace is waited inside the call's timeout: a pace as long as the timeout makes every second call a timeout.
+        else if (candidate.TimeoutSeconds > 0 && candidate.MinMillisecondsBetweenCalls >= candidate.TimeoutSeconds * 1000L)
+            problems.Add(prefix + "MinMillisecondsBetweenCalls must be below TimeoutSeconds.");
         if (candidate.IsCompatible)
         {
             if (!(Uri.TryCreate(candidate.BaseUrl, UriKind.Absolute, out var uri) && uri.Scheme == Uri.UriSchemeHttps))
                 problems.Add(prefix + "BaseUrl must be an absolute https address.");
             if (!IsVendorKeySetting(candidate.ApiKeySetting))
                 problems.Add(prefix + "ApiKeySetting must be '<Vendor>:ApiKey'.");
+            // The key goes as a bearer token to BaseUrl: the paid Anthropic key only to Anthropic's own endpoint.
+            else if (candidate.ApiKeySetting == AnthropicKeySetting
+                && !(uri is not null && string.Equals(uri.Host, AnthropicHost, StringComparison.OrdinalIgnoreCase)))
+                problems.Add(prefix + "ApiKeySetting may be the Anthropic key only when BaseUrl is " + AnthropicHost + ".");
             if (!OutputModes.Contains(candidate.OutputMode, StringComparer.Ordinal))
                 problems.Add(prefix + "OutputMode must be one of " + string.Join(", ", OutputModes) + ".");
         }

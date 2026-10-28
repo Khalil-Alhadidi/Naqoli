@@ -26,7 +26,7 @@ public static class ParserFactory
 
     /// <summary>The parser value for the model candidate in use, whatever its provider; <see cref="Claude"/> is a synonym.</summary>
     public const string Model = "model";
-    public const string ApiKeySetting = "Anthropic:ApiKey";
+    public const string ApiKeySetting = ModelOptions.AnthropicKeySetting;
     public const string ApiKeyVariable = "ANTHROPIC_API_KEY";
 
     /// <summary>The message when <c>claude</c> is chosen and no key is set (it names where to set one, never a value).</summary>
@@ -48,7 +48,8 @@ public static class ParserFactory
     /// <summary>
     /// The key for <paramref name="candidate"/>: for <c>anthropic</c> the lookup of
     /// <see cref="ApiKey(IConfiguration, Func{string, string?}?)"/>; for <c>compatible</c> the setting its
-    /// <see cref="ModelCandidate.ApiKeySetting"/> names. Null when not set.
+    /// <see cref="ModelCandidate.ApiKeySetting"/> names, only when it has the shape <c>&lt;Vendor&gt;:ApiKey</c>
+    /// (<see cref="ModelOptions.IsVendorKeySetting"/>), so no other setting is ever read as a key. Null when not set.
     /// </summary>
     public static string? ApiKey(IConfiguration configuration, ModelCandidate candidate, Func<string, string?>? environment = null)
     {
@@ -56,7 +57,7 @@ public static class ParserFactory
         ArgumentNullException.ThrowIfNull(candidate);
         if (!candidate.IsCompatible)
             return ApiKey(configuration, environment);
-        if (string.IsNullOrWhiteSpace(candidate.ApiKeySetting))
+        if (!ModelOptions.IsVendorKeySetting(candidate.ApiKeySetting))
             return null;
         var configured = configuration[candidate.ApiKeySetting];
         return string.IsNullOrWhiteSpace(configured) ? null : configured;
@@ -73,7 +74,7 @@ public static class ParserFactory
         if (!candidate.IsCompatible)
             return MissingKeyMessage;
         var setting = candidate.ApiKeySetting ?? string.Empty;
-        return "Agent:Parser is 'model' but no key is set for the candidate. Set " + setting
+        return "Agent:Parser selects a model, but no key is set for the candidate. Set " + setting
             + " in user secrets (dotnet user-secrets set \"" + setting + "\" <key> --project src/Agent.Web) or the environment variable "
             + setting.Replace(':', '_').Replace("_", "__", StringComparison.Ordinal) + ".";
     }
@@ -163,18 +164,27 @@ public static class ParserFactory
 
     /// <summary>
     /// The OpenAI SDK's chat client for <paramref name="candidate"/>'s model at its <see cref="ModelCandidate.BaseUrl"/>,
-    /// with <paramref name="apiKey"/> and no retries, as an <see cref="IChatClient"/>.
+    /// with <paramref name="apiKey"/>, no retries and the candidate's timeout, as an <see cref="IChatClient"/>.
     /// </summary>
     /// <param name="httpClient">The HTTP client to send through (tests pass a stubbed one); the SDK's own when null.</param>
+    /// <exception cref="ArgumentException">The base address is not an absolute <c>https</c> address (the key would go in clear).</exception>
     public static IChatClient CreateCompatibleClient(string apiKey, ModelCandidate candidate, HttpClient? httpClient = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(apiKey);
         ArgumentNullException.ThrowIfNull(candidate);
+        // Validated at start too (ModelOptions.Problems); checked again here for any other caller.
+        if (!Uri.TryCreate(candidate.BaseUrl, UriKind.Absolute, out var endpoint) || endpoint.Scheme != Uri.UriSchemeHttps)
+            throw new ArgumentException("The candidate's BaseUrl must be an absolute https address.", nameof(candidate));
+
         // No retries, as for Anthropic: one parse call per message (rule 2); a 429 shows the handover message at once.
+        // The SDK's network timeout is the candidate's, so one setting governs the call (the parser's own token too).
+        // Logging stays the SDK default: never give ClientLoggingOptions an ILoggerFactory or EnableMessageContentLogging,
+        // because the request and response bodies carry the user's masked text and the model's reply.
         var client = new OpenAIClient(new ApiKeyCredential(apiKey), new OpenAIClientOptions
         {
-            Endpoint = new Uri(candidate.BaseUrl!),
+            Endpoint = endpoint,
             RetryPolicy = new ClientRetryPolicy(maxRetries: 0),
+            NetworkTimeout = TimeSpan.FromSeconds(candidate.TimeoutSeconds),
             Transport = httpClient is null ? null : new HttpClientPipelineTransport(httpClient),
         });
         return client.GetChatClient(candidate.ModelId).AsIChatClient();

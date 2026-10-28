@@ -71,6 +71,35 @@ public class ModelOptionsTests
         Assert.Equal([Prefix + "ApiKeySetting must be '<Vendor>:ApiKey'."], options.Problems());
     }
 
+    [Theory]
+    [InlineData("https://api.anthropic.com/v1", true)]
+    [InlineData("https://API.anthropic.com/v1", true)]
+    [InlineData("https://openrouter.ai/api/v1", false)]
+    [InlineData("https://api.anthropic.com.example.org/v1", false)]
+    public void TheAnthropicKeyGoesOnlyToAnthropicsHost(string baseUrl, bool allowed)
+    {
+        var options = Compatible();
+        options.Selected!.ApiKeySetting = "Anthropic:ApiKey";
+        options.Selected.BaseUrl = baseUrl;
+
+        string[] expected = allowed ? [] : [Prefix + "ApiKeySetting may be the Anthropic key only when BaseUrl is api.anthropic.com."];
+        Assert.Equal(expected, options.Problems());
+    }
+
+    [Theory]
+    [InlineData(30, 29_999, true)]
+    [InlineData(30, 30_000, false)]
+    [InlineData(1, 4_000, false)]
+    public void ThePaceMustBeBelowTheTimeout(int timeoutSeconds, int paceMs, bool allowed)
+    {
+        var options = Compatible();
+        options.Selected!.TimeoutSeconds = timeoutSeconds;
+        options.Selected.MinMillisecondsBetweenCalls = paceMs;
+
+        string[] expected = allowed ? [] : [Prefix + "MinMillisecondsBetweenCalls must be below TimeoutSeconds."];
+        Assert.Equal(expected, options.Problems());
+    }
+
     [Fact]
     public void AnUnknownOutputModeIsOneProblem()
     {

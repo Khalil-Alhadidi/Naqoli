@@ -139,6 +139,53 @@ public class ParserFactoryTests
     }
 
     [Fact]
+    public void TheRunnerHasNoUserSecretsOfItsOwn()
+    {
+        // Security review M2: with a UserSecretsId, the runner's host (Development) would load that store whole; were it
+        // the console's id, every console secret, its agent database string above all, would reach the runner, which
+        // empties the tables of the database it uses. The runner copies one key only (EvalCommand.SecretToCopy).
+        var project = File.ReadAllText(Path.Combine(global::Agent.Eval.Running.EvalPaths.RepositoryRoot(), "src", "Agent.Eval", "Agent.Eval.csproj"));
+
+        Assert.DoesNotContain("<UserSecretsId>", project, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ACompatibleKeyIsReadOnlyFromAVendorKeySetting()
+    {
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["ConnectionStrings:Agent"] = "Server=test;Database=Agent_Test",
+            ["Gemini:ApiKey"] = SecretLookingKey,
+        }).Build();
+        var candidate = ModelOptionsTests.Compatible().Selected!;
+
+        Assert.Equal(SecretLookingKey, ParserFactory.ApiKey(configuration, candidate));
+        candidate.ApiKeySetting = "ConnectionStrings:Agent";
+        Assert.Null(ParserFactory.ApiKey(configuration, candidate));
+    }
+
+    [Theory]
+    [InlineData("http://generativelanguage.googleapis.com/v1beta/openai")]
+    [InlineData("relative/path")]
+    [InlineData(null)]
+    public void TheCompatibleClientRefusesAnAddressThatIsNotHttps(string? baseUrl)
+    {
+        var candidate = ModelOptionsTests.Compatible().Selected!;
+        candidate.BaseUrl = baseUrl;
+
+        Assert.Throws<ArgumentException>(() => ParserFactory.CreateCompatibleClient(SecretLookingKey, candidate));
+    }
+
+    [Fact]
+    public void TheMissingKeyMessageDoesNotAssumeTheParserValue()
+    {
+        var message = ParserFactory.MissingKeyMessageFor(ModelOptionsTests.Compatible().Selected!);
+
+        Assert.StartsWith("Agent:Parser selects a model, but no key is set for the candidate. Set Gemini:ApiKey", message, StringComparison.Ordinal);
+        Assert.EndsWith("or the environment variable Gemini__ApiKey.", message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void AnUnknownParserIsRefused()
     {
         var ex = Assert.Throws<InvalidOperationException>(() => Build(new Dictionary<string, string?> { ["Agent:Parser"] = "gpt" }));
