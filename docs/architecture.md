@@ -247,7 +247,7 @@ The built contract, with every route, field and error code, is `docs/wallet-api.
 | Runtime | .NET 10 | The current long-term release and Khalil's daily stack |
 | UI | Blazor Server with MudBlazor 9 | MudBlazor 9 supports .NET 8, 9 and 10. Tabs, data grids and form fields come ready-made, so effort goes into the card and the chat |
 | Right to left | The phone frame is wrapped in MudBlazor's right-to-left provider; the console stays left to right | Arabic chat and an English console on one page |
-| Model access | One provider-neutral chat interface (Microsoft.Extensions.AI) over the Anthropic SDK or the OpenAI SDK pointed at a compatible vendor | Swapping the three candidates becomes configuration, not code |
+| Model access | One provider-neutral chat interface (Microsoft.Extensions.AI) over the Anthropic SDK or the OpenAI SDK pointed at a compatible vendor | Swapping candidates, across vendors, becomes configuration, not code |
 | Storage | SQL Server through EF Core, created and seeded by migrations | Familiar, and closer to what a real wallet would run. Costs one thing: anyone running the repo needs a SQL Server instance |
 | Logs | Two tables in the same database | Audit log and learning log are queryable from the page |
 | Screen tests | Playwright for .NET | Proves what only a screen can show |
