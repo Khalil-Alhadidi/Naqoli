@@ -89,7 +89,10 @@ public class EvalSettingsTests
         var openrouter = options.Selected!;
         Assert.Equal("""{"reasoning":{"effort":"low"}}""", openrouter.RequestFieldsText());
         Assert.Equal((4000, 60), (openrouter.MaxOutputTokens, openrouter.TimeoutSeconds));
-        Assert.Null(options.Candidates["gemini"].RequestFields);
+        var gemini = options.Candidates["gemini"];
+        Assert.Null(gemini.RequestFields);
+        // The free tier of gemini-3.5-flash allows 20 requests a day; flash-lite is shipped, paced (29 Oct 2026).
+        Assert.Equal(("gemini-3.5-flash-lite", 6500), (gemini.ModelId, gemini.MinMillisecondsBetweenCalls));
     }
 
     [Theory]

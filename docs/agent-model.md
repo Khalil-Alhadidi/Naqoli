@@ -171,11 +171,11 @@ flowchart LR
 | `OutputMode` | `json_schema` (the default) or `json_object` |
 | `MinMillisecondsBetweenCalls` | The least time between the starts of two parse calls on the candidate (every provider; 0, no wait, by default) |
 
-The two shipped entries, in both `appsettings.json` files, were shipped with the model id empty on purpose: Khalil fills it from the vendor's console on the day (ids and prices change; the report header records what was used). A candidate whose model id is empty fails the start only when it is the one selected. On 29 Oct 2026 they hold `gemini-3.5-flash` and `recursive/flint-v1.0:free`.
+The two shipped entries, in both `appsettings.json` files, were shipped with the model id empty on purpose: Khalil fills it from the vendor's console on the day (ids and prices change; the report header records what was used). A candidate whose model id is empty fails the start only when it is the one selected. On 29 Oct 2026 they hold `gemini-3.5-flash-lite` and `recursive/flint-v1.0:free`. The `gemini` entry first held `gemini-3.5-flash`, but that model's free tier, measured on 29 Oct 2026, is 5 requests a minute and 20 a day (the 429 body names the quota `GenerateRequestsPerDayPerProjectPerModel-FreeTier`, value 20), and the smoke test spent them; `gemini-3.5-flash-lite` answered nine quick requests without a limit, so it is the shipped id, with the pace raised from 4,000 ms to 6,500 ms.
 
 | Candidate | BaseUrl | ApiKeySetting | Pacing | Notes |
 |---|---|---|---|---|
-| `gemini` | `https://generativelanguage.googleapis.com/v1beta/openai` | `Gemini:ApiKey` | 4,000 ms | Google AI Studio's free tier through its OpenAI-compatible endpoint; prefer a Flash or Flash-Lite id; a model that thinks by default needs a higher `MaxOutputTokens` |
+| `gemini` | `https://generativelanguage.googleapis.com/v1beta/openai` | `Gemini:ApiKey` | 6,500 ms | Google AI Studio's free tier through its OpenAI-compatible endpoint; prefer a Flash or Flash-Lite id; a model that thinks by default needs a higher `MaxOutputTokens` |
 | `openrouter` | `https://openrouter.ai/api/v1` | `OpenRouter:ApiKey` | 3,000 ms | One key, many models; the model id is OpenRouter's (`vendor/model`, free ones end `:free`). A second OpenRouter model is a copy of the entry under another name |
 
 `gemini` has `TimeoutSeconds` 30 and `MaxOutputTokens` 1,500; `openrouter` has `TimeoutSeconds` 60, `MaxOutputTokens` 4,000 and `RequestFields` `{"reasoning":{"effort":"low"}}` (29 Oct 2026, for the Flint model's reasoning). Both have prices 0, to be set from the vendor's price list. The pacing values are a first guess at the free tiers' per-minute limits, for Khalil to tune.
