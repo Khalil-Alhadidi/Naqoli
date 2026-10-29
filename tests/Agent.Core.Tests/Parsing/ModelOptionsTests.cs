@@ -215,6 +215,26 @@ public class ModelOptionsTests
         Assert.Equal([Prefix + "RequestFields must not set " + key + "."], options.Problems());
     }
 
+    [Theory]
+    [InlineData("""{"it's":1}""")]
+    [InlineData("""{"a\\b":1}""")]
+    public void RequestFieldsMemberNamesMayNotHoldAQuoteOrABackslash(string fields)
+    {
+        var options = Compatible();
+        options.Selected!.RequestFields = fields;
+
+        Assert.Equal([Prefix + "RequestFields member names may not contain a quote or a backslash."], options.Problems());
+    }
+
+    [Fact]
+    public void AMemberNameWithADotIsAccepted()
+    {
+        var options = Compatible();
+        options.Selected!.RequestFields = """{"x.y":1}""";
+
+        Assert.Empty(options.Problems());
+    }
+
     [Fact]
     public void TheReservedKeysAreComparedOrdinally()
     {

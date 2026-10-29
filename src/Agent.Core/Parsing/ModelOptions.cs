@@ -149,9 +149,15 @@ public sealed partial class ModelOptions
             else if (!ModelCandidate.TryParseRequestFields(candidate.RequestFields, out var fields))
                 problems.Add(prefix + "RequestFields must be a JSON object.");
             else
+            {
                 problems.AddRange(fields.Select(field => field.Key)
                     .Where(key => ReservedRequestFields.Contains(key, StringComparer.Ordinal))
                     .Select(key => prefix + "RequestFields must not set " + key + "."));
+                // Each name goes into a bracket-notation JSON path as written ($['name']), so it may hold no quote or backslash.
+                problems.AddRange(fields.Select(field => field.Key)
+                    .Where(key => key.Contains('\'', StringComparison.Ordinal) || key.Contains('\\', StringComparison.Ordinal))
+                    .Select(_ => prefix + "RequestFields member names may not contain a quote or a backslash."));
+            }
         }
 
         return problems;
@@ -192,8 +198,8 @@ public sealed class ModelCandidate
     /// For <c>compatible</c>: the text of a JSON object whose top-level members are added, as given, to the top level of
     /// the chat-completions request body (a vendor's own field, such as OpenRouter's <c>{"reasoning":{"effort":"low"}}</c>).
     /// Null, empty or <c>{}</c> (the default) sends nothing. Static configuration, opaque to the code: it may not name a
-    /// field the parser sets (<see cref="ModelOptions.ReservedRequestFields"/>), and an <c>anthropic</c> candidate may not
-    /// set it at all.
+    /// field the parser sets (<see cref="ModelOptions.ReservedRequestFields"/>), no member name may contain a quote or a
+    /// backslash, and an <c>anthropic</c> candidate may not set it at all.
     /// </summary>
     public string? RequestFields { get; set; }
 

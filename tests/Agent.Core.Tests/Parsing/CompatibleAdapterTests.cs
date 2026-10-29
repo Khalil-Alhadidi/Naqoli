@@ -251,7 +251,7 @@ public class CompatibleAdapterTests
     {
         var (parser, handler) = Start(
             ModelOptions.OutputModeJsonObject,
-            requestFields: """{"reasoning":{"effort":"low","exclude":true},"top_k":40,"provider":{"order":["a","b"]},"seed":null,"x.y":1,"it's":2}""");
+            requestFields: """{"reasoning":{"effort":"low","exclude":true},"top_k":40,"provider":{"order":["a","b"]},"seed":null,"x.y":1}""");
         handler.Answer = () => Completion(Reply);
 
         await parser.ParseAsync("pay the water", new ParseContext(null, MaskMap.Empty), Token);
@@ -261,9 +261,8 @@ public class CompatibleAdapterTests
         Assert.Equal(40, body.GetProperty("top_k").GetInt32());
         Assert.Equal(["a", "b"], body.GetProperty("provider").GetProperty("order").EnumerateArray().Select(e => e.GetString()));
         Assert.Equal(JsonValueKind.Null, body.GetProperty("seed").ValueKind);
-        // A member name with a dot or a quote is one top-level member, not a path.
+        // A member name with a dot is one top-level member, not a path.
         Assert.Equal(1, body.GetProperty("x.y").GetInt32());
-        Assert.Equal(2, body.GetProperty("it's").GetInt32());
         Assert.Equal("json_object", body.GetProperty("response_format").GetProperty("type").GetString());
         Assert.Equal(1500, body.GetProperty("max_completion_tokens").GetInt32());
     }

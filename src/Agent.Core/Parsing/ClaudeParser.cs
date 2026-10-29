@@ -316,8 +316,11 @@ public sealed partial class ClaudeParser : IParser, IParserUsage
         return raw;
     }
 
-    /// <summary>The JSON path of a top-level member, in bracket notation so that any member name is one segment.</summary>
-    private static string JsonPathOf(string key) => "$['" + key.Replace("\\", "\\\\", StringComparison.Ordinal).Replace("'", "\'", StringComparison.Ordinal) + "']";
+    /// <summary>
+    /// The JSON path of a top-level member, in bracket notation so that a name with a dot is one segment. The validation
+    /// refuses a name with a quote or a backslash, so the name goes in as written.
+    /// </summary>
+    private static string JsonPathOf(string key) => "$['" + key + "']";
 
     /// <summary>
     /// The system message for a <c>compatible</c> candidate: one plain text part, never marked cacheable, so it goes out
