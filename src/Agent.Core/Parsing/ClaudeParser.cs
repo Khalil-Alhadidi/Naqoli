@@ -402,6 +402,9 @@ public sealed partial class ClaudeParser : IParser, IParserUsage
         ClientResultException api => "http_" + api.Status.ToString(CultureInfo.InvariantCulture),
         HttpRequestException { StatusCode: { } status } => "http_" + ((int)status).ToString(CultureInfo.InvariantCulture),
         HttpRequestException or AnthropicIOException => "connection",
+        // The OpenAI adapter throws it when a 200 reply carries no choices: OpenRouter answers an upstream
+        // error (a rate-limited provider) that way, with "choices":[] and an error object in the body.
+        ArgumentOutOfRangeException => "empty_reply",
         _ => ex.GetType().Name,
     };
 

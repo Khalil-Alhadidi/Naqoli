@@ -202,6 +202,20 @@ public class CompatibleAdapterTests
         Assert.Equal("Bearer " + FakeKey, Assert.Single(handler.Authorizations));
     }
 
+    [Fact]
+    public async Task AnOkReplyWithNoChoicesIsUnavailableAsEmptyReply()
+    {
+        // OpenRouter's shape when the upstream provider is rate-limited (29 Oct 2026): HTTP 200, no choices, an error object.
+        var (parser, handler) = Start();
+        handler.Answer = () => Json(HttpStatusCode.OK, """{"id":"gen-test","choices":[],"error":{"message":"test-model:free is temporarily rate-limited upstream. Please retry shortly.","code":429,"metadata":{"provider_name":"Test","limit_source":"upstream_provider_shared_pool"}}}""");
+
+        var ex = await Assert.ThrowsAsync<ParserUnavailableException>(() => parser.ParseAsync("x", new ParseContext(null, MaskMap.Empty), Token));
+
+        Assert.Equal("The model did not answer (empty_reply).", ex.Message);
+        // One request, retried never.
+        Assert.Single(handler.Bodies);
+    }
+
     [Theory]
     [InlineData(null)]
     [InlineData(ReasoningLow)]
