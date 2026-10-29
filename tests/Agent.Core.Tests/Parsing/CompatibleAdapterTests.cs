@@ -27,11 +27,15 @@ public class CompatibleAdapterTests
 
     private static string Reply => "{\"requests\":[" + Item + "]}";
 
-    private static (ClaudeParser Parser, RecordingHandler Handler) Start(string outputMode = ModelOptions.OutputModeJsonSchema, int timeoutSeconds = 20)
+    private const string ReasoningLow = """{"reasoning":{"effort":"low"}}""";
+
+    private static (ClaudeParser Parser, RecordingHandler Handler) Start(
+        string outputMode = ModelOptions.OutputModeJsonSchema, int timeoutSeconds = 20, string? requestFields = null)
     {
         var handler = new RecordingHandler();
         var options = ClaudeParserTests.OptionsCompatible(outputMode);
         options.Selected!.TimeoutSeconds = timeoutSeconds;
+        options.Selected.RequestFields = requestFields;
         var parser = new ClaudeParser(
             ParserFactory.CreateCompatibleClient(FakeKey, options.Selected!, new HttpClient(handler)),
             Microsoft.Extensions.Options.Options.Create(options),
@@ -198,11 +202,13 @@ public class CompatibleAdapterTests
         Assert.Equal("Bearer " + FakeKey, Assert.Single(handler.Authorizations));
     }
 
-    [Fact]
-    public async Task TheOutboundTextIsMasked()
+    [Theory]
+    [InlineData(null)]
+    [InlineData(ReasoningLow)]
+    public async Task TheOutboundTextIsMasked(string? requestFields)
     {
         const string Raw = "send 50000 to 07701234567";
-        var (parser, handler) = Start();
+        var (parser, handler) = Start(requestFields: requestFields);
         handler.Answer = () => Completion(Reply);
 
         // No map given: the parser masks the text itself before it leaves (rule 5).
@@ -210,6 +216,72 @@ public class CompatibleAdapterTests
 
         var body = Assert.Single(handler.Bodies);
         Assert.DoesNotContain("07701234567", body.GetRawText(), StringComparison.Ordinal);
-        Assert.Equal("Pending: none\nMessage: " + Masker.Mask(Raw).Text, TextOf(body.GetProperty("messages")[1]));
+        // The request fields change neither message: the system message is the prompt, the user message the masked text.
+        var messages = body.GetProperty("messages");
+        Assert.Equal(2, messages.GetArrayLength());
+        Assert.Equal(ClaudeParser.Prompt, TextOf(messages[0]));
+        Assert.Equal("Pending: none\nMessage: " + Masker.Mask(Raw).Text, TextOf(messages[1]));
+    }
+
+    [Fact]
+    public async Task TheRequestFieldsArriveAtTheTopLevelBesideTheStrictFormat()
+    {
+        var (parser, handler) = Start(requestFields: ReasoningLow);
+        handler.Answer = () => Completion(Reply);
+
+        await parser.ParseAsync("pay the water", new ParseContext(null, MaskMap.Empty), Token);
+
+        var body = Assert.Single(handler.Bodies);
+        var reasoning = body.GetProperty("reasoning");
+        // The nested value as given, an object holding a string, not the object's text as a string.
+        Assert.Equal(JsonValueKind.Object, reasoning.ValueKind);
+        Assert.Equal(JsonValueKind.String, reasoning.GetProperty("effort").ValueKind);
+        Assert.Equal("low", reasoning.GetProperty("effort").GetString());
+        // What the parser sets itself still arrives beside it.
+        Assert.Equal("gemini-test", body.GetProperty("model").GetString());
+        var format = body.GetProperty("response_format");
+        Assert.Equal("json_schema", format.GetProperty("type").GetString());
+        Assert.True(format.GetProperty("json_schema").GetProperty("strict").GetBoolean());
+        Assert.True(JsonElement.DeepEquals(ClaudeParser.Schema, format.GetProperty("json_schema").GetProperty("schema")));
+        Assert.Equal(1500, body.GetProperty("max_completion_tokens").GetInt32());
+    }
+
+    [Fact]
+    public async Task EveryTopLevelMemberArrivesWithItsJsonKind()
+    {
+        var (parser, handler) = Start(
+            ModelOptions.OutputModeJsonObject,
+            requestFields: """{"reasoning":{"effort":"low","exclude":true},"top_k":40,"provider":{"order":["a","b"]},"seed":null,"x.y":1,"it's":2}""");
+        handler.Answer = () => Completion(Reply);
+
+        await parser.ParseAsync("pay the water", new ParseContext(null, MaskMap.Empty), Token);
+
+        var body = Assert.Single(handler.Bodies);
+        Assert.True(body.GetProperty("reasoning").GetProperty("exclude").GetBoolean());
+        Assert.Equal(40, body.GetProperty("top_k").GetInt32());
+        Assert.Equal(["a", "b"], body.GetProperty("provider").GetProperty("order").EnumerateArray().Select(e => e.GetString()));
+        Assert.Equal(JsonValueKind.Null, body.GetProperty("seed").ValueKind);
+        // A member name with a dot or a quote is one top-level member, not a path.
+        Assert.Equal(1, body.GetProperty("x.y").GetInt32());
+        Assert.Equal(2, body.GetProperty("it's").GetInt32());
+        Assert.Equal("json_object", body.GetProperty("response_format").GetProperty("type").GetString());
+        Assert.Equal(1500, body.GetProperty("max_completion_tokens").GetInt32());
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("{}")]
+    public async Task WithoutRequestFieldsNothingIsAdded(string? requestFields)
+    {
+        var (parser, handler) = Start(requestFields: requestFields);
+        handler.Answer = () => Completion(Reply);
+
+        await parser.ParseAsync("pay the water", new ParseContext(null, MaskMap.Empty), Token);
+
+        var body = Assert.Single(handler.Bodies);
+        Assert.False(body.TryGetProperty("reasoning", out _));
+        Assert.Equal(
+            ["max_completion_tokens", "messages", "model", "response_format"],
+            body.EnumerateObject().Select(p => p.Name).Order(StringComparer.Ordinal));
     }
 }

@@ -1,6 +1,7 @@
 using System.ClientModel;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Schema;
@@ -13,6 +14,7 @@ using Anthropic.Models.Messages;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using ChatCompletionOptions = OpenAI.Chat.ChatCompletionOptions;
 
 namespace Agent.Core.Parsing;
 
@@ -271,8 +273,9 @@ public sealed partial class ClaudeParser : IParser, IParserUsage
     };
 
     /// <summary>
-    /// The call's options for a <c>compatible</c> candidate: no effort and no raw request, the format by the output mode
-    /// (strict <c>json_schema</c>, or <c>json_object</c> with the schema in the system message).
+    /// The call's options for a <c>compatible</c> candidate: no effort, the format by the output mode (strict
+    /// <c>json_schema</c>, or <c>json_object</c> with the schema in the system message), and the candidate's
+    /// <see cref="ModelCandidate.RequestFields"/>, when it sets any, as the raw request (<see cref="RequestFieldsOptions"/>).
     /// </summary>
     private static ChatOptions CompatibleOptions(ModelCandidate candidate)
     {
@@ -282,6 +285,8 @@ public sealed partial class ClaudeParser : IParser, IParserUsage
             MaxOutputTokens = candidate.MaxOutputTokens,
             Temperature = candidate.Temperature,
         };
+        if (candidate.RequestFieldsObject() is { } fields)
+            options.RawRepresentationFactory = _ => RequestFieldsOptions(fields);
         if (candidate.OutputMode == ModelOptions.OutputModeJsonObject)
         {
             options.ResponseFormat = ChatResponseFormat.Json;
@@ -294,6 +299,25 @@ public sealed partial class ClaudeParser : IParser, IParserUsage
 
         return options;
     }
+
+    /// <summary>
+    /// The SDK's own options with each top-level member of <paramref name="fields"/> patched into the request body as given
+    /// (the OpenAI SDK's JSON patch, <c>SCME0001</c>). The OpenAI adapter starts from these options and then applies the rest
+    /// of <see cref="ChatOptions"/> (model, format, output limit); the validation keeps every field the parser sets out of
+    /// <paramref name="fields"/>, and <c>CompatibleAdapterTests</c> reads both from the request body.
+    /// </summary>
+    private static ChatCompletionOptions RequestFieldsOptions(JsonObject fields)
+    {
+        var raw = new ChatCompletionOptions();
+#pragma warning disable SCME0001 // The JSON patch is experimental in OpenAI 2.14.0; the wire tests pin what it sends.
+        foreach (var (key, value) in fields)
+            raw.Patch.Set(Encoding.UTF8.GetBytes(JsonPathOf(key)), BinaryData.FromString(value?.ToJsonString() ?? "null"));
+#pragma warning restore SCME0001
+        return raw;
+    }
+
+    /// <summary>The JSON path of a top-level member, in bracket notation so that any member name is one segment.</summary>
+    private static string JsonPathOf(string key) => "$['" + key.Replace("\\", "\\\\", StringComparison.Ordinal).Replace("'", "\'", StringComparison.Ordinal) + "']";
 
     /// <summary>
     /// The system message for a <c>compatible</c> candidate: one plain text part, never marked cacheable, so it goes out

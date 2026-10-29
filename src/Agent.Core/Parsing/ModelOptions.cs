@@ -1,4 +1,6 @@
 using System.Globalization;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 
 namespace Agent.Core.Parsing;
@@ -58,6 +60,13 @@ public sealed partial class ModelOptions
 
     /// <summary>The values <see cref="ModelCandidate.PromptCacheTtl"/> accepts.</summary>
     public static IReadOnlyList<string> PromptCacheTtls { get; } = [CacheTtl5m, CacheTtl1h, CacheTtlNone];
+
+    /// <summary>
+    /// The top-level request fields the parser sets itself, which <see cref="ModelCandidate.RequestFields"/> may not name
+    /// (compared ordinally).
+    /// </summary>
+    public static IReadOnlyList<string> ReservedRequestFields { get; } =
+        ["model", "messages", "response_format", "max_completion_tokens", "max_tokens", "temperature", "stream", "tools", "tool_choice"];
 
     /// <summary>The name of the candidate in use (a key of <see cref="Candidates"/>).</summary>
     public string? Candidate { get; set; }
@@ -133,6 +142,18 @@ public sealed partial class ModelOptions
                 problems.Add(prefix + "OutputMode must be one of " + string.Join(", ", OutputModes) + ".");
         }
 
+        if (!string.IsNullOrWhiteSpace(candidate.RequestFields))
+        {
+            if (!candidate.IsCompatible)
+                problems.Add(prefix + "RequestFields is only for a compatible candidate.");
+            else if (!ModelCandidate.TryParseRequestFields(candidate.RequestFields, out var fields))
+                problems.Add(prefix + "RequestFields must be a JSON object.");
+            else
+                problems.AddRange(fields.Select(field => field.Key)
+                    .Where(key => ReservedRequestFields.Contains(key, StringComparer.Ordinal))
+                    .Select(key => prefix + "RequestFields must not set " + key + "."));
+        }
+
         return problems;
     }
 
@@ -166,6 +187,15 @@ public sealed class ModelCandidate
     /// (<see cref="ModelOptions.OutputModes"/>). Unused for <c>anthropic</c>.
     /// </summary>
     public string OutputMode { get; set; } = ModelOptions.OutputModeJsonSchema;
+
+    /// <summary>
+    /// For <c>compatible</c>: the text of a JSON object whose top-level members are added, as given, to the top level of
+    /// the chat-completions request body (a vendor's own field, such as OpenRouter's <c>{"reasoning":{"effort":"low"}}</c>).
+    /// Null, empty or <c>{}</c> (the default) sends nothing. Static configuration, opaque to the code: it may not name a
+    /// field the parser sets (<see cref="ModelOptions.ReservedRequestFields"/>), and an <c>anthropic</c> candidate may not
+    /// set it at all.
+    /// </summary>
+    public string? RequestFields { get; set; }
 
     /// <summary>The least time, in milliseconds, between the starts of two parse calls on this candidate; 0 (the default) waits not at all.</summary>
     public int MinMillisecondsBetweenCalls { get; set; }
@@ -232,6 +262,36 @@ public sealed class ModelCandidate
             + (outputTokens * OutputPricePerMTok)
             + (cacheWriteTokens * CacheWritePricePerMTok)
             + (cacheReadTokens * CacheReadPricePerMTok)) / 1_000_000m;
+
+    /// <summary>
+    /// <see cref="RequestFields"/> as an object, or null when it is absent or empty (nothing is sent).
+    /// </summary>
+    /// <exception cref="InvalidOperationException">It is not a JSON object (the start-up validation says so first).</exception>
+    public JsonObject? RequestFieldsObject()
+    {
+        if (string.IsNullOrWhiteSpace(RequestFields))
+            return null;
+        if (!TryParseRequestFields(RequestFields, out var fields))
+            throw new InvalidOperationException("RequestFields must be a JSON object.");
+        return fields.Count == 0 ? null : fields;
+    }
+
+    /// <summary>Whether <paramref name="text"/> is one JSON object (with no member named twice).</summary>
+    internal static bool TryParseRequestFields(string text, out JsonObject fields)
+    {
+        fields = null!;
+        try
+        {
+            if (JsonNode.Parse(text, documentOptions: new JsonDocumentOptions { AllowDuplicateProperties = false }) is not JsonObject parsed)
+                return false;
+            fields = parsed;
+            return true;
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+    }
 
     /// <summary>A short invariant description for logs and reports (no key).</summary>
     public override string ToString()

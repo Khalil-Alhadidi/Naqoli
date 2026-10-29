@@ -172,4 +172,81 @@ public class ModelOptionsTests
     {
         Assert.Equal(expected, ModelOptions.IsVendorKeySetting(setting));
     }
+
+    [Fact]
+    public void RequestFieldsOnAnAnthropicCandidateIsOneProblem()
+    {
+        var options = ClaudeParserTests.Options();
+        options.Selected!.RequestFields = """{"reasoning":{"effort":"low"}}""";
+
+        Assert.Equal(["Model:Candidates:haiku:RequestFields is only for a compatible candidate."], options.Problems());
+    }
+
+    [Theory]
+    [InlineData("not json")]
+    [InlineData("{\"reasoning\":")]
+    [InlineData("[1,2]")]
+    [InlineData("\"low\"")]
+    [InlineData("42")]
+    [InlineData("null")]
+    public void RequestFieldsThatIsNotAJsonObjectIsOneProblem(string fields)
+    {
+        var options = Compatible();
+        options.Selected!.RequestFields = fields;
+
+        Assert.Equal([Prefix + "RequestFields must be a JSON object."], options.Problems());
+    }
+
+    [Theory]
+    [InlineData("model")]
+    [InlineData("messages")]
+    [InlineData("response_format")]
+    [InlineData("max_completion_tokens")]
+    [InlineData("max_tokens")]
+    [InlineData("temperature")]
+    [InlineData("stream")]
+    [InlineData("tools")]
+    [InlineData("tool_choice")]
+    public void RequestFieldsMustNotSetAFieldTheParserSets(string key)
+    {
+        var options = Compatible();
+        options.Selected!.RequestFields = "{\"reasoning\":{\"effort\":\"low\"},\"" + key + "\":1}";
+
+        Assert.Equal([Prefix + "RequestFields must not set " + key + "."], options.Problems());
+    }
+
+    [Fact]
+    public void TheReservedKeysAreComparedOrdinally()
+    {
+        var options = Compatible();
+        options.Selected!.RequestFields = """{"Model":"x"}""";
+
+        Assert.Empty(options.Problems());
+    }
+
+    [Theory]
+    [InlineData(null)]
+    // An empty value (a user secret that clears the shipped one) is absent, not a broken object.
+    [InlineData("")]
+    [InlineData("  ")]
+    [InlineData("{}")]
+    [InlineData(" { } ")]
+    [InlineData("""{"reasoning":{"effort":"low"}}""")]
+    [InlineData("""{"provider":{"order":["a","b"],"allow_fallbacks":false},"top_k":40}""")]
+    public void AnAbsentEmptyOrNestedObjectIsAccepted(string? fields)
+    {
+        var options = Compatible();
+        options.Selected!.RequestFields = fields;
+
+        Assert.Empty(options.Problems());
+    }
+
+    [Fact]
+    public void TheRequestFieldsParseToTheObjectOrToNothing()
+    {
+        Assert.Null(new ModelCandidate().RequestFieldsObject());
+        Assert.Null(new ModelCandidate { RequestFields = "{}" }.RequestFieldsObject());
+        var fields = new ModelCandidate { RequestFields = """{ "reasoning" : { "effort" : "low" } }""" }.RequestFieldsObject();
+        Assert.Equal("""{"reasoning":{"effort":"low"}}""", fields!.ToJsonString());
+    }
 }
