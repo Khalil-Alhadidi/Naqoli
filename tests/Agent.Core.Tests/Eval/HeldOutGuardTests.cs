@@ -247,6 +247,7 @@ public sealed class HeldOutGuardTests : IDisposable
         Assert.Equal("compatible", header["Model:Provider"]);
         Assert.Equal("https://generativelanguage.googleapis.com/v1beta/openai", header["Model:BaseUrl"]);
         Assert.Equal("json_schema", header["Model:OutputMode"]);
+        Assert.Equal("not sent", header["Model:RequestFields"]);
         Assert.Equal("not sent", header["Model:Effort"]);
         Assert.Equal("not sent", header["Model:PromptCacheTtl"]);
         Assert.Equal("0", header["Model:MinMillisecondsBetweenCalls"]);
@@ -267,7 +268,19 @@ public sealed class HeldOutGuardTests : IDisposable
         Assert.Equal("not sent", header["Model:BaseUrl"]);
         Assert.Equal("5m", header["Model:PromptCacheTtl"]);
         Assert.Equal("not sent", header["Model:OutputMode"]);
+        Assert.Equal("not sent", header["Model:RequestFields"]);
         Assert.Equal("0", header["Model:MinMillisecondsBetweenCalls"]);
+    }
+
+    [Fact]
+    public void TheHeaderCarriesTheRequestFieldsOfACompatibleCandidateAsCompactJson()
+    {
+        var gemini = Gemini();
+        gemini.RequestFields = """{ "reasoning": { "effort": "low" } }""";
+
+        var header = EvalCommand.ModelSettings("gemini", gemini).ToDictionary();
+
+        Assert.Equal("""{"reasoning":{"effort":"low"}}""", header["Model:RequestFields"]);
     }
 
     [Theory]

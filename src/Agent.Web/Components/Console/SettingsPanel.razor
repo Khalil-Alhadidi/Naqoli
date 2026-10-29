@@ -302,6 +302,7 @@
                 yield return (prefix + nameof(ModelCandidate.BaseUrl), c.BaseUrl ?? "-");
                 yield return (prefix + nameof(ModelCandidate.ApiKeySetting), c.ApiKeySetting ?? "-");
                 yield return (prefix + nameof(ModelCandidate.OutputMode), c.OutputMode);
+                yield return (prefix + nameof(ModelCandidate.RequestFields), c.RequestFieldsText() ?? NotSent);
             }
 
             yield return (prefix + nameof(ModelCandidate.MaxOutputTokens), Number(c.MaxOutputTokens));

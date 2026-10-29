@@ -276,6 +276,20 @@ public sealed class ModelCandidate
         return fields.Count == 0 ? null : fields;
     }
 
+    /// <summary>
+    /// <see cref="RequestFields"/> as compact JSON text for the settings panel and the report header, or null when nothing
+    /// is sent (an <c>anthropic</c> candidate, or an absent or empty object). Text that is not an object, which the
+    /// validation refuses on the selected candidate, is given trimmed as written.
+    /// </summary>
+    public string? RequestFieldsText()
+    {
+        if (!IsCompatible || string.IsNullOrWhiteSpace(RequestFields))
+            return null;
+        if (!TryParseRequestFields(RequestFields, out var fields))
+            return RequestFields.Trim();
+        return fields.Count == 0 ? null : fields.ToJsonString();
+    }
+
     /// <summary>Whether <paramref name="text"/> is one JSON object (with no member named twice).</summary>
     internal static bool TryParseRequestFields(string text, out JsonObject fields)
     {

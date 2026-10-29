@@ -54,7 +54,8 @@ public static class EvalCommand
     /// settings the call sends with it, <c>not sent</c> for one the provider's call leaves out: <c>Model:BaseUrl</c>
     /// (<c>compatible</c> only, the vendor's address, not a secret), <c>Model:Temperature</c>
     /// (unset), <c>Model:Effort</c> and <c>Model:PromptCacheTtl</c> (<c>anthropic</c> only), <c>Model:OutputMode</c>
-    /// (<c>compatible</c> only), and the pacing <c>Model:MinMillisecondsBetweenCalls</c>.
+    /// (<c>compatible</c> only), <c>Model:RequestFields</c> (<c>compatible</c> only, the compact JSON added to the request
+    /// body, <c>not sent</c> when absent or empty), and the pacing <c>Model:MinMillisecondsBetweenCalls</c>.
     /// </summary>
     public static IEnumerable<KeyValuePair<string, string>> ModelSettings(string candidateName, ModelCandidate candidate)
     {
@@ -70,6 +71,7 @@ public static class EvalCommand
         yield return new("Model:Effort", candidate.IsAnthropic ? candidate.Effort : NotSent);
         yield return new("Model:PromptCacheTtl", candidate.IsAnthropic ? candidate.PromptCacheTtl : NotSent);
         yield return new("Model:OutputMode", candidate.IsCompatible ? candidate.OutputMode : NotSent);
+        yield return new("Model:RequestFields", candidate.RequestFieldsText() ?? NotSent);
         yield return new("Model:MinMillisecondsBetweenCalls", candidate.MinMillisecondsBetweenCalls.ToString(CultureInfo.InvariantCulture));
     }
 

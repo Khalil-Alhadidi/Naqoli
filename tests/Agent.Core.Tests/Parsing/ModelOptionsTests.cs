@@ -241,6 +241,18 @@ public class ModelOptionsTests
         Assert.Empty(options.Problems());
     }
 
+    [Theory]
+    [InlineData(ModelOptions.CompatibleProvider, null, null)]
+    [InlineData(ModelOptions.CompatibleProvider, " {} ", null)]
+    [InlineData(ModelOptions.CompatibleProvider, """{ "reasoning" : { "effort" : "low" } }""", """{"reasoning":{"effort":"low"}}""")]
+    // Not an object: the validation refuses it on the selected candidate; elsewhere it is shown as written.
+    [InlineData(ModelOptions.CompatibleProvider, " [1] ", "[1]")]
+    [InlineData(ModelOptions.AnthropicProvider, """{"reasoning":{"effort":"low"}}""", null)]
+    public void TheRequestFieldsTextIsTheCompactObjectOrNothing(string provider, string? fields, string? expected)
+    {
+        Assert.Equal(expected, new ModelCandidate { Provider = provider, RequestFields = fields }.RequestFieldsText());
+    }
+
     [Fact]
     public void TheRequestFieldsParseToTheObjectOrToNothing()
     {
