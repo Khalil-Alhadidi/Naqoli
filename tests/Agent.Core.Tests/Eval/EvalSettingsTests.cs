@@ -3,8 +3,10 @@ extern alias AgentWeb;
 using System.Text.Json;
 using System.Xml.Linq;
 using Agent.Core;
+using Agent.Core.Parsing;
 using Agent.Eval.Running;
 using AgentWeb::Agent.Web.Services;
+using Microsoft.Extensions.Configuration;
 
 namespace Agent.Core.Tests.Eval;
 
@@ -69,6 +71,25 @@ public class EvalSettingsTests
             foreach (var setting in candidate.Value.EnumerateObject())
                 Assert.Equal(setting.Value.GetRawText(), evalCandidates.GetProperty(candidate.Name).GetProperty(setting.Name).GetRawText());
         }
+    }
+
+    [Theory]
+    [InlineData("Agent.Web")]
+    [InlineData("Agent.Eval")]
+    public void TheShippedOpenRouterCandidateBindsItsRequestFieldsAndValidates(string project)
+    {
+        // Bound through configuration as the hosts bind it: the request fields are one string, the object's text.
+        var configuration = new ConfigurationBuilder()
+            .AddJsonFile(Path.Combine(Root, "src", project, "appsettings.json"), optional: false)
+            .AddInMemoryCollection(new Dictionary<string, string?> { ["Model:Candidate"] = "openrouter" })
+            .Build();
+        var options = configuration.GetSection(ModelOptions.SectionName).Get<ModelOptions>()!;
+
+        Assert.Empty(options.Problems());
+        var openrouter = options.Selected!;
+        Assert.Equal("""{"reasoning":{"effort":"low"}}""", openrouter.RequestFieldsText());
+        Assert.Equal((4000, 60), (openrouter.MaxOutputTokens, openrouter.TimeoutSeconds));
+        Assert.Null(options.Candidates["gemini"].RequestFields);
     }
 
     [Theory]
