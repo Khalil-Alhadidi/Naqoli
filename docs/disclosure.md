@@ -45,6 +45,7 @@ Configured as parse-call candidates in the `Model` section (`src/Agent.Web/appse
 - Claude Sonnet 5.5 (`claude-sonnet-5-5`, Anthropic API), candidate `sonnet`.
 - Claude Opus 5.5 (`claude-opus-5-5`, Anthropic API), candidate `opus`.
 - Google Gemini through Google AI Studio's OpenAI-compatible endpoint, candidate `gemini` (model id set when first run; the free tier may use prompts for training; the prompt carries masked user text and the pending note only).
+- Google Gemma 4 (`gemma-4-26b-a4b-it`, an open-weight model under the Gemma Terms of Use) through the same Google AI Studio endpoint and key, candidate `gemma`, added 1 Nov 2026 as the free third model of the D13 comparison; the same training caveat as the `gemini` entry.
 - OpenRouter's OpenAI-compatible endpoint, candidate `openrouter` (model id set when first run; free models may use prompts for training; the prompt carries masked user text and the pending note only).
 - Anthropic prompt caching on the parse call's system prompt (18 Oct 2026, at Khalil's instruction), through the Anthropic SDK's `Microsoft.Extensions.AI` extension `WithCacheControl` (`Model:Candidates:<name>:PromptCacheTtl`, `5m` by default). The cached part is the frozen prompt, never user text: the user message carries no cache control.
 

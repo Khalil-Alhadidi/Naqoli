@@ -93,6 +93,9 @@ public class EvalSettingsTests
         Assert.Null(gemini.RequestFields);
         // The free tier of gemini-3.5-flash allows 20 requests a day; flash-lite is shipped, paced (29 Oct 2026).
         Assert.Equal(("gemini-3.5-flash-lite", 6500), (gemini.ModelId, gemini.MinMillisecondsBetweenCalls));
+        // Gemma 4's free tier is 16,000 input tokens a minute per model, about eight parse calls (1 Nov 2026).
+        var gemma = options.Candidates["gemma"];
+        Assert.Equal(("gemma-4-26b-a4b-it", 8000, "Gemini:ApiKey"), (gemma.ModelId, gemma.MinMillisecondsBetweenCalls, gemma.ApiKeySetting));
     }
 
     [Theory]
