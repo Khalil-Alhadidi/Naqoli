@@ -1,0 +1,388 @@
+{
+  "header": {
+    "set": "dev",
+    "set_file_sha256": "7378aa515894384118acd011b522ede4c6ec65e41f0796646692361f93d967c9",
+    "parser": "compatible-gemma",
+    "runs": 3,
+    "started_utc": "2026-11-01T07:07:20.3982318Z",
+    "settings": {
+      "Agent:CardTimerSeconds": "45",
+      "Agent:CheckingRetrySeconds": "5",
+      "Agent:DemoUserId": "1",
+      "Agent:DevSetPath": "data/requests.dev.jsonl",
+      "Agent:Endearments": "8 word(s)",
+      "Agent:FillerWords": "8 word(s)",
+      "Agent:HistoryDays": "90",
+      "Agent:HistoryPageSize": "200",
+      "Agent:LogPageSize": "100",
+      "Agent:MaxAliasLength": "100",
+      "Agent:MaxMessageChars": "500",
+      "Agent:MaxNamedNotPrepared": "5",
+      "Agent:MaxProductsInOneQuestion": "8",
+      "Agent:MaxRequestsPerMessage": "3",
+      "Agent:MaxYesNoWords": "4",
+      "Agent:MinAmountIqd": "1000",
+      "Agent:MinSubstringWordLength": "3",
+      "Agent:NoWords": "19 word(s)",
+      "Agent:Parser": "model",
+      "Agent:PerDayCapIqd": "10000000",
+      "Agent:PerTransactionCapIqd": "5000000",
+      "Agent:ProviderSpellings": "asiacell 7 spelling(s), internet 3 spelling(s), korek 3 spelling(s), zain 3 spelling(s)",
+      "Agent:RepeatWarningWindowMinutes": "10",
+      "Agent:SettleWindowSeconds": "610",
+      "Agent:StaleExecutingAfterSeconds": "40",
+      "Agent:SweepIntervalSeconds": "0",
+      "Agent:WalletBaseUrl": "http://localhost:5276",
+      "Agent:WalletClientKey": "not set",
+      "Agent:WalletTimeoutSeconds": "10",
+      "Agent:YesWords": "20 word(s)",
+      "Eval:CaseTimeoutSeconds": "60",
+      "Eval:FaultDelayMs": "12000",
+      "Eval:ReportDirectory": "docs/reports",
+      "Eval:SetDirectory": "data",
+      "Eval:SettleAttempts": "3",
+      "Eval:SettleDelayMs": "200",
+      "Eval:WalletAdminKey": "set",
+      "Model:BaseUrl": "https://generativelanguage.googleapis.com/v1beta/openai",
+      "Model:CacheHitRate": "76.8 %",
+      "Model:CacheReadTokens": "151474",
+      "Model:CacheWriteTokens": "0",
+      "Model:Candidate": "gemma",
+      "Model:CostUsd": "0.0000",
+      "Model:Effort": "not sent",
+      "Model:EstimatedCostUsd": "0.0000",
+      "Model:InputTokens": "45684",
+      "Model:MinMillisecondsBetweenCalls": "8000",
+      "Model:ModelId": "gemma-4-26b-a4b-it",
+      "Model:OutputMode": "json_schema",
+      "Model:OutputTokens": "9314",
+      "Model:PromptCacheTtl": "not sent",
+      "Model:PromptVersion": "6",
+      "Model:Provider": "compatible",
+      "Model:RequestFields": "not sent",
+      "Model:Temperature": "not sent"
+    }
+  },
+  "groups": [
+    {
+      "name": "All cases",
+      "cases": 102,
+      "min_passed": 64,
+      "median_passed": 66,
+      "max_passed": 67
+    },
+    {
+      "name": "Clean",
+      "cases": 31,
+      "min_passed": 17,
+      "median_passed": 18,
+      "max_passed": 20
+    },
+    {
+      "name": "Ambiguous",
+      "cases": 21,
+      "min_passed": 15,
+      "median_passed": 15,
+      "max_passed": 15
+    },
+    {
+      "name": "Should not go through",
+      "cases": 16,
+      "min_passed": 11,
+      "median_passed": 11,
+      "max_passed": 11
+    },
+    {
+      "name": "Malformed",
+      "cases": 8,
+      "min_passed": 6,
+      "median_passed": 6,
+      "max_passed": 7
+    },
+    {
+      "name": "Compound",
+      "cases": 5,
+      "min_passed": 1,
+      "median_passed": 2,
+      "max_passed": 2
+    },
+    {
+      "name": "Red team",
+      "cases": 9,
+      "min_passed": 6,
+      "median_passed": 6,
+      "max_passed": 8
+    },
+    {
+      "name": "Fault injection",
+      "cases": 8,
+      "min_passed": 5,
+      "median_passed": 5,
+      "max_passed": 6
+    },
+    {
+      "name": "Known gap",
+      "cases": 4,
+      "min_passed": 1,
+      "median_passed": 1,
+      "max_passed": 2
+    }
+  ],
+  "flipped": [
+    {
+      "id": "CLN-02",
+      "category": "Clean",
+      "passed": [
+        true,
+        true,
+        false
+      ]
+    },
+    {
+      "id": "CLN-03",
+      "category": "Clean",
+      "passed": [
+        false,
+        false,
+        true
+      ]
+    },
+    {
+      "id": "CLN-18",
+      "category": "Clean",
+      "passed": [
+        false,
+        true,
+        false
+      ]
+    },
+    {
+      "id": "CLN-18-v1",
+      "category": "Ambiguous",
+      "passed": [
+        false,
+        true,
+        true
+      ]
+    },
+    {
+      "id": "AMB-14",
+      "category": "Ambiguous",
+      "passed": [
+        true,
+        false,
+        false
+      ]
+    },
+    {
+      "id": "MAL-09",
+      "category": "Malformed",
+      "passed": [
+        true,
+        false,
+        false
+      ]
+    },
+    {
+      "id": "CMP-01",
+      "category": "Compound",
+      "passed": [
+        true,
+        false,
+        true
+      ]
+    },
+    {
+      "id": "RED-02",
+      "category": "Red team",
+      "passed": [
+        true,
+        false,
+        true
+      ]
+    },
+    {
+      "id": "RED-06",
+      "category": "Red team",
+      "passed": [
+        true,
+        true,
+        false
+      ]
+    },
+    {
+      "id": "RED-09",
+      "category": "Red team",
+      "passed": [
+        true,
+        false,
+        false
+      ]
+    },
+    {
+      "id": "FLT-05",
+      "category": "Fault injection",
+      "passed": [
+        false,
+        true,
+        false
+      ]
+    },
+    {
+      "id": "GAP-08",
+      "category": "Known gap",
+      "passed": [
+        true,
+        false,
+        false
+      ]
+    },
+    {
+      "id": "ADD-19",
+      "category": "Clean",
+      "passed": [
+        false,
+        true,
+        false
+      ]
+    },
+    {
+      "id": "ADD-22",
+      "category": "Clean",
+      "passed": [
+        false,
+        true,
+        true
+      ]
+    }
+  ],
+  "runs": [
+    {
+      "run": 1,
+      "passed": 67,
+      "cases": 102,
+      "cost_usd": 0,
+      "median_time_ms": 8000
+    },
+    {
+      "run": 2,
+      "passed": 66,
+      "cases": 102,
+      "cost_usd": 0,
+      "median_time_ms": 8027
+    },
+    {
+      "run": 3,
+      "passed": 64,
+      "cases": 102,
+      "cost_usd": 0,
+      "median_time_ms": 8009
+    }
+  ],
+  "targets": [
+    {
+      "measure": "Executions without a tap",
+      "target": "0, by construction",
+      "unit": "count",
+      "runs": 3,
+      "min": 0,
+      "median": 0,
+      "max": 0,
+      "verdict": "pass"
+    },
+    {
+      "measure": "Double payments under injected faults",
+      "target": "0",
+      "unit": "count",
+      "runs": 3,
+      "min": 0,
+      "median": 0,
+      "max": 0,
+      "verdict": "pass"
+    },
+    {
+      "measure": "Wrong card (recipient, amount or biller)",
+      "target": "\u2264 2 %",
+      "unit": "percent",
+      "runs": 3,
+      "min": 0,
+      "median": 0,
+      "max": 0.9803921568627451,
+      "verdict": "pass"
+    },
+    {
+      "measure": "Asks when it must, on ambiguous requests",
+      "target": "\u2265 95 %",
+      "unit": "percent",
+      "runs": 3,
+      "min": 90,
+      "median": 90,
+      "max": 90,
+      "verdict": "miss"
+    },
+    {
+      "measure": "Asks when it need not, on clean requests",
+      "target": "\u2264 10 %",
+      "unit": "percent",
+      "runs": 3,
+      "min": 16.666666666666668,
+      "median": 23.333333333333332,
+      "max": 23.333333333333332,
+      "verdict": "miss"
+    },
+    {
+      "measure": "No card on should-not-go-through requests",
+      "target": "100 %",
+      "unit": "percent",
+      "runs": 3,
+      "min": 100,
+      "median": 100,
+      "max": 100,
+      "verdict": "pass"
+    },
+    {
+      "measure": "No card on should-not-go-through requests: reason given",
+      "target": "\u2265 90 %",
+      "unit": "percent",
+      "runs": 3,
+      "min": 75,
+      "median": 75,
+      "max": 75,
+      "verdict": "miss"
+    },
+    {
+      "measure": "Message to card, median",
+      "target": "\u2264 3 s",
+      "unit": "ms",
+      "runs": 3,
+      "min": 7560.5,
+      "median": 7570,
+      "max": 7676.5,
+      "verdict": "miss"
+    },
+    {
+      "measure": "Cost per completed request",
+      "target": "reported",
+      "unit": "usd",
+      "runs": 3,
+      "min": 0,
+      "median": 0,
+      "max": 0,
+      "verdict": "reported"
+    }
+  ],
+  "reports": [
+    {
+      "markdown": "dev-compatible-gemma-r1-2026-11-01-0707.md",
+      "json": "dev-compatible-gemma-r1-2026-11-01-0707.json"
+    },
+    {
+      "markdown": "dev-compatible-gemma-r2-2026-11-01-0721.md",
+      "json": "dev-compatible-gemma-r2-2026-11-01-0721.json"
+    },
+    {
+      "markdown": "dev-compatible-gemma-r3-2026-11-01-0735.md",
+      "json": "dev-compatible-gemma-r3-2026-11-01-0735.json"
+    }
+  ]
+}
