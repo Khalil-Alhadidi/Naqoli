@@ -81,3 +81,19 @@ Configured as parse-call candidates in the `Model` section (`src/Agent.Web/appse
 - Roboto from Google Fonts (stylesheet link in src/Agent.Web/Components/App.razor; MudBlazor's default font; falls back to system fonts offline). Removed on 21 Oct 2026 (UI pass, task 1): the console uses the system font stack (`--font-console`, also MudBlazor's typography through `ConsoleTheme`), and no font or stylesheet is loaded from another host (`DesignTokensTests.NoFontIsLoadedFromTheNetwork`).
 
 The UI pass of 21 to 22 Oct 2026 added nothing else to this file: no package, tool, model or data source, only the self-hosted Noto Naskh Arabic above.
+
+## Freeze, milestone 10
+
+The freeze is the tag `milestone-10`, placed on the merge commit of branch `milestone-10` into `main` (3 Nov 2026). At the tag:
+
+- Model: Claude Sonnet 5.5, `claude-sonnet-5-5` (candidate `sonnet`, provider `anthropic`), the default `Model:Candidate` in `src/Agent.Web/appsettings.json` and `src/Agent.Eval/appsettings.json`, chosen by Khalil under D13 as amended on 3 Nov 2026 (`docs/agent-model.md`, "The choice").
+- Prompt: `src/Agent.Core/Parsing/parse-prompt.md`, version 6 (22 Oct 2026; its first line, `version: 6`).
+- Seed: SHA-256 `353d9a0bf7e8f7d38f8c1dfc40cc57543df65d2537f4b450c29bcebe6acf647f` of the eight seed files (`data/seed/seed-hash.txt`).
+- Development set: `data/requests.dev.jsonl`, SHA-256 `7378aa515894384118acd011b522ede4c6ec65e41f0796646692361f93d967c9` (`set_file_sha256` in the header of `docs/reports/dev-claude-sonnet-repeat3-2026-10-29-1049.json`).
+
+Frozen from the tag: the prompt (`parse-prompt.md`), the candidate entries and the default candidate, the parsing, validation, resolver, conversation and grading code in `Agent.Core` and `Agent.Eval`, `docs/matching-rules.md`, the seed, the dev set and its parses; a change there after the tag is a bug fix listed below, with the reason.
+Free after the tag: the console's look and panels, the journeys, the docs, the README, the demo script, the one commit that lifts the held-out deny rule for milestone 11 and the commit of its report.
+
+### Fixes after the freeze
+
+None.

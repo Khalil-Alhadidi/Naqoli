@@ -226,7 +226,7 @@ The table is `LearningEntries` (migration `LearningLog`): `Id`, `At`, `UserId`, 
 - **What is stored.** `LearningLog.WriteAsync` masks the detail and the text once more before it stores them, and has no parameter for a PIN, a balance or a purchase code.
 - **What is graded.** `Conversation.LastLearningEntry` is the entry written for the last reply; the runner grades that.
 - **A typed PIN.** Khalil's rule of 19 Oct 2026: a message that is only four to six digits writes no learning row, and while a card with a PIN field is live it is answered `pin_required` without a parse call. With no PIN card live such a message still reaches the parse call (a run of four to six digits is not masked), and a PIN typed with other words reaches the parse call and the learning log. The runner's PIN check scans the parse-call texts and the learning log ([failure-modes.md](failure-modes.md); known gaps row 34).
-- **Retention.** Rows are kept with the user id and the masked words, with no limit yet. A retention rule is an open item for the learning-data view, now milestone 10 (known gaps row 37).
+- **Retention** (milestone 10, 3 Nov 2026; known gaps row 37). Rows live until the agent database is reset by the runner or the journeys; the console's Reset keeps them; a deletion job after a fixed period once `Reviewed` is true is a deployment item, not built because the text is synthetic.
 
 ## Faults and failures
 
