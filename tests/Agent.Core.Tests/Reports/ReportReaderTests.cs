@@ -102,6 +102,27 @@ public sealed class ReportReaderTests : IDisposable
     }
 
     [Fact]
+    public void DefaultPrefersTheCandidatesNewestAggregate()
+    {
+        // The aggregate carries its first run's start (10:49), so its own later run (10:58) lists first.
+        var listing = ReportReader.List(CopyIn(SonnetRun3, SonnetRepeat), "sonnet");
+
+        Assert.Equal(SonnetRun3, listing.Entries[0].FileName);
+        Assert.Equal(SonnetRepeat, listing.DefaultFileName);
+    }
+
+    [Fact]
+    public void ResolveGivesARootedFullPath()
+    {
+        var resolved = ReportReader.Resolve("docs/reports");
+
+        Assert.True(Path.IsPathRooted(resolved));
+        Assert.Equal(Path.GetFullPath(resolved), resolved);
+        if (OperatingSystem.IsWindows())
+            Assert.DoesNotContain('/', resolved);
+    }
+
+    [Fact]
     public void DefaultFallsBackToNewestWhenNoParserMatches()
     {
         var listing = ReportReader.List(CopyIn(SonnetRun1, SonnetRepeat, GemmaRun3), "opus");

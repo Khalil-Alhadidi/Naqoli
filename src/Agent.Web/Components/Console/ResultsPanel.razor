@@ -137,7 +137,7 @@
         var candidate = Model.Value.Candidate ?? string.Empty;
         try
         {
-            directory = Path.GetFullPath(ReportReader.Resolve(configured));
+            directory = ReportReader.Resolve(configured);
 
             // Every listed file is read once to see its header and targets: off the circuit's render path.
             listing = await Task.Run(() => ReportReader.List(directory, candidate));

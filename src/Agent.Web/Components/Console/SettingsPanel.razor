@@ -277,7 +277,7 @@
             var configured = ConsoleSettings.CurrentValue.ReportsDirectory;
             try
             {
-                return Path.GetFullPath(ReportReader.Resolve(configured));
+                return ReportReader.Resolve(configured);
             }
             catch (InvalidOperationException)
             {

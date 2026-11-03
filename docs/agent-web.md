@@ -851,7 +851,7 @@ sequenceDiagram
 
 `ResultsPanel` (`Components/Console/ResultsPanel.razor`, the side menu's Results between Log and Aliases, milestone 10) shows a committed eval report's targets table, read only. When it opens it resolves `Console:ReportsDirectory` (default `docs/reports`, under the repository root when relative; a read-only row in the settings component) and lists it with `ReportReader.List` (`Agent.Core.Reports`, see [agent-eval.md](agent-eval.md), "Reading the reports back"): every `dev-*.json` and `heldout-*.json` with a targets table, newest first by the run's start, an aggregate before a single run on an equal start. The others (the 27 reports of 15 and 16 Oct 2026, written before the targets table, or a file that does not read) are counted in `results-skipped` ("27 file(s) skipped"). A directory that is missing or holds no report shows `empty-state` ("No reports in <directory>.").
 
-The select (`results-select`, a native `<select>`, option values the file names) offers every listed report as `yyyy-MM-dd HH:mm  set  parser  (aggregate)  file name`. The first opened is the newest report whose parser ends with `-<Model:Candidate>` (`claude-sonnet` for `sonnet`), else the newest overall. Choosing another reads it with `ReportReader.Read`; a file that fails shows `results-error` ("Could not read <file>: <exception type>") and the select stays usable.
+The select (`results-select`, a native `<select>`, option values the file names) offers every listed report as `yyyy-MM-dd HH:mm  set  parser  (aggregate)  file name`. The first opened is the candidate's newest aggregate (parser ending `-<Model:Candidate>`, `claude-sonnet` for `sonnet`), else the candidate's newest single run, else the newest overall. An aggregate carries its first run's start, so its own later runs list above it, but the aggregate still opens first. Choosing another reads it with `ReportReader.Read`; a file that fails shows `results-error` ("Could not read <file>: <exception type>") and the select stays usable.
 
 Two shapes, one header line (`results-header`: set, parser, started UTC, `Model:PromptVersion` from the header's settings when present, the runs of an aggregate, the cases):
 
@@ -866,7 +866,7 @@ flowchart LR
     resolve --> list["ReportReader.List: dev-* and heldout-* JSON with targets, newest first; others counted as skipped"]
     list --> none{"any entry?"}
     none -- no --> empty["empty-state: No reports in directory"]
-    none -- yes --> default["default: newest report of the candidate's parser, else the newest"]
+    none -- yes --> default["default: the candidate's newest aggregate, else its newest single run, else the newest"]
     default --> read["ReportReader.Read(file)"]
     pick["results-select: another file"] --> read
     read -- single run --> single["targets: Value, Verdict; totals line"]

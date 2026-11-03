@@ -19,21 +19,23 @@ public static class ReportReader
     };
 
     /// <summary>
-    /// <paramref name="reportsDirectory"/> as it is when rooted, otherwise under the repository root
-    /// (<see cref="RepositoryRoot.Find"/>).
+    /// The full path (<see cref="Path.GetFullPath(string)"/>) of <paramref name="reportsDirectory"/>: as it is when rooted,
+    /// otherwise under the repository root (<see cref="RepositoryRoot.Find"/>).
     /// </summary>
     public static string Resolve(string reportsDirectory)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(reportsDirectory);
-        return Path.IsPathRooted(reportsDirectory) ? reportsDirectory : Path.Combine(RepositoryRoot.Find(), reportsDirectory);
+        return Path.GetFullPath(Path.IsPathRooted(reportsDirectory) ? reportsDirectory : Path.Combine(RepositoryRoot.Find(), reportsDirectory));
     }
 
     /// <summary>
     /// Every <c>dev-*.json</c> and <c>heldout-*.json</c> in <paramref name="directory"/> that reads and has a targets
     /// table, newest first (<see cref="ReportEntry.StartedUtc"/> descending, an aggregate before a single run on a tie,
     /// then the file name descending, ordinal). Any other file of those names is counted in
-    /// <see cref="ReportListing.Skipped"/>; a missing directory is an empty listing. The default is the first entry whose
-    /// parser ends with <c>-</c> and <paramref name="candidate"/>, else the first entry. A file's content never makes it throw.
+    /// <see cref="ReportListing.Skipped"/>; a missing directory is an empty listing. An aggregate keeps its first run's
+    /// start, so its own later runs list before it. The default is the candidate's newest aggregate (parser ends with
+    /// <c>-</c> and <paramref name="candidate"/>), else the candidate's newest single run, else the first entry, else null.
+    /// A file's content never makes it throw.
     /// </summary>
     public static ReportListing List(string directory, string candidate)
     {
@@ -71,7 +73,8 @@ public static class ReportReader
             .ThenByDescending(e => e.FileName, StringComparer.Ordinal)
             .ToList();
         var suffix = "-" + candidate;
-        var chosen = ordered.FirstOrDefault(e => e.Parser.EndsWith(suffix, StringComparison.Ordinal)) ?? ordered.FirstOrDefault();
+        var ofCandidate = ordered.Where(e => e.Parser.EndsWith(suffix, StringComparison.Ordinal)).ToList();
+        var chosen = ofCandidate.FirstOrDefault(e => e.IsAggregate) ?? ofCandidate.FirstOrDefault() ?? ordered.FirstOrDefault();
         return new ReportListing(ordered, skipped, chosen?.FileName);
     }
 
