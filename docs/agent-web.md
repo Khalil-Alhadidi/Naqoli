@@ -32,10 +32,10 @@ flowchart TB
     bar["bar (sticky): Agentic AI Challenge Iraq : Pay and Bill Agent<br/>chip Mock wallet · synthetic data (data-testid mock-label)"]
     subgraph row["the second row"]
         direction LR
-        menu["menu (sticky, 200 px)<br/>Wallet data, Settings, Log, Aliases,<br/>Learning data with the unreviewed count"]
+        menu["menu (sticky, 200 px)<br/>Wallet data, Settings, Log, Results, Aliases,<br/>Learning data with the unreviewed count"]
         subgraph ltr["console: English, left to right (data-testid console, dir ltr, lang en), a sub-grid of main and trace"]
             direction LR
-            middle["main<br/>WalletDataPanel (default), SettingsPanel,<br/>LogPanel, AliasesPanel,<br/>LearningDataPanel (milestone 10)"]
+            middle["main<br/>WalletDataPanel (default), SettingsPanel,<br/>LogPanel, ResultsPanel, AliasesPanel,<br/>LearningDataPanel (milestone 10)"]
             trace["trace (sticky, the window's height less the bar)<br/>ResetPanel, FaultPanel, then LiveTrace<br/>filling the rest and scrolling inside"]
         end
         subgraph rtl["phone (sticky): Iraqi Arabic, right to left (data-testid phone-frame, dir rtl, lang ar)"]
@@ -719,7 +719,7 @@ The parses were drafted by Claude from Khalil's answer keys for his review (his 
 `SettingsPanel` (`Components/Console/SettingsPanel.razor`, the side menu's Settings) has a kill switch (below) and five tables, all English and left to right:
 
 - **Agent, editable (D8).** One row (`setting-row`, `data-name`) per agent limit, timer or count: `MinAmountIqd`, `PerTransactionCapIqd`, `PerDayCapIqd`, `CardTimerSeconds`, `MaxProductsInOneQuestion`, `RepeatWarningWindowMinutes`, `HistoryDays`, `MinSubstringWordLength`, `MaxYesNoWords`, `LogPageSize`, `CheckingRetrySeconds`, `MaxAliasLength`, `MaxMessageChars`, `MaxRequestsPerMessage` (1 to 20; milestone 9c, ruling 11: the conversation reads it when it splits the next message, and a queue already running keeps its own), `MaxNamedNotPrepared` (1 to 20, default 5; review R1 of milestone 9c, Khalil, 20 Oct 2026: the most parts the "not prepared" line names, read at the split as well): exactly `RuntimeSettings.EditableNames`, which the runtime store itself enforces (any other key, `Agent:WalletClientKey` or `Agent:DevSetPath` among them, is refused with an `ArgumentException`). Each shows its value in force (`setting-value`), an input (`setting-input`), Save (`setting-save`), and Reset (`setting-reset`) once a value has been saved. A refused value shows the validation message (`setting-error`), and the value in force does not change.
-- **Agent, read only.** `Parser`, `DevSetPath`, `DemoUserId`, `WalletBaseUrl`, `WalletTimeoutSeconds`, `SettleWindowSeconds`, `HistoryPageSize`, `SweepIntervalSeconds`, `StaleExecutingAfterSeconds`, `ProviderSpellings`, `Endearments` (rule 1's words of affection, Khalil, 17 Oct 2026) and `FillerWords` (the words dropped at either end of a typed answer, Khalil, 17 Oct 2026; all three are phone text, so only their counts are shown), and `Console:WalletAdminKey` as `set` or `not set`. No key is ever shown (wallet or Anthropic). One line above the tables (`settings-fault-pointer`) says the fault switch is in the Faults panel beside the live trace.
+- **Agent, read only.** `Parser`, `DevSetPath`, `DemoUserId`, `WalletBaseUrl`, `WalletTimeoutSeconds`, `SettleWindowSeconds`, `HistoryPageSize`, `SweepIntervalSeconds`, `StaleExecutingAfterSeconds`, `ProviderSpellings`, `Endearments` (rule 1's words of affection, Khalil, 17 Oct 2026) and `FillerWords` (the words dropped at either end of a typed answer, Khalil, 17 Oct 2026; all three are phone text, so only their counts are shown), `Console:WalletAdminKey` as `set` or `not set`, and `Console:ReportsDirectory` (milestone 10, default `docs/reports`) as the full path the Results panel resolves it to (`ReportReader.Resolve`, under the repository root when relative). No key is ever shown (wallet or Anthropic). One line above the tables (`settings-fault-pointer`) says the fault switch is in the Faults panel beside the live trace.
 - **Console, editable (decision 2, task 4c).** `Console:GridPageSize` (5 to 100, default 10): how many rows every console grid shows on one page ([Paging the grids](#paging-the-grids)); nothing in `Agent.Core` reads it, so it never changes a check, a card or a reply. Its row is the same editable row as the agent's, with `data-name="Console:GridPageSize"` (the full key) on `setting-row`, `setting-value`, `setting-input`, `setting-save`, `setting-reset` and `setting-error`; the value shown is `IOptionsMonitor<ConsoleOptions>.CurrentValue`. A saved value applies at the next render of every grid. `Console:WalletAdminKey` stays read only.
 - **Wallet, read only.** The wallet's own limits from `GET /settings` (`Wallet:PinRequiredAboveIqd`, `Wallet:MaxPinAttempts`, the transfer, bill and purchase fees and the rest; [wallet-api.md](wallet-api.md)), read once when the panel opens. A wallet that does not answer gives one `setting-error` row (`data-name="Wallet"`) with the reason.
 - **Model, read only.** The candidate in use and each candidate's model, output limit, effort, temperature, timeout and prices.
@@ -845,6 +845,33 @@ sequenceDiagram
     S-->>L: Changed (Busy false, the action ended)
     L->>A: ReadLatestAsync(LogPageSize)
     A-->>L: rows, newest first (At, then Id)
+```
+
+## Results
+
+`ResultsPanel` (`Components/Console/ResultsPanel.razor`, the side menu's Results between Log and Aliases, milestone 10) shows a committed eval report's targets table, read only. When it opens it resolves `Console:ReportsDirectory` (default `docs/reports`, under the repository root when relative; a read-only row in the settings component) and lists it with `ReportReader.List` (`Agent.Core.Reports`, see [agent-eval.md](agent-eval.md), "Reading the reports back"): every `dev-*.json` and `heldout-*.json` with a targets table, newest first by the run's start, an aggregate before a single run on an equal start. The others (the 27 reports of 15 and 16 Oct 2026, written before the targets table, or a file that does not read) are counted in `results-skipped` ("27 file(s) skipped"). A directory that is missing or holds no report shows `empty-state` ("No reports in <directory>.").
+
+The select (`results-select`, a native `<select>`, option values the file names) offers every listed report as `yyyy-MM-dd HH:mm  set  parser  (aggregate)  file name`. The first opened is the newest report whose parser ends with `-<Model:Candidate>` (`claude-sonnet` for `sonnet`), else the newest overall. Choosing another reads it with `ReportReader.Read`; a file that fails shows `results-error` ("Could not read <file>: <exception type>") and the select stays usable.
+
+Two shapes, one header line (`results-header`: set, parser, started UTC, `Model:PromptVersion` from the header's settings when present, the runs of an aggregate, the cases):
+
+- **A single run:** the targets table Measure, Target, Value, Verdict, then `results-totals`: "<passed> of <cases> passed (<percent> %) · cost <cost> USD · median <s> s".
+- **An aggregate** (`--repeat N`): Measure, Target, Min, Median, Max, Verdict, then `results-totals` with the All cases group ("passed min / median / max of cases") and one `results-run` row per run (run, passed of cases, cost USD, median s).
+
+The verdict is a chip (`badge badge-pass` on the success tint, `badge-miss` on the danger tint, `badge-reported` and `badge-na` for `n/a` muted). Every figure is the report file's, formatted with the invariant culture (a percent to one decimal, ms whole, USD to six decimals in the table); the console computes none, which is why an aggregate shows no overall cost or time: the file holds none. A report holds ids, codes and figures only, never a case's text, so none can be shown. The panel reads the files and never writes them.
+
+```mermaid
+flowchart LR
+    open["Results opens"] --> resolve["ReportReader.Resolve(Console:ReportsDirectory)"]
+    resolve --> list["ReportReader.List: dev-* and heldout-* JSON with targets, newest first; others counted as skipped"]
+    list --> none{"any entry?"}
+    none -- no --> empty["empty-state: No reports in directory"]
+    none -- yes --> default["default: newest report of the candidate's parser, else the newest"]
+    default --> read["ReportReader.Read(file)"]
+    pick["results-select: another file"] --> read
+    read -- single run --> single["targets: Value, Verdict; totals line"]
+    read -- aggregate --> agg["targets: Min, Median, Max, Verdict; All cases group; one row per run"]
+    read -- throws --> error["results-error: Could not read file"]
 ```
 
 ## Learning data
@@ -1023,7 +1050,12 @@ The journeys locate elements only by these attributes. The two lines of the "not
 | Empty state of a grid or list (UI pass, 22 Oct 2026) | `empty-state` | inside the panel it belongs to |
 | Log row, log refresh button | `log-row`, `log-refresh` | `log-row`: `data-event`, `data-reason` (empty when null), `data-pending` (the first 8 characters of the pending ID, empty when null) |
 | Settings value, input, Save, Reset, error (editable agent rows) | `setting-value`, `setting-input`, `setting-save`, `setting-reset`, `setting-error` | `data-name` (the setting's name, as on its row) |
-| Menu items | `menu-wallet`, `menu-settings`, `menu-log`, `menu-aliases`, `menu-learning` | |
+| Menu items | `menu-wallet`, `menu-settings`, `menu-log`, `menu-results` (milestone 10), `menu-aliases`, `menu-learning` | |
+| Results panel root, report select (milestone 10) | `results-panel`, `results-select` | `results-select` is a native `<select>`; each option's value is a file name |
+| Results header line (milestone 10) | `results-header` | `data-set`, `data-parser`, `data-started` (`yyyy-MM-dd HH:mm`, UTC) |
+| Results target row (milestone 10) | `results-target` | `data-measure`, `data-verdict` (`pass`, `miss`, `reported`, `n/a`) |
+| Results totals line, run row of an aggregate (milestone 10) | `results-totals`, `results-run` | `results-run`: `data-run` |
+| Results skipped count, read error (milestone 10) | `results-skipped`, `results-error` | `results-skipped` only when files were skipped |
 | Unreviewed learning rows on the menu (milestone 10) | `menu-learning-count` | inside `menu-learning`; absent when the count is 0 |
 | Learning data panel root, refresh button (milestone 10) | `learning-panel`, `learning-refresh` | |
 | Learning row (milestone 10) | `learning-row` | `data-id`, `data-reason`, `data-user`, `data-reviewed` (`true` or `false`) |
