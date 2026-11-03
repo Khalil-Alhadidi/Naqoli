@@ -1,17 +1,12 @@
 using System.Globalization;
 using System.Text;
 using System.Text.Json;
+using Agent.Core.Reports;
 
 namespace Agent.Eval.Grading;
 
-/// <summary>One group across the runs of a repeat series: its case count and the min, median and max of its passes.</summary>
-public sealed record RepeatGroup(string Name, int Cases, int MinPassed, double MedianPassed, int MaxPassed);
-
 /// <summary>A case that passed in some runs and failed in others, with its result in each run, in run order.</summary>
 public sealed record FlippedCase(string Id, string Category, IReadOnlyList<bool> Passed);
-
-/// <summary>One run of a repeat series: its passes, its cost and its median case time.</summary>
-public sealed record RepeatRun(int Run, int Passed, int Cases, decimal CostUsd, double MedianTimeMs);
 
 /// <summary>
 /// A repeat series (<c>--repeat N</c>) summed up: the groups (all cases, then each category), the flipped cases, the runs,

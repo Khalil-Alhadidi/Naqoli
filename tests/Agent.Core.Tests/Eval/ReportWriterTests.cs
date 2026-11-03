@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Agent.Core.Reports;
 using Agent.Eval.Grading;
 
 namespace Agent.Core.Tests.Eval;

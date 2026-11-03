@@ -162,6 +162,10 @@ flowchart LR
     agg --> write["...-repeat&lt;N&gt;-date .md and .json, console summary"]
 ```
 
+### Reading the reports back (milestone 10)
+
+The report rows the runner writes (`GroupScore`, `TargetRow`, `RepeatGroup`, `RepeatRun`, `RepeatTarget`) live in `Agent.Core.Reports` (`src/Agent.Core/Reports/ReportRows.cs`), moved there unchanged from `Agent.Eval.Grading`, so the JSON the runner writes is the same text as before (`ReportWriterTests`). Beside them, `ReportReader` reads the committed JSON reports back for the console's Results panel without referencing `Agent.Eval`: `List(directory, candidate)` lists every `dev-*.json` and `heldout-*.json` by name that reads and has a `targets` table, newest first (the run's start, an aggregate before its first run on a tie, then the file name), with the selected candidate's newest report as the default, and counts the others as skipped; `Read(path)` returns a single run (`ReportDocument`: header, totals, targets, time, cost) or an aggregate (`RepeatReportDocument`: header, groups, runs, targets) as the header has `runs` or not. The 27 reports of 15 and 16 Oct 2026 predate the targets table and are not read (they are skipped and counted). `ReportReaderTests` pins it, including that the writer's targets and totals read back equal.
+
 ## The held-out guard (rule 7)
 
 `data/requests.heldout.jsonl` is opened only by `dotnet run --project src/Agent.Eval -- heldout --milestone-11-run`, in milestone 11. `HeldOutGuard.Check` runs first, before any set file is opened:
