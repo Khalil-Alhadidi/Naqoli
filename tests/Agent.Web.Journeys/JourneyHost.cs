@@ -341,6 +341,15 @@ public sealed class JourneyHost : IAsyncLifetime
         Wallet.DefaultRequestHeaders.Add(AdminKeyFilter.HeaderName, AdminKey);
     }
 
+    /// <summary>The Results journeys' reports (milestone 10): trimmed copies of committed reports, in the build output.</summary>
+    public static string ReportsDirectory => Path.Combine(AppContext.BaseDirectory, "Fixtures", "reports");
+
+    /// <summary>The demo user whose console has no reports directory: the Results panel shows its empty state.</summary>
+    public const int EmptyReportsUserId = 5;
+
+    /// <summary>A reports directory that does not exist, for <see cref="EmptyReportsUserId"/>'s console.</summary>
+    public static string EmptyReportsDirectory => Path.Combine(AppContext.BaseDirectory, "Fixtures", "no-reports");
+
     private WebApplicationFactory<WebProgram> StartWeb(int? cardTimerSeconds, int? demoUserId, out Uri address)
     {
         var walletAddress = Wallet.BaseAddress!.ToString();
@@ -352,6 +361,9 @@ public sealed class JourneyHost : IAsyncLifetime
             host.UseSetting("Agent:SweepIntervalSeconds", "1");
             // Journeys never call a live model: the scripted parser is pinned whatever the developer's secrets say.
             host.UseSetting("Agent:Parser", "scripted");
+            // Milestone 10: the Results panel lists the fixture reports, never docs/reports. The U5 console points at a
+            // directory that does not exist, for the empty state.
+            host.UseSetting("Console:ReportsDirectory", demoUserId == EmptyReportsUserId ? EmptyReportsDirectory : ReportsDirectory);
             if (cardTimerSeconds is { } seconds)
                 host.UseSetting("Agent:CardTimerSeconds", seconds.ToString(System.Globalization.CultureInfo.InvariantCulture));
             if (demoUserId is { } user)

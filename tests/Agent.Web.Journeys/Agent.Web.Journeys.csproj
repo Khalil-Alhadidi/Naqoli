@@ -18,6 +18,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- The Results journeys' report directory (milestone 10): trimmed copies of committed reports. -->
+    <None Include="Fixtures\reports\**" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!-- Aliased: Agent.Web and Wallet.MockApi both have a public Program class. -->
     <ProjectReference Include="..\..\src\Agent.Web\Agent.Web.csproj" Aliases="AgentWeb" />
     <ProjectReference Include="..\..\src\Wallet.MockApi\Wallet.MockApi.csproj" />
