@@ -49,6 +49,15 @@ public class EvalSettingsTests
     }
 
     [Fact]
+    public void TheDefaultCandidateIsSonnetInBothProjects()
+    {
+        using var eval = JsonDocument.Parse(File.ReadAllText(Path.Combine(Root, "src", "Agent.Eval", "appsettings.json")));
+        using var web = JsonDocument.Parse(File.ReadAllText(Path.Combine(Root, "src", "Agent.Web", "appsettings.json")));
+        Assert.Equal("sonnet", web.RootElement.GetProperty("Model").GetProperty("Candidate").GetString());
+        Assert.Equal("sonnet", eval.RootElement.GetProperty("Model").GetProperty("Candidate").GetString());
+    }
+
+    [Fact]
     public void TheModelCandidatesMatchTheWebConsole()
     {
         // The candidates, their prices (the cache prices included), the prompt cache lifetime and the compatible fields: the runner prices and

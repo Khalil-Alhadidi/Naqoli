@@ -126,7 +126,7 @@ Its examples are the full-request sentences of the Example column of [matching-r
 | Setting | Meaning |
 |---|---|
 | `Agent:Parser` | `scripted` (the default: no model, no key) or `model` (the selected candidate, whatever its provider); `claude` is kept as a synonym of `model` |
-| `Model:Candidate` | `haiku` (the default), `sonnet` or `opus` (provider `anthropic`), or `gemini`, `gemma` or `openrouter` (provider `compatible`, below) |
+| `Model:Candidate` | `sonnet` (the default, milestone 10), `haiku` or `opus` (provider `anthropic`), or `gemini`, `gemma` or `openrouter` (provider `compatible`, below) |
 | `Model:Candidates:<name>:Provider` | `anthropic` (the default) or `compatible` |
 | `Model:Candidates:<name>:ModelId` | `claude-haiku-5-5`, `claude-sonnet-5-5`, `claude-opus-5-5` |
 | `...:Effort` | `low` (default); `low`, `medium`, `high`, `xhigh` or `max`. Sent as `output_config.effort`. `anthropic` only: not checked and not sent for `compatible` |
@@ -194,7 +194,20 @@ The two shipped entries, in both `appsettings.json` files, were shipped with the
 2. Smoke test first: select the candidate (`dotnet user-secrets set "Model:Candidate" "gemini" --project src/Agent.Web`) and run the gated `LiveCompatibleTests`, four clean development cases (CLN-01, CLN-11, CLN-27, CLN-31) compared with the oracle's parse lines in `data/requests.dev.parses.jsonl`. It skips unless the selected candidate is `compatible` and its key is set.
 3. If the vendor rejects the schema (an HTTP 400 on `response_format`, or a `json` problem on every case), set that entry's `OutputMode` to `json_object` and run the smoke test again.
 4. Run the set three times: `dotnet run --project src/Agent.Eval -- dev --parser compatible:<candidate> --repeat 3`.
-5. Read the aggregate report's header (`Model:Provider`, `Model:BaseUrl`, `Model:ModelId`, `Model:OutputMode`, the pass counts, `Model:CostUsd`) next to the latest Haiku aggregate, and apply D13: fewest wrong cards wins; a close call goes to the cheaper or in-country model.
+5. Read the aggregate report's header (`Model:Provider`, `Model:BaseUrl`, `Model:ModelId`, `Model:OutputMode`, the pass counts, `Model:CostUsd`) next to the latest Sonnet and Haiku aggregates, and apply D13 as amended on 3 Nov 2026 (The choice, below).
+
+## The choice (milestone 10, 3 Nov 2026)
+
+Khalil chose Sonnet (`claude-sonnet-5-5`) on 3 Nov 2026 under D13 as amended that day: fewest wrong cards wins; on a tie, the model that meets every target; then the cheaper one. The evidence is `docs/reports/model-comparison-2026-11-01.md` (prompt version 6, the 102-case development set, three runs each):
+
+| | Sonnet | Haiku | Gemma |
+|---|---|---|---|
+| Passed of 102, median of three runs | 97 | 93 | 66 |
+| Wrong cards, three runs | 0 | 0 | 1 of 306 |
+| Every target met | Yes | No: "asks when it must" 90 % against 95 % | No: four missed |
+| Cost per completed request, median | 0.0018 USD | 0.00012 USD | 0 (free tier) |
+
+Haiku and Sonnet tie on wrong cards (none); Sonnet meets every target and Haiku does not, so the tie goes to Sonnet before cost is reached. `Model:Candidate` is `sonnet` in both `appsettings.json` files (`src/Agent.Web`, `src/Agent.Eval`), pinned by `EvalSettingsTests.TheDefaultCandidateIsSonnetInBothProjects`. Haiku stays one setting away: `Model:Candidate` = `haiku` (`dotnet user-secrets set "Model:Candidate" "haiku" --project src/Agent.Web`, or `--parser claude:haiku` for the runner). The committed parser is still `scripted`; the model is switched on with `Agent:Parser` (The key, below).
 
 ## Cost accounting
 
