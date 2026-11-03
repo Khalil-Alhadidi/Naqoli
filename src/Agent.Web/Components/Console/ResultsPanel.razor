@@ -1,0 +1,241 @@
+@using System.Globalization
+@using System.Text.Json
+@using Agent.Core.Parsing
+@using Agent.Core.Reports
+@inject IOptionsMonitor<ConsoleOptions> ConsoleSettings
+@inject IOptions<ModelOptions> Model
+
+@* Milestone 10: a committed eval report's targets table, read only. It lists the reports under Console:ReportsDirectory
+   (ReportReader.List: dev-* and heldout-* JSON with a targets table, newest first) and opens the configured candidate's
+   newest one first; every listed report can be chosen. Every figure on the panel is the report file's, formatted
+   (invariant culture) and never computed here: a single run shows its totals, an aggregate its All cases group and one
+   row per run, because it holds no overall cost or time. A report never holds case text, so none can be shown. *@
+<MudPaper Class="pa-3" Elevation="1" data-testid="results-panel">
+    <MudText Typo="Typo.h6">Results</MudText>
+
+    @if (listing is null)
+    {
+        <TableSkeleton />
+    }
+    else
+    {
+        @if (listing.Skipped > 0)
+        {
+            <MudText Typo="Typo.caption" Class="console-muted" data-testid="results-skipped">@($"{listing.Skipped} file(s) skipped")</MudText>
+        }
+
+        @if (listing.Entries.Count == 0)
+        {
+            <EmptyState Icon="@Icons.Material.Filled.Assessment" Text="@($"No reports in {directory}.")" />
+        }
+        else
+        {
+            <div class="mt-2 mb-2">
+                <select data-testid="results-select" aria-label="Report" class="results-select" value="@selected" @onchange="OnSelectedAsync">
+                    @foreach (var entry in listing.Entries)
+                    {
+                        <option value="@entry.FileName" selected="@(entry.FileName == selected)">@OptionText(entry)</option>
+                    }
+                </select>
+            </div>
+        }
+
+        @if (failure is not null)
+        {
+            <MudText Color="Color.Error" data-testid="results-error">@failure</MudText>
+        }
+
+        @if (opened is not null)
+        {
+            var header = opened.Header;
+            <MudText Typo="Typo.body2" Class="mb-2" data-testid="results-header" data-set="@header.Set" data-parser="@header.Parser"
+                     data-started="@header.StartedUtc.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture)">
+                @HeaderText(opened)
+            </MudText>
+
+            <div class="grid-scroll">
+                <MudSimpleTable Dense="true" Hover="true">
+                    <thead>
+                        <tr>
+                            @if (opened.Single is not null)
+                            {
+                                <th>Measure</th><th>Target</th><th>Value</th><th>Verdict</th>
+                            }
+                            else
+                            {
+                                <th>Measure</th><th>Target</th><th>Min</th><th>Median</th><th>Max</th><th>Verdict</th>
+                            }
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in opened.Single?.Targets ?? [])
+                        {
+                            <tr data-testid="results-target" data-measure="@row.Measure" data-verdict="@row.Verdict">
+                                <td>@row.Measure</td>
+                                <td>@row.Target</td>
+                                <td class="cell-nowrap">@Figure(row.Value, row.Unit)</td>
+                                <td><span class="@VerdictClass(row.Verdict)">@row.Verdict</span></td>
+                            </tr>
+                        }
+                        @foreach (var row in opened.Repeat?.Targets ?? [])
+                        {
+                            <tr data-testid="results-target" data-measure="@row.Measure" data-verdict="@row.Verdict">
+                                <td>@row.Measure</td>
+                                <td>@row.Target</td>
+                                <td class="cell-nowrap">@Figure(row.Min, row.Unit)</td>
+                                <td class="cell-nowrap">@Figure(row.Median, row.Unit)</td>
+                                <td class="cell-nowrap">@Figure(row.Max, row.Unit)</td>
+                                <td><span class="@VerdictClass(row.Verdict)">@row.Verdict</span></td>
+                            </tr>
+                        }
+                    </tbody>
+                </MudSimpleTable>
+            </div>
+
+            @if (opened.Single is { } single)
+            {
+                <MudText Typo="Typo.body2" Class="mt-2" data-testid="results-totals">@TotalsText(single)</MudText>
+            }
+            else if (opened.Repeat is { } repeat)
+            {
+                <MudText Typo="Typo.body2" Class="mt-2" data-testid="results-totals">@GroupText(repeat)</MudText>
+                <div class="grid-scroll">
+                    <MudSimpleTable Dense="true">
+                        <thead>
+                            <tr><th>Run</th><th>Passed</th><th>Cost USD</th><th>Median s</th></tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var run in repeat.Runs)
+                            {
+                                <tr data-testid="results-run" data-run="@run.Run">
+                                    <td>@Number(run.Run)</td>
+                                    <td>@($"{Number(run.Passed)} of {Number(run.Cases)}")</td>
+                                    <td>@run.CostUsd.ToString("0.0000", CultureInfo.InvariantCulture)</td>
+                                    <td>@((run.MedianTimeMs / 1000).ToString("0.00", CultureInfo.InvariantCulture))</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </MudSimpleTable>
+                </div>
+            }
+        }
+    }
+</MudPaper>
+
+@code {
+    private const string PromptVersionSetting = "Model:PromptVersion";
+
+    private ReportListing? listing;
+    private string directory = string.Empty;
+    private string? selected;
+    private ReportFile? opened;
+    private string? failure;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var configured = ConsoleSettings.CurrentValue.ReportsDirectory;
+        var candidate = Model.Value.Candidate ?? string.Empty;
+        try
+        {
+            directory = ReportReader.Resolve(configured);
+
+            // Every listed file is read once to see its header and targets: off the circuit's render path.
+            listing = await Task.Run(() => ReportReader.List(directory, candidate));
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or ArgumentException or NotSupportedException or IOException)
+        {
+            // The directory cannot be resolved (no repository root, or a malformed path): an empty listing, with the reason.
+            directory = configured;
+            listing = new ReportListing([], 0, null);
+            failure = "Could not find the reports directory: " + ex.GetType().Name;
+            return;
+        }
+
+        selected = listing.DefaultFileName;
+        await OpenAsync(selected);
+    }
+
+    private async Task OnSelectedAsync(ChangeEventArgs e)
+    {
+        selected = e.Value as string;
+        await OpenAsync(selected);
+    }
+
+    /// <summary>Reads one listed report; a file that fails shows the error line and leaves the select usable.</summary>
+    private async Task OpenAsync(string? fileName)
+    {
+        opened = null;
+        failure = null;
+        if (string.IsNullOrEmpty(fileName) || listing is not { } shown)
+            return;
+
+        try
+        {
+            // ReportReader.Open opens only a listed name inside the directory (security review M3).
+            opened = await Task.Run(() => ReportReader.Open(directory, shown, fileName));
+        }
+        catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            failure = "Could not read " + fileName + ": " + ex.GetType().Name;
+        }
+    }
+
+    private static string OptionText(ReportEntry e)
+        => e.StartedUtc.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture) + "  " + e.Set + "  " + e.Parser
+            + (e.IsAggregate ? "  (aggregate)" : string.Empty) + "  " + e.FileName;
+
+    private static string HeaderText(ReportFile report)
+    {
+        var header = report.Header;
+        var parts = new List<string>
+        {
+            "Set " + header.Set,
+            "parser " + header.Parser,
+            "started " + header.StartedUtc.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture) + " UTC",
+        };
+        if (header.Settings is not null && header.Settings.TryGetValue(PromptVersionSetting, out var version))
+            parts.Add("prompt version " + version);
+        if (header.Runs is { } runs)
+            parts.Add(Number(runs) + " runs");
+        var cases = report.Single?.Totals?.Cases ?? report.Repeat?.Groups?.FirstOrDefault()?.Cases;
+        if (cases is { } count)
+            parts.Add(Number(count) + " cases");
+        return string.Join(" · ", parts);
+    }
+
+    private static string TotalsText(ReportDocument single)
+    {
+        var totals = single.Totals;
+        return Number(totals.Passed) + " of " + Number(totals.Cases) + " passed ("
+            + totals.Percent.ToString("0.0", CultureInfo.InvariantCulture) + " %) · cost "
+            + single.CostUsd.ToString("0.0000", CultureInfo.InvariantCulture) + " USD · median "
+            + (single.Time.MedianMs / 1000).ToString("0.00", CultureInfo.InvariantCulture) + " s";
+    }
+
+    private static string GroupText(RepeatReportDocument repeat)
+    {
+        var all = repeat.Groups.FirstOrDefault();
+        return all is null
+            ? string.Empty
+            : all.Name + ": passed " + Number(all.MinPassed) + " / " + all.MedianPassed.ToString("0.#", CultureInfo.InvariantCulture)
+                + " / " + Number(all.MaxPassed) + " of " + Number(all.Cases) + " (min / median / max)";
+    }
+
+    /// <summary>A target's figure as the report holds it, by unit; a dash when the report has none.</summary>
+    private static string Figure(double? value, string unit) => value switch
+    {
+        null => "–",
+        { } v => unit switch
+        {
+            "percent" => v.ToString("0.0", CultureInfo.InvariantCulture) + " %",
+            "ms" => v.ToString("0", CultureInfo.InvariantCulture) + " ms",
+            "usd" => v.ToString("0.000000", CultureInfo.InvariantCulture) + " USD",
+            _ => v.ToString("0.##", CultureInfo.InvariantCulture),
+        },
+    };
+
+    private static string VerdictClass(string verdict)
+        => "badge badge-" + (verdict == "n/a" ? "na" : verdict);
+
+    private static string Number(int value) => value.ToString(CultureInfo.InvariantCulture);
+}

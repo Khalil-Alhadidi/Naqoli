@@ -37,6 +37,14 @@ public sealed class ConsoleOptions
     [Range(5, 100, ErrorMessage = "Console:GridPageSize must be between 5 and 100.")]
     public int GridPageSize { get; set; } = 10;
 
+    /// <summary>
+    /// Where the Results panel lists the committed eval reports (milestone 10), default <c>docs/reports</c>. A relative path
+    /// is taken under the repository root (<c>ReportReader.Resolve</c>). Read only in the settings component: it is read
+    /// once when the panel opens, and the panel reads the files and never writes them.
+    /// </summary>
+    [Required(AllowEmptyStrings = false, ErrorMessage = "Console:ReportsDirectory is required.")]
+    public string ReportsDirectory { get; set; } = "docs/reports";
+
     /// <summary>True when <paramref name="key"/> may be used outside Development: set, not the placeholder, long enough.</summary>
     public static bool IsUsableOutsideDevelopment(string? key)
         => !string.IsNullOrWhiteSpace(key)

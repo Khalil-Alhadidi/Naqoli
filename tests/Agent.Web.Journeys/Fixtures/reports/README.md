@@ -1,0 +1,3 @@
+# Results journey fixtures
+
+These are copies of four committed eval reports in `docs/reports`, used by the Results journeys as the console's `Console:ReportsDirectory` (`JourneyHost.StartWeb`). `dev-claude-sonnet-repeat3-2026-10-29-1049.json` is copied whole. `dev-claude-sonnet-r1-2026-10-29-1049.json`, `dev-compatible-gemma-r3-2026-11-01-0735.json` and `dev-scripted-oracle-2026-10-15-2052.json` keep only the first three entries of their `cases` array, which the panel never reads; everything else (header, totals, categories, types, targets, red team, masking, time, cost, unsupported) is byte for byte as committed, so the figures the panel shows are the originals'. The scripted oracle report predates the targets table and is there to be skipped.

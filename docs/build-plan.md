@@ -500,12 +500,13 @@ The biller alias stays the later item below.
 - The candidates (Khalil, 15 Oct 2026): Claude (paid; Haiku, Sonnet and Opus through the Anthropic API, in since milestone 6), Gemini Flash-Lite (free) and a Qwen model on Groq (free). The second provider is wired through `Microsoft.Extensions.AI` before this milestone starts, so the comparison has at least one free candidate; its model id goes into `docs/disclosure.md` in the commit that configures it.
 - The learning data component in the console, with its count in the menu.
 - The results component: a console panel showing the latest report's targets table (the open item, settled 16 Oct 2026).
+- Khalil's three rulings of 3 Nov 2026: Sonnet (`claude-sonnet-5-5`) is the chosen model under D13 as amended (fewest wrong cards, then every target met, then cheaper), and each milestone is built on its own branch merged into `main` before its tag. The Learning data panel marks a row Reviewed, with the count of unreviewed rows in the menu, and the D12 "save as test case" button is deferred to after milestone 12 (`docs/known-gaps.md` row 47).
 
 **Done when**
 
-- The comparison report is committed.
-- The chosen model, the prompt and the seed are tagged in the repository.
-- After the tag, only fixes to plain code bugs are allowed, and each one is noted in `docs/disclosure.md`.
+- The comparison report is committed. Shown by `docs/reports/model-comparison-2026-11-01.md` (Haiku 93, Sonnet 97, Gemma 66 of 102 at the median, prompt 6).
+- The chosen model, the prompt and the seed are tagged in the repository. Shown by the tag `milestone-10` on the merge of branch `milestone-10` into `main`, with the model, the prompt version and the seed hash in `docs/disclosure.md`, "Freeze, milestone 10".
+- After the tag, only fixes to plain code bugs are allowed, and each one is noted in `docs/disclosure.md`. Shown by the list "Fixes after the freeze" in `docs/disclosure.md`, empty at the tag.
 
 ## Milestone 11: Held-out run, once
 

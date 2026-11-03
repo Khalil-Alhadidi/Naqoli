@@ -18,6 +18,9 @@ public sealed class ConsoleJourneys(JourneyHost host) : JourneyBase(host)
     /// <summary>The Amount column of a <c>log-row</c> (At, User, Event, Pending, From → To, Reason, Reference, Amount, Detail).</summary>
     private const int LogAmountColumn = 7;
 
+    /// <summary>The Masked text column of a <c>learning-row</c> (At, User, Reason, Detail, Masked text, Reviewed).</summary>
+    private const int LearningMaskedTextColumn = 4;
+
     [Fact]
     public async Task BalanceAnswersAfterConsentAndTheLogKeepsNoFigure()
     {
@@ -394,5 +397,78 @@ public sealed class ConsoleJourneys(JourneyHost host) : JourneyBase(host)
         await Expect(s20.Locator("[data-testid=status-badge][data-status=closed]")).ToHaveCountAsync(1);
         await Expect(s20).ToHaveClassAsync(new System.Text.RegularExpressions.Regex(@"(^|\s)row-muted(\s|$)"));
         Assert.Equal(closedInTheWallet, closedOnScreen);
+    }
+
+    /// <summary>
+    /// Milestone 10: ADD-02 (an unknown name) writes a <c>recipient_not_found</c> learning row; the menu counts it, the
+    /// Learning data panel shows it with the message as typed (it has no digits to mask), and its Reviewed tick saves:
+    /// the count goes and a Refresh still shows it ticked.
+    /// </summary>
+    [Fact]
+    public async Task LearningRowCanBeTickedReviewedAndTheMenuCountFollows()
+    {
+        var page = await OpenAsync(Host.WebAddress);
+
+        await SayAsync(page, DevSet.Say("ADD-02"));
+
+        await Expect(page.GetByTestId("menu-learning-count")).ToHaveTextAsync("1");
+        await page.GetByTestId("menu-learning").ClickAsync();
+        var row = page.GetByTestId("learning-row");
+        await Expect(row).ToHaveCountAsync(1);
+        await Expect(row).ToHaveAttributeAsync("data-reason", "recipient_not_found");
+        await Expect(row).ToHaveAttributeAsync("data-user", U1.ToString(CultureInfo.InvariantCulture));
+        await Expect(row).ToHaveAttributeAsync("data-reviewed", "false");
+        await Expect(row.Locator("td").Nth(LearningMaskedTextColumn)).ToHaveTextAsync(DevSet.Say("ADD-02"));
+
+        await row.GetByTestId("learning-reviewed").CheckAsync();
+
+        await Expect(row).ToHaveAttributeAsync("data-reviewed", "true");
+        await Expect(page.GetByTestId("menu-learning-count")).ToHaveCountAsync(0);
+        await page.GetByTestId("learning-refresh").ClickAsync();
+        await Expect(page.GetByTestId("learning-row")).ToHaveAttributeAsync("data-reviewed", "true");
+    }
+
+    /// <summary>
+    /// Milestone 10: the Results panel over the fixture reports opens on the candidate's newest aggregate (sonnet's
+    /// repeat3: nine targets, all pass but the reported cost, three runs), counts the one report without targets as
+    /// skipped, and switches to Gemma's single run, which misses targets.
+    /// </summary>
+    [Fact]
+    public async Task ResultsOpensOnTheCandidatesNewestReportAndCanSwitch()
+    {
+        var page = await OpenAsync(Host.WebAddress);
+
+        await page.GetByTestId("menu-results").ClickAsync();
+
+        await Expect(page.GetByTestId("results-select")).ToHaveValueAsync("dev-claude-sonnet-repeat3-2026-10-29-1049.json");
+        await Expect(page.GetByTestId("results-header")).ToHaveAttributeAsync("data-parser", "claude-sonnet");
+        var targets = page.GetByTestId("results-target");
+        await Expect(targets).ToHaveCountAsync(9);
+        await Expect(page.Locator("[data-testid=results-target][data-verdict=pass]")).ToHaveCountAsync(8);
+        await Expect(page.Locator("[data-testid=results-target][data-verdict=reported]")).ToHaveAttributeAsync("data-measure", "Cost per completed request");
+        await Expect(page.GetByTestId("results-run")).ToHaveCountAsync(3);
+        await Expect(page.GetByTestId("results-skipped")).ToHaveTextAsync(new System.Text.RegularExpressions.Regex("^1 file"));
+
+        await page.GetByTestId("results-select").SelectOptionAsync("dev-compatible-gemma-r3-2026-11-01-0735.json");
+
+        await Expect(page.GetByTestId("results-header")).ToHaveAttributeAsync("data-parser", "compatible-gemma");
+        await Expect(page.Locator("[data-testid=results-target][data-verdict=miss]").First).ToBeVisibleAsync();
+        await Expect(page.GetByTestId("results-totals")).ToContainTextAsync("of 102 passed");
+        await Expect(page.GetByTestId("results-run")).ToHaveCountAsync(0);
+    }
+
+    /// <summary>Milestone 10: U5's console points at a reports directory that does not exist; the panel shows the empty state.</summary>
+    [Fact]
+    public async Task ResultsShowsTheEmptyStateWhenThereAreNoReports()
+    {
+        var page = await OpenAsync(Host.UserWebAddress(JourneyHost.EmptyReportsUserId));
+
+        await page.GetByTestId("menu-results").ClickAsync();
+
+        var panel = page.GetByTestId("results-panel");
+        await Expect(panel.GetByTestId("empty-state")).ToContainTextAsync("No reports in ");
+        await Expect(panel.GetByTestId("results-select")).ToHaveCountAsync(0);
+        await Expect(panel.GetByTestId("results-skipped")).ToHaveCountAsync(0);
+        await Expect(panel.GetByTestId("results-error")).ToHaveCountAsync(0);
     }
 }

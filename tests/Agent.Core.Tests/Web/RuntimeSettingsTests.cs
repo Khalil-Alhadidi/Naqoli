@@ -143,6 +143,7 @@ public sealed class RuntimeSettingsTests : IDisposable
     [InlineData("Agent:Parser")]
     [InlineData("Agent:DemoUserId")]
     [InlineData("Console:WalletAdminKey")]
+    [InlineData("Console:ReportsDirectory")]
     [InlineData("Console:")]
     [InlineData("Agent:GridPageSize")]
     [InlineData("Console:PerTransactionCapIqd")]

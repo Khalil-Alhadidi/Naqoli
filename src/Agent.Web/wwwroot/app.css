@@ -217,6 +217,24 @@ a:focus-visible,
     font-weight: 600;
 }
 
+/* The unreviewed learning rows on Learning data (milestone 10): a small pill in the badge tint, absent at 0. */
+.console-menu-count {
+    display: inline-block;
+    margin-inline-start: var(--space-2);
+    padding: 0 var(--space-2);
+    border-radius: var(--radius-md);
+    background: var(--color-neutral-tint);
+    color: var(--color-text-muted);
+    font-size: var(--text-xs);
+    font-weight: 600;
+    line-height: 1.6;
+}
+
+/* A learning row's masked text (milestone 10): right to left inside the left-to-right grid (dir="auto"), wrapping. */
+.learning-text {
+    overflow-wrap: anywhere;
+}
+
 .console-columns {
     grid-column: main-start / trace-end;
     grid-row: 2;
@@ -413,6 +431,35 @@ a:focus-visible,
 .badge-failed {
     background: var(--color-danger-tint);
     color: var(--color-danger);
+}
+
+/* A target's verdict in the Results panel (milestone 10): pass on the success tint, miss on the danger tint, reported
+   (no target) and n/a (no cases) muted. */
+.badge-pass {
+    background: var(--color-success-tint);
+    color: var(--color-success);
+}
+
+.badge-miss {
+    background: var(--color-danger-tint);
+    color: var(--color-danger);
+}
+
+.badge-reported,
+.badge-na {
+    background: var(--color-neutral-tint);
+    color: var(--color-text-muted);
+}
+
+/* The Results panel's report select (milestone 10): a native select, so a journey can pick a file by its name. */
+.results-select {
+    max-width: 100%;
+    padding: var(--space-1) var(--space-2);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    background: var(--color-surface);
+    color: var(--color-text);
+    font: inherit;
 }
 
 .badge .badge-icon.mud-icon-root {

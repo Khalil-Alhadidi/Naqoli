@@ -120,7 +120,7 @@ public sealed class RequestJourneys(JourneyHost host) : JourneyBase(host)
         await Expect(page.GetByTestId("question-option")).ToHaveCountAsync(0);
         await Expect(page.GetByTestId("question-decline")).ToHaveCountAsync(0);
         await Expect(page.GetByTestId("card")).ToHaveCountAsync(0);
-        Assert.Contains(await LearningRowsAsync(), r => r.Reason == "recipient_not_found");
+        Assert.Contains(await LearningRowsAsync(minimum: 1), r => r.Reason == "recipient_not_found");
         Assert.Equal(U1Balance, await Host.BalanceAsync(U1));
     }
 

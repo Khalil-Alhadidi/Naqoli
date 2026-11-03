@@ -1,5 +1,6 @@
 using Agent.Core.Data;
 using Agent.Core.Masking;
+using Microsoft.EntityFrameworkCore;
 
 namespace Agent.Core.Learning;
 
@@ -30,6 +31,34 @@ public sealed class LearningLog(AgentDbContext db, TimeProvider time)
         });
         await db.SaveChangesAsync(cancellationToken);
     }
+
+    /// <summary>The newest <paramref name="take"/> rows, newest first (by time, then by id), read without tracking.</summary>
+    public async Task<IReadOnlyList<LearningEntryRow>> ReadLatestAsync(int take, CancellationToken cancellationToken)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(take, 1);
+
+        return await db.LearningEntries.AsNoTracking()
+            .OrderByDescending(r => r.At)
+            .ThenByDescending(r => r.Id)
+            .Take(take)
+            .ToListAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// Sets the reviewed tick of the row <paramref name="id"/> and saves it; <see langword="false"/> when no row has that id.
+    /// </summary>
+    public async Task<bool> SetReviewedAsync(long id, bool reviewed, CancellationToken cancellationToken)
+    {
+        // One UPDATE: a row removed by a reset in between is a plain false, never a concurrency exception (review N2).
+        var rows = await db.LearningEntries
+            .Where(r => r.Id == id)
+            .ExecuteUpdateAsync(s => s.SetProperty(r => r.Reviewed, reviewed), cancellationToken);
+        return rows > 0;
+    }
+
+    /// <summary>The number of rows not yet marked reviewed.</summary>
+    public Task<int> CountUnreviewedAsync(CancellationToken cancellationToken) =>
+        db.LearningEntries.CountAsync(r => !r.Reviewed, cancellationToken);
 
     private static string Cut(string text, int length) => text.Length > length ? text[..length] : text;
 }

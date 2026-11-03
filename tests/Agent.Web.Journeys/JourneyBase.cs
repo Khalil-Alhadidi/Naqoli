@@ -24,6 +24,11 @@ public abstract partial class JourneyBase(JourneyHost host) : IAsyncLifetime
     protected const int U5 = 5;
     protected const long U1Balance = 750_000;
 
+    /// <summary>How long <see cref="LearningRowsAsync"/> waits for its minimum, and how often it reads.</summary>
+    private static readonly TimeSpan LearningPollTimeout = TimeSpan.FromSeconds(5);
+
+    private static readonly TimeSpan LearningPollInterval = TimeSpan.FromMilliseconds(100);
+
     private IBrowserContext? context;
 
     protected JourneyHost Host => host;
@@ -113,12 +118,26 @@ public abstract partial class JourneyBase(JourneyHost host) : IAsyncLifetime
         return await db.AuditEntries.CountAsync(a => a.Event == @event, Token);
     }
 
-    /// <summary>Every learning row of the agent database as (reason, detail).</summary>
-    protected async Task<IReadOnlyList<(string Reason, string? Detail)>> LearningRowsAsync()
+    /// <summary>
+    /// Every learning row of the agent database as (reason, detail). The conversation writes a row after its reply
+    /// renders, so with <paramref name="minimum"/> above 0 the read is repeated every 100 ms, for up to 5 seconds, until
+    /// at least that many rows are there; whatever is there then is returned (milestone 10).
+    /// </summary>
+    protected async Task<IReadOnlyList<(string Reason, string? Detail)>> LearningRowsAsync(int minimum = 0)
     {
-        await using var scope = host.WebServices.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<AgentDbContext>();
-        return [.. (await db.LearningEntries.AsNoTracking().ToListAsync(Token)).Select(l => (l.Reason, l.Detail))];
+        var deadline = DateTime.UtcNow + LearningPollTimeout;
+        while (true)
+        {
+            await using (var scope = host.WebServices.CreateAsyncScope())
+            {
+                var db = scope.ServiceProvider.GetRequiredService<AgentDbContext>();
+                var rows = await db.LearningEntries.AsNoTracking().ToListAsync(Token);
+                if (rows.Count >= minimum || DateTime.UtcNow >= deadline)
+                    return [.. rows.Select(l => (l.Reason, l.Detail))];
+            }
+
+            await Task.Delay(LearningPollInterval, Token);
+        }
     }
 
     /// <summary>

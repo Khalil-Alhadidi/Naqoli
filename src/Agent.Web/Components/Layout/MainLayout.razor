@@ -1,6 +1,8 @@
 ﻿@inherits LayoutComponentBase
 @implements IDisposable
 @inject ConsoleNavigation Navigation
+@inject ChatSession Session
+@inject LearningCount Learning
 
 <MudThemeProvider Theme="ConsoleTheme.Light" />
 <MudPopoverProvider />
@@ -23,10 +25,18 @@
                         Class="@ActiveClass(ConsolePanel.Settings)" OnClick="@(() => Navigation.Select(ConsolePanel.Settings))">Settings</MudNavLink>
             <MudNavLink data-testid="menu-log" Icon="@Icons.Material.Filled.ListAlt"
                         Class="@ActiveClass(ConsolePanel.Log)" OnClick="@(() => Navigation.Select(ConsolePanel.Log))">Log</MudNavLink>
+            <MudNavLink data-testid="menu-results" Icon="@Icons.Material.Filled.Assessment"
+                        Class="@ActiveClass(ConsolePanel.Results)" OnClick="@(() => Navigation.Select(ConsolePanel.Results))">Results</MudNavLink>
             <MudNavLink data-testid="menu-aliases" Icon="@Icons.Material.Filled.Badge"
                         Class="@ActiveClass(ConsolePanel.Aliases)" OnClick="@(() => Navigation.Select(ConsolePanel.Aliases))">Aliases</MudNavLink>
             <MudNavLink data-testid="menu-learning" Icon="@Icons.Material.Filled.School"
-                        Class="@ActiveClass(ConsolePanel.LearningData)" OnClick="@(() => Navigation.Select(ConsolePanel.LearningData))">Learning data</MudNavLink>
+                        Class="@ActiveClass(ConsolePanel.LearningData)" OnClick="@(() => Navigation.Select(ConsolePanel.LearningData))">
+                Learning data
+                @if (unreviewed > 0)
+                {
+                    <span class="console-menu-count" data-testid="menu-learning-count">@unreviewed</span>
+                }
+            </MudNavLink>
         </MudNavMenu>
     </nav>
     @Body
@@ -39,11 +49,65 @@
 </div>
 
 @code {
-    protected override void OnInitialized() => Navigation.Changed += OnNavigationChanged;
+    private readonly CancellationTokenSource disposed = new();
 
-    public void Dispose() => Navigation.Changed -= OnNavigationChanged;
+    // The learning-log rows not yet marked reviewed (milestone 10); the count on Learning data shows only above 0.
+    private int unreviewed;
 
-    private void OnNavigationChanged() => _ = InvokeAsync(StateHasChanged);
+    protected override async Task OnInitializedAsync()
+    {
+        Navigation.Changed += OnNavigationChanged;
+        Session.Changed += OnSessionChanged;
+        Learning.Changed += OnLearningChanged;
+        await ReadCountAsync();
+    }
+
+    public void Dispose()
+    {
+        Navigation.Changed -= OnNavigationChanged;
+        Session.Changed -= OnSessionChanged;
+        Learning.Changed -= OnLearningChanged;
+
+        // A count still being read when the circuit goes away is cancelled.
+        disposed.Cancel();
+        disposed.Dispose();
+    }
+
+    private void OnNavigationChanged() => _ = InvokeAsync(ReadCountAsync);
+
+    private void OnSessionChanged()
+    {
+        // The session raises Changed many times during one action; read once it has finished (an action may log a row).
+        if (Session.Busy)
+            return;
+        _ = InvokeAsync(ReadCountAsync);
+    }
+
+    /// <summary>Called on the raiser's thread (any circuit's): marshalled to this circuit with InvokeAsync.</summary>
+    private void OnLearningChanged() => _ = InvokeAsync(ReadCountAsync);
+
+    private async Task ReadCountAsync()
+    {
+        if (disposed.IsCancellationRequested)
+            return;
+        var token = disposed.Token;
+        try
+        {
+            unreviewed = await Learning.ReadAsync(token);
+        }
+        catch (OperationCanceledException) when (token.IsCancellationRequested)
+        {
+            // The circuit is gone: nothing to show.
+            return;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // The agent database does not answer: the menu shows no count rather than a wrong one.
+            unreviewed = 0;
+        }
+
+        StateHasChanged();
+    }
 
     private string ActiveClass(ConsolePanel panel) => Navigation.Selected == panel ? "console-menu-active" : string.Empty;
 }

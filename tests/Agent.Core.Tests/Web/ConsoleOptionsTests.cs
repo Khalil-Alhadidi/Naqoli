@@ -1,5 +1,6 @@
 extern alias AgentWeb;
 
+using System.ComponentModel.DataAnnotations;
 using AgentWeb::Agent.Web.Services;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -103,5 +104,19 @@ public class ConsoleOptionsTests
             var ex = Assert.Throws<OptionsValidationException>(() => options.Value);
             Assert.Contains(nameof(ConsoleOptions.GridPageSize), ex.Message, StringComparison.Ordinal);
         }
+    }
+
+    [Fact]
+    public void ReportsDirectoryDefaultsToDocsReports()
+    {
+        Assert.Equal("docs/reports", new ConsoleOptions().ReportsDirectory);
+    }
+
+    [Fact]
+    public void ReportsDirectoryMustNotBeEmpty()
+    {
+        var options = new ConsoleOptions { ReportsDirectory = "" };
+
+        Assert.False(Validator.TryValidateObject(options, new ValidationContext(options), null, validateAllProperties: true));
     }
 }

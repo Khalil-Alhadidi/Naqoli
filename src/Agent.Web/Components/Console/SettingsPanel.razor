@@ -9,6 +9,7 @@
 @inject KillSwitch Kill
 @inject IOptionsMonitor<ConsoleOptions> ConsoleSettings
 @using Agent.Core.Audit
+@using Agent.Core.Reports
 
 @* D8: the agent's limits are edited here and apply to the next action, without a restart; the console's grid page size
    applies to the next render of every grid (task 4c). A saved value lives in memory only (RuntimeSettings); the other
@@ -42,6 +43,11 @@
             <tr data-testid="setting-row" data-name="Console:WalletAdminKey">
                 <td>Console:WalletAdminKey</td>
                 <td colspan="2">@(string.IsNullOrEmpty(ConsoleSettings.CurrentValue.WalletAdminKey) ? "not set" : "set")</td>
+            </tr>
+            @* Milestone 10: where the Results panel reads the committed reports, as resolved; read only. *@
+            <tr data-testid="setting-row" data-name="Console:ReportsDirectory">
+                <td>Console:ReportsDirectory</td>
+                <td colspan="2">@ReportsDirectoryShown</td>
             </tr>
         </tbody>
     </MudSimpleTable>
@@ -261,6 +267,23 @@
         Runtime.Reset(Key(name));
         errors.Remove(name);
         drafts.Remove(name);
+    }
+
+    /// <summary>The reports directory as the Results panel resolves it, or the configured value when the root is not found.</summary>
+    private string ReportsDirectoryShown
+    {
+        get
+        {
+            var configured = ConsoleSettings.CurrentValue.ReportsDirectory;
+            try
+            {
+                return ReportReader.Resolve(configured);
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or ArgumentException or NotSupportedException or IOException)
+            {
+                return configured + " (cannot be resolved: " + ex.GetType().Name + ")";
+            }
+        }
     }
 
     private static IEnumerable<(string Name, string Value)> ReadOnly(AgentOptions o)

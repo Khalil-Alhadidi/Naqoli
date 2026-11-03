@@ -32,10 +32,10 @@ flowchart TB
     bar["bar (sticky): Agentic AI Challenge Iraq : Pay and Bill Agent<br/>chip Mock wallet · synthetic data (data-testid mock-label)"]
     subgraph row["the second row"]
         direction LR
-        menu["menu (sticky, 200 px)<br/>Wallet data, Settings, Log, Aliases, Learning data"]
+        menu["menu (sticky, 200 px)<br/>Wallet data, Settings, Log, Results, Aliases,<br/>Learning data with the unreviewed count"]
         subgraph ltr["console: English, left to right (data-testid console, dir ltr, lang en), a sub-grid of main and trace"]
             direction LR
-            middle["main<br/>WalletDataPanel (default), SettingsPanel,<br/>LogPanel, AliasesPanel,<br/>Placeholder Learning data (milestone 10)"]
+            middle["main<br/>WalletDataPanel (default), SettingsPanel,<br/>LogPanel, ResultsPanel, AliasesPanel,<br/>LearningDataPanel (milestone 10)"]
             trace["trace (sticky, the window's height less the bar)<br/>ResetPanel, FaultPanel, then LiveTrace<br/>filling the rest and scrolling inside"]
         end
         subgraph rtl["phone (sticky): Iraqi Arabic, right to left (data-testid phone-frame, dir rtl, lang ar)"]
@@ -168,6 +168,7 @@ Fixed sizes of the layout are tokens too, so no rule holds a bare length: `--siz
 | `WalletChanges` | singleton | The process-wide wallet-change notification: `event Action<WalletChange>? Changed`, `Raise(WalletChange)`, `WalletChange(UserId, Kind)` with `WalletChangeKind` `Payment`, `Alias` or `Reset` (user 0, `WalletChange.EveryUser`, is every user). Raised by every circuit's `ChatSession` and by `WalletFaults`; the wallet data, aliases and log panels of every tab subscribe. See "Wallet changes" |
 | `AgentOptions` post-configuration | options | `YesWords` and `NoWords` (D6) from the resource values `Word_yes` and `Word_no`, so `Agent.Core` holds no phone text |
 | `ConsoleNavigation` | scoped | The side menu's selection |
+| `LearningCount` | singleton | The side menu's count of unreviewed learning rows (milestone 10): `ReadAsync` (a fresh scope's `LearningLog.CountUnreviewedAsync`), `NotifyChanged()` and `event Action? Changed`, raised after a Reviewed tick so every tab's menu reads again. See "Learning data" |
 | `RuntimeSettings` | singleton | Saves an agent setting live (D8) through `RuntimeSettingsProvider`, the last configuration source (`Program.cs`); see "The settings component" |
 | `KillSwitch` | singleton (from `AddAgentCore`) | The kill switch; see "The kill switch" |
 | `FaultingParser` (`AddFaultingParser`) | as the parser it wraps | Replaces the last `IParser` registration with one of the same lifetime that builds the original (its instance, factory or type) and wraps it; see "The fault panel" |
@@ -718,7 +719,7 @@ The parses were drafted by Claude from Khalil's answer keys for his review (his 
 `SettingsPanel` (`Components/Console/SettingsPanel.razor`, the side menu's Settings) has a kill switch (below) and five tables, all English and left to right:
 
 - **Agent, editable (D8).** One row (`setting-row`, `data-name`) per agent limit, timer or count: `MinAmountIqd`, `PerTransactionCapIqd`, `PerDayCapIqd`, `CardTimerSeconds`, `MaxProductsInOneQuestion`, `RepeatWarningWindowMinutes`, `HistoryDays`, `MinSubstringWordLength`, `MaxYesNoWords`, `LogPageSize`, `CheckingRetrySeconds`, `MaxAliasLength`, `MaxMessageChars`, `MaxRequestsPerMessage` (1 to 20; milestone 9c, ruling 11: the conversation reads it when it splits the next message, and a queue already running keeps its own), `MaxNamedNotPrepared` (1 to 20, default 5; review R1 of milestone 9c, Khalil, 20 Oct 2026: the most parts the "not prepared" line names, read at the split as well): exactly `RuntimeSettings.EditableNames`, which the runtime store itself enforces (any other key, `Agent:WalletClientKey` or `Agent:DevSetPath` among them, is refused with an `ArgumentException`). Each shows its value in force (`setting-value`), an input (`setting-input`), Save (`setting-save`), and Reset (`setting-reset`) once a value has been saved. A refused value shows the validation message (`setting-error`), and the value in force does not change.
-- **Agent, read only.** `Parser`, `DevSetPath`, `DemoUserId`, `WalletBaseUrl`, `WalletTimeoutSeconds`, `SettleWindowSeconds`, `HistoryPageSize`, `SweepIntervalSeconds`, `StaleExecutingAfterSeconds`, `ProviderSpellings`, `Endearments` (rule 1's words of affection, Khalil, 17 Oct 2026) and `FillerWords` (the words dropped at either end of a typed answer, Khalil, 17 Oct 2026; all three are phone text, so only their counts are shown), and `Console:WalletAdminKey` as `set` or `not set`. No key is ever shown (wallet or Anthropic). One line above the tables (`settings-fault-pointer`) says the fault switch is in the Faults panel beside the live trace.
+- **Agent, read only.** `Parser`, `DevSetPath`, `DemoUserId`, `WalletBaseUrl`, `WalletTimeoutSeconds`, `SettleWindowSeconds`, `HistoryPageSize`, `SweepIntervalSeconds`, `StaleExecutingAfterSeconds`, `ProviderSpellings`, `Endearments` (rule 1's words of affection, Khalil, 17 Oct 2026) and `FillerWords` (the words dropped at either end of a typed answer, Khalil, 17 Oct 2026; all three are phone text, so only their counts are shown), `Console:WalletAdminKey` as `set` or `not set`, and `Console:ReportsDirectory` (milestone 10, default `docs/reports`) as the full path the Results panel resolves it to (`ReportReader.Resolve`, under the repository root when relative). No key is ever shown (wallet or Anthropic). One line above the tables (`settings-fault-pointer`) says the fault switch is in the Faults panel beside the live trace.
 - **Console, editable (decision 2, task 4c).** `Console:GridPageSize` (5 to 100, default 10): how many rows every console grid shows on one page ([Paging the grids](#paging-the-grids)); nothing in `Agent.Core` reads it, so it never changes a check, a card or a reply. Its row is the same editable row as the agent's, with `data-name="Console:GridPageSize"` (the full key) on `setting-row`, `setting-value`, `setting-input`, `setting-save`, `setting-reset` and `setting-error`; the value shown is `IOptionsMonitor<ConsoleOptions>.CurrentValue`. A saved value applies at the next render of every grid. `Console:WalletAdminKey` stays read only.
 - **Wallet, read only.** The wallet's own limits from `GET /settings` (`Wallet:PinRequiredAboveIqd`, `Wallet:MaxPinAttempts`, the transfer, bill and purchase fees and the rest; [wallet-api.md](wallet-api.md)), read once when the panel opens. A wallet that does not answer gives one `setting-error` row (`data-name="Wallet"`) with the reason.
 - **Model, read only.** The candidate in use and each candidate's model, output limit, effort, temperature, timeout and prices.
@@ -846,6 +847,69 @@ sequenceDiagram
     A-->>L: rows, newest first (At, then Id)
 ```
 
+## Results
+
+`ResultsPanel` (`Components/Console/ResultsPanel.razor`, the side menu's Results between Log and Aliases, milestone 10) shows a committed eval report's targets table, read only. When it opens it resolves `Console:ReportsDirectory` (default `docs/reports`, under the repository root when relative; a read-only row in the settings component) and lists it with `ReportReader.List` (`Agent.Core.Reports`, see [agent-eval.md](agent-eval.md), "Reading the reports back"): every `dev-*.json` and `heldout-*.json` with a targets table, newest first by the run's start, an aggregate before a single run on an equal start. The others (the 27 reports of 15 and 16 Oct 2026, written before the targets table, or a file that does not read) are counted in `results-skipped` ("27 file(s) skipped"). A directory that is missing or holds no report shows `empty-state` ("No reports in <directory>.").
+
+The select (`results-select`, a native `<select>`, option values the file names) offers every listed report as `yyyy-MM-dd HH:mm  set  parser  (aggregate)  file name`. The first opened is the candidate's newest aggregate (parser ending `-<Model:Candidate>`, `claude-sonnet` for `sonnet`), else the candidate's newest single run, else the newest overall. An aggregate carries its first run's start, so its own later runs list above it, but the aggregate still opens first. Choosing another opens it with `ReportReader.Open`, the guard between the posted name and the file system: it opens only a name the listing holds that resolves to a file directly inside the directory, and returns null for anything else (a parent-directory, rooted or UNC name; security review M3). `ReportReader.Read` refuses a report without totals or time, or an aggregate without groups or runs, so such a file is skipped rather than opened (M1); a file that fails shows `results-error` ("Could not read <file>: <exception type>") and the select stays usable.
+
+Two shapes, one header line (`results-header`: set, parser, started UTC, `Model:PromptVersion` from the header's settings when present, the runs of an aggregate, the cases):
+
+- **A single run:** the targets table Measure, Target, Value, Verdict, then `results-totals`: "<passed> of <cases> passed (<percent> %) · cost <cost> USD · median <s> s".
+- **An aggregate** (`--repeat N`): Measure, Target, Min, Median, Max, Verdict, then `results-totals` with the All cases group ("passed min / median / max of cases") and one `results-run` row per run (run, passed of cases, cost USD, median s).
+
+The verdict is a chip (`badge badge-pass` on the success tint, `badge-miss` on the danger tint, `badge-reported` and `badge-na` for `n/a` muted). Every figure is the report file's, formatted with the invariant culture (a percent to one decimal, ms whole, USD to six decimals in the table); the console computes none, which is why an aggregate shows no overall cost or time: the file holds none. A report holds ids, codes and figures only, never a case's text, so none can be shown. The panel reads the files and never writes them.
+
+```mermaid
+flowchart LR
+    open["Results opens"] --> resolve["ReportReader.Resolve(Console:ReportsDirectory)"]
+    resolve --> list["ReportReader.List: dev-* and heldout-* JSON with targets, newest first; others counted as skipped"]
+    list --> none{"any entry?"}
+    none -- no --> empty["empty-state: No reports in directory"]
+    none -- yes --> default["default: the candidate's newest aggregate, else its newest single run, else the newest"]
+    default --> read["ReportReader.Read(file)"]
+    pick["results-select: another file"] --> read
+    read -- single run --> single["targets: Value, Verdict; totals line"]
+    read -- aggregate --> agg["targets: Min, Median, Max, Verdict; All cases group; one row per run"]
+    read -- throws --> error["results-error: Could not read file"]
+```
+
+## Learning data
+
+`LearningDataPanel` (`Components/Console/LearningDataPanel.razor`, the side menu's Learning data, milestone 10) follows `LogPanel` line for line. It lists the latest `LogPageSize` (100) learning-log rows (D12), newest first (At, then Id), through `LearningLog.ReadLatestAsync` in a fresh scope. It reads when it opens, when the session raises `Changed` with no action running (an action may write a row), and on its Refresh button (`learning-refresh`); a read that arrives while one runs is followed by one more. The heading is "Learning data". Columns, English and left to right: At (UTC, `yyyy-MM-dd HH:mm:ss`), User, Reason, Detail, Masked text (as stored, with its `<NUM_n>` tokens; `dir="auto"`, class `learning-text`, so an Arabic message reads right to left inside its cell, and long text wraps), Reviewed. The rows are shown `Console:GridPageSize` to a page with a `grid-pager` (`data-grid="learning"`), and every read returns to page 1.
+
+What it can show is only what `LearningLog.WriteAsync` stored: the reason, the masked detail and the masked text of the message (rule 5). A row has no column for a PIN, a balance, a purchase code or a model's words, and the panel reads nothing from the wallet, so none of them can appear.
+
+The Reviewed cell is a plain checkbox (`learning-reviewed`, `data-id`). A tick calls `LearningLog.SetReviewedAsync` at once, updates the row on screen and calls `LearningCount.NotifyChanged()`. A row that is gone (`false`) or a save that throws shows its own error line, `learning-tick-problem` (`row <id> no longer exists`, `tick not saved: <type>`), which a reload never clears and the next tick that saves does, and reads the table again; every read raises a load version that keys the rows (`@key`), so they are rebuilt and every tick on screen is what is stored (security review M2). `SetReviewedAsync` is one `UPDATE` (`ExecuteUpdateAsync`), so a row a reset removed is a plain `false`.
+
+The side menu shows the number of unreviewed rows after "Learning data" (`menu-learning-count`, the `console-menu-count` pill in the badge tint), and nothing when it is 0. `MainLayout` reads it through the singleton `LearningCount` when the circuit starts, on every menu selection, when its session raises `Changed` with no action running, and on `LearningCount.Changed` (a tick in any tab). A count that cannot be read shows nothing rather than a wrong figure.
+
+The console's Reset keeps the learning rows, as it keeps the audit log (ruling B, "The reset control"): they are the record. The journeys' per-test reset empties the table.
+
+```mermaid
+sequenceDiagram
+    actor R as Reviewer
+    participant P as LearningDataPanel
+    participant L as LearningLog (new scope)
+    participant C as LearningCount (singleton)
+    participant M as MainLayout (every tab)
+    R->>P: ticks Reviewed on a row
+    P->>L: SetReviewedAsync(id, true)
+    alt the row exists
+        L-->>P: true
+        P->>P: the row shows Reviewed
+        P->>C: NotifyChanged()
+        C-->>M: Changed
+        M->>C: ReadAsync()
+        C->>L: CountUnreviewedAsync()
+        L-->>M: n (the pill shows n, none at 0)
+    else the row is gone, or the save throws
+        L-->>P: false (or an exception)
+        P->>L: ReadLatestAsync(LogPageSize)
+        P->>P: the error line, the table as stored
+    end
+```
+
 ## Empty and loading states
 
 These came in the UI pass, task 8 (22 Oct 2026). They are English, console only.
@@ -860,9 +924,9 @@ These came in the UI pass, task 8 (22 Oct 2026). They are English, console only.
   | Log | `ListAlt` | No audit rows yet. |
   | Aliases | `Badge` | No aliases. |
   | Live trace | `Timeline` | No steps yet. Type in the phone. |
-  | Learning data (`Placeholder`) | `Schedule` | Arrives in milestone 10. |
+  | Learning data | `School` | No learning rows yet. |
 
-- **Loading.** Before their first read ends, the wallet data's three grids and the log show `TableSkeleton` (`Components/Console/TableSkeleton.razor`): three `MudSkeleton` rows of `--size-table-row` (33 px, a dense row). A later reload keeps the table and shows `MudProgressLinear` above it, as before.
+- **Loading.** Before their first read ends, the wallet data's three grids, the log and the learning data show `TableSkeleton` (`Components/Console/TableSkeleton.razor`): three `MudSkeleton` rows of `--size-table-row` (33 px, a dense row). A later reload keeps the table and shows `MudProgressLinear` above it, as before.
 - **Wide tables.** Each `MudSimpleTable` sits in `div.grid-scroll` (`overflow-x: auto`), so a wide table scrolls sideways inside its panel. Name cells (`cell-name`) and figures, references and dates (`cell-nowrap`) do not wrap. Table headers are muted, uppercase, `--text-xs`, with a little letter-spacing.
 - **The trace's detail** takes its own full-width line under the step (`flex-basis: 100%`, indented by `--space-8`, `overflow-wrap: anywhere`), so a long detail never squeezes the row. The other way was to keep it on the line with `min-width: 0`; it was not chosen because at a 320 px trace column it left about 50 px for the detail.
 - **Buttons.** At most one filled brand button per panel: the Aliases form's Save. The phone's Send and Confirm stay filled. Every other console action is outlined and `Size.Small`. Delete, Reset wallet and Clear all are in the danger colour. The live trace's Clear and the settings' Reset are outlined.
@@ -915,6 +979,7 @@ Which grids page what (task 4b). Each panel reads the page size from `IOptionsMo
 | Wallet data | `bills` | the user's bills (U1: 4, no pager) | the wallet's | keeps its page (clamped) |
 | Wallet data | `history` | `Agent:HistoryPageSize` (200) rows read in one call; the heading is "History" | newest first, as the wallet returns them | page 1 |
 | Log | `log` | the latest `Agent:LogPageSize` (100) audit rows; the heading is "Log" | newest first | page 1 |
+| Learning data | `learning` | the latest `Agent:LogPageSize` (100) learning rows; the heading is "Learning data" | newest first | page 1 |
 | Aliases | `aliases` | the user's aliases (U1: 4, no pager) | the wallet's | keeps its page (clamped) |
 | Phone directory (`PhonePager`) | none | the user's aliases (U1: 4, no pager) | the wallet's | keeps its page (clamped) |
 | Phone My orders (`PhonePager`) | none | every order the wallet returns (U1: at most 10 in the journeys, no pager) | newest first, as the wallet returns them | page 1 |
@@ -979,13 +1044,23 @@ The journeys locate elements only by these attributes. The two lines of the "not
 | Wallet history row | `wallet-history-row` | `data-reference` |
 | Wallet contact row (UI pass, 21 Oct 2026) | `wallet-contact-row` | `data-code`; `class="row-muted"` when the account is closed |
 | Account status badge (UI pass, 21 Oct 2026), in the Contacts and Aliases grids | `status-badge` | `data-status` (`active`, `closed`, or whatever the wallet reports) |
-| Grid pager: root, range text, Previous, Next | `grid-pager`, `grid-pager-range`, `grid-pager-previous`, `grid-pager-next` | root: `data-grid` (`contacts`, `bills`, `history`, `log`, `aliases`), `data-page`, `data-pages` |
+| Grid pager: root, range text, Previous, Next | `grid-pager`, `grid-pager-range`, `grid-pager-previous`, `grid-pager-next` | root: `data-grid` (`contacts`, `bills`, `history`, `log`, `aliases`, `learning`), `data-page`, `data-pages` |
 | Settings row | `setting-row` | `data-name` |
 | Log panel root (UI pass, 22 Oct 2026) | `log-panel` | |
 | Empty state of a grid or list (UI pass, 22 Oct 2026) | `empty-state` | inside the panel it belongs to |
 | Log row, log refresh button | `log-row`, `log-refresh` | `log-row`: `data-event`, `data-reason` (empty when null), `data-pending` (the first 8 characters of the pending ID, empty when null) |
 | Settings value, input, Save, Reset, error (editable agent rows) | `setting-value`, `setting-input`, `setting-save`, `setting-reset`, `setting-error` | `data-name` (the setting's name, as on its row) |
-| Menu items | `menu-wallet`, `menu-settings`, `menu-log`, `menu-aliases`, `menu-learning` | |
+| Menu items | `menu-wallet`, `menu-settings`, `menu-log`, `menu-results` (milestone 10), `menu-aliases`, `menu-learning` | |
+| Results panel root, report select (milestone 10) | `results-panel`, `results-select` | `results-select` is a native `<select>`; each option's value is a file name |
+| Learning tick problem (milestone 10, security review M2) | `learning-tick-problem` | the last failed tick's line; a reload keeps it |
+| Results header line (milestone 10) | `results-header` | `data-set`, `data-parser`, `data-started` (`yyyy-MM-dd HH:mm`, UTC) |
+| Results target row (milestone 10) | `results-target` | `data-measure`, `data-verdict` (`pass`, `miss`, `reported`, `n/a`) |
+| Results totals line, run row of an aggregate (milestone 10) | `results-totals`, `results-run` | `results-run`: `data-run` |
+| Results skipped count, read error (milestone 10) | `results-skipped`, `results-error` | `results-skipped` only when files were skipped |
+| Unreviewed learning rows on the menu (milestone 10) | `menu-learning-count` | inside `menu-learning`; absent when the count is 0 |
+| Learning data panel root, refresh button (milestone 10) | `learning-panel`, `learning-refresh` | |
+| Learning row (milestone 10) | `learning-row` | `data-id`, `data-reason`, `data-user`, `data-reviewed` (`true` or `false`) |
+| Reviewed tick of a learning row (milestone 10) | `learning-reviewed` | the checkbox input; `data-id` |
 | Kill switch | `kill-switch` | `data-on` (`true`, `false`) |
 | Reset panel root, its button, result line, error line | `reset-panel`, `reset-wallet`, `reset-result`, `reset-error` | the result is `done: <users> users, <accounts> accounts, <transactions> transactions; <n> open cards closed` |
 | Fault panel root, its error line, Clear all | `fault-panel`, `fault-error`, `fault-clear` | |
@@ -1007,9 +1082,10 @@ The journeys locate elements only by these attributes. The two lines of the "not
   - one with `CardTimerSeconds` 4 (U1);
   - one each with `Agent:DemoUserId` 2, 3 and 5 (`UserWebAddress(userId)`).
 
-  All use `Agent:WalletClientKey` `journeys-client-key-0001` and `SweepIntervalSeconds` 1.
+  All use `Agent:WalletClientKey` `journeys-client-key-0001` and `SweepIntervalSeconds` 1. Every console's `Console:ReportsDirectory` (milestone 10) is the fixture directory `tests/Agent.Web.Journeys/Fixtures/reports` in the build output (`JourneyHost.ReportsDirectory`): trimmed copies of four committed reports (Sonnet r1 and repeat3 of 29 Oct, Gemma r3 of 1 Nov, the scripted oracle of 15 Oct, which has no targets table), their `cases` arrays cut to three entries and every figure the panel shows as committed (the folder's `README.md`). U5's console points at a directory that does not exist (`JourneyHost.EmptyReportsDirectory`), for the empty state.
 - Before each journey it resets the wallet (`POST /admin/reset`, which also clears the wallet's fault switch), empties the agent tables (audit, pending, learning), turns every console's kill switch off, clears every console's model fault (`ModelFaultSwitch`) and clears every saved setting.
 - Each journey opens a new browser context and page, and waits for `data-interactive="true"` before typing.
+- `JourneyBase.LearningRowsAsync(minimum)` reads the learning table; with `minimum` above 0 it reads again every 100 ms, for up to 5 seconds, until that many rows are there, because the conversation writes the row after the reply renders (milestone 10).
 - Each journey types development-set messages by case id (`DevSet.Say(id, step)`), so the oracle returns that case's parse. It builds every expected text through the console's `IStringLocalizer<PhoneStrings>` and `PhoneFormat`, never as a literal. The PIN journey reads U3's PIN from `data/seed/users.json` (`SeedPins`) and never prints it.
 - The files: `Journeys.cs` holds the three journeys of milestone 4. `RequestJourneys.cs`, `CardJourneys.cs` and `ConsoleJourneys.cs` hold the milestone 7 journeys, on the shared base `JourneyBase`; `ConsoleJourneys.cs` also holds the two of the consent and reset change (milestone 7 post-tag, 18 Oct 2026), `AFreshUserSeesTheConsentScreenBeforeTyping` and `ResetClearsConsentAndThePhoneStartsAgain`, and `DecliningConsentSendsNothingAndTheBoxStaysClosedUntilAgree` (the consent screen's No, 20 Oct 2026). The journeys' per-test reset asks the wallet for the seed's consent values (`?consent=seed`), so U1 to U4 start consented and U5 not. `BillJourneys.cs` and `FaultJourneys.cs` hold the twelve of milestone 8. `AliasJourneys.cs` holds the ten of milestone 9a and its close-out, one per alias behaviour, among them `AnAliasSavedOnThePhoneShowsInTheConsoleDirectory` (milestone 7 post-tag, two pages on one console); they read the alias texts from the dev set (`DevSet.AliasOffer(id, step)`, the step's `expect.alias_offer`) and the wallet's aliases through `JourneyHost.AliasesAsync(userId)`, and pick a contact in the `MudSelect` by opening it and clicking the item with its `data-code`. Every fault journey sets its fault through the fault panel of the console under test (`SetWalletFaultAsync`, `ArmModelFaultAsync`, `DebitAsync` in `JourneyBase`, by `data-testid`), never through the host's own client, and ends by checking that the wallet's switch is `none` and that the panel's Clear all reads both switches back as `none` (`AssertFaultsClearedAsync`). The host reads bills with `BillsAsync(userId)` and the wallet's switch with `WalletFaultModeAsync()`. `PurchaseJourneys.cs` holds the eight of milestone 9b, one per purchase behaviour; the host reads orders with `OrdersAsync(userId)` and the catalogue with `ProductsAsync()`, and every browser context grants `clipboard-read` and `clipboard-write` so `ClipboardAsync(page)` (in `JourneyBase`) reads back what a copy button wrote. The two timeout journeys wait with explicit Playwright timeouts (20 s until Checking, 15 s until the automatic settle), never a sleep. `CompoundJourneys.cs` holds the eight of milestone 9c, one per compound-request behaviour (D7, rules 21 and 22), on CMP-01, CMP-03, CMP-05, CMP-07, CMP-09 and CLN-01; they read every figure from the case's key (`DevSet.CardFigure(id, card, field)`, `DevSet.FinalBalance(id)`, `DevSet.ReplyAmount(id, reply)`, `DevSet.AskOptions(id, ask)`, `DevSet.TapValue(id, step)`) and the fourth name of CMP-07 with `DevSet.NotPrepared(id)`, count the cards issued by the card messages (`chat-message` with `data-kind="card"`), and act on the card panel shown, which is the current card's only. `HelpJourneys.cs` holds the one of the Help screen (22 Oct 2026). `PersonOrBillJourneys.cs` holds the three of person or bill (Khalil, 20 Oct 2026): each saves BS2's label (read from the wallet) as an alias of S04 through the phone's directory, then types CLN-10; the directory helpers (`OpenDirectoryAsync`, `AddInDirectoryAsync`, `PickAsync`) are in `JourneyBase`.
 
@@ -1066,6 +1142,9 @@ The journeys locate elements only by these attributes. The two lines of the "not
 | `ThePhoneDirectoryListsAddsAndDeletes` | The directory's `directory-alias` rows equal the wallet's alias count for U1, and the compose row is gone; S03's saved name plus " x" saved for S03 adds a row and an alias on S03's account in the wallet; its `directory-delete` gives `Reply_alias_deleted` and removes it on screen and in the wallet |
 | `EmptyStatesShowOnAFreshConsole` | UI pass task 8: on U1's console after the per-test reset, `menu-log` shows `empty-state` in `log-panel` and no `log-row`; after CLN-01 and Confirm, a `log-row` and no `empty-state` |
 | `AClosedContactShowsItsStatusInTheWalletData` | UI pass task 5: on U1's wallet data, S01's `wallet-contact-row` holds `status-badge[data-status=active]`; through the contacts pager's `grid-pager-next`, S20's row holds `status-badge[data-status=closed]` and has `row-muted`; the closed badges counted on every page equal U1's contacts with `AccountStatus` `closed` as the host's wallet client reports |
+| `LearningRowCanBeTickedReviewedAndTheMenuCountFollows` | Milestone 10, ADD-02: `menu-learning-count` reads 1; in `menu-learning` one `learning-row` with `data-reason` `recipient_not_found`, `data-user` 1, `data-reviewed` false and the message as typed in its Masked text cell (it has no digits); `learning-reviewed` checked: `data-reviewed` true and no `menu-learning-count`; `learning-refresh`: still true |
+| `ResultsOpensOnTheCandidatesNewestReportAndCanSwitch` | Milestone 10, the fixture reports: `menu-results` opens on `dev-claude-sonnet-repeat3-2026-10-29-1049.json` (`results-select`'s value), `results-header` `data-parser` `claude-sonnet`, nine `results-target` rows, eight `pass` and the cost row `reported`, three `results-run` rows, `results-skipped` starting "1 file"; selecting Gemma's r3: `data-parser` `compatible-gemma`, a `miss` row, `results-totals` holding "of 102 passed", no `results-run` |
+| `ResultsShowsTheEmptyStateWhenThereAreNoReports` | Milestone 10, U5's console (no reports directory): `results-panel` shows `empty-state` "No reports in ..." and no `results-select`, `results-skipped` or `results-error` |
 | `ThePhoneDirectoryPagesAtTheGridPageSize` | UI pass task 4d: `Console:GridPageSize` saved as 5; two aliases of S03 added in the phone's directory (6 in all); `phone-pager` has `data-pages` 2 and 5 `directory-alias` rows; `phone-pager-next` gives page 2 and the sixth row; `setting-reset` gives 10, and the directory opened again shows every row and no pager |
 | `TheConsoleAliasesPanelListsAddsAndDeletes` | The same through `menu-aliases`: `console-alias` rows equal the wallet's count; save gives `console-alias-result` `saved` and one more row on S03's account; `console-alias-delete` gives `deleted` and the row and the wallet's alias go |
 | `AnAliasSavedOnThePhoneShowsInTheConsoleDirectory` | Milestone 7 post-tag (18 Oct 2026): two pages on U1's console, both with `menu-aliases` open; the first page's phone directory saves AMB-19's step 2 `alias_offer` for S08; both pages' `console-alias` rows gain it (`data-alias-id` of the wallet's new alias) without a click, and the phone's list shows it; the directory's delete removes the row on both pages and the alias in the wallet |
@@ -1093,7 +1172,8 @@ The journeys locate elements only by these attributes. The two lines of the "not
 | `TappingThePersonGivesTheTransferPath` | The same question; the tap on S04 gives `Question_which_amount` (CLN-10 names no amount) and no card; BS2 still due and the balance 750,000 |
 | `ANewMessageCancelsTheRest` | CMP-01, then CLN-01 while card 1 waits: one cancelled outcome; CLN-01's card live for its amount; Confirm gives done and the card stays done (no purchase card follows); two card messages; CLN-01's final balance |
 
-- **Run:** `dotnet test tests/Agent.Web.Journeys`. The 79 tests (77 journeys, the host test, and the screenshot helper `Screenshots.CaptureTheConsoleAndThePhone`, skipped unless `ZAINCASH_SCREENSHOTS` is `1`) take about two minutes. Timings by run:
+- **Run:** `dotnet test tests/Agent.Web.Journeys`. The 82 tests (80 journeys, the host test, and the screenshot helper `Screenshots.CaptureTheConsoleAndThePhone`, skipped unless `ZAINCASH_SCREENSHOTS` is `1`) take about two minutes. Timings by run:
+  - 80 journeys: 2 min 43 s on 3 Nov 2026 with the Learning data and Results journeys (milestone 10: `LearningRowCanBeTickedReviewedAndTheMenuCountFollows`, `ResultsOpensOnTheCandidatesNewestReportAndCanSwitch`, `ResultsShowsTheEmptyStateWhenThereAreNoReports` added).
   - 77 journeys: 2 min 20 s on 22 Oct 2026 with the alias offer's Cancel (`CancelOnTheOfferClosesItAndTheNextRequestAsksAgain` added).
   - 76 journeys: 2 min 21 s on 22 Oct 2026 with the Help screen (`HelpShowsTheFiveSectionsAndReturnsToTheChat` added).
   - 75 journeys: 2 min 20 s on 22 Oct 2026 after the scroll fix (`TheScreenScrollsToTheNewestMessageAndCard` added). 74 journeys: 2 min 19 s on 22 Oct 2026 after a clean build, and 2 min 7 s within a full `dotnet test`. The UI pass added five: `TheHistoryGridPagesNewestFirst`, `ThePhoneDirectoryPagesAtTheGridPageSize`, `AClosedContactShowsItsStatusInTheWalletData`, `ThePhoneHasAStatusBarAndTheCardShowsTheTimerByConfirm` and `EmptyStatesShowOnAFreshConsole`.
@@ -1195,11 +1275,11 @@ The UI pass changed the console's and the phone's look and changed no behaviour:
 
 | Gap | Plan |
 |---|---|
-| Learning data is a placeholder | Milestone 10 (the settings and log components came in milestone 7) |
+| Learning data has no save-as-test-case button (D12) | Deferred (milestone 10 design, approved by Khalil, 3 Nov 2026); the draft-export shape to return to is in `docs/plans/milestone-10-model-choice.md` |
 | A reissued card of the known gap `choose_account` does not carry the `account_choice_unavailable` note | Deferred, minor |
 | Text typed before the circuit is interactive is lost | The `data-interactive` marker tells the journeys; a person types again |
 | A Checking record whose circuit is gone has no "check again" button in a new circuit | Still open after milestone 8: the Checking card and its automatic settle live in the card's own circuit. The record stays Checking and is never shown as failed |
 | The live trace keeps every entry for the life of the circuit | A cap would be a new setting |
 | The reset control starts over only its own circuit's phone; another open console keeps its conversation, whose cards were closed by the reset | Refresh that page |
 | The model fault is per console process, the wallet's fault switch is shared by every console | Shown as read back on each panel; the demo runs one console |
-| Two journeys read the learning table once, right after the reply shows (`JourneyBase.LearningRowsAsync`): `RequestJourneys.NoneOfTheseOnWhichContactRefusesRecipientNotFound` and `FaultJourneys.ModelInvalidReplyIsNotUnderstood`. Each found no row once in the UI pass, because the conversation writes the row after the reply renders | A polling read in the base helper would fix both; awaiting Khalil. Each passed on rerun |
+| Two journeys read the learning table once, right after the reply shows (`JourneyBase.LearningRowsAsync`): `RequestJourneys.NoneOfTheseOnWhichContactRefusesRecipientNotFound` and `FaultJourneys.ModelInvalidReplyIsNotUnderstood`. Each found no row once in the UI pass, because the conversation writes the row after the reply renders | Fixed in milestone 10: the read polls (`LearningRowsAsync(minimum: 1)`, every 100 ms for up to 5 seconds) |

@@ -6,6 +6,10 @@ public enum ConsolePanel
     WalletData,
     Settings,
     Log,
+
+    /// <summary>The latest eval report's targets table (milestone 10).</summary>
+    Results,
+
     LearningData,
 
     /// <summary>The demo user's aliases (milestone 9a).</summary>

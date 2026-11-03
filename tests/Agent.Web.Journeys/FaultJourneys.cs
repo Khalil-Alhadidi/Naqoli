@@ -122,7 +122,7 @@ public sealed class FaultJourneys(JourneyHost host) : JourneyBase(host)
 
         await Expect(LastAgentMessage(page)).ToHaveTextAsync(Text["Refusal_" + ReasonCodes.NotUnderstood].Value);
         await Expect(page.GetByTestId("card")).ToHaveCountAsync(0);
-        var learning = Assert.Single(await LearningRowsAsync());
+        var learning = Assert.Single(await LearningRowsAsync(minimum: 1));
         Assert.Equal((LearningLogRule.ModelInvalidReply, FaultingParser.InjectedProblem), learning);
         Assert.Equal(U1Balance, await Host.BalanceAsync(U1));
         await AssertFaultsClearedAsync(page);

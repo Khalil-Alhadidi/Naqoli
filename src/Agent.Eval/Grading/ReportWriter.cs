@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Agent.Core.Reports;
 
 namespace Agent.Eval.Grading;
 
@@ -23,9 +24,6 @@ public sealed record RunSummary(
     IReadOnlyList<CaseResult> Results,
     string? Label = null,
     int? Run = null);
-
-/// <summary>Cases, passes and the Wilson 95% interval of one group.</summary>
-public sealed record GroupScore(string Name, int Cases, int Passed, double Percent, double LowPercent, double HighPercent);
 
 /// <summary>The report files of a run.</summary>
 public sealed record ReportPaths(string JsonPath, string MarkdownPath);
