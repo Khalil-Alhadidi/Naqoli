@@ -1,0 +1,202 @@
+@implements IDisposable
+@using System.Globalization
+@using Agent.Core.Learning
+@inject IServiceScopeFactory Scopes
+@inject ChatSession Session
+@inject LearningCount Count
+@inject IOptionsMonitor<AgentOptions> Options
+@inject IOptionsMonitor<ConsoleOptions> ConsoleSettings
+
+@* The learning log (D12, milestone 10): the newest rows, newest first, as LearningLog stored them. A row holds the
+   masked text of the message, a reason and a masked detail; never a PIN, a balance, a purchase code or anything else
+   read from the wallet, and never model text, so none can be shown. Each read goes through a fresh scope's LearningLog.
+   It reloads after each action of this circuit's session (an action may write a row) and on Refresh. It loads the
+   latest Agent:LogPageSize rows and shows one page of Console:GridPageSize of them; every reload returns to page 1.
+   The Reviewed tick saves at once and tells the side menu's count (LearningCount). The console's Reset keeps the rows. *@
+<MudPaper Class="pa-3" Elevation="1" data-testid="learning-panel">
+    <div class="d-flex align-center">
+        <MudText Typo="Typo.h6">Learning data</MudText>
+        <MudSpacer />
+        <MudButton data-testid="learning-refresh" Size="Size.Small" Variant="Variant.Outlined" Disabled="@loading"
+                   OnClick="LoadAsync">Refresh</MudButton>
+    </div>
+
+    @if (loading && loaded)
+    {
+        <MudProgressLinear Indeterminate="true" />
+    }
+
+    @if (failure is not null)
+    {
+        <MudText Color="Color.Error">@failure</MudText>
+    }
+
+    @if (!loaded)
+    {
+        <TableSkeleton />
+    }
+    else if (rows.Count == 0 && failure is null)
+    {
+        <EmptyState Icon="@Icons.Material.Filled.School" Text="No learning rows yet." />
+    }
+    else if (rows.Count > 0)
+    {
+        var shown = PagedList<LearningEntryRow>.Of(rows, page, PageSize);
+        <div class="grid-scroll">
+            <MudSimpleTable Dense="true" Hover="true">
+                <thead>
+                    <tr>
+                        <th>At (UTC)</th><th>User</th><th>Reason</th><th>Detail</th><th>Masked text</th><th>Reviewed</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var row in shown.Rows)
+                    {
+                        <tr data-testid="learning-row" data-id="@row.Id" data-reason="@row.Reason" data-user="@row.UserId"
+                            data-reviewed="@(row.Reviewed ? "true" : "false")">
+                            <td>@row.At.UtcDateTime.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture)</td>
+                            <td>@row.UserId</td>
+                            <td>@row.Reason</td>
+                            <td>@row.Detail</td>
+                            <td dir="auto" class="learning-text">@row.MaskedText</td>
+                            <td>
+                                <input type="checkbox" data-testid="learning-reviewed" data-id="@row.Id" aria-label="Reviewed"
+                                       checked="@row.Reviewed" @onchange="e => ToggleAsync(row.Id, (bool)e.Value!)" />
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+        </div>
+        <GridPager Grid="learning" Total="@shown.Total" Page="@shown.Page" PageCount="@shown.PageCount" PageSize="@PageSize"
+                   PageChanged="@((int next) => page = next)" />
+    }
+</MudPaper>
+
+@code {
+    private readonly CancellationTokenSource disposed = new();
+    private IReadOnlyList<LearningEntryRow> rows = [];
+
+    // The page shown, 1-based; every reload sets it back to 1.
+    private int page = 1;
+    private bool loading;
+
+    // False until the first read has ended (rows or a failure): the skeleton shows until then.
+    private bool loaded;
+    private bool reloadRequested;
+    private string? failure;
+
+    /// <summary>Rows to a page: <c>Console:GridPageSize</c>, read on each render.</summary>
+    private int PageSize => ConsoleSettings.CurrentValue.GridPageSize;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Session.Changed += OnSessionChanged;
+        await LoadAsync();
+    }
+
+    public void Dispose()
+    {
+        Session.Changed -= OnSessionChanged;
+
+        // A read still running when the component goes away is cancelled, not left to finish for nothing.
+        disposed.Cancel();
+        disposed.Dispose();
+    }
+
+    private void OnSessionChanged()
+    {
+        // The session raises Changed many times during one action; read once it has finished.
+        if (Session.Busy)
+            return;
+        _ = InvokeAsync(LoadAsync);
+    }
+
+    private async Task LoadAsync()
+    {
+        // A read queued before the component went away does nothing.
+        if (disposed.IsCancellationRequested)
+            return;
+        var token = disposed.Token;
+
+        // A read already running is followed by one more, so the last action's rows are always shown.
+        if (loading)
+        {
+            reloadRequested = true;
+            return;
+        }
+
+        loading = true;
+        StateHasChanged();
+        try
+        {
+            do
+            {
+                reloadRequested = false;
+                await using var scope = Scopes.CreateAsyncScope();
+                rows = await scope.ServiceProvider.GetRequiredService<LearningLog>().ReadLatestAsync(Options.CurrentValue.LogPageSize, token);
+                failure = null;
+
+                // Each reload follows an action or Refresh: the newest row is the first on screen.
+                page = 1;
+            }
+            while (reloadRequested);
+
+            loaded = true;
+        }
+        catch (OperationCanceledException) when (token.IsCancellationRequested)
+        {
+            // The component is gone: nothing to show.
+            return;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            failure = "learning data unavailable: " + ex.GetType().Name;
+            loaded = true;
+        }
+        finally
+        {
+            loading = false;
+        }
+
+        StateHasChanged();
+    }
+
+    /// <summary>Saves the Reviewed tick of one row; a row that is gone, or a save that fails, reloads the table.</summary>
+    private async Task ToggleAsync(long id, bool reviewed)
+    {
+        if (disposed.IsCancellationRequested)
+            return;
+        var token = disposed.Token;
+
+        string problem;
+        try
+        {
+            await using var scope = Scopes.CreateAsyncScope();
+            if (await scope.ServiceProvider.GetRequiredService<LearningLog>().SetReviewedAsync(id, reviewed, token))
+            {
+                if (rows.FirstOrDefault(r => r.Id == id) is { } row)
+                    row.Reviewed = reviewed;
+                failure = null;
+                Count.NotifyChanged();
+                return;
+            }
+
+            problem = "row " + id.ToString(CultureInfo.InvariantCulture) + " no longer exists";
+        }
+        catch (OperationCanceledException) when (token.IsCancellationRequested)
+        {
+            // The component is gone: nothing to save into.
+            return;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            problem = "tick not saved: " + ex.GetType().Name;
+        }
+
+        // The table is read again so every tick shows what is stored; the problem stays on screen after the read.
+        await LoadAsync();
+        failure = problem;
+        StateHasChanged();
+    }
+}

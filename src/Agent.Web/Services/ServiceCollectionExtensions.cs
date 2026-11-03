@@ -23,7 +23,8 @@ public static class ServiceCollectionExtensions
     /// <see cref="RuntimeSettings"/> saves agent settings live (D8). The parser is wrapped in <see cref="FaultingParser"/>
     /// (<see cref="AddFaultingParser"/>), and the fault panel gets <see cref="ConsoleOptions"/> (validated at start) and
     /// the typed <see cref="WalletFaults"/> client. The singleton <see cref="WalletChanges"/> carries every circuit's wallet
-    /// changes to every console panel that mirrors the wallet.
+    /// changes to every console panel that mirrors the wallet, and the singleton <see cref="LearningCount"/> the side
+    /// menu's unreviewed count (milestone 10).
     /// </summary>
     public static IServiceCollection AddAgentWebServices(this IServiceCollection services, IConfiguration configuration)
     {
@@ -64,6 +65,7 @@ public static class ServiceCollectionExtensions
             sp.GetService<IHostEnvironment>()));
         services.AddRuntimeSettings(configuration);
         services.TryAddSingleton<WalletChanges>();
+        services.TryAddSingleton<LearningCount>();
         services.AddScoped<ChatSession>();
         services.AddScoped<ConsoleNavigation>();
         return services;

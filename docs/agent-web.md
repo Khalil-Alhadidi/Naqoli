@@ -32,10 +32,10 @@ flowchart TB
     bar["bar (sticky): Agentic AI Challenge Iraq : Pay and Bill Agent<br/>chip Mock wallet · synthetic data (data-testid mock-label)"]
     subgraph row["the second row"]
         direction LR
-        menu["menu (sticky, 200 px)<br/>Wallet data, Settings, Log, Aliases, Learning data"]
+        menu["menu (sticky, 200 px)<br/>Wallet data, Settings, Log, Aliases,<br/>Learning data with the unreviewed count"]
         subgraph ltr["console: English, left to right (data-testid console, dir ltr, lang en), a sub-grid of main and trace"]
             direction LR
-            middle["main<br/>WalletDataPanel (default), SettingsPanel,<br/>LogPanel, AliasesPanel,<br/>Placeholder Learning data (milestone 10)"]
+            middle["main<br/>WalletDataPanel (default), SettingsPanel,<br/>LogPanel, AliasesPanel,<br/>LearningDataPanel (milestone 10)"]
             trace["trace (sticky, the window's height less the bar)<br/>ResetPanel, FaultPanel, then LiveTrace<br/>filling the rest and scrolling inside"]
         end
         subgraph rtl["phone (sticky): Iraqi Arabic, right to left (data-testid phone-frame, dir rtl, lang ar)"]
@@ -168,6 +168,7 @@ Fixed sizes of the layout are tokens too, so no rule holds a bare length: `--siz
 | `WalletChanges` | singleton | The process-wide wallet-change notification: `event Action<WalletChange>? Changed`, `Raise(WalletChange)`, `WalletChange(UserId, Kind)` with `WalletChangeKind` `Payment`, `Alias` or `Reset` (user 0, `WalletChange.EveryUser`, is every user). Raised by every circuit's `ChatSession` and by `WalletFaults`; the wallet data, aliases and log panels of every tab subscribe. See "Wallet changes" |
 | `AgentOptions` post-configuration | options | `YesWords` and `NoWords` (D6) from the resource values `Word_yes` and `Word_no`, so `Agent.Core` holds no phone text |
 | `ConsoleNavigation` | scoped | The side menu's selection |
+| `LearningCount` | singleton | The side menu's count of unreviewed learning rows (milestone 10): `ReadAsync` (a fresh scope's `LearningLog.CountUnreviewedAsync`), `NotifyChanged()` and `event Action? Changed`, raised after a Reviewed tick so every tab's menu reads again. See "Learning data" |
 | `RuntimeSettings` | singleton | Saves an agent setting live (D8) through `RuntimeSettingsProvider`, the last configuration source (`Program.cs`); see "The settings component" |
 | `KillSwitch` | singleton (from `AddAgentCore`) | The kill switch; see "The kill switch" |
 | `FaultingParser` (`AddFaultingParser`) | as the parser it wraps | Replaces the last `IParser` registration with one of the same lifetime that builds the original (its instance, factory or type) and wraps it; see "The fault panel" |
@@ -846,6 +847,42 @@ sequenceDiagram
     A-->>L: rows, newest first (At, then Id)
 ```
 
+## Learning data
+
+`LearningDataPanel` (`Components/Console/LearningDataPanel.razor`, the side menu's Learning data, milestone 10) follows `LogPanel` line for line. It lists the latest `LogPageSize` (100) learning-log rows (D12), newest first (At, then Id), through `LearningLog.ReadLatestAsync` in a fresh scope. It reads when it opens, when the session raises `Changed` with no action running (an action may write a row), and on its Refresh button (`learning-refresh`); a read that arrives while one runs is followed by one more. The heading is "Learning data". Columns, English and left to right: At (UTC, `yyyy-MM-dd HH:mm:ss`), User, Reason, Detail, Masked text (as stored, with its `<NUM_n>` tokens; `dir="auto"`, class `learning-text`, so an Arabic message reads right to left inside its cell, and long text wraps), Reviewed. The rows are shown `Console:GridPageSize` to a page with a `grid-pager` (`data-grid="learning"`), and every read returns to page 1.
+
+What it can show is only what `LearningLog.WriteAsync` stored: the reason, the masked detail and the masked text of the message (rule 5). A row has no column for a PIN, a balance, a purchase code or a model's words, and the panel reads nothing from the wallet, so none of them can appear.
+
+The Reviewed cell is a plain checkbox (`learning-reviewed`, `data-id`). A tick calls `LearningLog.SetReviewedAsync` at once, updates the row on screen and calls `LearningCount.NotifyChanged()`. A row that is gone (`false`) or a save that throws shows a one-line error (`row <id> no longer exists`, `tick not saved: <type>`) and reads the table again, so every tick on screen is what is stored.
+
+The side menu shows the number of unreviewed rows after "Learning data" (`menu-learning-count`, the `console-menu-count` pill in the badge tint), and nothing when it is 0. `MainLayout` reads it through the singleton `LearningCount` when the circuit starts, on every menu selection, when its session raises `Changed` with no action running, and on `LearningCount.Changed` (a tick in any tab). A count that cannot be read shows nothing rather than a wrong figure.
+
+The console's Reset keeps the learning rows, as it keeps the audit log (ruling B, "The reset control"): they are the record. The journeys' per-test reset empties the table.
+
+```mermaid
+sequenceDiagram
+    actor R as Reviewer
+    participant P as LearningDataPanel
+    participant L as LearningLog (new scope)
+    participant C as LearningCount (singleton)
+    participant M as MainLayout (every tab)
+    R->>P: ticks Reviewed on a row
+    P->>L: SetReviewedAsync(id, true)
+    alt the row exists
+        L-->>P: true
+        P->>P: the row shows Reviewed
+        P->>C: NotifyChanged()
+        C-->>M: Changed
+        M->>C: ReadAsync()
+        C->>L: CountUnreviewedAsync()
+        L-->>M: n (the pill shows n, none at 0)
+    else the row is gone, or the save throws
+        L-->>P: false (or an exception)
+        P->>L: ReadLatestAsync(LogPageSize)
+        P->>P: the error line, the table as stored
+    end
+```
+
 ## Empty and loading states
 
 These came in the UI pass, task 8 (22 Oct 2026). They are English, console only.
@@ -860,9 +897,9 @@ These came in the UI pass, task 8 (22 Oct 2026). They are English, console only.
   | Log | `ListAlt` | No audit rows yet. |
   | Aliases | `Badge` | No aliases. |
   | Live trace | `Timeline` | No steps yet. Type in the phone. |
-  | Learning data (`Placeholder`) | `Schedule` | Arrives in milestone 10. |
+  | Learning data | `School` | No learning rows yet. |
 
-- **Loading.** Before their first read ends, the wallet data's three grids and the log show `TableSkeleton` (`Components/Console/TableSkeleton.razor`): three `MudSkeleton` rows of `--size-table-row` (33 px, a dense row). A later reload keeps the table and shows `MudProgressLinear` above it, as before.
+- **Loading.** Before their first read ends, the wallet data's three grids, the log and the learning data show `TableSkeleton` (`Components/Console/TableSkeleton.razor`): three `MudSkeleton` rows of `--size-table-row` (33 px, a dense row). A later reload keeps the table and shows `MudProgressLinear` above it, as before.
 - **Wide tables.** Each `MudSimpleTable` sits in `div.grid-scroll` (`overflow-x: auto`), so a wide table scrolls sideways inside its panel. Name cells (`cell-name`) and figures, references and dates (`cell-nowrap`) do not wrap. Table headers are muted, uppercase, `--text-xs`, with a little letter-spacing.
 - **The trace's detail** takes its own full-width line under the step (`flex-basis: 100%`, indented by `--space-8`, `overflow-wrap: anywhere`), so a long detail never squeezes the row. The other way was to keep it on the line with `min-width: 0`; it was not chosen because at a 320 px trace column it left about 50 px for the detail.
 - **Buttons.** At most one filled brand button per panel: the Aliases form's Save. The phone's Send and Confirm stay filled. Every other console action is outlined and `Size.Small`. Delete, Reset wallet and Clear all are in the danger colour. The live trace's Clear and the settings' Reset are outlined.
@@ -915,6 +952,7 @@ Which grids page what (task 4b). Each panel reads the page size from `IOptionsMo
 | Wallet data | `bills` | the user's bills (U1: 4, no pager) | the wallet's | keeps its page (clamped) |
 | Wallet data | `history` | `Agent:HistoryPageSize` (200) rows read in one call; the heading is "History" | newest first, as the wallet returns them | page 1 |
 | Log | `log` | the latest `Agent:LogPageSize` (100) audit rows; the heading is "Log" | newest first | page 1 |
+| Learning data | `learning` | the latest `Agent:LogPageSize` (100) learning rows; the heading is "Learning data" | newest first | page 1 |
 | Aliases | `aliases` | the user's aliases (U1: 4, no pager) | the wallet's | keeps its page (clamped) |
 | Phone directory (`PhonePager`) | none | the user's aliases (U1: 4, no pager) | the wallet's | keeps its page (clamped) |
 | Phone My orders (`PhonePager`) | none | every order the wallet returns (U1: at most 10 in the journeys, no pager) | newest first, as the wallet returns them | page 1 |
@@ -979,13 +1017,17 @@ The journeys locate elements only by these attributes. The two lines of the "not
 | Wallet history row | `wallet-history-row` | `data-reference` |
 | Wallet contact row (UI pass, 21 Oct 2026) | `wallet-contact-row` | `data-code`; `class="row-muted"` when the account is closed |
 | Account status badge (UI pass, 21 Oct 2026), in the Contacts and Aliases grids | `status-badge` | `data-status` (`active`, `closed`, or whatever the wallet reports) |
-| Grid pager: root, range text, Previous, Next | `grid-pager`, `grid-pager-range`, `grid-pager-previous`, `grid-pager-next` | root: `data-grid` (`contacts`, `bills`, `history`, `log`, `aliases`), `data-page`, `data-pages` |
+| Grid pager: root, range text, Previous, Next | `grid-pager`, `grid-pager-range`, `grid-pager-previous`, `grid-pager-next` | root: `data-grid` (`contacts`, `bills`, `history`, `log`, `aliases`, `learning`), `data-page`, `data-pages` |
 | Settings row | `setting-row` | `data-name` |
 | Log panel root (UI pass, 22 Oct 2026) | `log-panel` | |
 | Empty state of a grid or list (UI pass, 22 Oct 2026) | `empty-state` | inside the panel it belongs to |
 | Log row, log refresh button | `log-row`, `log-refresh` | `log-row`: `data-event`, `data-reason` (empty when null), `data-pending` (the first 8 characters of the pending ID, empty when null) |
 | Settings value, input, Save, Reset, error (editable agent rows) | `setting-value`, `setting-input`, `setting-save`, `setting-reset`, `setting-error` | `data-name` (the setting's name, as on its row) |
 | Menu items | `menu-wallet`, `menu-settings`, `menu-log`, `menu-aliases`, `menu-learning` | |
+| Unreviewed learning rows on the menu (milestone 10) | `menu-learning-count` | inside `menu-learning`; absent when the count is 0 |
+| Learning data panel root, refresh button (milestone 10) | `learning-panel`, `learning-refresh` | |
+| Learning row (milestone 10) | `learning-row` | `data-id`, `data-reason`, `data-user`, `data-reviewed` (`true` or `false`) |
+| Reviewed tick of a learning row (milestone 10) | `learning-reviewed` | the checkbox input; `data-id` |
 | Kill switch | `kill-switch` | `data-on` (`true`, `false`) |
 | Reset panel root, its button, result line, error line | `reset-panel`, `reset-wallet`, `reset-result`, `reset-error` | the result is `done: <users> users, <accounts> accounts, <transactions> transactions; <n> open cards closed` |
 | Fault panel root, its error line, Clear all | `fault-panel`, `fault-error`, `fault-clear` | |
@@ -1195,7 +1237,7 @@ The UI pass changed the console's and the phone's look and changed no behaviour:
 
 | Gap | Plan |
 |---|---|
-| Learning data is a placeholder | Milestone 10 (the settings and log components came in milestone 7) |
+| Learning data has no save-as-test-case button (D12) | Deferred (milestone 10 design, approved by Khalil, 3 Nov 2026); the draft-export shape to return to is in `docs/plans/milestone-10-model-choice.md` |
 | A reissued card of the known gap `choose_account` does not carry the `account_choice_unavailable` note | Deferred, minor |
 | Text typed before the circuit is interactive is lost | The `data-interactive` marker tells the journeys; a person types again |
 | A Checking record whose circuit is gone has no "check again" button in a new circuit | Still open after milestone 8: the Checking card and its automatic settle live in the card's own circuit. The record stays Checking and is never shown as failed |
