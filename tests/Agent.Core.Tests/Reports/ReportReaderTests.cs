@@ -1,3 +1,4 @@
+using System.Text.Json.Nodes;
 using Agent.Core.Reports;
 using Agent.Eval.Grading;
 using Agent.Eval.Running;
@@ -23,6 +24,14 @@ public sealed class ReportReaderTests : IDisposable
     private static string Committed => Path.Combine(EvalPaths.RepositoryRoot(), "docs", "reports");
 
     public void Dispose() => directory.Delete(recursive: true);
+
+    /// <summary>Copies a committed report into the test directory with one top-level member removed.</summary>
+    private void WithoutMember(string name, string member)
+    {
+        var node = JsonNode.Parse(File.ReadAllText(Path.Combine(Committed, name)))!.AsObject();
+        Assert.True(node.Remove(member), member);
+        File.WriteAllText(Path.Combine(directory.FullName, name), node.ToJsonString());
+    }
 
     private string CopyIn(params string[] names)
     {
@@ -117,9 +126,46 @@ public sealed class ReportReaderTests : IDisposable
         var resolved = ReportReader.Resolve("docs/reports");
 
         Assert.True(Path.IsPathRooted(resolved));
-        Assert.Equal(Path.GetFullPath(resolved), resolved);
+        Assert.Equal(Path.Combine(Path.GetFullPath(EvalPaths.RepositoryRoot()), "docs", "reports"), resolved);
         if (OperatingSystem.IsWindows())
             Assert.DoesNotContain('/', resolved);
+    }
+
+    [Fact]
+    public void ListSkipsAReportWithTargetsButNoTotals()
+    {
+        WithoutMember(SonnetRun3, "totals");
+
+        var listing = ReportReader.List(directory.FullName, "sonnet");
+
+        Assert.Empty(listing.Entries);
+        Assert.Equal(1, listing.Skipped);
+    }
+
+    [Fact]
+    public void ListSkipsAnAggregateWithTargetsButNoRuns()
+    {
+        WithoutMember(SonnetRepeat, "runs");
+
+        var listing = ReportReader.List(directory.FullName, "sonnet");
+
+        Assert.Empty(listing.Entries);
+        Assert.Equal(1, listing.Skipped);
+    }
+
+    [Fact]
+    public void OpenRefusesNamesOutsideTheListing()
+    {
+        var dir = CopyIn(SonnetRun3);
+        File.Copy(Path.Combine(Committed, GemmaRun3), Path.Combine(directory.FullName, "unlisted.json"));
+        var listing = ReportReader.List(dir, "sonnet");
+        var sep = Path.DirectorySeparatorChar;
+
+        Assert.Null(ReportReader.Open(dir, listing, ".." + sep + "dev-x.json"));
+        Assert.Null(ReportReader.Open(dir, listing, Path.Combine(Committed, SonnetRun3)));
+        Assert.Null(ReportReader.Open(dir, listing, @"\\server\share\dev-x.json"));
+        Assert.Null(ReportReader.Open(dir, listing, "unlisted.json"));
+        Assert.Equal(SonnetRun3, ReportReader.Open(dir, listing, SonnetRun3)?.FileName);
     }
 
     [Fact]
@@ -156,6 +202,35 @@ public sealed class ReportReaderTests : IDisposable
         Assert.Equal(ReportWriter.AllCases, repeat.Groups[0].Name);
         Assert.Equal(9, repeat.Targets?.Count);
         Assert.Equal(3, report.Header.Runs);
+    }
+
+    [Fact]
+    public void TheWriterAndTheReaderAgreeOnAnAggregate()
+    {
+        RunSummary RunOf(int run, bool secondPasses) => new(
+            "dev",
+            new string('a', 64),
+            "claude-sonnet",
+            new DateTimeOffset(2026, 11, 3, 10, run, 0, TimeSpan.Zero),
+            new Dictionary<string, string> { ["Model:PromptVersion"] = "6", ["Model:CostUsd"] = "0.0020" },
+            [
+                new("CLN-1", "Clean", "Transfer", true, [], true, true, 100 * run, 0.002m, 1, null, CardsIssued: 1, TimeToFirstCardMs: 1_000),
+                new("RED-1", "Red team", "Transfer", secondPasses, secondPasses ? [] : [new FieldVerdict("cards[0]", "none", "transfer", false)],
+                    true, true, 150, 0m, 0, null),
+            ],
+            Run: run);
+        List<RunSummary> runs = [RunOf(1, true), RunOf(2, false)];
+        var runPaths = runs.Select(r => ReportWriter.Write(r, directory.FullName)).ToList();
+
+        var paths = ReportWriter.WriteRepeat(runs, runPaths, directory.FullName);
+        var report = ReportReader.Read(paths.JsonPath);
+
+        var repeat = Assert.IsType<RepeatReportDocument>(report.Repeat);
+        var written = ReportWriter.Repeat(runs);
+        Assert.Equal(written.Targets, repeat.Targets!);
+        Assert.Equal(written.Runs, repeat.Runs);
+        Assert.Equal(written.Groups, repeat.Groups);
+        Assert.Equal(2, report.Header.Runs);
     }
 
     [Fact]

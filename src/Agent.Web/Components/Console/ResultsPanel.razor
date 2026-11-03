@@ -142,9 +142,9 @@
             // Every listed file is read once to see its header and targets: off the circuit's render path.
             listing = await Task.Run(() => ReportReader.List(directory, candidate));
         }
-        catch (InvalidOperationException ex)
+        catch (Exception ex) when (ex is InvalidOperationException or ArgumentException or NotSupportedException or IOException)
         {
-            // No repository root above the console's base directory: an empty listing, with the reason.
+            // The directory cannot be resolved (no repository root, or a malformed path): an empty listing, with the reason.
             directory = configured;
             listing = new ReportListing([], 0, null);
             failure = "Could not find the reports directory: " + ex.GetType().Name;
@@ -166,13 +166,13 @@
     {
         opened = null;
         failure = null;
-        if (string.IsNullOrEmpty(fileName) || listing is null || listing.Entries.All(e => e.FileName != fileName))
+        if (string.IsNullOrEmpty(fileName) || listing is not { } shown)
             return;
 
         try
         {
-            var path = Path.Combine(directory, fileName);
-            opened = await Task.Run(() => ReportReader.Read(path));
+            // ReportReader.Open opens only a listed name inside the directory (security review M3).
+            opened = await Task.Run(() => ReportReader.Open(directory, shown, fileName));
         }
         catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException or InvalidOperationException)
         {

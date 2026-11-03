@@ -31,6 +31,12 @@
         <MudText Color="Color.Error">@failure</MudText>
     }
 
+    @* A failed tick has its own line: a reload never clears it, the next tick that saves does (security review M2). *@
+    @if (tickProblem is not null)
+    {
+        <MudText Color="Color.Error" data-testid="learning-tick-problem">@tickProblem</MudText>
+    }
+
     @if (!loaded)
     {
         <TableSkeleton />
@@ -52,7 +58,8 @@
                 <tbody>
                     @foreach (var row in shown.Rows)
                     {
-                        <tr data-testid="learning-row" data-id="@row.Id" data-reason="@row.Reason" data-user="@row.UserId"
+                        @* Keyed by the load: after every read the rows are rebuilt, so each checkbox shows what is stored. *@
+                        <tr @key="(row.Id, loadVersion)" data-testid="learning-row" data-id="@row.Id" data-reason="@row.Reason" data-user="@row.UserId"
                             data-reviewed="@(row.Reviewed ? "true" : "false")">
                             <td>@row.At.UtcDateTime.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture)</td>
                             <td>@row.UserId</td>
@@ -61,7 +68,7 @@
                             <td dir="auto" class="learning-text">@row.MaskedText</td>
                             <td>
                                 <input type="checkbox" data-testid="learning-reviewed" data-id="@row.Id" aria-label="Reviewed"
-                                       checked="@row.Reviewed" @onchange="e => ToggleAsync(row.Id, (bool)e.Value!)" />
+                                       checked="@row.Reviewed" @onchange="e => ToggleAsync(row.Id, e.Value is true)" />
                             </td>
                         </tr>
                     }
@@ -85,6 +92,12 @@
     private bool loaded;
     private bool reloadRequested;
     private string? failure;
+
+    // The last tick's problem, apart from the read's failure: a load never clears it.
+    private string? tickProblem;
+
+    // Raised by every read, so the rows' @key changes and Blazor rebuilds them (security review M2).
+    private int loadVersion;
 
     /// <summary>Rows to a page: <c>Console:GridPageSize</c>, read on each render.</summary>
     private int PageSize => ConsoleSettings.CurrentValue.GridPageSize;
@@ -135,6 +148,7 @@
                 reloadRequested = false;
                 await using var scope = Scopes.CreateAsyncScope();
                 rows = await scope.ServiceProvider.GetRequiredService<LearningLog>().ReadLatestAsync(Options.CurrentValue.LogPageSize, token);
+                loadVersion++;
                 failure = null;
 
                 // Each reload follows an action or Refresh: the newest row is the first on screen.
@@ -177,7 +191,7 @@
             {
                 if (rows.FirstOrDefault(r => r.Id == id) is { } row)
                     row.Reviewed = reviewed;
-                failure = null;
+                tickProblem = null;
                 Count.NotifyChanged();
                 return;
             }
@@ -194,9 +208,9 @@
             problem = "tick not saved: " + ex.GetType().Name;
         }
 
-        // The table is read again so every tick shows what is stored; the problem stays on screen after the read.
+        // The problem has its own line, then the table is read again so every tick shows what is stored.
+        tickProblem = problem;
         await LoadAsync();
-        failure = problem;
         StateHasChanged();
     }
 }

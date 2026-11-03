@@ -279,9 +279,9 @@
             {
                 return ReportReader.Resolve(configured);
             }
-            catch (InvalidOperationException)
+            catch (Exception ex) when (ex is InvalidOperationException or ArgumentException or NotSupportedException or IOException)
             {
-                return configured + " (repository root not found)";
+                return configured + " (cannot be resolved: " + ex.GetType().Name + ")";
             }
         }
     }

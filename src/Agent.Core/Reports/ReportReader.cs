@@ -45,9 +45,20 @@ public static class ReportReader
         if (!Directory.Exists(directory))
             return new ReportListing([], 0, null);
 
+        List<string> paths;
+        try
+        {
+            paths = [.. Patterns.SelectMany(p => Directory.EnumerateFiles(directory, p))];
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // The directory went away or cannot be listed: an empty listing (security review M1).
+            return new ReportListing([], 0, null);
+        }
+
         var entries = new List<ReportEntry>();
         var skipped = 0;
-        foreach (var path in Patterns.SelectMany(p => Directory.EnumerateFiles(directory, p)))
+        foreach (var path in paths)
         {
             try
             {
@@ -79,10 +90,34 @@ public static class ReportReader
     }
 
     /// <summary>
+    /// Opens <paramref name="fileName"/> from <paramref name="directory"/> only when it is a file name of
+    /// <paramref name="listing"/> and resolves to a file directly inside <paramref name="directory"/>; otherwise null.
+    /// This is the guard between a name posted by the browser and the file system (security review M3).
+    /// </summary>
+    /// <exception cref="JsonException">The listed file is no longer a report this reader knows.</exception>
+    /// <exception cref="IOException">The listed file cannot be read.</exception>
+    public static ReportFile? Open(string directory, ReportListing listing, string fileName)
+    {
+        ArgumentNullException.ThrowIfNull(directory);
+        ArgumentNullException.ThrowIfNull(listing);
+        if (string.IsNullOrEmpty(fileName) || listing.Entries.All(e => !string.Equals(e.FileName, fileName, StringComparison.Ordinal)))
+            return null;
+
+        var root = Path.TrimEndingDirectorySeparator(Path.GetFullPath(directory));
+        var path = Path.GetFullPath(Path.Combine(root, fileName));
+        if (!path.StartsWith(root + Path.DirectorySeparatorChar, StringComparison.Ordinal))
+            return null;
+        return Read(path);
+    }
+
+    /// <summary>
     /// Reads one report: an aggregate (<see cref="ReportFile.Repeat"/>) when its header has <c>runs</c>, otherwise a
     /// single run (<see cref="ReportFile.Single"/>).
     /// </summary>
-    /// <exception cref="JsonException">The file is not a report: not JSON, or no header with a set and a parser.</exception>
+    /// <exception cref="JsonException">
+    /// The file is not a report: not JSON, no header with a set and a parser, a single run without totals or time, or an
+    /// aggregate without groups or runs (security review M1).
+    /// </exception>
     /// <exception cref="IOException">The file cannot be read.</exception>
     public static ReportFile Read(string path)
     {
@@ -107,6 +142,10 @@ public static class ReportReader
         var read = report.Single?.Header ?? report.Repeat?.Header;
         if (read is not { Set: not null, Parser: not null })
             throw new JsonException("The report's header has no set or parser.");
+        if (report.Single is { } single && (single.Totals is null || single.Time is null))
+            throw new JsonException("The single-run report has no totals or no time.");
+        if (report.Repeat is { } repeat && (repeat.Groups is null || repeat.Runs is null))
+            throw new JsonException("The aggregate report has no groups or no runs.");
         return report;
     }
 }

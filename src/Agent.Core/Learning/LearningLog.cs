@@ -49,13 +49,11 @@ public sealed class LearningLog(AgentDbContext db, TimeProvider time)
     /// </summary>
     public async Task<bool> SetReviewedAsync(long id, bool reviewed, CancellationToken cancellationToken)
     {
-        var row = await db.LearningEntries.FindAsync([id], cancellationToken);
-        if (row is null)
-            return false;
-
-        row.Reviewed = reviewed;
-        await db.SaveChangesAsync(cancellationToken);
-        return true;
+        // One UPDATE: a row removed by a reset in between is a plain false, never a concurrency exception (review N2).
+        var rows = await db.LearningEntries
+            .Where(r => r.Id == id)
+            .ExecuteUpdateAsync(s => s.SetProperty(r => r.Reviewed, reviewed), cancellationToken);
+        return rows > 0;
     }
 
     /// <summary>The number of rows not yet marked reviewed.</summary>
