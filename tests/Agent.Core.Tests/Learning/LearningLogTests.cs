@@ -77,6 +77,60 @@ public class LearningLogTests(AgentHost host)
     }
 
     [Fact]
+    public async Task ReadLatestReturnsNewestFirstAndTakesAtMost()
+    {
+        Assert.SkipUnless(host.DatabaseAvailable, host.SkipReason);
+        await host.ResetAsync();
+
+        await WriteAsync(new LearningEntry(LearningLogRule.RecipientNotFound, "first"), "one");
+        await WriteAsync(new LearningEntry(LearningLogRule.NotUnderstood, "second"), "two");
+        await WriteAsync(new LearningEntry(LearningLogRule.RecipientNotFound, "third"), "three");
+
+        await using var scope = host.Services.CreateAsyncScope();
+        var log = scope.ServiceProvider.GetRequiredService<LearningLog>();
+        var latest = await log.ReadLatestAsync(2, Token);
+
+        Assert.Equal(["third", "second"], latest.Select(r => r.Detail));
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => log.ReadLatestAsync(0, Token));
+    }
+
+    [Fact]
+    public async Task SetReviewedUpdatesOneRowAndReportsAnAbsentId()
+    {
+        Assert.SkipUnless(host.DatabaseAvailable, host.SkipReason);
+        await host.ResetAsync();
+
+        await WriteAsync(new LearningEntry(LearningLogRule.RecipientNotFound, "first"), "one");
+        await WriteAsync(new LearningEntry(LearningLogRule.NotUnderstood, "second"), "two");
+        var firstId = (await RowsAsync())[0].Id;
+
+        await using var scope = host.Services.CreateAsyncScope();
+        var log = scope.ServiceProvider.GetRequiredService<LearningLog>();
+
+        Assert.True(await log.SetReviewedAsync(firstId, true, Token));
+        Assert.Equal([true, false], (await RowsAsync()).Select(r => r.Reviewed));
+        Assert.False(await log.SetReviewedAsync(long.MaxValue, true, Token));
+    }
+
+    [Fact]
+    public async Task CountUnreviewedCountsOnlyUntickedRows()
+    {
+        Assert.SkipUnless(host.DatabaseAvailable, host.SkipReason);
+        await host.ResetAsync();
+
+        await WriteAsync(new LearningEntry(LearningLogRule.RecipientNotFound, "first"), "one");
+        await WriteAsync(new LearningEntry(LearningLogRule.NotUnderstood, "second"), "two");
+        await WriteAsync(new LearningEntry(LearningLogRule.RecipientNotFound, "third"), "three");
+        var rows = await RowsAsync();
+
+        await using var scope = host.Services.CreateAsyncScope();
+        var log = scope.ServiceProvider.GetRequiredService<LearningLog>();
+        Assert.True(await log.SetReviewedAsync(rows[1].Id, true, Token));
+
+        Assert.Equal(2, await log.CountUnreviewedAsync(Token));
+    }
+
+    [Fact]
     public void WriteHasNoParameterForAPinABalanceOrAPurchaseCode()
     {
         var names = typeof(LearningLog).GetMethod(nameof(LearningLog.WriteAsync))!
