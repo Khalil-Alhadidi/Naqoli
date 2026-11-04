@@ -172,7 +172,9 @@ public sealed class ScriptedParserTests : IDisposable
     public void EveryBillOfTheSidecarNamesItsBillerInTheUsersOwnWords()
     {
         // Schema version 2 (16 Oct 2026): a bill's biller_text is copied verbatim from the message, as is that of a request
-        // to pay part of a bill (read as a bill, ruling 2 of milestone 8); any other request has none.
+        // to pay part of a bill (read as a bill, ruling 2 of milestone 8). Another unsupported request fills the slots its
+        // message states (prompt rule), so its biller_text, when set, is verbatim too (MAL-06, refused as another language
+        // from 4 Nov 2026); any other request has none.
         var sidecar = Path.Combine(RepositoryRoot.Find(), "data", ScriptedParser.SidecarFileName);
         var bills = 0;
         foreach (var line in File.ReadLines(sidecar).Where(l => l.Length > 0))
@@ -189,6 +191,10 @@ public sealed class ScriptedParserTests : IDisposable
                 {
                     bills++;
                     Assert.True(billerText.ValueKind == JsonValueKind.String, where);
+                    Assert.True(say.Contains(billerText.GetString()!, StringComparison.Ordinal), where);
+                }
+                else if (request.GetProperty("intent").GetString() == "unsupported" && billerText.ValueKind == JsonValueKind.String)
+                {
                     Assert.True(say.Contains(billerText.GetString()!, StringComparison.Ordinal), where);
                 }
                 else

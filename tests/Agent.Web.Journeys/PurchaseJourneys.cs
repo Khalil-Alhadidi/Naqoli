@@ -1,6 +1,7 @@
 extern alias AgentWeb;
 
 using Agent.Core.Data;
+using Agent.Core.Learning;
 using Agent.Core.Pipeline;
 using Agent.Core.Text;
 using Agent.Core.Wallet;
@@ -167,22 +168,21 @@ public sealed class PurchaseJourneys(JourneyHost host) : JourneyBase(host)
     }
 
     [Fact]
-    public async Task ALatinOperatorSpellingGoesStraightToTheCard()
+    public async Task ALatinScriptMessageIsRefusedAsOtherLanguage()
     {
+        // MAL-09, re-keyed 4 Nov 2026 (Khalil): a message written entirely in Latin letters is another language, even
+        // with "asia" configured under the provider code asiacell (Agent:ProviderSpellings). No card, no question, the
+        // other_language reply and its learning row; U2's balance is unchanged.
         var page = await OpenAsync(Host.UserWebAddress(U2));
-        var ac5 = await ProductAsync("AC-CR-5");
+        var before = await Host.BalanceAsync(U2);
 
         await SayAsync(page, DevSet.Say("MAL-09"));
 
-        // "asia" is configured under the provider code asiacell (Agent:ProviderSpellings, MAL-09).
-        await ExpectPurchaseCardAsync(page, ac5);
-        await Expect(page.GetByTestId("card-amount")).ToHaveTextAsync(PhoneFormat.Amount(5_000, Text));
+        await Expect(LastAgentMessage(page)).ToHaveTextAsync(Text["Unsupported_" + LearningLogRule.OtherLanguage].Value);
+        await Expect(page.GetByTestId("card")).ToHaveCountAsync(0);
         await Expect(Questions(page)).ToHaveCountAsync(0);
-
-        await page.GetByTestId("card-confirm").ClickAsync();
-
-        await Expect(Outcomes(page, "done")).ToHaveCountAsync(2);
-        Assert.Equal(13_500, await Host.BalanceAsync(U2));
+        Assert.Contains((LearningLogRule.OtherLanguage, (string?)null), await LearningRowsAsync(minimum: 1));
+        Assert.Equal(before, await Host.BalanceAsync(U2));
     }
 
     [Fact]
