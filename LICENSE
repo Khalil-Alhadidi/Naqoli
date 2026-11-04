@@ -1,0 +1,29 @@
+Copyright (c) 2026 Khalil Ahmed Ibrahim. All rights reserved.
+
+This repository (its source code, documentation, test data, seed data,
+prompts, reports and every other file in it, together "the Work") is made
+publicly readable so that the organisers, mentors and judges of the ZainCash
+Agentic AI Challenge Iraq can review it. It is not open-source software and
+it is not free software.
+
+No licence is granted. Without the prior written permission of the copyright
+holder, no part of the Work may be used, copied, reproduced, modified,
+merged, published, distributed, sublicensed, sold, or used to train or
+evaluate a machine-learning model, in whole or in part, by any means.
+Reading the Work on its public repository page for the purpose of review is
+permitted. Forking, cloning or downloading the Work for that same purpose of
+review, without further use, is tolerated and does not grant any other right.
+
+Third-party components used by the Work (NuGet packages, the Noto Naskh
+Arabic font under the SIL Open Font License 1.1 in
+src/Agent.Web/wwwroot/fonts/OFL.txt, and the models and services listed in
+docs/disclosure.md) remain under their own licences and terms, which this
+notice does not alter.
+
+THE WORK IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY ARISING
+FROM, OUT OF OR IN CONNECTION WITH THE WORK OR ITS USE.
+
+Contact: through the GitHub profile Khalil-Alhadidi.
