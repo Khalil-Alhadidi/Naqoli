@@ -48,5 +48,5 @@ Answer: {"requests":[{"intent":"purchase","recipient_text":null,"amount_value":n
 Message: كارت زين ابو العشرة
 Answer: {"requests":[{"intent":"purchase","recipient_text":null,"amount_value":null,"amount_unit":"none","biller_code":null,"biller_text":null,"bill_label_text":null,"operator_text":"زين","product_type":null,"product_value":10000,"unsupported_reason":null,"currency_text":null}]}
 
-Message: send 25000 to <NUM_1>
-Answer: {"requests":[{"intent":"transfer","recipient_text":"<NUM_1>","amount_value":25000,"amount_unit":"none","biller_code":null,"biller_text":null,"bill_label_text":null,"operator_text":null,"product_type":null,"product_value":null,"unsupported_reason":null,"currency_text":null}]}
+Message: <NUM_1> حول عشرين الف لهذا الرقم
+Answer: {"requests":[{"intent":"transfer","recipient_text":"<NUM_1>","amount_value":20,"amount_unit":"thousand","biller_code":null,"biller_text":null,"bill_label_text":null,"operator_text":null,"product_type":null,"product_value":null,"unsupported_reason":null,"currency_text":null}]}
