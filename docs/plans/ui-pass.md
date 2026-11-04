@@ -17,7 +17,7 @@
 | 5 | Fonts | "Yes" | Tasks 1 and 7 as written: system stack for the console, Noto Naskh Arabic self-hosted for the phone |
 | 6 | The header text | "Agentic AI Challenge Iraq : Pay and Bill Agent" | Task 2: that is the title in the bar and the page title; the "Mock wallet · synthetic data" chip stays beside it |
 | 7 | The history read | "OK as long as I don't need to scroll to the end to see the history" | Task 4b: newest first, page 1 after every wallet change, so the latest payment is the first row on screen |
-| 8 | The timer on Confirm | Saw the mock of three placements (<https://claude.ai/artifact/Juf6qEHp6LdoVXCbQdvGMA>) and chose option B, "timer in the action block" | Task 7: the countdown sentence and its bar move into the card's action block, directly above Confirm and Cancel, under a rule that closes the fields |
+| 8 | The timer on Confirm | Saw the mock of three placements and chose option B, "timer in the action block" | Task 7: the countdown sentence and its bar move into the card's action block, directly above Confirm and Cancel, under a rule that closes the fields |
 | 9 | Light only | "Keep the light theme, no need for the dark theme yet" | Task 1 as written |
 
 **Parked by Khalil, 21 Oct 2026:** the amount's format on the card and the thousands separator (`PhoneFormat.Number`, the Arabic thousands separator U+066C) may be rethought later. This pass changes neither; the mock showed them as the code renders them today. **Decided at his review, 22 Oct 2026:** the separator becomes the comma that hangs down (U+002C) in place of the raised U+066C, and the card's amount drops from 28 px to 24 px (`--text-2xl`); the amount's format is otherwise unchanged.
