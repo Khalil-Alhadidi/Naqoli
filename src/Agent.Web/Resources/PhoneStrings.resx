@@ -159,7 +159,7 @@
   <data name="Offer_decline_alias_button" xml:space="preserve"><value>إلغاء</value></data>
   <data name="Reply_alias_saved" xml:space="preserve"><value>انحفظ "{0}". المرة الجاية اكتبه وبس</value></data>
   <data name="Reply_alias_deleted" xml:space="preserve"><value>انحذف الاسم</value></data>
-  <data name="Refusal_alias_exists" xml:space="preserve"><value>هذا الاسم موجود عندك من قبل</value></data>
+  <data name="Refusal_alias_exists" xml:space="preserve"><value>هذا الاسم موجود عندك من قبل ، اختار غيره</value></data>
   <data name="Refusal_alias_invalid" xml:space="preserve"><value>الاسم مو مناسب. اكتب اسم قصير بدون أرقام</value></data>
   <data name="Refusal_alias_shared" xml:space="preserve"><value>هذا الاسم يشبه أكثر من شخص عندك. اكتب اسم مختلف</value></data>
   <data name="Directory_Open" xml:space="preserve"><value>الأسماء المحفوظة</value></data>
