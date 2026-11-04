@@ -92,6 +92,9 @@ internal static class DevSetText
     /// <summary>The filler words the console is configured with (<c>src/Agent.Web/appsettings.json</c>), never a literal.</summary>
     public static string[] ConfiguredFillerWords() => ConfiguredWords("FillerWords");
 
+    /// <summary>The dinar words the console is configured with (<c>src/Agent.Web/appsettings.json</c>), never a literal.</summary>
+    public static string[] ConfiguredDinarWords() => ConfiguredWords("DinarWords");
+
     private static string[] ConfiguredWords(string setting)
     {
         var path = Path.Combine(SeedHashTests.RepositoryRoot(), "src", "Agent.Web", "appsettings.json");

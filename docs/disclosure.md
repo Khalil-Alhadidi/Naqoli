@@ -99,4 +99,4 @@ Free after the tag: the console's look and panels, the journeys, the docs, the R
 
 ### Fixes after the freeze
 
-None.
+- 4 Nov 2026, commits 97e86a0 (`config: deepseek at temperature 0 ...`) and the next one (`fix(core): the dinar-unit guard ...`), on Khalil's request of 4 Nov 2026 after DeepSeek V4.1 Flash (candidate `deepseek`) built a 500,000 IQD card on ADD-13 ("500 dinars", below the minimum) in all three dev runs of that day and flipped 9 cases between runs (`docs/reports/model-comparison-2026-11-04.md`). (1) The `deepseek` candidate entry gains `"Temperature": 0` in both `appsettings.json` files; no other candidate changes, and the default candidate stays `sonnet`. (2) The dinar-unit guard (`src/Agent.Core/Parsing/DinarUnitGuard.cs`), applied after `ParsedRequestValidator` in both parsers: a request with an amount and no unit, in a message that holds a dinar word of the new setting `Agent:DinarWords` (four words drafted by Claude, for Khalil's review), gets the unit dinars; matching rule 9 (`AmountRule`) is unchanged. The prompt is unchanged at version 6, the dev set and its parses are unchanged, and the held-out set was not opened.

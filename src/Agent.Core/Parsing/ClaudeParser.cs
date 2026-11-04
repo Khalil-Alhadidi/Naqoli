@@ -246,7 +246,8 @@ public sealed partial class ClaudeParser : IParser, IParserUsage
         if (reply.Requests is { Count: > 1 } several)
             trace.Record(TraceZone.Model, MoreThanOneRequestStep, several.Count.ToString(CultureInfo.InvariantCulture));
 
-        return new ParsedMessage(ParsedRequestValidator.Validate(reply, map).Requests);
+        // The dinar-unit guard: a bare number the user wrote with a dinar word stays in dinars (Khalil, 4 Nov 2026).
+        return new ParsedMessage(DinarUnitGuard.Apply(ParsedRequestValidator.Validate(reply, map).Requests, text, context.DinarWords ?? []));
     }
 
     /// <summary>A reply with no structure to validate: one unclear request carrying the parser's own problem.</summary>

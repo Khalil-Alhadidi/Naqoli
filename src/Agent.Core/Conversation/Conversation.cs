@@ -432,7 +432,7 @@ public sealed class Conversation : IDisposable
         try
         {
             // D7: the parse call returns every request of the message; the first runs now, the others are queued below.
-            message = await parser.ParseAsync(masked.Text, new ParseContext(pendingNote, masked.Map), token);
+            message = await parser.ParseAsync(masked.Text, new ParseContext(pendingNote, masked.Map, options.CurrentValue.DinarWords), token);
         }
         catch (ParserUnavailableException)
         {
