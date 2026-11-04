@@ -508,6 +508,8 @@ The biller alias stays the later item below.
 - The chosen model, the prompt and the seed are tagged in the repository. Shown by the tag `milestone-10` on the merge of branch `milestone-10` into `main`, with the model, the prompt version and the seed hash in `docs/disclosure.md`, "Freeze, milestone 10".
 - After the tag, only fixes to plain code bugs are allowed, and each one is noted in `docs/disclosure.md`. Shown by the list "Fixes after the freeze" in `docs/disclosure.md`, empty at the tag.
 
+**After the freeze, 4 Nov 2026.** Two rounds, each listed in `docs/disclosure.md` under "Fixes after the freeze". The Flash round: DeepSeek V4.1 Flash (`deepseek`) at temperature 0 and the dinar-unit guard (`Agent:DinarWords`), so a written "500 dinars" is no longer read as thousands (`docs/reports/model-comparison-2026-11-04-flash-round.md`). Then the prompt version 7 round (`docs/plans/prompt-7-round.md`): prompt version 7 with Khalil's rulings of 4 Nov 2026 (a message written entirely in English or Latin letters is `other_language`, with digits, number tokens and punctuation neutral; the new refusal `undo_payment` with his wording; credit to the user's own number is a plain purchase, `credit_to_own_number` removed; `recipient_text` names the person whose balance is asked), the five re-keyed dev cases (MAL-06, MAL-09, ADD-07, ADD-24, GAP-06; Clean 32, Known gap 3; seed-v5), the other-balance guard, and the `deepseek-reasoning` candidate for a stability experiment (`docs/reports/model-comparison-2026-11-04-prompt-7.md`). D13 stays Sonnet until Khalil chooses.
+
 ## Milestone 11: Held-out run, once
 
 **Delivers**
@@ -519,6 +521,8 @@ The biller alias stays the later item below.
 
 - The report is committed as produced, misses included.
 - Nothing in the prompt or the code is changed in response to the held-out results. If something must change, the change and the reason are written in `docs/disclosure.md`.
+
+**Open item for Khalil (4 Nov 2026).** The held-out set and the test-set workbook are keyed under the rulings before 4 Nov 2026: Arabic typed in Latin letters is Arabic, credit to the user's own number is refused, and a request to undo a done payment is plain not-supported. The dev set was re-keyed to his rulings of 4 Nov 2026 in the prompt version 7 round; the held-out set is sealed and was not opened. Khalil: "keep it out now until we see all fixes, and later we decide." He decides before the run whether to re-key those held-out cases; otherwise the milestone 11 report names every miss that is a key difference (known-gaps row 48).
 
 ## Milestone 12: Demo readiness
 
