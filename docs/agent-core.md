@@ -45,7 +45,7 @@ The test hosts set `SweepIntervalSeconds` to 0 and use `NullTraceSink`, or a rec
 | `OperatorText` | string? | The operator as typed, or null |
 | `ProductType` | string? | `credit`, `internet`, or null |
 | `ProductValue` | long? | The face value the user named, in IQD, or null |
-| `UnsupportedReason` | string? | For `Unsupported`: `withdrawal`, `other_balance`, `other_currency`, `refers_back`, `same_as_last_time`, `choose_account`, `part_of_bill`, `credit_to_own_number`, `change_waiting_card`, `other_language`, `receive_from` (from 16 Oct 2026, schema version 3); otherwise null |
+| `UnsupportedReason` | string? | For `Unsupported`: `withdrawal`, `other_balance`, `other_currency`, `refers_back`, `same_as_last_time`, `choose_account`, `part_of_bill`, `change_waiting_card`, `other_language`, `receive_from` (from 16 Oct 2026, schema version 3), `undo_payment` (from 4 Nov 2026, schema version 4, which also removes `credit_to_own_number`); otherwise null |
 | `CurrencyText` | string? | A currency other than dinars, as typed. When set, the request is refused with `dinars_only` |
 | `Problem` | string? | Set by `ParsedRequestValidator` when the parse call's structure broke a rule: the field's wire name, with `Intent` `Unclear`. Null from the scripted parser |
 
@@ -873,7 +873,7 @@ Never stored: a PIN, a balance figure, a purchase code (full or partial), the ty
 | `CardIssued` with `Note` `account_choice_unavailable` (the known gap, GAP-04) | `choose_account`, no detail |
 | `Refusal` with `only_own_balance` (someone else's balance, RED-10) | `not_supported`, detail `other_balance` |
 | `Refusal` with `bills_paid_in_full` and detail `part_of_bill` (a request to pay part of a bill, from 16 Oct 2026) | `part_of_bill`, no detail. Without that detail (D9, a named amount that is not the amount due) it is not logged |
-| `Unsupported` with `same_as_last_time`, `refers_back`, `change_waiting_card`, `choose_account`, `part_of_bill`, `credit_to_own_number`, `other_currency`, `other_language` (GAP-08, ADD-23; from 17 Oct 2026 the orchestrator replies `Unsupported` for it, no longer `not_understood`) or `receive_from` | That reason, no detail |
+| `Unsupported` with `same_as_last_time`, `refers_back`, `change_waiting_card`, `choose_account`, `part_of_bill`, `other_currency`, `other_language` (GAP-08, ADD-23; from 17 Oct 2026 the orchestrator replies `Unsupported` for it, no longer `not_understood`), `receive_from` or `undo_payment` (ADD-24; from 4 Nov 2026, seed-v5, which also removes `credit_to_own_number` from the list) | That reason, no detail |
 | `Unsupported` with any other reason (`withdrawal`) | `not_supported`, with the reason as detail |
 | A `not_logged` refusal (`insufficient_balance`, the two caps, `nothing_due`, `account_closed`, `number_has_no_wallet`, `consent_required`), any other refusal, a question, a balance, the consent screen, a card | null |
 
@@ -1114,5 +1114,5 @@ Still open:
 | A reissued `choose_account` card (GAP-04) does not carry the `account_choice_unavailable` note | Deferred, minor |
 | `Attempts` counts Confirm taps that began an execute, not settle resends | Display only |
 | A biller alias (one word for one biller account) is not built; aliases point to accounts only | A later item of the build plan, after milestone 9a |
-| GAP-06, credit for the user's own number (`credit_to_own_number` with the operator, type and value filled), is still a known gap: no purchase card is built for it | Deferred to milestone 10, with the prompt pass (the brief of 19 Oct 2026; the tuning backlog keeps it) |
+| GAP-06, credit for the user's own number, was a known gap (refused with the reason `credit_to_own_number`, no card) | Closed 4 Nov 2026 (Khalil): it is a plain purchase that shows its code; the reason was removed with prompt version 7 (`docs/plans/prompt-7-round.md`) |
 | A Done purchase is assumed to carry its code: the mock wallet returns one for every purchase; a Done without one shows the outcome with no code message and keeps no last four | The wallet contract (`docs/wallet-api.md`, execute step 6) creates an order with a new code for every purchase; nothing to build |

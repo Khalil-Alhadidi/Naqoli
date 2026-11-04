@@ -57,6 +57,16 @@ public class PhoneStringsTests
     }
 
     [Fact]
+    public void TheUndoPaymentReplyExistsAndTheOwnNumberCreditReplyDoesNot()
+    {
+        // Prompt version 7 (Khalil, 4 Nov 2026): undo_payment has its own reply; credit_to_own_number is no longer a reason.
+        var values = Values();
+        Assert.True(values.TryGetValue("Unsupported_undo_payment", out var undo), "Unsupported_undo_payment is missing");
+        Assert.False(string.IsNullOrWhiteSpace(undo));
+        Assert.False(values.ContainsKey("Unsupported_credit_to_own_number"));
+    }
+
+    [Fact]
     public void EveryProductTypeOfTheSeedHasItsTypeWord()
     {
         // Security review M3 of milestone 9b: the type word's key is built from the wallet's product type.

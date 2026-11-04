@@ -187,8 +187,9 @@ public class ClaudeParserTests
         Assert.Equal(["electricity", "water", "internet", "school_fees", null], Enum("biller_code"));
         Assert.Equal(["credit", "internet", null], Enum("product_type"));
         Assert.Equal([.. ParsedRequestValidator.UnsupportedReasons, null], Enum("unsupported_reason"));
-        // Schema version 3 (16 Oct 2026): receive_from, the last reason.
-        Assert.Equal("receive_from", Enum("unsupported_reason")[^2]);
+        // Schema version 3 (16 Oct 2026): receive_from, then the last reason; schema version 4 (4 Nov 2026): undo_payment last.
+        Assert.Equal("receive_from", Enum("unsupported_reason")[^3]);
+        Assert.Equal("undo_payment", Enum("unsupported_reason")[^2]);
 
         // Schema version 2 (16 Oct 2026): the user's words for the biller, a free nullable string with no set.
         var billerText = properties.GetProperty("biller_text");
@@ -453,8 +454,8 @@ public class ClaudeParserTests
         var (parser, _, _) = Start();
 
         Assert.Equal("claude:haiku", parser.Name);
-        Assert.Equal("6", ClaudeParser.PromptVersion);
-        Assert.StartsWith("version: 6", ClaudeParser.Prompt, StringComparison.Ordinal);
+        Assert.Equal("7", ClaudeParser.PromptVersion);
+        Assert.StartsWith("version: 7", ClaudeParser.Prompt, StringComparison.Ordinal);
     }
 
     [Fact]

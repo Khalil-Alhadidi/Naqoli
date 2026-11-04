@@ -69,10 +69,10 @@
       "change_waiting_card",
       "choose_account",
       "part_of_bill",
-      "credit_to_own_number",
       "other_currency",
       "other_language",
-      "receive_from"
+      "receive_from",
+      "undo_payment"
     ],
     "not_logged": [
       "insufficient_balance",

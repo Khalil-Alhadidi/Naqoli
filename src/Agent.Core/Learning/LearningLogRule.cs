@@ -37,7 +37,6 @@ public static class LearningLogRule
     public const string ChangeWaitingCard = "change_waiting_card";
     public const string ChooseAccount = "choose_account";
     public const string PartOfBill = "part_of_bill";
-    public const string CreditToOwnNumber = "credit_to_own_number";
     public const string OtherCurrency = "other_currency";
     public const string OtherLanguage = "other_language";
 
@@ -46,6 +45,13 @@ public static class LearningLogRule
     /// logged under its own name, last in <see cref="Logged"/> as in the seed's <c>learning_log.logged</c> (seed-v4).
     /// </summary>
     public const string ReceiveFrom = "receive_from";
+
+    /// <summary>
+    /// A request to return, refund, cancel or undo a transfer or purchase that is already done (ADD-24; prompt version 7,
+    /// Khalil, 4 Nov 2026): logged under its own name, last in <see cref="Logged"/> as in the seed's
+    /// <c>learning_log.logged</c> (seed-v5).
+    /// </summary>
+    public const string UndoPayment = "undo_payment";
 
     /// <summary>
     /// The unsupported reason for a question about someone else's balance: the reply is <c>only_own_balance</c>, and the
@@ -70,10 +76,10 @@ public static class LearningLogRule
         ChangeWaitingCard,
         ChooseAccount,
         PartOfBill,
-        CreditToOwnNumber,
         OtherCurrency,
         OtherLanguage,
         ReceiveFrom,
+        UndoPayment,
     ];
 
     /// <summary>The refusal codes that are never logged: the agent understood, and the wallet's rules said no.</summary>
@@ -97,8 +103,8 @@ public static class LearningLogRule
     /// <summary>The unsupported reasons that are logged under their own name; any other is <c>not_supported</c> with the reason as detail.</summary>
     private static readonly HashSet<string> LoggedUnsupportedReasons = new(StringComparer.Ordinal)
     {
-        SameAsLastTime, RefersBack, ChangeWaitingCard, ChooseAccount, PartOfBill, CreditToOwnNumber, OtherCurrency, OtherLanguage,
-        ReceiveFrom,
+        SameAsLastTime, RefersBack, ChangeWaitingCard, ChooseAccount, PartOfBill, OtherCurrency, OtherLanguage,
+        ReceiveFrom, UndoPayment,
     };
 
     /// <summary>

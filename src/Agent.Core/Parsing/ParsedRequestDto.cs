@@ -51,7 +51,8 @@ public sealed record ParsedRequestDto
 
     /// <summary>
     /// One of the eleven documented reasons (<see cref="ParsedRequestValidator.UnsupportedReasons"/>) or null. Schema
-    /// version 3 (16 Oct 2026) adds the one value <c>receive_from</c>.
+    /// version 3 (16 Oct 2026) adds the one value <c>receive_from</c>; schema version 4 (4 Nov 2026) adds <c>undo_payment</c>
+    /// and removes <c>credit_to_own_number</c>.
     /// </summary>
     [JsonPropertyName("unsupported_reason")]
     public string? UnsupportedReason { get; init; }

@@ -533,7 +533,7 @@ The phone's header has a third control, a question-mark icon (`phone-help`, a `M
 - the title (`help-title`, `Help_Title`) and an intro line (`Help_Intro`);
 - five sections (`help-section`, `data-section` `transfer`, `bill`, `purchase`, `balance`, `not_done`), each a surface card with its heading in the brand colour (`Help_Transfer`, `Help_Bill`, `Help_Purchase`, `Help_Balance`, `Help_NotDone`);
 - under the first four, the example lines (`help-example`, on the page colour): `Help_Example_Transfer_1` to `_3`, `Help_Example_Bill_1` to `_3`, `Help_Example_Purchase_1` and `_2`, `Help_Example_Balance_1`, shown in Arabic-Indic digits (`PhoneFormat.Digits`), as every figure in the phone;
-- under the last, the agent's own replies for what it does not do (`help-not-done`, muted, a red cross before each): `Unsupported_withdrawal`, `Unsupported_other_currency`, `Unsupported_other_balance`, `Unsupported_part_of_bill` and `Unsupported_credit_to_own_number`, reused as they are.
+- under the last, the agent's own replies for what it does not do (`help-not-done`, muted, a red cross before each): `Unsupported_withdrawal`, `Unsupported_other_currency`, `Unsupported_other_balance`, `Unsupported_part_of_bill` and `Unsupported_undo_payment` (in place of `Unsupported_credit_to_own_number` from 4 Nov 2026, prompt version 7), reused as they are.
 
 The example lines are development-set messages, copied verbatim from the `message` of CLN-01, CLN-03, ADD-01 (transfer), ADD-05, CLN-23, CLN-25 (bill), CLN-27, CLN-29 (purchase; Khalil's order, 22 Oct 2026) and CLN-31 (balance). `HelpExamplesTests` (Agent.Core.Tests, Web) checks that each value equals its case's message (`DevSetText.Message`, which reads `requests.dev.jsonl` only) and that no other `Help_Example_` key exists, so the help never shows a request the parser is not proven on. The title, intro and headings were drafted by Claude at Khalil's request, pending his review (see [the phone strings](#the-phone-strings-for-khalil)). The journey `HelpShowsTheFiveSectionsAndReturnsToTheChat` shows the screen.
 
@@ -645,10 +645,10 @@ The seventeen keys of milestone 9a (`Offer_save_alias`, `Offer_save_alias_button
 | `Unsupported_same_as_last_time` | Please say the full request again | |
 | `Unsupported_choose_account` | Choosing the account is not available | |
 | `Unsupported_part_of_bill` | Bills are paid in full | |
-| `Unsupported_credit_to_own_number` | I cannot send credit to your own number | |
 | `Unsupported_change_waiting_card` | A card cannot be changed. Cancel it and ask again | |
 | `Unsupported_other_language` | Please write in Iraqi Arabic | The reply to `other_language` (GAP-08, ADD-23) from 17 Oct 2026, Khalil's decision; it was `Refusal_not_understood` before |
 | `Unsupported_receive_from` | I cannot take money from another person's account. They have to send it to you | Khalil's Arabic, 16 Oct 2026 (ADD-08, ADD-09) |
+| `Unsupported_undo_payment` | Sorry, I cannot undo a transfer or a purchase | Khalil's Arabic, 4 Nov 2026 (ADD-24, prompt version 7); `Unsupported_credit_to_own_number` was removed the same day (own-number credit is a plain purchase) |
 | `Purchase_code` | Your code: {0} | |
 | `Type_transfer` | Transfer | |
 | `Type_bill` | Bill | |
