@@ -85,6 +85,45 @@ public class EvalSettingsTests
     [Theory]
     [InlineData("Agent.Web")]
     [InlineData("Agent.Eval")]
+    public void TheDeepseekReasoningCandidateIsDeepseekWithReasoningAtLowEffort(string project)
+    {
+        // The prompt version 7 round's stability experiment (4 Nov 2026): Flash with reasoning on at low effort, a copy of
+        // deepseek except the request fields, a longer timeout and room for the reasoning tokens in the output budget.
+        using var document = JsonDocument.Parse(File.ReadAllText(Path.Combine(Root, "src", project, "appsettings.json")));
+        var candidates = document.RootElement.GetProperty("Model").GetProperty("Candidates");
+        var names = candidates.EnumerateObject().Select(c => c.Name).ToList();
+        Assert.Equal(names.IndexOf("qwen") + 1, names.IndexOf("deepseek-reasoning"));
+        var deepseek = candidates.GetProperty("deepseek");
+        var reasoning = candidates.GetProperty("deepseek-reasoning");
+        var changed = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            // The raw JSON text of the string: its quotes escaped with a backslash, as written in the file.
+            ["RequestFields"] = "\"" + """{"reasoning":{"effort":"low"},"provider":{"data_collection":"deny"}}""".Replace("\"", "\\\"", StringComparison.Ordinal) + "\"",
+            ["TimeoutSeconds"] = "90",
+            ["MaxOutputTokens"] = "4000",
+        };
+
+        Assert.Equal(deepseek.EnumerateObject().Select(p => p.Name), reasoning.EnumerateObject().Select(p => p.Name));
+        foreach (var setting in deepseek.EnumerateObject())
+        {
+            var expected = changed.TryGetValue(setting.Name, out var value) ? value : setting.Value.GetRawText();
+            Assert.Equal(expected, reasoning.GetProperty(setting.Name).GetRawText());
+        }
+
+        var configuration = new ConfigurationBuilder()
+            .AddJsonFile(Path.Combine(Root, "src", project, "appsettings.json"), optional: false)
+            .AddInMemoryCollection(new Dictionary<string, string?> { ["Model:Candidate"] = "deepseek-reasoning" })
+            .Build();
+        var options = configuration.GetSection(ModelOptions.SectionName).Get<ModelOptions>()!;
+        Assert.Empty(options.Problems());
+        var selected = options.Selected!;
+        Assert.Equal("""{"reasoning":{"effort":"low"},"provider":{"data_collection":"deny"}}""", selected.RequestFieldsText());
+        Assert.Equal((0f, 90, 4000), (selected.Temperature, selected.TimeoutSeconds, selected.MaxOutputTokens));
+    }
+
+    [Theory]
+    [InlineData("Agent.Web")]
+    [InlineData("Agent.Eval")]
     public void TheShippedOpenRouterCandidateBindsItsRequestFieldsAndValidates(string project)
     {
         // Bound through configuration as the hosts bind it: the request fields are one string, the object's text.
