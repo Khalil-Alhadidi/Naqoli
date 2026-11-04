@@ -188,6 +188,15 @@ public sealed class AgentOptions
     public string[] FillerWords { get; set; } = [];
 
     /// <summary>
+    /// The dinar words (Khalil, 4 Nov 2026, the Flash round; the list drafted by Claude for his review): when the user's
+    /// message holds one of them (compared by <see cref="Text.ArabicText.Key"/>) and a parsed request has an amount with
+    /// no unit, <see cref="Parsing.DinarUnitGuard"/> sets the unit to dinars, so matching rule 9 does not read a written
+    /// "500 dinars" as thousands. Configuration, not code: <c>Agent.Core</c> holds no Arabic. Empty by default (the guard
+    /// is off); shown read only (as a count) in the settings component.
+    /// </summary>
+    public string[] DinarWords { get; set; } = [];
+
+    /// <summary>
     /// The parse call: <c>scripted</c> (the default; no model) or <c>model</c> (the <c>Model</c> section's candidate,
     /// with its key in user secrets; <c>claude</c> is a synonym). Read by <see cref="Parsing.ParserFactory.AddAgentParser"/>.
     /// </summary>

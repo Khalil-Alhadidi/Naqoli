@@ -161,6 +161,12 @@ public sealed class ScriptedParser : IParser, IParserUsage
         var parsed = sentences.TryGetValue(ArabicText.Normalize(text), out var message)
             ? message
             : ParsedMessage.One(new ParsedRequest { Intent = RequestIntent.Unclear });
+
+        // The dinar-unit guard, as the model parser applies it after the validator (Khalil, 4 Nov 2026); the oracle's
+        // parses carry their units, so it changes nothing here.
+        var guarded = DinarUnitGuard.Apply(parsed.Requests, text, context.DinarWords ?? []);
+        if (!ReferenceEquals(guarded, parsed.Requests))
+            parsed = new ParsedMessage(guarded);
         Volatile.Write(ref lastUsage, new ParseUsage(0, 0, 0, 0, 0m, Stopwatch.GetElapsedTime(started)));
         return Task.FromResult(parsed);
     }

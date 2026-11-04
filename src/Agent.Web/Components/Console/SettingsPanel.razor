@@ -305,6 +305,8 @@
         yield return (nameof(AgentOptions.Endearments), o.Endearments.Length == 0 ? "none" : Number(o.Endearments.Length));
         // The filler words dropped at either end of a typed answer (Khalil, 17 Oct 2026) are phone text: count only.
         yield return (nameof(AgentOptions.FillerWords), o.FillerWords.Length == 0 ? "none" : Number(o.FillerWords.Length));
+        // The dinar words of the dinar-unit guard (Khalil, 4 Nov 2026; drafted by Claude for his review) are phone text: count only.
+        yield return (nameof(AgentOptions.DinarWords), o.DinarWords.Length == 0 ? "none" : Number(o.DinarWords.Length));
     }
 
     /// <summary>
