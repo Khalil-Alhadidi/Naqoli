@@ -105,6 +105,23 @@ public class EvalSettingsTests
         // Gemma 4's free tier is 16,000 input tokens a minute per model, about eight parse calls (1 Nov 2026).
         var gemma = options.Candidates["gemma"];
         Assert.Equal(("gemma-4-26b-a4b-it", 8000, "Gemini:ApiKey"), (gemma.ModelId, gemma.MinMillisecondsBetweenCalls, gemma.ApiKeySetting));
+        // DeepSeek V4 on OpenRouter's paid endpoints (4 Nov 2026): reasoning off, only providers that keep no prompts, prices from OpenRouter's list.
+        foreach (var (name, modelId, input, output, cacheRead) in new[]
+        {
+            ("deepseek", "deepseek/deepseek-v4.1-flash", 0.045m, 0.5m, 0.018m),
+            ("deepseek-pro", "deepseek/deepseek-v4-pro", 1.6m, 3.2m, 0.135m),
+        })
+        {
+            var deepseek = options.Candidates[name];
+            Assert.Equal((ModelOptions.CompatibleProvider, "https://openrouter.ai/api/v1", "OpenRouter:ApiKey", modelId, ModelOptions.OutputModeJsonSchema),
+                (deepseek.Provider, deepseek.BaseUrl, deepseek.ApiKeySetting, deepseek.ModelId, deepseek.OutputMode));
+            Assert.Equal("""{"reasoning":{"enabled":false},"provider":{"data_collection":"deny"}}""", deepseek.RequestFieldsText());
+            Assert.Equal((1500, 60, 0), (deepseek.MaxOutputTokens, deepseek.TimeoutSeconds, deepseek.MinMillisecondsBetweenCalls));
+            Assert.Equal((input, output, 0m, cacheRead),
+                (deepseek.InputPricePerMTok, deepseek.OutputPricePerMTok, deepseek.CacheWritePricePerMTok, deepseek.CacheReadPricePerMTok));
+            options.Candidate = name;
+            Assert.Empty(options.Problems());
+        }
     }
 
     [Theory]
