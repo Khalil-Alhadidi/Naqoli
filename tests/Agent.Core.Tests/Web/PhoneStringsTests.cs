@@ -1,6 +1,7 @@
 extern alias AgentWeb;
 
 using System.Globalization;
+using System.Text.RegularExpressions;
 using AgentWeb::Agent.Web.Services;
 
 namespace Agent.Core.Tests.Web;
@@ -64,6 +65,25 @@ public class PhoneStringsTests
         Assert.True(values.TryGetValue("Unsupported_undo_payment", out var undo), "Unsupported_undo_payment is missing");
         Assert.False(string.IsNullOrWhiteSpace(undo));
         Assert.False(values.ContainsKey("Unsupported_credit_to_own_number"));
+    }
+
+    [Fact]
+    public void EveryNotDoneLineOfTheHelpScreenHasItsKey()
+    {
+        // Review N8 of the prompt version 7 round: the Help screen's "does not do" lines are keys listed in
+        // HelpPanel.razor; a key missing from the resource file would render its name. Read from the razor file itself.
+        var razor = File.ReadAllText(Path.Combine(
+            global::Agent.Core.Tests.Wallet.SeedHashTests.RepositoryRoot(), "src", "Agent.Web", "Components", "Phone", "HelpPanel.razor"));
+        var start = razor.IndexOf("new(\"not_done\"", StringComparison.Ordinal);
+        Assert.True(start >= 0, "HelpPanel.razor has no not_done section.");
+        var end = razor.IndexOf("Examples: false", start, StringComparison.Ordinal);
+        Assert.True(end > start, "The not_done section has no end.");
+        var keys = Regex.Matches(razor[start..end], "\"([A-Za-z_]+)\"").Select(m => m.Groups[1].Value).Where(k => k != "not_done").ToList();
+
+        Assert.Equal("Help_NotDone", keys[0]);
+        Assert.Equal(6, keys.Count);
+        var values = Values();
+        Assert.All(keys, key => Assert.True(values.ContainsKey(key), key + " is not in PhoneStrings.resx"));
     }
 
     [Fact]

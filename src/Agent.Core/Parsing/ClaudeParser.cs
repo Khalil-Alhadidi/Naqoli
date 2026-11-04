@@ -247,8 +247,10 @@ public sealed partial class ClaudeParser : IParser, IParserUsage
             trace.Record(TraceZone.Model, MoreThanOneRequestStep, several.Count.ToString(CultureInfo.InvariantCulture));
 
         // The code guards (Khalil, 4 Nov 2026): a bare number the user wrote with a dinar word stays in dinars, and a
-        // balance question that names a person is someone else's balance.
-        return new ParsedMessage(ParseGuards.Apply(ParsedRequestValidator.Validate(reply, map).Requests, text, context.DinarWords ?? []));
+        // balance question that names a person is someone else's balance. What fired is traced (review M2).
+        var guarded = ParseGuards.Apply(ParsedRequestValidator.Validate(reply, map).Requests, text, context.DinarWords ?? []);
+        ParseGuards.Record(guarded, trace);
+        return new ParsedMessage(guarded.Requests);
     }
 
     /// <summary>A reply with no structure to validate: one unclear request carrying the parser's own problem.</summary>
