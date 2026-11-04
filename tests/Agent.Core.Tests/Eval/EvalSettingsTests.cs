@@ -123,6 +123,10 @@ public class EvalSettingsTests
             options.Candidate = name;
             Assert.Empty(options.Problems());
         }
+        // Flash at temperature 0 (Khalil, 4 Nov 2026, the Flash round); every other candidate leaves it unset.
+        Assert.Equal(0f, options.Candidates["deepseek"].Temperature);
+        Assert.Null(options.Candidates["deepseek-pro"].Temperature);
+        Assert.Null(options.Candidates["sonnet"].Temperature);
     }
 
     [Theory]
