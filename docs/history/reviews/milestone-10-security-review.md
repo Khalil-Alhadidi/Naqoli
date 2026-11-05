@@ -1,6 +1,6 @@
 # Security review: milestone 10 (model choice, learning data, results), range c59a723..991f88c
 
-Reviewer: the `dotnet-security-reviewer` agent (Claude Opus), 3 Nov 2026, on the branch diff of `src` and `tests`, `CLAUDE.md`, the design (`docs/plans/milestone-10-model-choice.md`) and the 9c review for format. The held-out file and the workbook were not opened. The four fixture reports were scanned for Arabic characters (none) and for digit runs of nine or more (SHA-256 values and percentage fractions only). No file was modified by the review.
+Reviewer: the `dotnet-security-reviewer` agent (Claude Opus), 3 Nov 2026, on the branch diff of `src` and `tests`, `CLAUDE.md`, the design (`docs/history/plans/milestone-10-model-choice.md`) and the 9c review for format. The held-out file and the workbook were not opened. The four fixture reports were scanned for Arabic characters (none) and for digit runs of nine or more (SHA-256 values and percentage fractions only). No file was modified by the review.
 
 **Verdict: pass with changes.** Critical 0, Important 0, Minor 4, Notes 7.
 

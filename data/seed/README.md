@@ -41,7 +41,7 @@ To re-freeze after an intended change (a new export from Khalil):
 
 `seed-v4` (16 Oct 2026) adds one value, `receive_from`, to `settings.json`'s `learning_log.logged`, at the end of the list after `other_language`, at Khalil's instruction. No other file, no answer key and no figure changes, so no answer key needed re-checking.
 
-`seed-v5` (4 Nov 2026, the prompt version 7 round) changes `settings.json`'s `learning_log.logged` under Khalil's rulings of that day: `undo_payment` is added at the end of the list after `receive_from` (a request to undo a done transfer or purchase is refused and logged under its own name), and `credit_to_own_number` is removed (credit for the user's own number is a plain purchase). No other file and no figure changes; the dev set's answer keys were re-checked by the oracle run over all 102 cases before the hash was re-frozen (`docs/plans/prompt-7-round.md`).
+`seed-v5` (4 Nov 2026, the prompt version 7 round) changes `settings.json`'s `learning_log.logged` under Khalil's rulings of that day: `undo_payment` is added at the end of the list after `receive_from` (a request to undo a done transfer or purchase is refused and logged under its own name), and `credit_to_own_number` is removed (credit for the user's own number is a plain purchase). No other file and no figure changes; the dev set's answer keys were re-checked by the oracle run over all 102 cases before the hash was re-frozen (`docs/history/plans/prompt-7-round.md`).
 
 ## How the wallet loads them
 

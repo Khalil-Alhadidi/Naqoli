@@ -8,12 +8,12 @@
 
 **Tech Stack:** .NET 10, xUnit, `Agent.Eval` runner, the Anthropic model through `Microsoft.Extensions.AI`.
 
-**Spec:** `docs/plans/quarter-wording.md` (Khalil approved sections A and B on 22 Oct 2026; section C is done: rule 9 in `docs/matching-rules.md` carries the three quarter examples).
+**Spec:** `docs/history/plans/quarter-wording.md` (Khalil approved sections A and B on 22 Oct 2026; section C is done: rule 9 in `docs/matching-rules.md` carries the three quarter examples).
 
 ## Global Constraints
 
 - CLAUDE.md rules 1 to 9 hold. In particular: no Arabic in C# (test messages come from the dev set through `CaseLoader` or `DevSetText`, expected figures are numbers); never open `data/requests.heldout.jsonl` or the workbook; tune on the dev set only.
-- The Arabic strings are exactly the approved ones in `docs/plans/quarter-wording.md`. Do not reword them. A case that cannot pass with Khalil's wording is reported, not reworded.
+- The Arabic strings are exactly the approved ones in `docs/history/plans/quarter-wording.md`. Do not reword them. A case that cannot pass with Khalil's wording is reported, not reworded.
 - Do not change an existing answer key, target or matching rule. Rule 9's examples were added with Khalil's leave on 22 Oct 2026 and stay as they are.
 - Any change to `parse-prompt.md` raises its version (`version: 6`) and is recorded in `docs/agent-model.md`, `docs/tuning-backlog.md` ("Out-of-sequence prompt changes") and `docs/disclosure.md`.
 - The working tree holds uncommitted alias work in other files (`Conversation.cs`, `ChatSession.cs`, `AliasJourneys.cs`, `PhoneStrings.resx` and more). Leave it alone. Every commit here is `git add <listed paths>` only, never `git add -A` or `git commit -a`. If the build fails because of that work, stop and tell Khalil.
@@ -135,7 +135,7 @@ Expected: FAIL, expected "6" actual "5".
 
 - [ ] **Step 3: Edit the prompt**
 
-Line 1 becomes `version: 6`. Line 20 (the `amount_value` and `amount_unit` bullet) gains, after "(code reads a bare number below 1,000 in thousands).", this text and nothing else, with the Arabic forms exactly as approved in `docs/plans/quarter-wording.md` section A:
+Line 1 becomes `version: 6`. Line 20 (the `amount_value` and `amount_unit` bullet) gains, after "(code reads a bare number below 1,000 in thousands).", this text and nothing else, with the Arabic forms exactly as approved in `docs/history/plans/quarter-wording.md` section A:
 
 > A fraction word after a number is part of the number: "ونص" adds a half and "وربع" a quarter ("2 ونص" is 2.5 `none`; "١٢ الف وربع" is 12.25 `thousand`; "مليون وربع" is 1.25 `million`). "الا ربع" takes a quarter away and "الا نص" a half ("مليون الا ربع" is 0.75 `million`; "الفين الا ربع" is 1.75 `thousand`; "3 الا ربع" is 2.75 `none`). A fraction word before a unit is that fraction of the unit ("ربع مليون" is 0.25 `million`). A fraction word alone is that fraction with `none` ("ربع" is 0.25 `none`).
 
@@ -148,16 +148,16 @@ Expected: PASS.
 
 - [ ] **Step 5: Record the version in the docs**
 
-- `docs/agent-model.md`: the sentence "the current one is `version: 5`" becomes `version: 6`; add to the "from version N" list: "from version 6, the fraction words in Khalil's forms of 22 Oct 2026: a half or a quarter after a number is added (2.5, 12.25 thousand, 1.25 million), after "الا" it is taken away (0.75 million, 1.75 thousand, 2.75), before a unit it is that fraction of the unit (0.25 million), alone it is 0.25 `none`"; in the "Version rule" paragraph add one sentence: "Version 6 is from 22 Oct 2026, out of sequence: it adds four sentences to the amount line for the fraction words (ربع, الا ربع, الا نص) in Khalil's forms; no example is added or changed (docs/plans/quarter-wording.md)."
+- `docs/agent-model.md`: the sentence "the current one is `version: 5`" becomes `version: 6`; add to the "from version N" list: "from version 6, the fraction words in Khalil's forms of 22 Oct 2026: a half or a quarter after a number is added (2.5, 12.25 thousand, 1.25 million), after "الا" it is taken away (0.75 million, 1.75 thousand, 2.75), before a unit it is that fraction of the unit (0.25 million), alone it is 0.25 `none`"; in the "Version rule" paragraph add one sentence: "Version 6 is from 22 Oct 2026, out of sequence: it adds four sentences to the amount line for the fraction words (ربع, الا ربع, الا نص) in Khalil's forms; no example is added or changed (docs/history/plans/quarter-wording.md)."
 - `docs/tuning-backlog.md`: one row `| 22 Oct 2026 | 6 | Four sentences on the amount line: a fraction word after a number is added (وربع), after الا taken away, before a unit a fraction of it, alone 0.25 none; Khalil's forms. No example changed. | Khalil's manual testing, 22 Oct 2026: نص reached the card but ربع had no rule. Dev cases ADD-26 to ADD-30 hold it. |`
-- `docs/disclosure.md`: one bullet after the ADD-25 bullet: "Prompt version 6 and development cases ADD-26 to ADD-30 (22 Oct 2026; the Arabic drafted by Claude in `docs/plans/quarter-wording.md`, checked and approved by Khalil): the quarter amounts (ربع, وربع, الا ربع, الا نص, ربع مليون). No amount code changes; rule 9's examples gained the three quarter figures with Khalil's leave. The set has 102 cases."
+- `docs/disclosure.md`: one bullet after the ADD-25 bullet: "Prompt version 6 and development cases ADD-26 to ADD-30 (22 Oct 2026; the Arabic drafted by Claude in `docs/history/plans/quarter-wording.md`, checked and approved by Khalil): the quarter amounts (ربع, وربع, الا ربع, الا نص, ربع مليون). No amount code changes; rule 9's examples gained the three quarter figures with Khalil's leave. The set has 102 cases."
 - `CLAUDE.md`: "is at version 5 (16 Oct 2026, 4d10f21; ...)" becomes "is at version 6 (22 Oct 2026; ...)"; fill the commit hash after Step 6 or leave the date only.
 
 - [ ] **Step 6: Commit**
 
 ```bash
-git add src/Agent.Core/Parsing/parse-prompt.md tests/Agent.Core.Tests/Parsing/ClaudeParserTests.cs docs/agent-model.md docs/tuning-backlog.md docs/disclosure.md CLAUDE.md docs/plans/quarter-wording.md
-git commit -m "feat(core): prompt version 6, the fraction words (Khalil, 22 Oct 2026): a half or a quarter after a number is added, after الا taken away, before a unit a fraction of it, alone 0.25 none; Khalil's forms from docs/plans/quarter-wording.md; no example changed; agent-model.md, tuning-backlog.md, disclosure.md, CLAUDE.md"
+git add src/Agent.Core/Parsing/parse-prompt.md tests/Agent.Core.Tests/Parsing/ClaudeParserTests.cs docs/agent-model.md docs/tuning-backlog.md docs/disclosure.md CLAUDE.md docs/history/plans/quarter-wording.md
+git commit -m "feat(core): prompt version 6, the fraction words (Khalil, 22 Oct 2026): a half or a quarter after a number is added, after الا taken away, before a unit a fraction of it, alone 0.25 none; Khalil's forms from docs/history/plans/quarter-wording.md; no example changed; agent-model.md, tuning-backlog.md, disclosure.md, CLAUDE.md"
 ```
 
 ---
@@ -169,7 +169,7 @@ git commit -m "feat(core): prompt version 6, the fraction words (Khalil, 22 Oct 
 - Modify: `data/requests.dev.parses.jsonl` (six lines appended: one per say step)
 - Modify: `tests/Agent.Core.Tests/Eval/CaseLoaderTests.cs:221` (`TheDevelopmentSetLoads`, the count)
 - Modify: `docs/agent-eval.md:5` (the set's counts), `docs/architecture.md:217` (the tree line), `docs/rules-coverage.md` (row 9), `docs/failure-modes.md` (row 1, "Amount misread"), `docs/matching-rules.md` (no change: already done)
-- Modify: `docs/plans/quarter-wording.md` (one note under section B about ADD-27's PIN)
+- Modify: `docs/history/plans/quarter-wording.md` (one note under section B about ADD-27's PIN)
 
 **Interfaces:**
 - Consumes: the case-file shape of `src/Agent.Eval/Cases/CaseFile.cs` (fields exactly as the ADD-10, ADD-13, AMB-06 and RED-09 lines use them); the sidecar shape of `data/requests.dev.parses.jsonl` (`id`, `step`, `say`, `parse.requests[]` with all twelve fields).
@@ -188,7 +188,7 @@ Expected: FAIL on `TheDevelopmentSetLoads`, 97 not 102.
 
 Append these lines to `data/requests.dev.jsonl`, one JSON object per line, same field order as ADD-25, UTF-8, LF, no trailing blank line beyond the file's convention. Figures: fee 1,000 on every transfer; `balance_after` = balance − amount − fee.
 
-ADD-26 (Clean, Transfer, U1): message `حول 2 وربع لاخوية حمودي`; meaning "Send two and a quarter to my brother Hammoudi (a bare number with a quarter)."; steps `[{"say": "<message>"}, {"tap": "confirm", "expect": {"card_outcome": "done"}}]`; asks `[]`; card `{"kind": "transfer", "to": "S01", "to_number": "07805550101", "display": "اخوية حمودي", "registered_name": "محمد جبار حميد", "amount": 2250, "fee": 1000, "total": 3250, "balance_after": 746750, "pin_required": false, "first_time": false, "warning": null, "outcome": "done"}`; replies `[]`; refusal `null`; consent_screen `false`; final `{"balance": 746750, "transactions": [{"type": "transfer", "amount": 2250, "fee": 1000, "to_number": "07805550101", "to": "S01"}], "codes_issued": 0, "bills_now": {}, "alias_saved": null}`; learning_log `null`; notes "Added 22 Oct 2026; drafted by Claude, approved by Khalil (docs/plans/quarter-wording.md). Rule 9: a bare 2.25 is read in thousands, 2,250, straight to the card. Prompt version 6 names the quarter."; set `dev`; parent `null`; pending_wording_recheck `false`; fault `null`.
+ADD-26 (Clean, Transfer, U1): message `حول 2 وربع لاخوية حمودي`; meaning "Send two and a quarter to my brother Hammoudi (a bare number with a quarter)."; steps `[{"say": "<message>"}, {"tap": "confirm", "expect": {"card_outcome": "done"}}]`; asks `[]`; card `{"kind": "transfer", "to": "S01", "to_number": "07805550101", "display": "اخوية حمودي", "registered_name": "محمد جبار حميد", "amount": 2250, "fee": 1000, "total": 3250, "balance_after": 746750, "pin_required": false, "first_time": false, "warning": null, "outcome": "done"}`; replies `[]`; refusal `null`; consent_screen `false`; final `{"balance": 746750, "transactions": [{"type": "transfer", "amount": 2250, "fee": 1000, "to_number": "07805550101", "to": "S01"}], "codes_issued": 0, "bills_now": {}, "alias_saved": null}`; learning_log `null`; notes "Added 22 Oct 2026; drafted by Claude, approved by Khalil (docs/history/plans/quarter-wording.md). Rule 9: a bare 2.25 is read in thousands, 2,250, straight to the card. Prompt version 6 names the quarter."; set `dev`; parent `null`; pending_wording_recheck `false`; fault `null`.
 
 ADD-27 (Clean, Transfer, U3): message `حول مليون الا ربع للمحاسب`; meaning "Send a million less a quarter to the accountant."; steps: say, then `{"tap": "confirm", "expect": {"card_outcome": "done"}}`; card to T03: `"to_number": "07905550303", "display": "المحاسب", "registered_name": "ماهر عبد الستار نعمان", "amount": 750000, "fee": 1000, "total": 751000, "balance_after": 11749000, "pin_required": false, "first_time": false, "warning": null, "outcome": "done"`; final balance `11749000`, one transaction `{"type": "transfer", "amount": 750000, "fee": 1000, "to_number": "07905550303", "to": "T03"}`; notes "Added 22 Oct 2026; drafted by Claude, approved by Khalil. 'الا ربع' takes a quarter off the million: 0.75 million, 750,000. Below the PIN threshold of 1,000,000, so no PIN (the wording file's 'PIN path' note was wrong; the amount is Khalil's)."
 
@@ -228,12 +228,12 @@ Expected: `5 passed`; the report `docs/reports/dev-scripted-quarter-<date>-<HHmm
 - `docs/architecture.md` line 217: `97 requests (Khalil's 72, ADD-01 to ADD-25)` becomes `102 requests (Khalil's 72, ADD-01 to ADD-30)`.
 - `docs/rules-coverage.md` row 9: add the Task 1 test names (`AmountRuleTests.BareTwoAndAQuarterIsTwoThousandTwoHundredFifty`, `LessAQuarterOrAHalfTakesItAway`, `AQuarterOfAMillionIsTwoHundredFiftyThousand`, `ABareQuarterIsLeftToTheChecks`) and the cases ADD-26 to ADD-30 in its columns.
 - `docs/failure-modes.md` row 1: after "units multiply;" add "a fraction word is part of the number the model returns (prompt version 6, Khalil's forms of 22 Oct 2026: وربع adds, الا ربع takes away, ربع مليون is a quarter of the unit), and the same whole-dinars rule applies;" and add `AmountRuleTests.LessAQuarterOrAHalfTakesItAway` and ADD-26 to ADD-30 to its test and case columns.
-- `docs/plans/quarter-wording.md`, under section B: "Note (Claude, after Khalil's approval): ADD-27's 750,000 is below the PIN threshold of 1,000,000 (`data/seed/settings.json`), so its key has `pin_required: false` and a plain Confirm."
+- `docs/history/plans/quarter-wording.md`, under section B: "Note (Claude, after Khalil's approval): ADD-27's 750,000 is below the PIN threshold of 1,000,000 (`data/seed/settings.json`), so its key has `pin_required: false` and a plain Confirm."
 
 - [ ] **Step 8: Commit**
 
 ```bash
-git add data/requests.dev.jsonl data/requests.dev.parses.jsonl tests/Agent.Core.Tests/Eval/CaseLoaderTests.cs docs/agent-eval.md docs/architecture.md docs/rules-coverage.md docs/failure-modes.md docs/plans/quarter-wording.md docs/reports/dev-scripted-quarter-*
+git add data/requests.dev.jsonl data/requests.dev.parses.jsonl tests/Agent.Core.Tests/Eval/CaseLoaderTests.cs docs/agent-eval.md docs/architecture.md docs/rules-coverage.md docs/failure-modes.md docs/history/plans/quarter-wording.md docs/reports/dev-scripted-quarter-*
 git commit -m "feat(eval): development cases ADD-26 to ADD-30, the quarter amounts (drafted by Claude, approved by Khalil, 22 Oct 2026): 2 وربع (2,250), مليون الا ربع (750,000, no PIN), ربع مليون (250,000), a bare ربع refused below the minimum, and ٣ الف وربع as a typed amount (3,250); their parse lines; the set has 102 cases; scripted run 5 passed (dev-scripted-quarter); agent-eval.md, architecture.md, rules-coverage.md, failure-modes.md"
 ```
 
@@ -244,7 +244,7 @@ git commit -m "feat(eval): development cases ADD-26 to ADD-30, the quarter amoun
 **Files:**
 - Modify: `tests/Agent.Core.Tests/Parsing/LiveModelTests.cs` (one new gated theory after `TheBalanceQuestionIsItsOwnIntent`)
 - Create: `docs/reports/dev-claude-haiku-quarter-<date>-<HHmm>.md` and `.json` (written by the runner)
-- Modify: `docs/agent-model.md` (one sentence on the run), `docs/plans/quarter-wording.md` (the result line)
+- Modify: `docs/agent-model.md` (one sentence on the run), `docs/history/plans/quarter-wording.md` (the result line)
 
 **Interfaces:**
 - Consumes: `CaseLoader.Load(path)` returning cases with `Id`, `Message`, `Steps[n].Say`; `Masker.Mask`, `ParseContext`, `Parser(candidate)` and `Print` from the test class; `ParsedRequest.AmountValue` (`decimal?`) and `AmountUnit`.
@@ -305,12 +305,12 @@ Expected: `5 passed`, header `Model:PromptVersion` 6, cost printed. Keep the rep
 - [ ] **Step 5: Record the result**
 
 - `docs/agent-model.md`: after the version 6 sentence add "Run on 22 Oct 2026 on Haiku over ADD-26 to ADD-30: `docs/reports/dev-claude-haiku-quarter-<date>-<HHmm>` (<n> of 5 passed); the gated `LiveModelTests.AQuarterIsReadAsAFractionOfTheNumber` passed on haiku and sonnet."
-- `docs/plans/quarter-wording.md`: one closing line "Built 22 Oct 2026: prompt version 6, ADD-26 to ADD-30, Haiku run <n>/5."
+- `docs/history/plans/quarter-wording.md`: one closing line "Built 22 Oct 2026: prompt version 6, ADD-26 to ADD-30, Haiku run <n>/5."
 
 - [ ] **Step 6: Commit**
 
 ```bash
-git add tests/Agent.Core.Tests/Parsing/LiveModelTests.cs docs/reports/dev-claude-haiku-quarter-* docs/agent-model.md docs/plans/quarter-wording.md
+git add tests/Agent.Core.Tests/Parsing/LiveModelTests.cs docs/reports/dev-claude-haiku-quarter-* docs/agent-model.md docs/history/plans/quarter-wording.md
 git commit -m "test(core): the quarter forms on the model (22 Oct 2026): the gated LiveModelTests.AQuarterIsReadAsAFractionOfTheNumber over ADD-26 to ADD-30 on haiku and sonnet; Haiku eval run dev-claude-haiku-quarter, <n> of 5 passed; agent-model.md"
 ```
 

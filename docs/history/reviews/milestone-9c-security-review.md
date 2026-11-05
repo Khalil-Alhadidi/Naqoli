@@ -1,6 +1,6 @@
 # Security review: milestone 9c (compound requests, D7), range 3d29a1a..7e5f253
 
-Written by the security reviewer agent (`dotnet-security-reviewer`) on 19 Oct 2026, saved verbatim by the controller. Sources: the plan `docs/plans/milestone-9c-compound.md` (the seven tasks and the twelve controller rulings) and the current files under `src/`, `tests/` and `docs/` at 7e5f253, read directly along the paths the plan names (the reviewer had no shell in this run, so the range was read from the files rather than from `git diff`; the two m9c report files under `docs/reports` were scanned only for Arabic text and for digit runs). The reviewer did not open, search or hash the held-out file or any workbook (rule 7). No file was modified and no command that writes was run.
+Written by the security reviewer agent (`dotnet-security-reviewer`) on 19 Oct 2026, saved verbatim by the controller. Sources: the plan `docs/history/plans/milestone-9c-compound.md` (the seven tasks and the twelve controller rulings) and the current files under `src/`, `tests/` and `docs/` at 7e5f253, read directly along the paths the plan names (the reviewer had no shell in this run, so the range was read from the files rather than from `git diff`; the two m9c report files under `docs/reports` were scanned only for Arabic text and for digit runs). The reviewer did not open, search or hash the held-out file or any workbook (rule 7). No file was modified and no command that writes was run.
 
 **Verdict: pass with changes.** Critical 0, Important 0, Minor 3, Recommendations 6.
 

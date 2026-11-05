@@ -16,6 +16,8 @@ Reading guide, in order:
 4. [docs/known-gaps.md](docs/known-gaps.md): every known limit of the agent as built, and what would close it.
 5. [docs/disclosure.md](docs/disclosure.md): every library, tool, model and data source used, Claude Code included.
 
+Every other document is listed in [docs/README.md](docs/README.md).
+
 An agent that turns one sentence in Iraqi Arabic into one confirmation card and one tap, against a mock wallet API, for transfers, bills, store purchases and the read-only balance question. It is an entry for the ZainCash Agentic AI Challenge Iraq, topic 04, and its design is in [docs/architecture.md](docs/architecture.md).
 
 Rules: the nine rules that are never broken are listed in [CLAUDE.md](CLAUDE.md).

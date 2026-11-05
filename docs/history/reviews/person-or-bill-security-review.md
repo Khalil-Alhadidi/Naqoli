@@ -1,6 +1,6 @@
 # Security review: person or bill (Khalil, 20 Oct 2026), range 8aca616..50bc5ed
 
-Written by the security reviewer agent (`dotnet-security-reviewer`, run on Opus) on 20 Oct 2026, saved verbatim by the controller. Sources: `CLAUDE.md`, the plan `docs/plans/person-or-bill.md`, and the current files under `src/` and `tests/` at 50bc5ed, read directly (no shell in this run, so no `git diff`). The working tree's uncommitted `PhoneStrings.resx` change and the untracked `dev-scripted-person-or-bill-*` reports were not reviewed. The reviewer did not open, search or hash the held-out file or any workbook (rule 7). No file was modified.
+Written by the security reviewer agent (`dotnet-security-reviewer`, run on Opus) on 20 Oct 2026, saved verbatim by the controller. Sources: `CLAUDE.md`, the plan `docs/history/plans/person-or-bill.md`, and the current files under `src/` and `tests/` at 50bc5ed, read directly (no shell in this run, so no `git diff`). The working tree's uncommitted `PhoneStrings.resx` change and the untracked `dev-scripted-person-or-bill-*` reports were not reviewed. The reviewer did not open, search or hash the held-out file or any workbook (rule 7). No file was modified.
 
 **Verdict: pass with changes.** Critical 0, Important 0, Minor 2, Recommendations 3.
 

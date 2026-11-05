@@ -8,7 +8,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace Agent.Core.Tests.Parsing;
 
 /// <summary>
-/// The first thing to run on a <c>compatible</c> candidate (docs/plans/model-providers.md, "Tests"), gated: runs only with
+/// The first thing to run on a <c>compatible</c> candidate (docs/history/plans/model-providers.md, "Tests"), gated: runs only with
 /// <c>ZAINCASH_MODEL_TESTS=1</c>, when the <c>Model:Candidate</c> of <c>src/Agent.Web/appsettings.json</c>, the web
 /// console's user secrets or the environment is a <c>compatible</c> candidate and its <c>&lt;Vendor&gt;:ApiKey</c> is set.
 /// Four clean development cases, one per intent, must parse as the scripted parser's oracle line in

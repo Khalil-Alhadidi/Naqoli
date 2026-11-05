@@ -1,6 +1,6 @@
 # Security review: the prompt version 7 round, range main..prompt-7 (b98dc3f..a8a5dc5)
 
-Reviewer: the `dotnet-security-reviewer` agent, 5 Nov 2026, on the branch diff of `src`, `tests`, `data` (dev set, parses, seed settings, seed hash, seed README) and `CLAUDE.md`, the design (`docs/plans/prompt-7-round.md`), the disclosure, `data/README.md`, `docs/failure-modes.md`, `docs/user-messages.md` and the milestone 10 review for format. The held-out file and the workbook were not opened; the grep for seed names under `data` excluded `requests.heldout.jsonl` by glob. No report under `docs/reports` was opened. No file was modified by the review.
+Reviewer: the `dotnet-security-reviewer` agent, 5 Nov 2026, on the branch diff of `src`, `tests`, `data` (dev set, parses, seed settings, seed hash, seed README) and `CLAUDE.md`, the design (`docs/history/plans/prompt-7-round.md`), the disclosure, `data/README.md`, `docs/failure-modes.md`, `docs/user-messages.md` and the milestone 10 review for format. The held-out file and the workbook were not opened; the grep for seed names under `data` excluded `requests.heldout.jsonl` by glob. No report under `docs/reports` was opened. No file was modified by the review.
 
 **Verdict: pass with changes.** Critical 0, Important 0, Minor 3, Notes 10.
 

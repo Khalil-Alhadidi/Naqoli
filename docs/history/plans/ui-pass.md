@@ -414,7 +414,7 @@ Done. One commit per task, in Khalil's name:
 | 8 General polish | e456c7c |
 | 9 Documentation sweep and the checked screenshots | the commit that adds this section |
 
-Each task's "Done when" lines and the test, journey or file that shows each are listed in [docs/agent-web.md](../agent-web.md) ("UI pass, 21 to 22 Oct 2026"). The checked screenshots are in [docs/reports/ui-pass-2026-10-22/](../reports/ui-pass-2026-10-22/).
+Each task's "Done when" lines and the test, journey or file that shows each are listed in [docs/agent-web.md](../../agent-web.md) ("UI pass, 21 to 22 Oct 2026"). The checked screenshots are in [docs/reports/ui-pass-2026-10-22/](../../reports/ui-pass-2026-10-22/).
 
 Left open:
 

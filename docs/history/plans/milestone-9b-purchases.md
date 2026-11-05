@@ -143,6 +143,6 @@ One journey per behaviour, on the oracle; every code, count and name read from t
 ## After the tasks (controller)
 
 - Sonnet rerun with the wallet running: `dotnet run --project src/Agent.Eval -- dev --parser claude:sonnet --repeat 3 --label m9b`; commit the reports; record the scores in the build plan's 9b status.
-- `dotnet-security-reviewer` agent over the milestone's diff; fixes through the implementer; the review saved as `docs/reviews/milestone-9b-security-review.md`.
+- `dotnet-security-reviewer` agent over the milestone's diff; fixes through the implementer; the review saved as `docs/history/reviews/milestone-9b-security-review.md`.
 - The list of `TODO-AR` keys for Khalil in the summary.
 - Push; tag `milestone-9b`.

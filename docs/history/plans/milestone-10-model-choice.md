@@ -130,7 +130,7 @@ The build plan's "only fixes to plain code bugs after the tag" names the surface
 
 ### Security review and close
 
-At the end, the `dotnet-security-reviewer` agent reads the diff of the branch. Its findings are fixed on the branch before the merge; the review and its disposition go to `docs/reviews/milestone-10-security-review.md` in the repository's existing format. Then the merge, the tag and the push.
+At the end, the `dotnet-security-reviewer` agent reads the diff of the branch. Its findings are fixed on the branch before the merge; the review and its disposition go to `docs/history/reviews/milestone-10-security-review.md` in the repository's existing format. Then the merge, the tag and the push.
 
 ## Calls made in this design (Claude's, for Khalil to overturn)
 

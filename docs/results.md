@@ -44,7 +44,7 @@ D13 ([architecture.md](architecture.md)), as amended on 3 Nov 2026: the fewest w
 
 ## The residual cases
 
-- **ADD-30, the typed quarter:** fails on both leaders in every freeze run (`cards[0]`, no card) and in every prompt 8 run of Sonnet and Flash with reasoning. Khalil left it for later; a model-independent fix (the fraction words in code) exists and is not built ([milestone 11 preparation](plans/milestone-11-prep.md), gap 7).
+- **ADD-30, the typed quarter:** fails on both leaders in every freeze run (`cards[0]`, no card) and in every prompt 8 run of Sonnet and Flash with reasoning. Khalil left it for later; a model-independent fix (the fraction words in code) exists and is not built ([milestone 11 preparation](history/plans/milestone-11-prep.md), gap 7).
 - **GAP-04, choosing the account to pay from:** on prompt 8 Haiku failed it in two runs and Flash with reasoning in one, with a plain card and no note. The reason guard (5 Nov 2026) now turns a request that carries `choose_account` into the noted card whatever intent the model gave ([agent-model.md](agent-model.md), "The reason guard"); it passes in every freeze run.
 - **ADD-04, part of a bill:** on prompt 8 Haiku failed it in every run and plain Flash in one: the learning row `part_of_bill` is missing when the model returns a plain bill with an amount. The code still refuses `bills_paid_in_full` and builds no card. Not the frozen model; not changed.
 

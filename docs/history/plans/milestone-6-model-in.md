@@ -8,7 +8,7 @@
 
 **Tech Stack:** `Microsoft.Extensions.AI` 10.x (`IChatClient`, `ChatOptions.ResponseFormat = ChatResponseFormat.ForJsonSchema`), `Anthropic` NuGet 12.55.x (`AnthropicClient`, `AsIChatClient()`), `System.Text.Json` schema export, user secrets `Anthropic:ApiKey`, EF Core migration for the learning log, xunit.v3. Check the current package versions on nuget.org when adding them and record them in `docs/disclosure.md`.
 
-**Spec:** `docs/build-plan.md` milestone 6 ("Done when"); `docs/architecture.md` sections 1 and 3, D1, D5, D7 (the model returns a list; this milestone parses one request and keeps the list shape for 9c), D13, D20, D21, D22; `CLAUDE.md` rules 2, 4, 5; `docs/matching-rules.md` (rules 9, 10, 19, 20 shape the slots; the Example column supplies prompt examples verbatim); `docs/reviews/milestone-3-security-review.md` I3 and "Forward-looking for milestone 6"; `docs/reviews/milestone-5-security-review.md` M1, M2, R3; the rulings in memory (`agent-decisions-14-oct` item 8: a wallet 5xx carrying a wallet `code` is "nothing taken"; a bare 5xx, timeout or dropped connection stays Checking); `docs/research/model-access.md`. Repository root: the clone folder.
+**Spec:** `docs/build-plan.md` milestone 6 ("Done when"); `docs/architecture.md` sections 1 and 3, D1, D5, D7 (the model returns a list; this milestone parses one request and keeps the list shape for 9c), D13, D20, D21, D22; `CLAUDE.md` rules 2, 4, 5; `docs/matching-rules.md` (rules 9, 10, 19, 20 shape the slots; the Example column supplies prompt examples verbatim); `docs/history/reviews/milestone-3-security-review.md` I3 and "Forward-looking for milestone 6"; `docs/history/reviews/milestone-5-security-review.md` M1, M2, R3; the rulings in memory (`agent-decisions-14-oct` item 8: a wallet 5xx carrying a wallet `code` is "nothing taken"; a bare 5xx, timeout or dropped connection stays Checking); `docs/history/research/model-access.md`. Repository root: the clone folder.
 
 ## Global Constraints
 
@@ -66,7 +66,7 @@
 
 ### Task 3: Baselines per candidate
 
-- Candidates (defaults, Khalil may rename): `haiku` = `claude-haiku-5-5`, `sonnet` = `claude-sonnet-5-5`, `opus` = `claude-opus-5-5`, with the prices from `docs/research/model-access.md` (Haiku 0.10/0.50, Sonnet 2/10, Opus 4/20 USD per MTok in/out). Estimated cost per dev run (about 120 parse calls × ~1,500 input + ~150 output tokens): Haiku ≈ 0.03 USD, Sonnet ≈ 0.55 USD, Opus ≈ 1.1 USD. The controller confirms the figures with Khalil before the runs.
+- Candidates (defaults, Khalil may rename): `haiku` = `claude-haiku-5-5`, `sonnet` = `claude-sonnet-5-5`, `opus` = `claude-opus-5-5`, with the prices from `docs/history/research/model-access.md` (Haiku 0.10/0.50, Sonnet 2/10, Opus 4/20 USD per MTok in/out). Estimated cost per dev run (about 120 parse calls × ~1,500 input + ~150 output tokens): Haiku ≈ 0.03 USD, Sonnet ≈ 0.55 USD, Opus ≈ 1.1 USD. The controller confirms the figures with Khalil before the runs.
 - [ ] **Step 1:** With the wallet running and the key in user secrets, run `dotnet run --project src/Agent.Eval -- dev --parser claude:haiku`, then `sonnet`, then `opus`; commit the six report files under `docs/reports/` (ids and codes only; no Arabic; check by script). The prompt version printed in each must be the same.
 - [ ] **Step 2:** Also run `--parser scripted` once more after Task 1 so the scripted baseline reflects the ruling (FLT-03).
 - [ ] **Step 3:** Commit `docs: baseline reports per candidate before any prompt tuning`.

@@ -295,7 +295,7 @@ flowchart TD
     end
 ```
 
-The label match compares `ArabicText.Key` of `BillLabelText` with that of each bill's label. Since 5 Nov 2026 (the prompt version 8 round, `docs/plans/prompt-8-round.md`) `BillResolver.LabelKey` first drops a first word that is a possessive word (the `possessive` list of `arabic-words.json`, read through `ArabicWords.Possessives`), so MAL-07's label read with the possessive word in front matches as the label alone does; a label that is only the possessive word keys to empty and asks. A tolerance in matching, not a matching rule. Tests: `BillResolverTests.ALabelAfterThePossessiveWordIsThatLabelsBill`, `ALabelThatIsOnlyThePossessiveWordAsks`.
+The label match compares `ArabicText.Key` of `BillLabelText` with that of each bill's label. Since 5 Nov 2026 (the prompt version 8 round, `docs/history/plans/prompt-8-round.md`) `BillResolver.LabelKey` first drops a first word that is a possessive word (the `possessive` list of `arabic-words.json`, read through `ArabicWords.Possessives`), so MAL-07's label read with the possessive word in front matches as the label alone does; a label that is only the possessive word keys to empty and asks. A tolerance in matching, not a matching rule. Tests: `BillResolverTests.ALabelAfterThePossessiveWordIsThatLabelsBill`, `ALabelThatIsOnlyThePossessiveWordAsks`.
 
 `ProductResolver.Resolve(request, catalogue, options)`, rules 11 and 12 as Khalil decided them (milestone 9b, 19 Oct 2026):
 
@@ -326,7 +326,7 @@ Part of a bill (ruling 2 of the milestone 8 plan, 16 Oct 2026; D9 and the matchi
 
 ### Person or bill (Khalil, 20 Oct 2026)
 
-When the name the user typed is both a person (a saved name or an alias of one of their contacts) and one of their bills (the label of a bill), the agent never chooses by the intent the model read: it asks one question, `person_or_bill` (option 1 (a), "always ask"). The plan is `docs/plans/person-or-bill.md`.
+When the name the user typed is both a person (a saved name or an alias of one of their contacts) and one of their bills (the label of a bill), the agent never chooses by the intent the model read: it asks one question, `person_or_bill` (option 1 (a), "always ask"). The plan is `docs/history/plans/person-or-bill.md`.
 
 - **The typed text** (`PersonOrBillRule.TypedText`): for a transfer, `RecipientText` unless it looks like a number; for a bill, `BillLabelText`, else `BillerText`. Any other intent, or no such text, skips the check.
 - **Same name, exact only.** The person side is the contact resolver's exact step alone (`ContactResolver.ExactMatches`: the `ArabicText.Key` of the typed text equals that of a saved name or alias, one candidate per account, and the same step again without the endearments when nothing matched; `Resolve` runs the same step through the same private helper). The bill side is every bill of the user whose label has the same key (`PersonOrBillRule.Bills`). A near spelling, a partial and a shared word are not the same name. `PersonOrBillRule.Find` returns both lists, or null when either is empty. Pure.
@@ -1116,5 +1116,5 @@ Still open:
 | A reissued `choose_account` card (GAP-04) does not carry the `account_choice_unavailable` note | Deferred, minor |
 | `Attempts` counts Confirm taps that began an execute, not settle resends | Display only |
 | A biller alias (one word for one biller account) is not built; aliases point to accounts only | A later item of the build plan, after milestone 9a |
-| GAP-06, credit for the user's own number, was a known gap (refused with the reason `credit_to_own_number`, no card) | Closed 4 Nov 2026 (Khalil): it is a plain purchase that shows its code; the reason was removed with prompt version 7 (`docs/plans/prompt-7-round.md`) |
+| GAP-06, credit for the user's own number, was a known gap (refused with the reason `credit_to_own_number`, no card) | Closed 4 Nov 2026 (Khalil): it is a plain purchase that shows its code; the reason was removed with prompt version 7 (`docs/history/plans/prompt-7-round.md`) |
 | A Done purchase is assumed to carry its code: the mock wallet returns one for every purchase; a Done without one shows the outcome with no code message and keeps no last four | The wallet contract (`docs/wallet-api.md`, execute step 6) creates an order with a new code for every purchase; nothing to build |

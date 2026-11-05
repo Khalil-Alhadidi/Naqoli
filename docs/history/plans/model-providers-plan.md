@@ -8,7 +8,7 @@
 
 **Tech Stack:** .NET 10, Microsoft.Extensions.AI 10.11.0, Anthropic 12.56.0 (unchanged), new `OpenAI` SDK and `Microsoft.Extensions.AI.OpenAI` (latest stable whose Abstractions dependency matches 10.11.0; check with `dotnet package search Microsoft.Extensions.AI.OpenAI --exact-match`), xUnit v3.
 
-**Spec:** `docs/plans/model-providers.md`
+**Spec:** `docs/history/plans/model-providers.md`
 
 ## Global Constraints
 
@@ -72,7 +72,7 @@ public void AVendorKeySettingIsVendorColonApiKey(string setting, bool expected)
 
 ```bash
 git add src/Agent.Core/Parsing/ModelOptions.cs tests/Agent.Core.Tests/Parsing/ModelOptionsTests.cs
-git commit -m "feat(core): the compatible provider on ModelCandidate: BaseUrl, ApiKeySetting (<Vendor>:ApiKey), OutputMode, MinMillisecondsBetweenCalls, and the per-provider validation (docs/plans/model-providers.md); ModelOptionsTests N passed"
+git commit -m "feat(core): the compatible provider on ModelCandidate: BaseUrl, ApiKeySetting (<Vendor>:ApiKey), OutputMode, MinMillisecondsBetweenCalls, and the per-provider validation (docs/history/plans/model-providers.md); ModelOptionsTests N passed"
 ```
 
 ---

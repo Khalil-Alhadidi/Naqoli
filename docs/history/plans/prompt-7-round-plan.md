@@ -8,7 +8,7 @@
 
 **Tech Stack:** .NET 10, xUnit v3, the eval runner, OpenRouter through the `compatible` provider.
 
-**Spec:** `docs/plans/prompt-7-round.md` (approved 4 Nov 2026). The plan argues from it; a conflict resolves against the spec.
+**Spec:** `docs/history/plans/prompt-7-round.md` (approved 4 Nov 2026). The plan argues from it; a conflict resolves against the spec.
 
 ## Global Constraints
 
@@ -117,5 +117,5 @@
 
 1. Review every diff against the spec; rulings in the ledger.
 2. Tell Khalil the branch is ready for his hand smoke test, with the four sentences to type and the user-secrets switch for Flash.
-3. After his test: the `dotnet-security-reviewer` agent on `main..prompt-7`, one fix wave, the review in `docs/reviews/prompt-7-security-review.md`.
+3. After his test: the `dotnet-security-reviewer` agent on `main..prompt-7`, one fix wave, the review in `docs/history/reviews/prompt-7-security-review.md`.
 4. Merge `--no-ff` to main, push main and the branch. No tag.

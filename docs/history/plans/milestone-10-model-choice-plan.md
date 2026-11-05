@@ -8,7 +8,7 @@
 
 **Tech Stack:** .NET 10, Blazor Server, MudBlazor 9, EF Core on SQL Server, `System.Text.Json`, xUnit (`Agent.Core.Tests`, collection `agent` with the `AgentHost` fixture), Playwright for .NET (`Agent.Web.Journeys`, scripted parser).
 
-**Spec:** `docs/plans/milestone-10-model-choice.md` (approved by Khalil, 3 Nov 2026).
+**Spec:** `docs/history/plans/milestone-10-model-choice.md` (approved by Khalil, 3 Nov 2026).
 
 ## Global Constraints
 
@@ -346,6 +346,6 @@ git commit -m "docs: milestone 10 close-out: known gaps 20 closed, 37 rule state
 ### After the tasks (the controller)
 
 1. Full suite from a clean build: `dotnet build` then `dotnet test`; record the counts.
-2. Run `dotnet-security-reviewer` on `git diff main...milestone-10`; write `docs/reviews/milestone-10-security-review.md` in the existing format; fix what it finds on the branch; one commit per fix wave with the disposition in the review file.
+2. Run `dotnet-security-reviewer` on `git diff main...milestone-10`; write `docs/history/reviews/milestone-10-security-review.md` in the existing format; fix what it finds on the branch; one commit per fix wave with the disposition in the review file.
 3. `git checkout main && git merge --no-ff milestone-10`, tag `milestone-10` on the merge commit with a message naming the model, prompt 6 and seed v4, push `main` and the tag.
 4. Report to Khalil: which "Done when" lines are true and what shows each; anything unsure.

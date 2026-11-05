@@ -190,5 +190,5 @@
 ## After the tasks (controller)
 
 - The sonnet rerun: `dotnet run --project src/Agent.Eval -- dev --parser claude:sonnet --repeat 3 --label m7` with the wallet running; commit the reports; note the medians in `docs/build-plan.md` milestone 7 status.
-- The `dotnet-security-reviewer` agent over the milestone's diff; fixes through the implementer; the review saved as `docs/reviews/milestone-7-security-review.md`.
+- The `dotnet-security-reviewer` agent over the milestone's diff; fixes through the implementer; the review saved as `docs/history/reviews/milestone-7-security-review.md`.
 - Push; tag `milestone-7`.

@@ -1,6 +1,6 @@
 # Model comparison, 4 Nov 2026: prompt version 7 (Khalil's rulings), with Haiku, Sonnet, Flash and Flash with reasoning
 
-Khalil ruled on five cases the same evening as the Flash round ([model-comparison-2026-11-04-flash-round.md](model-comparison-2026-11-04-flash-round.md)). Those cases failed on every model, and the cause was the answer keys or the prompt, not the models. The round is designed in `docs/plans/prompt-7-round.md`, and every change is listed in [disclosure.md](../disclosure.md) under "Fixes after the freeze". What changed:
+Khalil ruled on five cases the same evening as the Flash round ([model-comparison-2026-11-04-flash-round.md](model-comparison-2026-11-04-flash-round.md)). Those cases failed on every model, and the cause was the answer keys or the prompt, not the models. The round is designed in `docs/history/plans/prompt-7-round.md`, and every change is listed in [disclosure.md](../disclosure.md) under "Fixes after the freeze". What changed:
 
 1. **Prompt version 7.** A message written entirely in English or in Latin letters is `other_language`. A Latin word inside an Arabic sentence keeps the message Arabic. The script is judged by the words only: digits in either form, number tokens and punctuation are neutral.
    - New refusal reason: `undo_payment`, with Khalil's wording.
