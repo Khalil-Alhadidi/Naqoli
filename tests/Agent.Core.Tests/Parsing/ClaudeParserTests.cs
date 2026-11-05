@@ -96,7 +96,8 @@ public class ClaudeParserTests
     }
 
     /// <summary>One request in the model's full structure, every field null except those given (a JSON object's members).</summary>
-    private static string Reply(string intent, string? recipient = null, decimal? amount = null, string unit = "none")
+    private static string Reply(
+        string intent, string? recipient = null, decimal? amount = null, string unit = "none", string? reason = null)
         => JsonSerializer.Serialize(new
         {
             requests = new[]
@@ -105,7 +106,7 @@ public class ClaudeParserTests
                 {
                     ["intent"] = intent, ["recipient_text"] = recipient, ["amount_value"] = amount, ["amount_unit"] = unit,
                     ["biller_code"] = null, ["biller_text"] = null, ["bill_label_text"] = null, ["operator_text"] = null,
-                    ["product_type"] = null, ["product_value"] = null, ["unsupported_reason"] = null, ["currency_text"] = null,
+                    ["product_type"] = null, ["product_value"] = null, ["unsupported_reason"] = reason, ["currency_text"] = null,
                 },
             },
         });
@@ -142,6 +143,26 @@ public class ClaudeParserTests
         Assert.Contains((TraceZone.Code, ParseGuards.DinarUnitStep, (string?)"1"), trace.Entries);
         Assert.DoesNotContain(trace.Entries, e => e.Step == ParseGuards.OtherBalanceStep);
         Assert.All(trace.Entries, e => Assert.DoesNotContain("500", e.Detail ?? string.Empty, StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task ATransferThatCarriesAReasonIsMadeUnsupportedByTheReasonGuard()
+    {
+        // The milestone 11 preparation (GAP-04 on Haiku, prompt 8): a transfer with choose_account built a plain card.
+        // The model parser applies the reason guard after the other two and leaves a trace step with the count only.
+        var name = global::Agent.Core.Tests.Wallet.SeedFacts.Contact("S01").SavedName;
+        var (parser, client, trace) = Start();
+        client.Reply = (_, _, _) => Task.FromResult(FakeChatClient.Json(
+            Reply("transfer", recipient: name, amount: 50, unit: "thousand", reason: "choose_account")));
+
+        var parsed = (await parser.ParseAsync("x", new ParseContext(null, MaskMap.Empty), Token)).First;
+
+        Assert.Equal(
+            (RequestIntent.Unsupported, "choose_account", name, 50m, AmountUnit.Thousand),
+            (parsed.Intent, parsed.UnsupportedReason, parsed.RecipientText, parsed.AmountValue, parsed.AmountUnit));
+        Assert.Contains((TraceZone.Code, ParseGuards.ReasonIntentStep, (string?)"1"), trace.Entries);
+        Assert.DoesNotContain(trace.Entries, e => e.Step == ParseGuards.OtherBalanceStep || e.Step == ParseGuards.DinarUnitStep);
+        Assert.All(trace.Entries, e => Assert.DoesNotContain(name, e.Detail ?? string.Empty, StringComparison.Ordinal));
     }
 
     [Fact]

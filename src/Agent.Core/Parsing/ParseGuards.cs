@@ -8,14 +8,16 @@ namespace Agent.Core.Parsing;
 /// What <see cref="ParseGuards.Apply"/> did: the guarded requests, and how many requests each guard rewrote (0 when it
 /// changed nothing).
 /// </summary>
-/// <param name="Requests">The requests with both guards applied; the same list as given when no request changed.</param>
+/// <param name="Requests">The requests with every guard applied; the same list as given when no request changed.</param>
 /// <param name="DinarUnit">The number of requests <see cref="DinarUnitGuard"/> rewrote.</param>
 /// <param name="OtherBalance">The number of requests <see cref="OtherBalanceGuard"/> rewrote.</param>
-public sealed record ParseGuardResult(IReadOnlyList<ParsedRequest> Requests, int DinarUnit, int OtherBalance);
+/// <param name="ReasonIntent">The number of requests <see cref="ReasonIntentGuard"/> rewrote.</param>
+public sealed record ParseGuardResult(IReadOnlyList<ParsedRequest> Requests, int DinarUnit, int OtherBalance, int ReasonIntent);
 
 /// <summary>
 /// The code guards both parsers apply to the validated requests of one message, in order: the dinar-unit guard
-/// (<see cref="DinarUnitGuard"/>), then the other-balance guard (<see cref="OtherBalanceGuard"/>). Each only ever makes a
+/// (<see cref="DinarUnitGuard"/>), the other-balance guard (<see cref="OtherBalanceGuard"/>), then the reason guard
+/// (<see cref="ReasonIntentGuard"/>). Each only ever makes a
 /// request smaller or a refusal, never a card the parse did not ask for. <see cref="Apply"/> is pure; the parsers write
 /// what fired to the trace with <see cref="Record"/> (security review M2 of the prompt version 7 round).
 /// </summary>
@@ -27,7 +29,10 @@ public static class ParseGuards
     /// <summary>The trace step (<see cref="TraceZone.Code"/>) when the other-balance guard rewrote a request; the detail is the count.</summary>
     public const string OtherBalanceStep = "guard:other_balance";
 
-    /// <summary>Both guards applied, with the number of requests each rewrote.</summary>
+    /// <summary>The trace step (<see cref="TraceZone.Code"/>) when the reason guard rewrote a request; the detail is the count.</summary>
+    public const string ReasonIntentStep = "guard:reason_intent";
+
+    /// <summary>Every guard applied, with the number of requests each rewrote.</summary>
     /// <param name="requests">The validated requests of one message.</param>
     /// <param name="maskedText">The message as the parser was given it (numbers masked; the words are the user's own).</param>
     /// <param name="dinarWords"><see cref="AgentOptions.DinarWords"/>; empty turns the dinar-unit guard off.</param>
@@ -37,8 +42,10 @@ public static class ParseGuards
         ArgumentNullException.ThrowIfNull(requests);
 
         var dinars = DinarUnitGuard.Apply(requests, maskedText, dinarWords);
-        var guarded = OtherBalanceGuard.Apply(dinars);
-        return new ParseGuardResult(guarded, Rewritten(requests, dinars), Rewritten(dinars, guarded));
+        var balances = OtherBalanceGuard.Apply(dinars);
+        var guarded = ReasonIntentGuard.Apply(balances);
+        return new ParseGuardResult(
+            guarded, Rewritten(requests, dinars), Rewritten(dinars, balances), Rewritten(balances, guarded));
     }
 
     /// <summary>
@@ -54,6 +61,8 @@ public static class ParseGuards
             trace.Record(TraceZone.Code, DinarUnitStep, result.DinarUnit.ToString(CultureInfo.InvariantCulture));
         if (result.OtherBalance > 0)
             trace.Record(TraceZone.Code, OtherBalanceStep, result.OtherBalance.ToString(CultureInfo.InvariantCulture));
+        if (result.ReasonIntent > 0)
+            trace.Record(TraceZone.Code, ReasonIntentStep, result.ReasonIntent.ToString(CultureInfo.InvariantCulture));
     }
 
     /// <summary>The number of positions where a guard returned a new request (each guard keeps an unchanged request as it is).</summary>

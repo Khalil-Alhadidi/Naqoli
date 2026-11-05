@@ -249,6 +249,21 @@ public sealed class ScriptedParserTests : IDisposable
         Assert.Equal([(global::Agent.Core.Trace.TraceZone.Code, ParseGuards.OtherBalanceStep, (string?)"1")], trace.Entries);
     }
 
+    [Fact]
+    public async Task TheReasonGuardIsTracedToTheCallersSink()
+    {
+        // The milestone 11 preparation: the scripted parser applies the reason guard as the model parser does.
+        var name = SeedFacts.Contact("S01").SavedName;
+        var parser = new ScriptedParser([new ScriptedSentence(
+            "x", ParsedRequest.Transfer(name, 50, AmountUnit.Thousand) with { UnsupportedReason = "choose_account" })]);
+        var trace = new ClaudeParserTests.RecordingTrace();
+
+        var parsed = (await parser.ParseAsync("x", new ParseContext(null, Trace: trace), Token)).First;
+
+        Assert.Equal((RequestIntent.Unsupported, "choose_account"), (parsed.Intent, parsed.UnsupportedReason));
+        Assert.Equal([(global::Agent.Core.Trace.TraceZone.Code, ParseGuards.ReasonIntentStep, (string?)"1")], trace.Entries);
+    }
+
     [Theory]
     [InlineData("yes")]
     [InlineData("send fifty thousand to my brother")]
