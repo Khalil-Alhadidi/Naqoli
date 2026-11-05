@@ -136,7 +136,7 @@ Its examples are the full-request sentences of the Example column of [matching-r
 | Setting | Meaning |
 |---|---|
 | `Agent:Parser` | `scripted` (the default: no model, no key) or `model` (the selected candidate, whatever its provider); `claude` is kept as a synonym of `model` |
-| `Model:Candidate` | `sonnet` (the default, milestone 10), `haiku` or `opus` (provider `anthropic`), or `gemini`, `gemma`, `openrouter`, `deepseek`, `deepseek-pro` or `qwen` (provider `compatible`, below) |
+| `Model:Candidate` | `deepseek-reasoning` (the default from the freeze of 5 Nov 2026; `sonnet` was the default from milestone 10), `sonnet`, `haiku` or `opus` (provider `anthropic`), or `gemini`, `gemma`, `openrouter`, `deepseek`, `deepseek-pro`, `qwen` or `deepseek-reasoning` (provider `compatible`, below) |
 | `Model:Candidates:<name>:Provider` | `anthropic` (the default) or `compatible` |
 | `Model:Candidates:<name>:ModelId` | `claude-haiku-5-5`, `claude-sonnet-5-5`, `claude-opus-5-5` |
 | `...:Effort` | `low` (default); `low`, `medium`, `high`, `xhigh` or `max`. Sent as `output_config.effort`. `anthropic` only: not checked and not sent for `compatible` |
@@ -191,7 +191,7 @@ The two shipped entries, in both `appsettings.json` files, were shipped with the
 | `deepseek` | `https://openrouter.ai/api/v1` | `OpenRouter:ApiKey` | 0 ms | DeepSeek V4.1 Flash (`deepseek/deepseek-v4.1-flash`, open weights under MIT) on OpenRouter's paid endpoint, added 4 Nov 2026; prices 0.045 / 0.5 USD per million input / output tokens, cache reads 0.018 (OpenRouter's list on 4 Nov 2026) |
 | `deepseek-pro` | `https://openrouter.ai/api/v1` | `OpenRouter:ApiKey` | 0 ms | DeepSeek V4 Pro (`deepseek/deepseek-v4-pro`, open weights under MIT) on the same endpoint and key, added 4 Nov 2026; prices 1.6 / 3.2 USD per million input / output tokens, cache reads 0.135 |
 | `qwen` | `https://openrouter.ai/api/v1` | `OpenRouter:ApiKey` | 0 ms | Qwen3.8 27B (`qwen/qwen3.8-27b`, a dense 27B model from Alibaba's Qwen team, open weights under Apache 2.0 as reported for its August 2026 release) on the same endpoint and key, added 4 Nov 2026; prices 0.15 / 1.875 USD per million input / output tokens, cache reads 0.0375 |
-| `deepseek-reasoning` | `https://openrouter.ai/api/v1` | `OpenRouter:ApiKey` | 0 ms | The `deepseek` entry (DeepSeek V4.1 Flash, temperature 0, same prices) with reasoning on: `RequestFields` `{"reasoning":{"effort":"low"},"provider":{"data_collection":"deny"}}`, `TimeoutSeconds` 90 and `MaxOutputTokens` 4,000 (reasoning tokens count against the output budget on OpenRouter). Added 4 Nov 2026 for the stability experiment of the prompt version 7 round (`docs/plans/prompt-7-round.md`), so the fixed Flash configuration stays as measured; the gated smoke test (`LiveCompatibleTests`) passed 4 of 4 that day. Not a model choice |
+| `deepseek-reasoning` | `https://openrouter.ai/api/v1` | `OpenRouter:ApiKey` | 0 ms | The `deepseek` entry (DeepSeek V4.1 Flash, temperature 0, same prices) with reasoning on: `RequestFields` `{"reasoning":{"effort":"low"},"provider":{"data_collection":"deny"}}`, `TimeoutSeconds` 90 and `MaxOutputTokens` 4,000 (reasoning tokens count against the output budget on OpenRouter). Added 4 Nov 2026 for the stability experiment of the prompt version 7 round (`docs/plans/prompt-7-round.md`), so the fixed Flash configuration stays as measured; the gated smoke test (`LiveCompatibleTests`) passed 4 of 4 that day. From 5 Nov 2026 the default candidate (The choice, below), with the provider pinned: `RequestFields` `{"reasoning":{"effort":"low"},"provider":{"data_collection":"deny","quantizations":["fp8"],"order":["deepinfra/fp8","morph/fp8"],"allow_fallbacks":true}}` (8-bit endpoints only, no data collection, DeepInfra's fp8 endpoint first and Morph's second, fallback only within those limits) and DeepInfra's published fp8 prices, 0.14 / 0.42 USD per million input / output tokens, cache reads 0.0042 (OpenRouter's endpoint list on 5 Nov 2026) |
 
 `gemini` and `gemma` have `TimeoutSeconds` 30 and `MaxOutputTokens` 1,500; `openrouter` has `TimeoutSeconds` 60, `MaxOutputTokens` 4,000 and `RequestFields` `{"reasoning":{"effort":"low"}}` (29 Oct 2026, for the Flint model's reasoning). Both have prices 0, to be set from the vendor's price list. The pacing values are a first guess at the free tiers' per-minute limits, for Khalil to tune.
 
@@ -223,7 +223,21 @@ Khalil chose Sonnet (`claude-sonnet-5-5`) on 3 Nov 2026 under D13 as amended tha
 | Every target met | Yes | No: "asks when it must" 90 % against 95 % | No: four missed |
 | Cost per completed request, median | 0.0018 USD | 0.00012 USD | 0 (free tier) |
 
-Haiku and Sonnet tie on wrong cards (none); Sonnet meets every target and Haiku does not, so the tie goes to Sonnet before cost is reached. `Model:Candidate` is `sonnet` in both `appsettings.json` files (`src/Agent.Web`, `src/Agent.Eval`), pinned by `EvalSettingsTests.TheDefaultCandidateIsSonnetInBothProjects`. Haiku stays one setting away: `Model:Candidate` = `haiku` (`dotnet user-secrets set "Model:Candidate" "haiku" --project src/Agent.Web`, or `--parser claude:haiku` for the runner). The committed parser is still `scripted`; the model is switched on with `Agent:Parser` (The key, below).
+Haiku and Sonnet tie on wrong cards (none); Sonnet meets every target and Haiku does not, so the tie goes to Sonnet before cost is reached. `Model:Candidate` is `sonnet` in both `appsettings.json` files (`src/Agent.Web`, `src/Agent.Eval`), pinned then by `EvalSettingsTests.TheDefaultCandidateIsSonnetInBothProjects` (from 5 Nov 2026 `TheDefaultCandidateIsDeepseekReasoningInBothProjects`, below). Haiku stays one setting away: `Model:Candidate` = `haiku` (`dotnet user-secrets set "Model:Candidate" "haiku" --project src/Agent.Web`, or `--parser claude:haiku` for the runner). The committed parser is still `scripted`; the model is switched on with `Agent:Parser` (The key, below).
+
+### Amended, 5 Nov 2026: DeepSeek V4.1 Flash with reasoning
+
+Khalil reopened the choice before the held-out run (he had not submitted, his rulings of 4 Nov 2026 had changed the prompt, and the head of AI at Zain advised open-weight models) and chose DeepSeek V4.1 Flash with reasoning at low effort, candidate `deepseek-reasoning`, on 5 Nov 2026. The evidence is `docs/reports/model-comparison-2026-11-05-prompt-8.md` (prompt version 8, the 102-case development set, three runs each):
+
+| | Flash with reasoning | Sonnet | Flash | Haiku |
+|---|---|---|---|---|
+| Passed of 102, median of three runs | 101 | 101 | 98 | 97 |
+| Wrong cards, three runs | 0 | 0 | 0 | 0 |
+| Every target met (median) | Yes | Yes | Yes | Yes |
+| Flipped cases | 1 | 0 | 10 | 5 |
+| Cost per completed request, median | 0.00020 USD | 0.0019 USD | 0.000098 USD | 0.00012 USD |
+
+D13 as worded selects plain Flash on price, since all four tie on wrong cards and meet every target at the median. Khalil's reason for the reasoning variant: one flipped case against ten, and no card on a should-not-go-through case in any run (plain Flash built one on NOGO-05 in one run), with the same result as Sonnet on the development set at a fraction of the cost, and open weights that Zain can host itself. The provider is pinned (the `deepseek-reasoning` row above), so the dev runs and the held-out run are served at the same precision; the prices above were measured at the earlier unpinned routing, and the freeze runs (`docs/disclosure.md`, "Freeze before the held-out run") are priced at DeepInfra's. `Model:Candidate` is `deepseek-reasoning` in both `appsettings.json` files, pinned by `EvalSettingsTests.TheDefaultCandidateIsDeepseekReasoningInBothProjects`; Sonnet stays one setting away (`Model:Candidate` = `sonnet`, with `Anthropic:ApiKey`, or `--parser claude:sonnet` for the runner).
 
 ## Cost accounting
 
