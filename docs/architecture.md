@@ -266,7 +266,7 @@ These are limits we chose, not bugs. Each one fails safely today, is counted in 
 | Several accounts and choosing where the money comes from | Uses the one default account | A "From" line on the card that the user taps to change; the data model already allows several accounts |
 | Moving money between the user's own accounts | Not offered | Reuses the transfer flow with the user's own account as recipient |
 | Paying part of a bill | No card. The reply says bills are paid in full and gives the full amount | An amount field on bill cards where the biller allows it |
-| Credit delivered straight to the user's own number | Refused with no card; the reason `credit_to_own_number` is logged (GAP-06, milestone 10) | A delivery line on the card; code checks that the operator matches the number |
+| Credit delivered straight to the user's own number | Refused with no card; the reason `credit_to_own_number` is logged (GAP-06, milestone 10). Amended 4 Nov 2026 (Khalil): treated as a plain purchase, the code shown as for any purchase, since the credit cannot be loaded onto the number directly; known gap 12 closed. | A delivery line on the card; code checks that the operator matches the number |
 | Other goods and services in the store | "Not available", logged | More catalogue rows; the mechanism is the same |
 | Scanning a QR code | Not offered. The user types the phone number, or uses a saved alias | Left to the wallet app's own QR feature. If wanted later, a scan feeds the same path as a typed phone number |
 | Sending to an account number | Not offered. No card; the reply asks for a phone number or a saved name | Resolve the account number in code to its registered name, then the same path as a typed phone number |

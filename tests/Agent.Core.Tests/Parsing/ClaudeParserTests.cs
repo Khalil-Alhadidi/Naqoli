@@ -95,6 +95,66 @@ public class ClaudeParserTests
         Assert.Equal(ParsedRequest.Transfer("Ali", 50m, AmountUnit.Thousand), parsed);
     }
 
+    /// <summary>One request in the model's full structure, every field null except those given (a JSON object's members).</summary>
+    private static string Reply(string intent, string? recipient = null, decimal? amount = null, string unit = "none")
+        => JsonSerializer.Serialize(new
+        {
+            requests = new[]
+            {
+                new Dictionary<string, object?>
+                {
+                    ["intent"] = intent, ["recipient_text"] = recipient, ["amount_value"] = amount, ["amount_unit"] = unit,
+                    ["biller_code"] = null, ["biller_text"] = null, ["bill_label_text"] = null, ["operator_text"] = null,
+                    ["product_type"] = null, ["product_value"] = null, ["unsupported_reason"] = null, ["currency_text"] = null,
+                },
+            },
+        });
+
+    [Fact]
+    public async Task ABalanceQuestionThatNamesAPersonIsRefusedByTheOtherBalanceGuard()
+    {
+        // Review M1 and M2 of the prompt version 7 round: the model parser applies the other-balance guard after the
+        // validator, whatever the model read, and leaves a trace step with the count only.
+        var name = global::Agent.Core.Tests.Wallet.SeedFacts.Contact("S01").SavedName;
+        var (parser, client, trace) = Start();
+        client.Reply = (_, _, _) => Task.FromResult(FakeChatClient.Json(Reply("balance", recipient: name)));
+
+        var parsed = (await parser.ParseAsync("x", new ParseContext(null, MaskMap.Empty), Token)).First;
+
+        Assert.Equal((RequestIntent.Unsupported, "other_balance", name), (parsed.Intent, parsed.UnsupportedReason, parsed.RecipientText));
+        Assert.Contains((TraceZone.Code, ParseGuards.OtherBalanceStep, (string?)"1"), trace.Entries);
+        Assert.DoesNotContain(trace.Entries, e => e.Step == ParseGuards.DinarUnitStep);
+        Assert.All(trace.Entries, e => Assert.DoesNotContain(name, e.Detail ?? string.Empty, StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task ABareAmountWithADinarWordIsReadInDinarsByTheDinarUnitGuard()
+    {
+        // Review M1 and M2: the model parser applies the dinar-unit guard (ADD-13's reading: a bare 500 with the word
+        // dinars) and leaves a trace step with the count only, never the amount.
+        var word = DevSetText.ConfiguredDinarWords()[0];
+        var (parser, client, trace) = Start();
+        client.Reply = (_, _, _) => Task.FromResult(FakeChatClient.Json(Reply("transfer", recipient: "Ali", amount: 500)));
+
+        var parsed = (await parser.ParseAsync("send 500 " + word + " to Ali", new ParseContext(null, MaskMap.Empty, [word]), Token)).First;
+
+        Assert.Equal((500m, AmountUnit.Dinars), (parsed.AmountValue, parsed.AmountUnit));
+        Assert.Contains((TraceZone.Code, ParseGuards.DinarUnitStep, (string?)"1"), trace.Entries);
+        Assert.DoesNotContain(trace.Entries, e => e.Step == ParseGuards.OtherBalanceStep);
+        Assert.All(trace.Entries, e => Assert.DoesNotContain("500", e.Detail ?? string.Empty, StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task AReplyNoGuardChangesLeavesNoGuardStep()
+    {
+        var (parser, client, trace) = Start();
+        client.Reply = (_, _, _) => Task.FromResult(FakeChatClient.Json(Transfer));
+
+        await parser.ParseAsync("send fifty to Ali", new ParseContext(null, MaskMap.Empty, DevSetText.ConfiguredDinarWords()), Token);
+
+        Assert.DoesNotContain(trace.Entries, e => e.Step.StartsWith("guard:", StringComparison.Ordinal));
+    }
+
     [Fact]
     public async Task ItSendsTheFrozenPromptAndTheMaskedTextWithThePendingNote()
     {
@@ -187,8 +247,9 @@ public class ClaudeParserTests
         Assert.Equal(["electricity", "water", "internet", "school_fees", null], Enum("biller_code"));
         Assert.Equal(["credit", "internet", null], Enum("product_type"));
         Assert.Equal([.. ParsedRequestValidator.UnsupportedReasons, null], Enum("unsupported_reason"));
-        // Schema version 3 (16 Oct 2026): receive_from, the last reason.
-        Assert.Equal("receive_from", Enum("unsupported_reason")[^2]);
+        // Schema version 3 (16 Oct 2026): receive_from, then the last reason; schema version 4 (4 Nov 2026): undo_payment last.
+        Assert.Equal("receive_from", Enum("unsupported_reason")[^3]);
+        Assert.Equal("undo_payment", Enum("unsupported_reason")[^2]);
 
         // Schema version 2 (16 Oct 2026): the user's words for the biller, a free nullable string with no set.
         var billerText = properties.GetProperty("biller_text");
@@ -453,8 +514,8 @@ public class ClaudeParserTests
         var (parser, _, _) = Start();
 
         Assert.Equal("claude:haiku", parser.Name);
-        Assert.Equal("6", ClaudeParser.PromptVersion);
-        Assert.StartsWith("version: 6", ClaudeParser.Prompt, StringComparison.Ordinal);
+        Assert.Equal("8", ClaudeParser.PromptVersion);
+        Assert.StartsWith("version: 8", ClaudeParser.Prompt, StringComparison.Ordinal);
     }
 
     [Fact]

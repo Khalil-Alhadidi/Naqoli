@@ -30,7 +30,9 @@ public static class ParsedRequestValidator
 
     /// <summary>
     /// The eleven documented unsupported reasons (<c>docs/agent-core.md</c>, <c>ParsedRequest</c>); the model's schema
-    /// takes its enum from this list. Schema version 3 (16 Oct 2026) adds <c>receive_from</c>, last.
+    /// takes its enum from this list. Schema version 3 (16 Oct 2026) adds <c>receive_from</c>, last. Schema version 4 (4 Nov
+    /// 2026, prompt version 7) adds <c>undo_payment</c>, last, and removes <c>credit_to_own_number</c> (credit for the user's
+    /// own number is a plain purchase), so the reasons are eleven as before.
     /// </summary>
     public static IReadOnlyList<string> UnsupportedReasons { get; } =
     [
@@ -41,10 +43,10 @@ public static class ParsedRequestValidator
         "same_as_last_time",
         "choose_account",
         "part_of_bill",
-        "credit_to_own_number",
         "change_waiting_card",
         "other_language",
         "receive_from",
+        "undo_payment",
     ];
 
     private static readonly Dictionary<string, RequestIntent> Intents = new(StringComparer.Ordinal)

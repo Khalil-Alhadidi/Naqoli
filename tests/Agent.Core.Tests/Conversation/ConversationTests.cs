@@ -5,6 +5,7 @@ using Agent.Core.Confirm;
 using Agent.Core.Audit;
 using Agent.Core.Conversation;
 using Agent.Core.Data;
+using Agent.Core.Learning;
 using Agent.Core.Parsing;
 using Agent.Core.Pending;
 using Agent.Core.Pipeline;
@@ -1563,17 +1564,26 @@ public sealed class ConversationTests(AgentHost host) : IAsyncDisposable
     }
 
     [Fact]
-    public async Task ALatinOperatorSpellingGoesStraightToTheCard()
+    public async Task ALatinScriptMessageIsRefusedAsOtherLanguage()
     {
-        // MAL-09 on the oracle: "asia", configured under the provider code, names Asiacell (U2).
+        // MAL-09 on the oracle, re-keyed 4 Nov 2026 (Khalil): a message written entirely in Latin letters is another
+        // language, even with "asia" configured under the provider code (U2). No card, the other_language reply, its row.
+        // The Latin spelling inside an Arabic sentence stays proven at the resolver level
+        // (ProductResolverTests.AConfiguredLatinSpellingNamesTheOperator).
         var session = await StartAsync(SeedFacts.TightUserId, Oracle(), o => o.ProviderSpellings["asiacell"] = ["asia"]);
         var conversation = session.Conversation;
 
         await conversation.SendAsync(DevSetText.Say("MAL-09", 0));
 
         Assert.Null(conversation.Question);
-        var card = Assert.IsType<CardView>(conversation.Card);
-        Assert.Equal("AC-CR-5", card.ProductCode);
+        Assert.Null(conversation.Card);
+        var reply = LastAgentMessage(conversation);
+        Assert.Equal((ConversationKind.Unsupported, LearningLogRule.OtherLanguage), (reply.Kind, reply.Code));
+
+        await using var scope = session.Provider.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<AgentDbContext>();
+        var row = Assert.Single(await db.LearningEntries.AsNoTracking().ToListAsync(Token));
+        Assert.Equal((LearningLogRule.OtherLanguage, (string?)null), (row.Reason, row.Detail));
     }
 
     [Fact]

@@ -4,7 +4,7 @@ namespace Agent.Core.Text;
 
 /// <summary>
 /// Khalil's word lists from matching rule 1 (<c>arabic-words.json</c>, an embedded resource): kinship groups and title
-/// words. Read once; the lists are kept in normalised form so they compare with normalised input.
+/// words, and the possessive word a bill label may start with (prompt version 8 round, 5 Nov 2026). Read once; the lists are kept in normalised form so they compare with normalised input.
 /// </summary>
 internal static class ArabicWords
 {
@@ -21,12 +21,16 @@ internal static class ArabicWords
     /// <summary>The normalised title words.</summary>
     public static IReadOnlySet<string> Titles => Loaded.Value.Titles;
 
+    /// <summary>The normalised possessive words ("of", "belonging to") that join a bill to what it belongs to.</summary>
+    public static IReadOnlySet<string> Possessives => Loaded.Value.Possessives;
+
     private sealed record Lists(
         IReadOnlyDictionary<string, string> KinshipVariants,
         IReadOnlySet<string> KinshipCanonicals,
-        IReadOnlySet<string> Titles);
+        IReadOnlySet<string> Titles,
+        IReadOnlySet<string> Possessives);
 
-    private sealed record WordsFile(KinshipGroup[] Kinship, string[] Titles);
+    private sealed record WordsFile(KinshipGroup[] Kinship, string[] Titles, string[]? Possessive);
 
     private sealed record KinshipGroup(string Canonical, string[] Variants);
 
@@ -49,6 +53,7 @@ internal static class ArabicWords
         }
 
         var titles = file.Titles.Select(ArabicText.NormalizeLetters).ToHashSet(StringComparer.Ordinal);
-        return new Lists(variants, canonicals, titles);
+        var possessives = (file.Possessive ?? []).Select(ArabicText.NormalizeLetters).ToHashSet(StringComparer.Ordinal);
+        return new Lists(variants, canonicals, titles, possessives);
     }
 }

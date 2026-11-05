@@ -61,7 +61,8 @@ public class ProductResolverTests
     [Fact]
     public void AConfiguredLatinSpellingNamesTheOperator()
     {
-        // MAL-09.
+        // A Latin operator spelling inside an Arabic sentence (Khalil, 4 Nov 2026: "a Latin operator should be ok"). MAL-09
+        // itself, all in Latin letters, is refused as another language from that day; this is the path's proof.
         var options = new AgentOptions { ProviderSpellings = { ["asiacell"] = ["asia"] } };
         var card = Assert.IsType<ProductResolution.Card>(Resolve("asia", "credit", 5_000, options));
         Assert.Equal("AC-CR-5", card.Product.Code);

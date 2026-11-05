@@ -1,0 +1,299 @@
+{
+  "header": {
+    "set": "dev",
+    "set_file_sha256": "7df4552c9de0fb5c6513750d83bab9cdd9fbea983663360b1eac2a48d1c37d91",
+    "parser": "compatible-deepseek",
+    "runs": 3,
+    "started_utc": "2026-11-04T20:49:59.6633411Z",
+    "settings": {
+      "Agent:CardTimerSeconds": "45",
+      "Agent:CheckingRetrySeconds": "5",
+      "Agent:DemoUserId": "1",
+      "Agent:DevSetPath": "data/requests.dev.jsonl",
+      "Agent:DinarWords": "4 word(s)",
+      "Agent:Endearments": "8 word(s)",
+      "Agent:FillerWords": "8 word(s)",
+      "Agent:HistoryDays": "90",
+      "Agent:HistoryPageSize": "200",
+      "Agent:LogPageSize": "100",
+      "Agent:MaxAliasLength": "100",
+      "Agent:MaxMessageChars": "500",
+      "Agent:MaxNamedNotPrepared": "5",
+      "Agent:MaxProductsInOneQuestion": "8",
+      "Agent:MaxRequestsPerMessage": "3",
+      "Agent:MaxYesNoWords": "4",
+      "Agent:MinAmountIqd": "1000",
+      "Agent:MinSubstringWordLength": "3",
+      "Agent:NoWords": "19 word(s)",
+      "Agent:Parser": "model",
+      "Agent:PerDayCapIqd": "10000000",
+      "Agent:PerTransactionCapIqd": "5000000",
+      "Agent:ProviderSpellings": "asiacell 7 spelling(s), internet 3 spelling(s), korek 3 spelling(s), zain 3 spelling(s)",
+      "Agent:RepeatWarningWindowMinutes": "10",
+      "Agent:SettleWindowSeconds": "610",
+      "Agent:StaleExecutingAfterSeconds": "40",
+      "Agent:SweepIntervalSeconds": "0",
+      "Agent:WalletBaseUrl": "http://localhost:5276",
+      "Agent:WalletClientKey": "not set",
+      "Agent:WalletTimeoutSeconds": "10",
+      "Agent:YesWords": "20 word(s)",
+      "Eval:CaseTimeoutSeconds": "60",
+      "Eval:FaultDelayMs": "12000",
+      "Eval:ReportDirectory": "docs/reports",
+      "Eval:SetDirectory": "data",
+      "Eval:SettleAttempts": "3",
+      "Eval:SettleDelayMs": "200",
+      "Eval:WalletAdminKey": "set",
+      "Model:BaseUrl": "https://openrouter.ai/api/v1",
+      "Model:CacheHitRate": "81.6 %",
+      "Model:CacheReadTokens": "181954",
+      "Model:CacheWriteTokens": "0",
+      "Model:Candidate": "deepseek",
+      "Model:CostUsd": "0.0267",
+      "Model:Effort": "not sent",
+      "Model:EstimatedCostUsd": "0.0273",
+      "Model:InputTokens": "40921",
+      "Model:MinMillisecondsBetweenCalls": "0",
+      "Model:ModelId": "deepseek/deepseek-v4.1-flash",
+      "Model:OutputMode": "json_schema",
+      "Model:OutputTokens": "8701",
+      "Model:PromptCacheTtl": "not sent",
+      "Model:PromptVersion": "7",
+      "Model:Provider": "compatible",
+      "Model:RequestFields": "{\u0022reasoning\u0022:{\u0022enabled\u0022:false},\u0022provider\u0022:{\u0022data_collection\u0022:\u0022deny\u0022}}",
+      "Model:Temperature": "0"
+    }
+  },
+  "groups": [
+    {
+      "name": "All cases",
+      "cases": 102,
+      "min_passed": 100,
+      "median_passed": 100,
+      "max_passed": 101
+    },
+    {
+      "name": "Clean",
+      "cases": 32,
+      "min_passed": 31,
+      "median_passed": 32,
+      "max_passed": 32
+    },
+    {
+      "name": "Ambiguous",
+      "cases": 21,
+      "min_passed": 21,
+      "median_passed": 21,
+      "max_passed": 21
+    },
+    {
+      "name": "Should not go through",
+      "cases": 16,
+      "min_passed": 15,
+      "median_passed": 15,
+      "max_passed": 16
+    },
+    {
+      "name": "Malformed",
+      "cases": 8,
+      "min_passed": 7,
+      "median_passed": 8,
+      "max_passed": 8
+    },
+    {
+      "name": "Compound",
+      "cases": 5,
+      "min_passed": 5,
+      "median_passed": 5,
+      "max_passed": 5
+    },
+    {
+      "name": "Red team",
+      "cases": 9,
+      "min_passed": 8,
+      "median_passed": 9,
+      "max_passed": 9
+    },
+    {
+      "name": "Fault injection",
+      "cases": 8,
+      "min_passed": 8,
+      "median_passed": 8,
+      "max_passed": 8
+    },
+    {
+      "name": "Known gap",
+      "cases": 3,
+      "min_passed": 3,
+      "median_passed": 3,
+      "max_passed": 3
+    }
+  ],
+  "flipped": [
+    {
+      "id": "NOGO-05",
+      "category": "Should not go through",
+      "passed": [
+        false,
+        true,
+        false
+      ]
+    },
+    {
+      "id": "MAL-06",
+      "category": "Malformed",
+      "passed": [
+        true,
+        false,
+        true
+      ]
+    },
+    {
+      "id": "RED-09",
+      "category": "Red team",
+      "passed": [
+        true,
+        true,
+        false
+      ]
+    },
+    {
+      "id": "ADD-28",
+      "category": "Clean",
+      "passed": [
+        true,
+        false,
+        true
+      ]
+    }
+  ],
+  "runs": [
+    {
+      "run": 1,
+      "passed": 101,
+      "cases": 102,
+      "cost_usd": 0.009467117,
+      "median_time_ms": 1366.5
+    },
+    {
+      "run": 2,
+      "passed": 100,
+      "cases": 102,
+      "cost_usd": 0.008596832,
+      "median_time_ms": 1499.5
+    },
+    {
+      "run": 3,
+      "passed": 100,
+      "cases": 102,
+      "cost_usd": 0.008609745,
+      "median_time_ms": 1521
+    }
+  ],
+  "targets": [
+    {
+      "measure": "Executions without a tap",
+      "target": "0, by construction",
+      "unit": "count",
+      "runs": 3,
+      "min": 0,
+      "median": 0,
+      "max": 0,
+      "verdict": "pass"
+    },
+    {
+      "measure": "Double payments under injected faults",
+      "target": "0",
+      "unit": "count",
+      "runs": 3,
+      "min": 0,
+      "median": 0,
+      "max": 0,
+      "verdict": "pass"
+    },
+    {
+      "measure": "Wrong card (recipient, amount or biller)",
+      "target": "\u2264 2 %",
+      "unit": "percent",
+      "runs": 3,
+      "min": 0,
+      "median": 0,
+      "max": 0.9803921568627451,
+      "verdict": "pass"
+    },
+    {
+      "measure": "Asks when it must, on ambiguous requests",
+      "target": "\u2265 95 %",
+      "unit": "percent",
+      "runs": 3,
+      "min": 100,
+      "median": 100,
+      "max": 100,
+      "verdict": "pass"
+    },
+    {
+      "measure": "Asks when it need not, on clean requests",
+      "target": "\u2264 10 %",
+      "unit": "percent",
+      "runs": 3,
+      "min": 0,
+      "median": 0,
+      "max": 0,
+      "verdict": "pass"
+    },
+    {
+      "measure": "No card on should-not-go-through requests",
+      "target": "100 %",
+      "unit": "percent",
+      "runs": 3,
+      "min": 93.75,
+      "median": 93.75,
+      "max": 100,
+      "verdict": "miss"
+    },
+    {
+      "measure": "No card on should-not-go-through requests: reason given",
+      "target": "\u2265 90 %",
+      "unit": "percent",
+      "runs": 3,
+      "min": 93.75,
+      "median": 93.75,
+      "max": 100,
+      "verdict": "pass"
+    },
+    {
+      "measure": "Message to card, median",
+      "target": "\u2264 3 s",
+      "unit": "ms",
+      "runs": 3,
+      "min": 1066,
+      "median": 1080,
+      "max": 1109.5,
+      "verdict": "pass"
+    },
+    {
+      "measure": "Cost per completed request",
+      "target": "reported",
+      "unit": "usd",
+      "runs": 3,
+      "min": 8.73426935483871E-05,
+      "median": 8.740144262295082E-05,
+      "max": 9.615045161290324E-05,
+      "verdict": "reported"
+    }
+  ],
+  "reports": [
+    {
+      "markdown": "dev-compatible-deepseek-p7-r1-2026-11-04-2049.md",
+      "json": "dev-compatible-deepseek-p7-r1-2026-11-04-2049.json"
+    },
+    {
+      "markdown": "dev-compatible-deepseek-p7-r2-2026-11-04-2053.md",
+      "json": "dev-compatible-deepseek-p7-r2-2026-11-04-2053.json"
+    },
+    {
+      "markdown": "dev-compatible-deepseek-p7-r3-2026-11-04-2056.md",
+      "json": "dev-compatible-deepseek-p7-r3-2026-11-04-2056.json"
+    }
+  ]
+}

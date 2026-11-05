@@ -66,10 +66,10 @@ One chat line; no card; a learning row for every reason. A reason with no key wo
 | `Unsupported_same_as_last_time` | اكتبلي الطلب كامل من جديد | "Same as last time", "like last month" (D4). | Say the full request; or Send again on the last receipt (D19). | F2: could mention Send again on the last receipt, which covers the commonest case. |
 | `Unsupported_choose_account` | اختيار الحساب مو متوفر هسه | The user chose the account to pay from and the recipient or the amount is missing (GAP-04). | Say the request again without the account. | F3: same text as `Refusal_account_choice_unavailable`, after which a card does follow. F1: no next step. |
 | `Unsupported_part_of_bill` | الفاتورة تندفع كاملة | Never today: a part-of-bill request is read as a bill request (ruling 2, milestone 8) and refused with `Refusal_bills_paid_in_full` and the full amount. | | U |
-| `Unsupported_credit_to_own_number` | ما أكدر أرسل رصيد لرقمك إنت | Credit for the user's own number (GAP-06, deferred to milestone 10). | Buy the card and enter the code yourself. | F1: the next step is not said. |
 | `Unsupported_change_waiting_card` | ما رهمت. الغيها واطلب من جديد | A message read as a change to the waiting card ("make it sixty"); the card is kept. | Tap Cancel, then ask again. | F3 with `Refusal_cannot_change_card` (never shown; different wording). |
-| `Unsupported_other_language` | اكتبلي باللهجة العراقية | A message in a language other than Arabic (ADD-23; Arabizi is Arabic). | Write in Iraqi Arabic. | |
+| `Unsupported_other_language` | اكتبلي باللهجة العراقية | A message written entirely in a language other than Arabic (English, Kurdish) or entirely in Latin letters (Arabic typed as `areed raseed`; ADD-23, MAL-06, MAL-09, ADD-07; Khalil, 4 Nov 2026). A Latin word inside an Arabic sentence (an operator, a name) keeps it Arabic. | Write in Iraqi Arabic. | |
 | `Unsupported_receive_from` | ما أكدر أجيب فلوس من حساب شخص ثاني. لازم هو يحوّلك. | A request to receive money from someone (ADD-08, ADD-09). | Nothing; the other person sends. | |
+| `Unsupported_undo_payment` | اعتذر ما اكدر اتراجع عن عملية التحويل او الشراء | A request to return, refund, cancel or undo a transfer or purchase that is already done (ADD-24; prompt version 7, Khalil, 4 Nov 2026). Credit for the user's own number is no longer refused: it is a plain purchase with its code (GAP-06). | Nothing. | |
 | `Unsupported_other_balance` | أكدر أكولك رصيدك إنت بس | Never: `Refusal_only_own_balance` is shown. | | U, F3 |
 | `Unsupported_other_currency` | أشتغل بالدينار العراقي بس | Never: `Refusal_dinars_only` is shown. | | U, F3 |
 
@@ -196,7 +196,7 @@ Built by code; the labels below frame figures from the wallet. The card's type w
 
 1. `Refusal_not_understood` while a card waits: the card is still there and will expire on its own.
 2. `Refusal_recipient_not_found`: the number can be typed instead.
-3. `Refusal_number_has_no_wallet`, `Refusal_bill_not_found`, `Refusal_product_not_found`, `Refusal_pin_locked`, `Unsupported_choose_account`, `Unsupported_credit_to_own_number`: no next step.
+3. `Refusal_number_has_no_wallet`, `Refusal_bill_not_found`, `Refusal_product_not_found`, `Refusal_pin_locked`, `Unsupported_choose_account`: no next step.
 4. `Refusal_insufficient_balance` and the other amount refusals: a typed amount merges for one message, which the text does not say.
 5. `Refusal_bills_paid_in_full`: asking again without an amount gives the card.
 6. `Refusal_account_choice_unavailable`: the card that follows pays from the usual account.

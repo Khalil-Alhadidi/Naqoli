@@ -89,9 +89,9 @@ public class LearningLogRuleTests
     [InlineData(LearningLogRule.ChangeWaitingCard)]
     [InlineData(LearningLogRule.ChooseAccount)]
     [InlineData(LearningLogRule.PartOfBill)]
-    [InlineData(LearningLogRule.CreditToOwnNumber)]
     [InlineData(LearningLogRule.OtherCurrency)]
     [InlineData(LearningLogRule.OtherLanguage)]
+    [InlineData(LearningLogRule.UndoPayment)]
     public void AnUnsupportedReasonWithItsOwnNameIsLoggedUnderIt(string reason)
     {
         var entry = LearningLogRule.EntryFor(new AgentReply.Unsupported(reason), Unsupported(reason));
@@ -108,7 +108,20 @@ public class LearningLogRuleTests
 
         Assert.Equal(new LearningEntry(LearningLogRule.ReceiveFrom, null), entry);
         Assert.Equal("receive_from", LearningLogRule.ReceiveFrom);
-        Assert.Equal(LearningLogRule.ReceiveFrom, LearningLogRule.Logged[^1]);
+        // seed-v5 (4 Nov 2026): undo_payment follows it, last.
+        Assert.Equal(LearningLogRule.ReceiveFrom, LearningLogRule.Logged[^2]);
+    }
+
+    [Fact]
+    public void AnUndoPaymentRequestIsLoggedAsUndoPaymentLast()
+    {
+        // ADD-24, prompt version 7 (Khalil, 4 Nov 2026): undoing a done payment is logged under its own name (seed-v5).
+        var entry = LearningLogRule.EntryFor(new AgentReply.Unsupported("undo_payment"), Unsupported("undo_payment"));
+
+        Assert.Equal(new LearningEntry(LearningLogRule.UndoPayment, null), entry);
+        Assert.Equal("undo_payment", LearningLogRule.UndoPayment);
+        Assert.Equal(LearningLogRule.UndoPayment, LearningLogRule.Logged[^1]);
+        Assert.DoesNotContain("credit_to_own_number", LearningLogRule.Logged);
     }
 
     [Theory]

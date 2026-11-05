@@ -99,7 +99,7 @@ public static class BillResolver
         // Several bills of one biller: the label the user named picks one, else ask (all of them, due or not).
         if (!string.IsNullOrWhiteSpace(request.BillLabelText))
         {
-            var labelKey = ArabicText.Key(request.BillLabelText);
+            var labelKey = LabelKey(request.BillLabelText);
             var labelled = ofBiller
                 .Where(b => b.Label is not null && labelKey.Length > 0 && ArabicText.Key(b.Label) == labelKey)
                 .ToList();
@@ -112,6 +112,19 @@ public static class BillResolver
         }
 
         return new BillResolution.Options(ofBiller);
+    }
+
+    /// <summary>
+    /// The comparison key of the user's label words (<see cref="ArabicText.Key"/>), with a first word that is a
+    /// possessive word dropped (prompt version 8 round, 5 Nov 2026), so "of the house" matches the label "the house" as
+    /// "the house" does. A tolerance in matching, not a rule; empty when nothing is left.
+    /// </summary>
+    internal static string LabelKey(string labelText)
+    {
+        var words = ArabicText.Words(labelText);
+        return words.Count > 0 && ArabicText.IsPossessive(words[0])
+            ? ArabicText.Key(string.Join(' ', words.Skip(1)))
+            : ArabicText.Key(labelText);
     }
 
     /// <summary>

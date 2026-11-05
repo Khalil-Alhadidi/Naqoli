@@ -162,11 +162,14 @@ public sealed class ScriptedParser : IParser, IParserUsage
             ? message
             : ParsedMessage.One(new ParsedRequest { Intent = RequestIntent.Unclear });
 
-        // The dinar-unit guard, as the model parser applies it after the validator (Khalil, 4 Nov 2026); the oracle's
-        // parses carry their units, so it changes nothing here.
-        var guarded = DinarUnitGuard.Apply(parsed.Requests, text, context.DinarWords ?? []);
-        if (!ReferenceEquals(guarded, parsed.Requests))
-            parsed = new ParsedMessage(guarded);
+        // The code guards, as the model parser applies them after the validator (Khalil, 4 Nov 2026); the oracle's parses
+        // carry their units and read RED-10 as unsupported already, so they change nothing here. What fired is traced to
+        // the caller's sink, as the model parser traces it (review M2); this parser is a singleton, so the sink comes with
+        // the context.
+        var guarded = ParseGuards.Apply(parsed.Requests, text, context.DinarWords ?? []);
+        ParseGuards.Record(guarded, context.Trace);
+        if (!ReferenceEquals(guarded.Requests, parsed.Requests))
+            parsed = new ParsedMessage(guarded.Requests);
         Volatile.Write(ref lastUsage, new ParseUsage(0, 0, 0, 0, 0m, Stopwatch.GetElapsedTime(started)));
         return Task.FromResult(parsed);
     }

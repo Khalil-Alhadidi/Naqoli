@@ -172,7 +172,9 @@ public sealed class ScriptedParserTests : IDisposable
     public void EveryBillOfTheSidecarNamesItsBillerInTheUsersOwnWords()
     {
         // Schema version 2 (16 Oct 2026): a bill's biller_text is copied verbatim from the message, as is that of a request
-        // to pay part of a bill (read as a bill, ruling 2 of milestone 8); any other request has none.
+        // to pay part of a bill (read as a bill, ruling 2 of milestone 8). Another unsupported request fills the slots its
+        // message states (prompt rule), so its biller_text, when set, is verbatim too (MAL-06, refused as another language
+        // from 4 Nov 2026); any other request has none.
         var sidecar = Path.Combine(RepositoryRoot.Find(), "data", ScriptedParser.SidecarFileName);
         var bills = 0;
         foreach (var line in File.ReadLines(sidecar).Where(l => l.Length > 0))
@@ -189,6 +191,10 @@ public sealed class ScriptedParserTests : IDisposable
                 {
                     bills++;
                     Assert.True(billerText.ValueKind == JsonValueKind.String, where);
+                    Assert.True(say.Contains(billerText.GetString()!, StringComparison.Ordinal), where);
+                }
+                else if (request.GetProperty("intent").GetString() == "unsupported" && billerText.ValueKind == JsonValueKind.String)
+                {
                     Assert.True(say.Contains(billerText.GetString()!, StringComparison.Ordinal), where);
                 }
                 else
@@ -213,6 +219,34 @@ public sealed class ScriptedParserTests : IDisposable
         var parsed = (await parser.ParseAsync(sentence, NothingPending, Token)).First;
 
         Assert.Equal(ParsedRequest.Transfer(SeedFacts.Contact("S01").Alias, 50, AmountUnit.Thousand), parsed);
+    }
+
+    [Fact]
+    public async Task AnOracleLineThatNeedsNoGuardLeavesNoGuardStep()
+    {
+        // Review M2 of the prompt version 7 round: CLN-01's oracle parse carries its unit and is a transfer, so neither
+        // guard fires and the caller's trace gets no guard step.
+        var trace = new ClaudeParserTests.RecordingTrace();
+        var masked = Masker.Mask(DevSetText.Say("CLN-01"));
+
+        await ScriptedParser.Load(DevSetPath).ParseAsync(
+            masked.Text, new ParseContext(null, masked.Map, DevSetText.ConfiguredDinarWords(), trace), Token);
+
+        Assert.DoesNotContain(trace.Entries, e => e.Step.StartsWith("guard:", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task AGuardThatFiresIsTracedToTheCallersSink()
+    {
+        // Review M2: the scripted parser writes the same guard step as the model parser, to the sink in the context.
+        var name = SeedFacts.Contact("S01").SavedName;
+        var parser = new ScriptedParser([new ScriptedSentence("x", ParsedRequest.Balance() with { RecipientText = name })]);
+        var trace = new ClaudeParserTests.RecordingTrace();
+
+        var parsed = (await parser.ParseAsync("x", new ParseContext(null, Trace: trace), Token)).First;
+
+        Assert.Equal((RequestIntent.Unsupported, "other_balance"), (parsed.Intent, parsed.UnsupportedReason));
+        Assert.Equal([(global::Agent.Core.Trace.TraceZone.Code, ParseGuards.OtherBalanceStep, (string?)"1")], trace.Entries);
     }
 
     [Theory]

@@ -163,10 +163,10 @@ public class ParsedRequestValidatorTests
     [InlineData("same_as_last_time")]
     [InlineData("choose_account")]
     [InlineData("part_of_bill")]
-    [InlineData("credit_to_own_number")]
     [InlineData("change_waiting_card")]
     [InlineData("other_language")]
     [InlineData("receive_from")]
+    [InlineData("undo_payment")]
     public void EveryDocumentedUnsupportedReasonIsRead(string reason)
     {
         var result = ParsedRequestValidator.Validate(
@@ -174,6 +174,16 @@ public class ParsedRequestValidatorTests
 
         Assert.Null(result.Problem);
         Assert.Equal(reason, result.First.UnsupportedReason);
+    }
+
+    [Fact]
+    public void UndoPaymentIsAReasonAndCreditToOwnNumberIsNot()
+    {
+        // Prompt version 7, schema version 4 (Khalil, 4 Nov 2026): a request to undo a done payment has its own reason,
+        // and credit for the user's own number is a plain purchase, no longer a reason.
+        Assert.Contains("undo_payment", ParsedRequestValidator.UnsupportedReasons);
+        Assert.DoesNotContain("credit_to_own_number", ParsedRequestValidator.UnsupportedReasons);
+        Assert.Equal(11, ParsedRequestValidator.UnsupportedReasons.Count);
     }
 
     [Theory]

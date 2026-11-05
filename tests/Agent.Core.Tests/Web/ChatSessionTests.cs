@@ -616,8 +616,8 @@ public sealed class ChatSessionTests(AgentHost host) : IAsyncDisposable
     [Fact]
     public async Task AnUnsupportedRequestWithNoReasonFallsToNotSupported()
     {
-        // Rule 11 (ADD-24's parse): "return the card I bought" has no request type and no reason in the structure, so
-        // the model marks it unsupported with no reason; the agent replies not_supported and logs it with no detail.
+        // Rule 11 (ADD-24's parse before prompt version 7, which gave it the reason undo_payment): an unsupported request
+        // with no reason; the agent replies not_supported and logs it with no detail.
         const string sentence = "return the card I bought";
         var circuit = await StartAsync(SeedFacts.DemoUserId, new ScriptedSentence(sentence, new ParsedRequest { Intent = RequestIntent.Unsupported }));
         var session = circuit.Session;
