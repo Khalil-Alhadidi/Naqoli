@@ -227,7 +227,7 @@ Haiku and Sonnet tie on wrong cards (none); Sonnet meets every target and Haiku 
 
 ### Amended, 5 Nov 2026: DeepSeek V4.1 Flash with reasoning
 
-Khalil reopened the choice before the held-out run (he had not submitted, his rulings of 4 Nov 2026 had changed the prompt, and the head of AI at Zain advised open-weight models) and chose DeepSeek V4.1 Flash with reasoning at low effort, candidate `deepseek-reasoning`, on 5 Nov 2026. The evidence is `docs/reports/model-comparison-2026-11-05-prompt-8.md` (prompt version 8, the 102-case development set, three runs each):
+Khalil reopened the choice before the held-out run (he had not submitted, his rulings of 4 Nov 2026 had changed the prompt, and an open-weight model can be hosted by the wallet operator itself) and chose DeepSeek V4.1 Flash with reasoning at low effort, candidate `deepseek-reasoning`, on 5 Nov 2026. The evidence is `docs/reports/model-comparison-2026-11-05-prompt-8.md` (prompt version 8, the 102-case development set, three runs each):
 
 | | Flash with reasoning | Sonnet | Flash | Haiku |
 |---|---|---|---|---|
