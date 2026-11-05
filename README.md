@@ -11,15 +11,31 @@ The agent reads one sentence in Iraqi Arabic (a transfer, a bill, a store purcha
 Reading guide, in order:
 
 1. [docs/architecture.md](docs/architecture.md): the design, decisions D1 to D22, and the decisions log.
-2. [docs/failure-modes.md](docs/failure-modes.md): every way the system can fail that we found, and how each is handled.
-3. [docs/known-gaps.md](docs/known-gaps.md): every known limit of the agent as built, and what would close it.
-4. [docs/reports/dev-claude-sonnet-m9c-repeat3-2026-10-19-2055.md](docs/reports/dev-claude-sonnet-m9c-repeat3-2026-10-19-2055.md): the latest Sonnet result on the development set, three runs, every target passed on the median.
-5. [docs/targets.md](docs/targets.md): the targets from the brief that every report grades against.
-6. [docs/disclosure.md](docs/disclosure.md): every library, tool, model and data source used, Claude Code included.
+2. [docs/results.md](docs/results.md): what the agent scores on the development set, on each model, and how the model was chosen.
+3. [docs/failure-modes.md](docs/failure-modes.md): every way the system can fail that we found, and how each is handled.
+4. [docs/known-gaps.md](docs/known-gaps.md): every known limit of the agent as built, and what would close it.
+5. [docs/disclosure.md](docs/disclosure.md): every library, tool, model and data source used, Claude Code included.
 
 An agent that turns one sentence in Iraqi Arabic into one confirmation card and one tap, against a mock wallet API, for transfers, bills, store purchases and the read-only balance question. It is an entry for the ZainCash Agentic AI Challenge Iraq, topic 04, and its design is in [docs/architecture.md](docs/architecture.md).
 
 Rules: the nine rules that are never broken are listed in [CLAUDE.md](CLAUDE.md).
+
+## Results
+
+The development set, 102 cases, three runs per model, the median of the three ([docs/results.md](docs/results.md), where every figure links to its report; targets in [docs/targets.md](docs/targets.md)).
+
+| Model | Passed of 102 (median) | Wrong cards (three runs) | Every target met | Cost per completed request | Open weights | Prompt version of the run |
+|---|---|---|---|---|---|---|
+| DeepSeek V4.1 Flash with reasoning (the frozen model) | 101 | 0 | Yes | 0.000126 USD | Yes | 8, frozen code |
+| Claude Sonnet 5.5 | 101 | 0 | Yes | 0.0019 USD | No | 8, frozen code |
+| DeepSeek V4.1 Flash | 98 | 0 | Yes | 0.000098 USD | Yes | 8, before the reason guard |
+| Claude Haiku 5.5 | 97 | 0 | Yes | 0.00012 USD | No | 8, before the reason guard |
+| DeepSeek V4 Pro | 92 | 0 | No | 0.00096 USD | Yes | 6, older prompt and keys |
+| Qwen3.8 27B | 90 | 1 of 306 | No | 0.00034 USD | Yes | 6, older prompt and keys |
+| Gemini 3.5 Flash-Lite | 81 | 0 | No | 0 (free tier) | No | 6, older prompt and keys |
+| Gemma 4 | 66 | 1 of 306 | No | 0 (free tier) | Yes | 6, older prompt and keys |
+
+The rows on prompt 6 are as measured then, before two prompt versions, five re-keyed cases and the guards, so they show where each model stood and are not comparable with the first four. Khalil froze on DeepSeek V4.1 Flash with reasoning (5 Nov 2026): open weights that Zain can host itself, the same 101 of 102 as Sonnet with no flipped case at about a fifteenth of the cost per request. The one residual case on both is ADD-30, a typed quarter amount, which builds no card. The held-out result is added after milestone 11.
 
 ## Repository layout
 
