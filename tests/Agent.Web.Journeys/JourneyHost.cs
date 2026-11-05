@@ -361,6 +361,9 @@ public sealed class JourneyHost : IAsyncLifetime
             host.UseSetting("Agent:SweepIntervalSeconds", "1");
             // Journeys never call a live model: the scripted parser is pinned whatever the developer's secrets say.
             host.UseSetting("Agent:Parser", "scripted");
+            // The Results panel opens on the candidate's newest report, so the candidate is pinned to the one the fixture
+            // reports were made on; otherwise the developer's user secret (Model:Candidate) leaks into the journey host.
+            host.UseSetting("Model:Candidate", "sonnet");
             // Milestone 10: the Results panel lists the fixture reports, never docs/reports. The U5 console points at a
             // directory that does not exist, for the empty state.
             host.UseSetting("Console:ReportsDirectory", demoUserId == EmptyReportsUserId ? EmptyReportsDirectory : ReportsDirectory);
