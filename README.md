@@ -18,7 +18,7 @@ Reading guide, in order:
 
 Every other document is listed in [docs/README.md](docs/README.md).
 
-An agent that turns one sentence in Iraqi Arabic into one confirmation card and one tap, against a mock wallet API, for transfers, bills, store purchases and the read-only balance question. It is an entry for the ZainCash Agentic AI Challenge Iraq, topic 04, and its design is in [docs/architecture.md](docs/architecture.md).
+It is an entry for the ZainCash Agentic AI Challenge Iraq, topic 04.
 
 Rules: the nine rules that are never broken are listed in [CLAUDE.md](CLAUDE.md).
 
@@ -44,7 +44,7 @@ The rows on prompt 6 are as measured then, before two prompt versions, five re-k
 - `src/`: the four applications: `Wallet.MockApi` (minimal API, EF Core with SQL Server), `Agent.Core` (orchestrator and request pipeline), `Agent.Web` (Blazor Server with MudBlazor), `Agent.Eval` (console that runs the request sets).
 - `tests/`: `Agent.Core.Tests` (xunit.v3 unit and API tests) and `Agent.Web.Journeys` (Playwright screen journeys).
 - `data/`: Khalil's exported test-set files: the wallet seed (`data/seed/*.json`, see `data/seed/README.md`) and the request sets.
-- `docs/`: architecture, build plan, failure modes and disclosure. The agent's write path as built (structured request, resolvers, checks, pending states, Confirm and Checking, audit log) is in [docs/agent-core.md](docs/agent-core.md).
+- `docs/`: the design, the results, the failure modes, the known gaps and the disclosure, with the reference documents, the eval reports (`docs/reports/`) and the plans and reviews of each milestone (`docs/history/`). The index is [docs/README.md](docs/README.md).
 
 ## Prerequisites
 
@@ -155,7 +155,7 @@ Notes:
 - Install the Playwright browser once, after the first build: `pwsh tests/Agent.Web.Journeys/bin/Debug/net10.0/playwright.ps1 install chromium`.
 - The screen journeys (`tests/Agent.Web.Journeys`, collection `journeys`, fixture `JourneyHost`) host the mock wallet and the web console in process on Kestrel, on dynamic loopback ports, and drive them with headless Chromium through the scripted parser (never a live model). The wallet uses `ZainCashWalletJourneys_<pid>_<n>_Test` (stem and server from `ConnectionStrings__WalletJourneysTest`, default `ZainCashWalletJourneys_Test`) and the console `ZainCashAgent_Journeys_<pid>_<n>_Test` (`ConnectionStrings__AgentJourneysTest`, default `ZainCashAgent_Journeys_Test`), where `<pid>` is the test process and `<n>` the host's number in it, so two runs on one server never collide; both are created at the start of a run and dropped at its end, and the configured names must end in `_Test`. A run that is killed can leave its two `_<pid>_<n>_Test` databases behind; drop them by hand. Five consoles run: two for U1 (the default card timer, and a 4-second timer for the timer journeys), and one each for U2, U3 and U5 (`Agent:DemoUserId`). The journeys type development-set messages by case id (`DevSet`), and the reset before each one also turns the kill switch off and clears saved settings. The journeys skip when SQL Server does not answer the 3-second probe, or when Chromium is not installed (the skip message gives the install command). The 80 journeys, with the host test and the screenshot helper (82 tests, the helper skipped unless `ZAINCASH_SCREENSHOTS` is `1`), take about two and a half minutes.
 
-## The model (Claude parser)
+## The model
 
 The parse call is the scripted parser by default (`Agent:Parser` = `scripted`): no model, no key. The model parser (milestone 6) calls the selected candidate of the `Model` section through `Microsoft.Extensions.AI`. The default candidate, since the freeze of 5 Nov 2026, is `deepseek-reasoning`: DeepSeek V4.1 Flash (open weights) through OpenRouter, reasoning at low effort, temperature 0, served only by 8-bit providers that do not collect data, DeepInfra first. It needs an OpenRouter API key, kept in user secrets, never in a file:
 
@@ -204,7 +204,7 @@ Outside Development the agent needs both `Agent:WalletBaseUrl` and `Agent:Wallet
 
 Every `/admin` request also carries the `X-Wallet-Admin-Key` header. In Development with no `Wallet:AdminKey` set, any non-empty value is accepted (the header makes a browser preflight, so a web page cannot reset the wallet). Outside Development, set a key of at least 16 characters in user secrets or the `Wallet__AdminKey` environment variable and send it in that header; never commit it.
 
-Status, 21 Oct 2026: milestones 1 to 9 of 12 are done and tagged (`milestone-1` to `milestone-9c`; 9a aliases, 9b store purchases, 9c compound requests), followed on 20 Oct 2026 by the person-or-bill question and the consent screen's No button. The parse prompt is at version 5. 1,418 core tests (8 skipped by gate: the live model tests and the link tests), 70 screen journeys, and every rule of `docs/matching-rules.md` built (50 of 50, [docs/rules-coverage.md](docs/rules-coverage.md)). On the development set (96 cases), the oracle passes 95 (`docs/reports/dev-scripted-person-or-bill-2026-10-20-1250`) and Sonnet 93 on the median of three runs on 19 Oct 2026, before the 20 Oct changes (`docs/reports/dev-claude-sonnet-m9c-repeat3-2026-10-19-2055`); 0 executions without a tap, 0 double payments and 0 masking failures in every committed report. The slide 2 targets are in [docs/targets.md](docs/targets.md) and every runner report prints pass or miss against them. The status of each milestone is in [docs/build-plan.md](docs/build-plan.md); the failure modes are in [docs/failure-modes.md](docs/failure-modes.md). Next: milestone 10, model choice and freeze.
+Status, 5 Nov 2026: milestones 1 to 10 of 12 are done and tagged. The model, the prompt (version 8) and the seed are frozen for the held-out run ([docs/disclosure.md](docs/disclosure.md), "Freeze before the held-out run"). 1,712 core tests and 82 screen journeys pass; every rule of `docs/matching-rules.md` is built ([docs/rules-coverage.md](docs/rules-coverage.md)). The results are in [docs/results.md](docs/results.md), the status of each milestone in [docs/build-plan.md](docs/build-plan.md). Next: milestone 11, the one held-out run, then milestone 12, demo readiness.
 
 ## Disclosure
 
