@@ -514,8 +514,8 @@ public class ClaudeParserTests
         var (parser, _, _) = Start();
 
         Assert.Equal("claude:haiku", parser.Name);
-        Assert.Equal("7", ClaudeParser.PromptVersion);
-        Assert.StartsWith("version: 7", ClaudeParser.Prompt, StringComparison.Ordinal);
+        Assert.Equal("8", ClaudeParser.PromptVersion);
+        Assert.StartsWith("version: 8", ClaudeParser.Prompt, StringComparison.Ordinal);
     }
 
     [Fact]
