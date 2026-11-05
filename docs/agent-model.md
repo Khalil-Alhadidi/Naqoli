@@ -108,7 +108,7 @@ stateDiagram-v2
 
 ## The prompt
 
-`src/Agent.Core/Parsing/parse-prompt.md` is an embedded resource, in English. Its first line is its version, which the runner prints and writes in the report header; the current one is `version: 6` (`ClaudeParser.PromptVersion`), and this sentence is the only place in the docs that states it. It holds:
+`src/Agent.Core/Parsing/parse-prompt.md` is an embedded resource, in English. Its first line is its version, which the runner prints and writes in the report header; the current one is `version: 8` (`ClaudeParser.PromptVersion`; 5 Nov 2026), and this sentence is the only place in the docs that states it. It holds:
 
 - the task;
 - the two-line input;
