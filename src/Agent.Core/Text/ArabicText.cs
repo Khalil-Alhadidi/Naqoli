@@ -84,6 +84,9 @@ public static class ArabicText
     /// <summary>True when the word is a kinship word of rule 1 (any variant; variants map to their canonical form).</summary>
     public static bool IsKinship(string word) => ArabicWords.KinshipVariants.ContainsKey(NormalizeLetters(word));
 
+    /// <summary>True when the word is a possessive word ("of", "belonging to") of <c>arabic-words.json</c>.</summary>
+    public static bool IsPossessive(string word) => ArabicWords.Possessives.Contains(NormalizeLetters(word));
+
     /// <summary>Levenshtein distance over UTF-16 code units: one letter added, dropped or changed counts one.</summary>
     public static int EditDistance(string a, string b)
     {

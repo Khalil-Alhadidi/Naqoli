@@ -61,7 +61,7 @@ The model returns `{"requests": [...]}` (`ParsedRequestsDto`), one entry per req
 | `amount_unit` | `none`, `dinars`, `thousand`, `million` |
 | `biller_code` | `electricity`, `water`, `internet`, `school_fees`; null |
 | `biller_text` | For a bill, the user's words that name the biller or the service, verbatim; null (schema version 2, 16 Oct 2026). Read only by the bill resolver, which looks in it for a provider name of the wallet's billers; never on the card, the trace or the audit log |
-| `bill_label_text` | The user's words for one of several bills of a biller; null |
+| `bill_label_text` | The user's words for one of several bills of a biller; null. From 5 Nov 2026 `BillResolver` drops a leading possessive word before it compares the label, so a model that copies the possessive into the label (MAL-07) still matches (`docs/agent-core.md`) |
 | `operator_text` | The operator as typed; null |
 | `product_type` | `credit`, `internet`; null |
 | `product_value` | The face value in dinars, above 0; null |

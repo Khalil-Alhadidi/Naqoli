@@ -1,6 +1,7 @@
 using Agent.Core.Requests;
 using Agent.Core.Resolver;
 using Agent.Core.Tests.Wallet;
+using Agent.Core.Text;
 using Agent.Core.Wallet;
 
 namespace Agent.Core.Tests.Resolver;
@@ -63,6 +64,22 @@ public class BillResolverTests
     {
         var card = Assert.IsType<BillResolution.Card>(Resolve("U1", "electricity", SeedWallet.LabelOf("BS2")));
         Assert.Equal("BS2", card.Bill.Code);
+    }
+
+    [Fact]
+    public void ALabelAfterThePossessiveWordIsThatLabelsBill()
+    {
+        // Prompt version 8 round (5 Nov 2026): a leading possessive word is dropped before the label is compared.
+        var label = ArabicWords.Possessives.Single() + " " + SeedWallet.LabelOf("BS1");
+        var card = Assert.IsType<BillResolution.Card>(Resolve("U1", "electricity", label));
+        Assert.Equal("BS1", card.Bill.Code);
+    }
+
+    [Fact]
+    public void ALabelThatIsOnlyThePossessiveWordAsks()
+    {
+        var options = Assert.IsType<BillResolution.Options>(Resolve("U1", "electricity", ArabicWords.Possessives.Single()));
+        Assert.Equal(["BS1", "BS2"], Codes(options.Bills));
     }
 
     [Fact]

@@ -295,6 +295,8 @@ flowchart TD
     end
 ```
 
+The label match compares `ArabicText.Key` of `BillLabelText` with that of each bill's label. Since 5 Nov 2026 (the prompt version 8 round, `docs/plans/prompt-8-round.md`) `BillResolver.LabelKey` first drops a first word that is a possessive word (the `possessive` list of `arabic-words.json`, read through `ArabicWords.Possessives`), so MAL-07's label read with the possessive word in front matches as the label alone does; a label that is only the possessive word keys to empty and asks. A tolerance in matching, not a matching rule. Tests: `BillResolverTests.ALabelAfterThePossessiveWordIsThatLabelsBill`, `ALabelThatIsOnlyThePossessiveWordAsks`.
+
 `ProductResolver.Resolve(request, catalogue, options)`, rules 11 and 12 as Khalil decided them (milestone 9b, 19 Oct 2026):
 
 ```mermaid
