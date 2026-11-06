@@ -28,7 +28,7 @@ The development set, 102 cases, three runs per model, the median of the three ([
 
 | Model | Passed of 102 (median) | Wrong cards (three runs) | Every target met | Cost per completed request | Open weights | Prompt version of the run |
 |---|---|---|---|---|---|---|
-| DeepSeek V4.1 Flash with reasoning (the frozen model) | 102 | 0 | Yes | 0.000126 USD | Yes | 8, frozen code |
+| DeepSeek V4.1 Flash with reasoning (the frozen model) | 102 | 0 | Yes | 0.00035 USD | Yes | 8, frozen code |
 | Claude Sonnet 5.5 | 102 | 0 | Yes | 0.0019 USD | No | 8, frozen code |
 | DeepSeek V4.1 Flash | 98 | 0 | Yes | 0.000098 USD | Yes | 8, before the reason guard |
 | Claude Haiku 5.5 | 97 | 0 | Yes | 0.00012 USD | No | 8, before the reason guard |
@@ -37,7 +37,7 @@ The development set, 102 cases, three runs per model, the median of the three ([
 | Gemini 3.5 Flash-Lite | 81 | 0 | No | 0 (free tier) | No | 6, older prompt and keys |
 | Gemma 4 | 66 | 1 of 306 | No | 0 (free tier) | Yes | 6, older prompt and keys |
 
-The rows on prompt 6 are as measured then, before two prompt versions, five re-keyed cases and the guards, so they show where each model stood and are not comparable with the first four. Khalil froze on DeepSeek V4.1 Flash with reasoning (5 Nov 2026): open weights that Zain can host itself, the same 102 of 102 as Sonnet in every run, with no flipped case, at about a fifteenth of the cost per request. Sonnet is the faster of the two: message to card 1.80 s against 2.58 s at the median, both inside the 3 s target. The held-out result is added after milestone 11.
+The rows on prompt 6 are as measured then, before two prompt versions, five re-keyed cases and the guards, so they show where each model stood and are not comparable with the first four. Khalil froze on DeepSeek V4.1 Flash with reasoning (5 Nov 2026): open weights that Zain can host itself, the same 102 of 102 as Sonnet in every run, with no flipped case, at under a fifth of the cost per request. Message to card at the median is 1.95 s against Sonnet's 1.72 s, both inside the 3 s target; on a hosted endpoint that time moves with the provider's load ([docs/results.md](docs/results.md), measurement notes). The held-out result is added after milestone 11.
 
 ## Repository layout
 
@@ -157,7 +157,7 @@ Notes:
 
 ## The model
 
-The parse call is the scripted parser by default (`Agent:Parser` = `scripted`): no model, no key. The model parser (milestone 6) calls the selected candidate of the `Model` section through `Microsoft.Extensions.AI`. The default candidate, since the freeze of 5 Nov 2026, is `deepseek-reasoning`: DeepSeek V4.1 Flash (open weights) through OpenRouter, reasoning at low effort, temperature 0, served only by 8-bit providers that do not collect data, DeepInfra first. It needs an OpenRouter API key, kept in user secrets, never in a file:
+The parse call is the scripted parser by default (`Agent:Parser` = `scripted`): no model, no key. The model parser (milestone 6) calls the selected candidate of the `Model` section through `Microsoft.Extensions.AI`. The default candidate, since the freeze of 5 Nov 2026, is `deepseek-reasoning`: DeepSeek V4.1 Flash (open weights) through OpenRouter, reasoning at low effort, temperature 0, served only by 8-bit providers that do not collect data, Venice first and DeepInfra second. It needs an OpenRouter API key, kept in user secrets, never in a file:
 
 ```powershell
 dotnet user-secrets set "OpenRouter:ApiKey" "<your key>" --project src/Agent.Web
@@ -211,7 +211,7 @@ Status, 5 Nov 2026: milestones 1 to 10 of 12 are done and tagged. The model, the
 Every model, provider, library, data source and AI coding assistant used in this entry, in short. The full list, one line per item and added in the same commit as the thing it names, is [docs/disclosure.md](docs/disclosure.md).
 
 - AI coding assistant: Claude Code (Anthropic), with the Claude Fable 5.1, Opus and Haiku models, for planning, implementation and review. Claude drafted each test case and its answer key (architecture D14); Khalil rewrote every sentence in his own Iraqi Arabic. The phone strings and the matching rules are Khalil's.
-- Models and providers: DeepSeek V4.1 Flash (`deepseek/deepseek-v4.1-flash`, open weights under MIT) with reasoning at low effort, the default candidate `deepseek-reasoning` from the freeze of 5 Nov 2026, through OpenRouter, pinned to 8-bit endpoints that do not collect data (DeepInfra first, then Morph); Claude Sonnet 5.5 (`claude-sonnet-5-5`, chosen under D13 on 3 Nov 2026 and the default until 5 Nov 2026), Claude Haiku 5.5 (`claude-haiku-5-5`) and Claude Opus 5.5 (`claude-opus-5-5`) through the Anthropic API; the other candidates measured (DeepSeek V4 Pro, Qwen3.8 27B, Gemini, Gemma 4) are in [docs/disclosure.md](docs/disclosure.md). Each is used for one read-only structured parse call per message. The keys are read from user secrets (`OpenRouter:ApiKey`, `Anthropic:ApiKey`) or `ANTHROPIC_API_KEY` and are never committed.
+- Models and providers: DeepSeek V4.1 Flash (`deepseek/deepseek-v4.1-flash`, open weights under MIT) with reasoning at low effort, the default candidate `deepseek-reasoning` from the freeze of 5 Nov 2026, through OpenRouter, pinned to 8-bit endpoints that do not collect data (Venice first, then DeepInfra, from 6 Nov 2026); Claude Sonnet 5.5 (`claude-sonnet-5-5`, chosen under D13 on 3 Nov 2026 and the default until 5 Nov 2026), Claude Haiku 5.5 (`claude-haiku-5-5`) and Claude Opus 5.5 (`claude-opus-5-5`) through the Anthropic API; the other candidates measured (DeepSeek V4 Pro, Qwen3.8 27B, Gemini, Gemma 4) are in [docs/disclosure.md](docs/disclosure.md). Each is used for one read-only structured parse call per message. The keys are read from user secrets (`OpenRouter:ApiKey`, `Anthropic:ApiKey`) or `ANTHROPIC_API_KEY` and are never committed.
 - Runtime and libraries: .NET 10 SDK and ASP.NET Core 10; Anthropic 12.56.0 (official C# SDK) and Microsoft.Extensions.AI 10.11.0 (the `IChatClient` abstraction); MudBlazor 9.11.0; Microsoft.EntityFrameworkCore.SqlServer and .Design 10.0.13 with the dotnet-ef 10.0.13 tool; Microsoft.AspNetCore.OpenApi 10.0.13; Scalar.AspNetCore 2.18.2; Microsoft.Extensions.Http, Hosting, Options and Configuration 10.0.13; System.Security.Cryptography.Pkcs 10.0.13; SQL Server (local instance, LocalDB or container).
 - Tests: xunit.v3 4.0.2 on Microsoft Testing Platform, xunit.runner.visualstudio 4.0.1, Microsoft.NET.Test.Sdk 18.11.0, Microsoft.AspNetCore.Mvc.Testing 10.0.13, Microsoft.Playwright 1.63.0 with Chrome Headless Shell 153.
 - Data: the test-set workbook v0.15 (Khalil, 14 Oct 2026), exported as `data/seed/*.json`, `data/requests.dev.jsonl`, `data/requests.heldout.jsonl` and `docs/matching-rules.md`. All synthetic. The held-out file is sealed ([docs/HELDOUT_SEAL.md](docs/HELDOUT_SEAL.md)).
