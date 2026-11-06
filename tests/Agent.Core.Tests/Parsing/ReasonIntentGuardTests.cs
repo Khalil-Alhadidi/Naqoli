@@ -65,4 +65,44 @@ public class ReasonIntentGuardTests
         Assert.Same(plain, guarded[0]);
         Assert.Equal((RequestIntent.Unsupported, LearningLogRule.OtherLanguage), (guarded[1].Intent, guarded[1].UnsupportedReason));
     }
+
+    [Theory]
+    [InlineData(RequestIntent.Purchase)]
+    [InlineData(RequestIntent.Bill)]
+    [InlineData(RequestIntent.Balance)]
+    [InlineData(RequestIntent.Unclear)]
+    public void ChooseAccountOnARequestThatWasNotATransferLosesItsAmount(RequestIntent intent)
+    {
+        // Security review of 6 Nov 2026: choose_account with a recipient and an amount is the one reason the orchestrator
+        // turns into a transfer card. A parse that was not a transfer must not become one, so the amount goes and the
+        // request is refused with its reason.
+        var flagged = new ParsedRequest
+        {
+            Intent = intent,
+            RecipientText = Name,
+            AmountValue = 50,
+            AmountUnit = AmountUnit.Thousand,
+            UnsupportedReason = LearningLogRule.ChooseAccount,
+        };
+
+        var request = Assert.Single(ReasonIntentGuard.Apply([flagged]));
+
+        Assert.Equal(flagged with { Intent = RequestIntent.Unsupported, AmountValue = null, AmountUnit = AmountUnit.None }, request);
+    }
+
+    [Fact]
+    public void ABillWithPartOfBillKeepsItsAmount()
+    {
+        var bill = new ParsedRequest
+        {
+            Intent = RequestIntent.Bill,
+            AmountValue = 10,
+            AmountUnit = AmountUnit.Thousand,
+            UnsupportedReason = LearningLogRule.PartOfBill,
+        };
+
+        var request = Assert.Single(ReasonIntentGuard.Apply([bill]));
+
+        Assert.Equal(bill with { Intent = RequestIntent.Unsupported }, request);
+    }
 }

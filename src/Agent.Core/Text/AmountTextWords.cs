@@ -58,7 +58,7 @@ internal static class AmountTextWords
         }
 
         foreach (var construct in document.RootElement.GetProperty("construct").EnumerateObject())
-            Add(construct.Value.GetString(), new AmountWord(AmountWordKind.Unit, int.Parse(construct.Name, NumberStyles.None, CultureInfo.InvariantCulture)));
+            Add(construct.Value.GetString(), new AmountWord(AmountWordKind.Unit, int.Parse(construct.Name, NumberStyles.None, CultureInfo.InvariantCulture), Construct: true));
 
         AddList("thousand", AmountWordKind.Thousand, 1);
         AddList("two_thousand", AmountWordKind.Thousand, 2);
@@ -109,5 +109,8 @@ internal enum AmountWordKind
     Less,
 }
 
-/// <summary>One word of <see cref="AmountTextWords"/>: its kind and its value.</summary>
-internal readonly record struct AmountWord(AmountWordKind Kind, int Value);
+/// <summary>
+/// One word of <see cref="AmountTextWords"/>: its kind, its value, and whether it is a short counting form (three to
+/// ten, the <c>construct</c> list).
+/// </summary>
+internal readonly record struct AmountWord(AmountWordKind Kind, int Value, bool Construct = false);

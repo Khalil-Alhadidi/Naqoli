@@ -48,5 +48,19 @@
   { "source": "composed", "text": "ربع الا ربع", "reads": false },
   { "source": "composed", "text": "مليون والا ربع", "reads": false },
   { "source": "composed", "text": "مليون الا ربع ونص", "reads": false },
-  { "source": "composed", "text": "ربع 3", "reads": false }
+  { "source": "composed", "text": "ربع 3", "reads": false },
+  { "source": "composed", "text": "خمسين ونص", "reads": true, "value": 50.5, "unit": "none" },
+  { "source": "composed", "text": "الف وخمسمية", "reads": true, "value": 1500, "unit": "dinars" },
+  { "source": "review", "text": "مية ونص", "reads": false },
+  { "source": "review", "text": "100 ونص", "reads": false },
+  { "source": "review", "text": "مية الا ربع", "reads": false },
+  { "source": "review", "text": "خمسمية وربع", "reads": false },
+  { "source": "review", "text": "مليون وخمسمية", "reads": false },
+  { "source": "review", "text": "مليون و 200", "reads": false },
+  { "source": "review", "text": "مليونين وخمسين", "reads": false },
+  { "source": "review", "text": "ثلث مليون", "reads": false },
+  { "source": "review", "text": "خمس مليون", "reads": false },
+  { "source": "review", "text": "خمس الف", "reads": false },
+  { "source": "review", "text": "0 الا ربع", "reads": false },
+  { "source": "review", "text": "79228162514264337593543950335 الف ونص", "reads": false }
 ]

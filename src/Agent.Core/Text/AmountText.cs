@@ -24,7 +24,10 @@ namespace Agent.Core.Text;
 /// just before the singular scale word is that fraction of it (a quarter of a million is
 /// (0.25, <see cref="AmountUnit.Million"/>)); a fraction alone is (0.25 or 0.5, <see cref="AmountUnit.None"/>), which
 /// the checks refuse below the minimum. A fraction with two or more scale groups, or followed by anything but the word
-/// for dinar, does not read. Words are compared after <see cref="ArabicText.Normalize"/> on both sides.
+/// for dinar, does not read. Three forms whose meaning is Khalil's to rule do not read either (review of 6 Nov 2026), so
+/// they go to the model as any message does: a fraction after a bare hundred or more, a bare number straight after
+/// the millions, and a short counting form (three to ten) straight before the singular scale word.
+/// Words are compared after <see cref="ArabicText.Normalize"/> on both sides.
 /// </remarks>
 public static partial class AmountText
 {
@@ -92,7 +95,21 @@ public static partial class AmountText
         if (groups.Count == 1)
         {
             var (count, scale) = groups[0];
-            count += fraction;
+
+            // A fraction after a bare hundred or more ("a hundred and a half") is not read: the half may be of the
+            // hundred or of the thousand, and that reading is Khalil's to rule (review of 6 Nov 2026).
+            if (fraction != 0 && scale == ScaleNone && count >= BareCountTooLargeForAFraction)
+                return false;
+
+            try
+            {
+                count += fraction;
+            }
+            catch (OverflowException)
+            {
+                return false;
+            }
+
             if (count <= 0)
                 return false;
             value = count;
@@ -103,6 +120,14 @@ public static partial class AmountText
         // A fraction is read with one group only; with more, the text goes to the model.
         if (fraction != 0)
             return false;
+
+        // A bare number straight after the millions ("a million and five hundred") is not read: it may count thousands
+        // or dinars, and that reading is Khalil's to rule (review of 6 Nov 2026). After the thousands it is dinars.
+        for (var i = 1; i < groups.Count; i++)
+        {
+            if (groups[i].Scale == ScaleNone && groups[i - 1].Scale == ScaleMillion)
+                return false;
+        }
 
         decimal total;
         try
@@ -120,6 +145,9 @@ public static partial class AmountText
         unit = AmountUnit.Dinars;
         return true;
     }
+
+    /// <summary>A bare count from here up takes no fraction word (see <see cref="TryRead"/>).</summary>
+    private const decimal BareCountTooLargeForAFraction = 100m;
 
     private const int ScaleNone = 0;
     private const int ScaleThousand = 1;
@@ -140,7 +168,7 @@ public static partial class AmountText
     };
 
     /// <summary>A word of the text, or a number written in digits (<see cref="Digits"/> is then set).</summary>
-    private readonly record struct Token(AmountWordKind Kind, int Value, decimal? Digits = null);
+    private readonly record struct Token(AmountWordKind Kind, int Value, decimal? Digits = null, bool Construct = false);
 
     /// <summary>
     /// Splits the normalised text on spaces into words of <see cref="AmountTextWords"/> and digit numbers; "and"
@@ -165,7 +193,7 @@ public static partial class AmountText
             }
             else if (words.TryGetValue(word, out var known))
             {
-                tokens.Add(new Token(known.Kind, known.Value));
+                tokens.Add(new Token(known.Kind, known.Value, Construct: known.Construct));
             }
             else if (word.Length > and.Length
                 && word.StartsWith(and, StringComparison.Ordinal)
@@ -173,7 +201,7 @@ public static partial class AmountText
                 && joined.Kind is not AmountWordKind.And and not AmountWordKind.Dinar and not AmountWordKind.Less)
             {
                 tokens.Add(new Token(AmountWordKind.And, 0));
-                tokens.Add(new Token(joined.Kind, joined.Value));
+                tokens.Add(new Token(joined.Kind, joined.Value, Construct: joined.Construct));
             }
             else
             {
@@ -230,6 +258,14 @@ public static partial class AmountText
         /// <summary>A count with its scale word (thousand or million), or a bare count (scale none); null when neither.</summary>
         public (decimal Count, int Scale)? Group()
         {
+            // A short counting form straight before the singular scale word is not read: the same words name a third,
+            // a fifth and so on of the unit, and that reading is Khalil's to rule (review of 6 Nov 2026).
+            if (Peek(0) is { Digits: null, Kind: AmountWordKind.Unit, Construct: true }
+                && Peek(1) is { Digits: null, Value: 1, Kind: AmountWordKind.Thousand or AmountWordKind.Million })
+            {
+                return null;
+            }
+
             var count = Count();
             if (Peek(0) is { Digits: null } scaleWord && scaleWord.Kind is AmountWordKind.Thousand or AmountWordKind.Million)
             {
