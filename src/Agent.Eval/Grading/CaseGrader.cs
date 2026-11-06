@@ -534,8 +534,20 @@ public sealed class CaseGrader
                 verdicts.Add(new FieldVerdict(field + ".card_outcome", outcome, shown, OutcomeMatches(outcome, actedState, reasons)));
             }
 
-            if (expect.Reply is { } reply)
-                verdicts.Add(new FieldVerdict(field + ".reply", reply, Codes(step.ReplyCodes), step.ReplyCodes.Contains(reply)));
+            if (expect.Reply is { } reply && expect.Amount is { } replyAmount)
+            {
+                // The reply with its figure (a balance reply's balance), as the case-level replies are compared.
+                var items = ReplyItems(step.Replies);
+                verdicts.Add(new FieldVerdict(
+                    field + ".reply",
+                    reply + " " + Figure(replyAmount),
+                    Codes(items.Select(item => item.Amount is { } seen ? item.Code + " " + Figure(seen) : item.Code)),
+                    items.Any(item => item.Code == reply && item.Amount == replyAmount)));
+            }
+            else if (expect.Reply is { } replyCode)
+            {
+                verdicts.Add(new FieldVerdict(field + ".reply", replyCode, Codes(step.ReplyCodes), step.ReplyCodes.Contains(replyCode)));
+            }
             if (expect.Moved is { } moved)
                 verdicts.Add(Equal(field + ".moved", Figure(moved), Figure(step.MovedIqd)));
             if (expect.Executions is { } executions)

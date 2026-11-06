@@ -746,6 +746,33 @@ public class CaseGraderTests
     }
 
     [Fact]
+    public void AStepReplyWithAnAmountIsGradedOnTheCodeAndTheFigure()
+    {
+        var evalCase = Case(new Expectation(), Say(), Confirm(new StepExpect(Reply: ReasonCodes.Balance, Amount: Balance)));
+
+        FieldVerdict Graded(params ConversationMessage[] replies)
+            => StepVerdict(Grader.Grade(evalCase, Observed(steps: [Step(0, "say", "live"), ConfirmStep("done", "done", replies)])), "reply");
+
+        var right = Graded(Agent(ConversationKind.Outcome, OutcomeCodes.Done), Agent(ConversationKind.Balance, amount: Balance));
+        Assert.True(right.Ok);
+        Assert.True(right.Graded);
+        var wrongFigure = Graded(Agent(ConversationKind.Balance, amount: Balance - 1));
+        Assert.False(wrongFigure.Ok);
+        Assert.Contains((Balance - 1).ToString(System.Globalization.CultureInfo.InvariantCulture), wrongFigure.Observed, StringComparison.Ordinal);
+        Assert.False(Graded(Agent(ConversationKind.Refusal, ReasonCodes.NotUnderstood)).Ok);
+        Assert.False(Graded().Ok);
+    }
+
+    [Fact]
+    public void AStepReplyWithoutAnAmountIsGradedOnTheCodeAlone()
+    {
+        var evalCase = Case(new Expectation(), Say(), Confirm(new StepExpect(Reply: ReasonCodes.Balance)));
+        var seen = Observed(steps: [Step(0, "say", "live"), ConfirmStep("done", "done", Agent(ConversationKind.Balance, amount: Balance - 1))]);
+
+        Assert.True(StepVerdict(Grader.Grade(evalCase, seen), "reply").Ok);
+    }
+
+    [Fact]
     public void NoCardFourPassesWithThreeCards()
     {
         var expect = new StepExpect(CardOutcome: "done") { NoCard = new Dictionary<int, bool> { [4] = true } };

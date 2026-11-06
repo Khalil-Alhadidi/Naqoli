@@ -180,6 +180,50 @@ public sealed class CaseLoaderTests : IDisposable
         Assert.Equal("FIX-01", ex.CaseId);
     }
 
+    [Fact]
+    public void AStepReplyMayCarryItsAmount()
+    {
+        const string Reply = "\"reply\": \"points_to_confirm\"";
+        Assert.Contains(Reply, FixtureLine(0), StringComparison.Ordinal);
+        var path = Write(FixtureLine(0).Replace(Reply, Reply + ", \"amount\": 699000", StringComparison.Ordinal));
+
+        var expect = CaseLoader.Load(path)[0].Steps[3].Expect!;
+
+        Assert.Equal(("points_to_confirm", 699_000L), (expect.Reply, expect.Amount!.Value));
+        Assert.Null(expect.Extra);
+    }
+
+    [Fact]
+    public void AStepAmountWithoutAReplyIsRefused()
+    {
+        var path = Write(FixtureLine(0).Replace("\"executions\": 1", "\"executions\": 1, \"amount\": 699000", StringComparison.Ordinal));
+
+        var ex = Assert.Throws<CaseFileException>(() => CaseLoader.Load(path));
+
+        Assert.Contains("amount", ex.Message, StringComparison.Ordinal);
+        Assert.Equal((1, "FIX-01"), (ex.Line, ex.CaseId));
+    }
+
+    [Fact]
+    public void EveryBadLineIsNamedInOneRefusal()
+    {
+        var first = FixtureLine(0).Replace("\"executions\": 1", "\"executions\": 1, \"exections\": 1", StringComparison.Ordinal);
+        var third = FixtureLine(2).Replace("\"set\": \"dev\", ", string.Empty, StringComparison.Ordinal);
+        Assert.NotEqual(FixtureLine(2), third);
+        var path = Write(first, FixtureLine(1), third, FixtureLine(1));
+
+        var ex = Assert.Throws<CaseFileException>(() => CaseLoader.Load(path));
+
+        Assert.Equal((1, "FIX-01"), (ex.Line, ex.CaseId));
+        var lines = ex.Message.Split(Environment.NewLine);
+        Assert.Equal(3, lines.Length);
+        Assert.Contains("line 1 (case FIX-01)", lines[0], StringComparison.Ordinal);
+        Assert.Contains("exections", lines[0], StringComparison.Ordinal);
+        Assert.Contains("line 3 (case FIX-03)", lines[1], StringComparison.Ordinal);
+        Assert.Contains("line 4 (case FIX-02)", lines[2], StringComparison.Ordinal);
+        Assert.Contains("used twice", lines[2], StringComparison.Ordinal);
+    }
+
     [Theory]
     [InlineData("{\"say\": \"yes\",", "{\"say\": \"yes\", \"tap\": \"confirm\",")]
     [InlineData("{\"tap\": \"cancel\",", "{\"tap\": \"jump\",")]

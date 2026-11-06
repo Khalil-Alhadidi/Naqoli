@@ -28,6 +28,14 @@ public sealed class CaseFileException : Exception
         CaseId = caseId;
     }
 
+    /// <summary>Several problems of one file as one exception: every message on its own line, the first one's line and case id.</summary>
+    public CaseFileException(IReadOnlyList<CaseFileException> problems)
+        : base(string.Join(Environment.NewLine, (problems ?? throw new ArgumentNullException(nameof(problems))).Select(p => p.Message)), problems[0])
+    {
+        Line = problems[0].Line;
+        CaseId = problems[0].CaseId;
+    }
+
     /// <summary>The 1-based line of the problem.</summary>
     public int Line { get; }
 
@@ -43,8 +51,9 @@ public sealed class CaseFileException : Exception
 /// <summary>
 /// Reads a request set (<c>requests.dev.jsonl</c> format, <c>data/README.md</c>): one JSON object per line, blank lines
 /// skipped. Strict: snake_case names, no unknown key (<see cref="JsonUnmappedMemberHandling.Disallow"/>), required
-/// fields present, nulls only where the format allows them, and the step forms and fault codes of the README. Any problem
-/// is one <see cref="CaseFileException"/> naming the line and the case id; the message never quotes case text.
+/// fields present, nulls only where the format allows them, and the step forms and fault codes of the README. Every line
+/// is read before the loader refuses, so one <see cref="CaseFileException"/> names the first problem of each bad line
+/// with its line and case id; the message never quotes case text.
 /// </summary>
 public static class CaseLoader
 {
@@ -80,7 +89,7 @@ public static class CaseLoader
     };
 
     /// <summary>Every case of the file at <paramref name="path"/>, in file order.</summary>
-    /// <exception cref="CaseFileException">The file is missing, a line is not a valid case, or two cases share an id.</exception>
+    /// <exception cref="CaseFileException">The file is missing, or one or more lines are not valid cases or repeat an id.</exception>
     public static IReadOnlyList<EvalCase> Load(string path)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
@@ -88,6 +97,7 @@ public static class CaseLoader
             throw new CaseFileException($"{Path.GetFileName(path)}: the case file does not exist.");
 
         var cases = new List<EvalCase>();
+        var problems = new List<CaseFileException>();
         var ids = new HashSet<string>(StringComparer.Ordinal);
         var number = 0;
         foreach (var line in File.ReadLines(path))
@@ -96,30 +106,49 @@ public static class CaseLoader
             if (string.IsNullOrWhiteSpace(line))
                 continue;
 
-            var id = TryReadId(line);
-            EvalCase? read;
             try
             {
-                read = JsonSerializer.Deserialize<EvalCase>(line, Json);
+                cases.Add(ReadLine(path, number, line, ids));
             }
-            catch (JsonException ex)
+            catch (CaseFileException ex)
             {
-                // The serializer's message names the JSON path and the member, never the value.
-                throw new CaseFileException(path, number, id, "not a valid case: " + ex.Message, ex);
+                // Keep reading: a sealed set must name every bad line in one attempt (the held-out file, 6 Nov 2026).
+                problems.Add(ex);
             }
-
-            if (read is null)
-                throw new CaseFileException(path, number, id, "the line is null.");
-
-            var problem = Validate(read, out var checkedCase);
-            if (problem is not null)
-                throw new CaseFileException(path, number, read.Id, problem);
-            if (!ids.Add(checkedCase.Id))
-                throw new CaseFileException(path, number, checkedCase.Id, "the id is used twice.");
-            cases.Add(checkedCase);
         }
 
-        return cases;
+        return problems.Count switch
+        {
+            0 => cases,
+            1 => throw problems[0],
+            _ => throw new CaseFileException(problems),
+        };
+    }
+
+    /// <summary>The case on one line, checked; <paramref name="ids"/> gains its id.</summary>
+    private static EvalCase ReadLine(string path, int number, string line, HashSet<string> ids)
+    {
+        var id = TryReadId(line);
+        EvalCase? read;
+        try
+        {
+            read = JsonSerializer.Deserialize<EvalCase>(line, Json);
+        }
+        catch (JsonException ex)
+        {
+            // The serializer's message names the JSON path and the member, never the value.
+            throw new CaseFileException(path, number, id, "not a valid case: " + ex.Message, ex);
+        }
+
+        if (read is null)
+            throw new CaseFileException(path, number, id, "the line is null.");
+
+        var problem = Validate(read, out var checkedCase);
+        if (problem is not null)
+            throw new CaseFileException(path, number, read.Id, problem);
+        if (!ids.Add(checkedCase.Id))
+            throw new CaseFileException(path, number, checkedCase.Id, "the id is used twice.");
+        return checkedCase;
     }
 
     /// <summary>The case id of a line, when the line is a JSON object with a string <c>id</c>.</summary>
@@ -206,6 +235,9 @@ public static class CaseLoader
             return "a pin is correct or wrong, on a confirm tap only.";
         if (step.Twice && step.Tap != "confirm")
             return "twice is for a confirm tap only.";
+
+        if (step.Expect is { Amount: not null, Reply: null })
+            return "an expect amount is the figure of a reply; the step names no reply.";
 
         if (step.Expect is not { Extra: { Count: > 0 } extra } expect)
             return null;
