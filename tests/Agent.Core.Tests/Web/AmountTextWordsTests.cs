@@ -62,7 +62,7 @@ public class AmountTextWordsTests
     [Fact]
     public void TheFractionListsHoldOneWordEach()
     {
-        // The fraction forms (5 Nov 2026) are Khalil's, from the parse prompt; the card never writes a fraction, so
+        // The fraction forms (6 Nov 2026) are Khalil's, from the parse prompt; the card never writes a fraction, so
         // there is no resource key to compare with. One word each: another spelling is his to add.
         using var words = Words();
         var root = words.RootElement;

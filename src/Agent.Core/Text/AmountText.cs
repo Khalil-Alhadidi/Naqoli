@@ -18,7 +18,7 @@ namespace Agent.Core.Text;
 /// (<c>AmountRule</c>); a bare number with the word for dinar is (number, <see cref="AmountUnit.Dinars"/>). A unit
 /// written just before the word for one hundred multiplies it; a unit before a tens word adds to it. Two or more scale
 /// groups add up in dinars (one million and five hundred thousand is (1,500,000, <see cref="AmountUnit.Dinars"/>)).
-/// Fraction words (5 Nov 2026), read as the parse prompt reads them: "and" with the word for a quarter or a half after
+/// Fraction words (6 Nov 2026), read as the parse prompt reads them: "and" with the word for a quarter or a half after
 /// one group adds it (three thousand and a quarter is (3.25, <see cref="AmountUnit.Thousand"/>)); the word for "less"
 /// with a fraction takes it away (a million less a quarter is (0.75, <see cref="AmountUnit.Million"/>)); a fraction
 /// just before the singular scale word is that fraction of it (a quarter of a million is

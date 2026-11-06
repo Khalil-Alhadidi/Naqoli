@@ -28,8 +28,8 @@ The development set, 102 cases, three runs per model, the median of the three ([
 
 | Model | Passed of 102 (median) | Wrong cards (three runs) | Every target met | Cost per completed request | Open weights | Prompt version of the run |
 |---|---|---|---|---|---|---|
-| DeepSeek V4.1 Flash with reasoning (the frozen model) | 101 | 0 | Yes | 0.000126 USD | Yes | 8, frozen code |
-| Claude Sonnet 5.5 | 101 | 0 | Yes | 0.0019 USD | No | 8, frozen code |
+| DeepSeek V4.1 Flash with reasoning (the frozen model) | 102 | 0 | Yes | 0.000126 USD | Yes | 8, frozen code |
+| Claude Sonnet 5.5 | 102 | 0 | Yes | 0.0019 USD | No | 8, frozen code |
 | DeepSeek V4.1 Flash | 98 | 0 | Yes | 0.000098 USD | Yes | 8, before the reason guard |
 | Claude Haiku 5.5 | 97 | 0 | Yes | 0.00012 USD | No | 8, before the reason guard |
 | DeepSeek V4 Pro | 92 | 0 | No | 0.00096 USD | Yes | 6, older prompt and keys |
@@ -37,7 +37,7 @@ The development set, 102 cases, three runs per model, the median of the three ([
 | Gemini 3.5 Flash-Lite | 81 | 0 | No | 0 (free tier) | No | 6, older prompt and keys |
 | Gemma 4 | 66 | 1 of 306 | No | 0 (free tier) | Yes | 6, older prompt and keys |
 
-The rows on prompt 6 are as measured then, before two prompt versions, five re-keyed cases and the guards, so they show where each model stood and are not comparable with the first four. Khalil froze on DeepSeek V4.1 Flash with reasoning (5 Nov 2026): open weights that Zain can host itself, the same 101 of 102 as Sonnet with no flipped case at about a fifteenth of the cost per request. The one residual case on both is ADD-30, a typed quarter amount, which builds no card. The held-out result is added after milestone 11.
+The rows on prompt 6 are as measured then, before two prompt versions, five re-keyed cases and the guards, so they show where each model stood and are not comparable with the first four. Khalil froze on DeepSeek V4.1 Flash with reasoning (5 Nov 2026): open weights that Zain can host itself, the same 102 of 102 as Sonnet in every run, with no flipped case, at about a fifteenth of the cost per request. Sonnet is the faster of the two: message to card 1.80 s against 2.58 s at the median, both inside the 3 s target. The held-out result is added after milestone 11.
 
 ## Repository layout
 

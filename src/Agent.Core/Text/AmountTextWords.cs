@@ -6,7 +6,7 @@ namespace Agent.Core.Text;
 /// <summary>
 /// Khalil's number words for reading a typed amount (<c>amount-words.json</c>, an embedded resource): the same words as
 /// the <c>Words_*</c> keys of the phone's resource file (17 Oct 2026), plus his spelling of millions, the word for
-/// dinar, and his fraction forms from the parse prompt (a quarter, a half, and the word for "less"; 5 Nov 2026). Read once; every word is kept in the form <see cref="ArabicText.Normalize"/> gives, so it compares with
+/// dinar, and his fraction forms from the parse prompt (a quarter, a half, and the word for "less"; 6 Nov 2026). Read once; every word is kept in the form <see cref="ArabicText.Normalize"/> gives, so it compares with
 /// normalised input.
 /// </summary>
 internal static class AmountTextWords

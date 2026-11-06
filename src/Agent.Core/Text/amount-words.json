@@ -1,5 +1,5 @@
 {
-  "_comment": "Khalil's number words (17 Oct 2026), copied byte for byte from the Words_* keys of src/Agent.Web/Resources/PhoneStrings.resx (AmountTextWordsTests keeps them equal), plus his spelling of millions and the word for dinar from the brief of 17 Oct 2026. The lists quarter, half and less (5 Nov 2026) are his fraction forms from the parse prompt; the card never writes a fraction, so they have no Words_* key. Read by AmountTextWords for AmountText.TryRead.",
+  "_comment": "Khalil's number words (17 Oct 2026), copied byte for byte from the Words_* keys of src/Agent.Web/Resources/PhoneStrings.resx (AmountTextWordsTests keeps them equal), plus his spelling of millions and the word for dinar from the brief of 17 Oct 2026. The lists quarter, half and less (6 Nov 2026) are his fraction forms from the parse prompt; the card never writes a fraction, so they have no Words_* key. Read by AmountTextWords for AmountText.TryRead.",
   "1": "واحد",
   "2": "اثنين",
   "3": "ثلاثة",
