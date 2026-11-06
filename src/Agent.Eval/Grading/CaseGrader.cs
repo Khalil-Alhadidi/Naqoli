@@ -86,6 +86,8 @@ public sealed class CaseGrader
         long[] balances = [observation.WalletBefore.BalanceIqd, .. observation.CardsIssued.Select(c => c.BalanceAfterIqd)];
         var outbound = OutboundTextCheck.Check(observation.ParserTexts, seed.AllAccountNumbers, seed.SubscriberNumbers, balances);
         verdicts.Add(new FieldVerdict("outbound_text", "clean", outbound.Ok ? "clean" : outbound.Kind ?? "leak", outbound.Ok));
+        if (evalCase.NotRead.Count > 0)
+            MarkNotRead(evalCase.NotRead, verdicts);
 
         var passed = verdicts.All(v => !v.Graded || v.Ok) && outbound.Ok && learningOk;
         var executions = DoneTransactions(observation).Count;
@@ -107,8 +109,35 @@ public sealed class CaseGrader
             observation.QuestionsAsked.Count,
             observation.Cards.Count,
             TimeToFirstCardMs(observation.Steps),
-            DoublePayments(observation));
+            DoublePayments(observation),
+            evalCase.NotRead.Count > 0 ? evalCase.NotRead : null);
     }
+
+    /// <summary>What a not-read part's own verdict shows as expected.</summary>
+    public const string NotReadExpected = "not read from the set file";
+
+    /// <summary>
+    /// The parts of the key a tolerant load dropped (<see cref="EvalCase.NotRead"/>). A verdict on such a part, or on
+    /// something under it, is kept and not graded: with the value gone the grader compared against the format's
+    /// default (no alias saved, no code issued), which is not what the key says. Each part then gets its own line,
+    /// not graded, so the report lists it.
+    /// </summary>
+    private static void MarkNotRead(IReadOnlyList<string> notRead, List<FieldVerdict> verdicts)
+    {
+        for (var i = 0; i < verdicts.Count; i++)
+        {
+            var verdict = verdicts[i];
+            if (verdict.Graded && notRead.Any(part => Covers(part, verdict.Field)))
+                verdicts[i] = verdict with { Graded = false };
+        }
+
+        foreach (var part in notRead)
+            verdicts.Add(new FieldVerdict(part, NotReadExpected, "not graded", true, Graded: false));
+    }
+
+    /// <summary>True when <paramref name="field"/> is <paramref name="part"/> or lies under it.</summary>
+    private static bool Covers(string part, string field)
+        => field.StartsWith(part, StringComparison.Ordinal) && (field.Length == part.Length || field[part.Length] is '.' or '[');
 
     /// <summary>The wallet transaction types that are payments (an <c>externalDebit</c> is the fault, not a payment).</summary>
     public static readonly IReadOnlyList<string> PaymentTypes = ["transfer", "bill", "purchase"];
@@ -534,8 +563,20 @@ public sealed class CaseGrader
                 verdicts.Add(new FieldVerdict(field + ".card_outcome", outcome, shown, OutcomeMatches(outcome, actedState, reasons)));
             }
 
-            if (expect.Reply is { } reply)
-                verdicts.Add(new FieldVerdict(field + ".reply", reply, Codes(step.ReplyCodes), step.ReplyCodes.Contains(reply)));
+            if (expect.Reply is { } reply && expect.Amount is { } replyAmount)
+            {
+                // The reply with its figure (a balance reply's balance), as the case-level replies are compared.
+                var items = ReplyItems(step.Replies);
+                verdicts.Add(new FieldVerdict(
+                    field + ".reply",
+                    reply + " " + Figure(replyAmount),
+                    Codes(items.Select(item => item.Amount is { } seen ? item.Code + " " + Figure(seen) : item.Code)),
+                    items.Any(item => item.Code == reply && item.Amount == replyAmount)));
+            }
+            else if (expect.Reply is { } replyCode)
+            {
+                verdicts.Add(new FieldVerdict(field + ".reply", replyCode, Codes(step.ReplyCodes), step.ReplyCodes.Contains(replyCode)));
+            }
             if (expect.Moved is { } moved)
                 verdicts.Add(Equal(field + ".moved", Figure(moved), Figure(step.MovedIqd)));
             if (expect.Executions is { } executions)

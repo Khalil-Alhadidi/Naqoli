@@ -36,7 +36,16 @@ public sealed record EvalCase(
     string? Parent = null,
     bool PendingWordingRecheck = false,
     string? Meaning = null,
-    string? Notes = null);
+    string? Notes = null)
+{
+    /// <summary>
+    /// The parts of the line a tolerant load could not read and dropped (<see cref="CaseLoader.Load(string, bool)"/>),
+    /// named as the grader names its fields (<c>final.alias_saved</c>, <c>cards[0].reissued</c>, <c>steps[1].queue</c>).
+    /// Empty on a strict load. The grader lists each one as not graded.
+    /// </summary>
+    [JsonIgnore]
+    public IReadOnlyList<string> NotRead { get; init; } = [];
+}
 
 /// <summary>
 /// One step. Exactly one of <see cref="Say"/>, <see cref="Tap"/> and <see cref="Wait"/> is set (<see cref="CaseLoader"/>
@@ -66,7 +75,8 @@ public sealed record CaseStep(
 /// What must hold right after a step. <c>no_card_N</c> keys (a compound request's part N gives no card) land in
 /// <see cref="NoCard"/>; <c>alias_offer</c> lands in <see cref="AliasOfferSet"/> and <see cref="AliasOffer"/>, so an
 /// explicit null ("no offer") is told from an absent key ("not graded"); any other unknown key is refused by
-/// <see cref="CaseLoader"/>.
+/// <see cref="CaseLoader"/>. <see cref="Amount"/> is the figure the step's <see cref="Reply"/> carries (a balance
+/// reply's balance), written only beside a <c>reply</c>.
 /// </summary>
 public sealed record StepExpect(
     string? Card = null,
@@ -78,7 +88,8 @@ public sealed record StepExpect(
     int? PinAttemptsLeft = null,
     string? ThenReply = null,
     bool? NewRequest = null,
-    bool? PinInChatOrLogs = null)
+    bool? PinInChatOrLogs = null,
+    long? Amount = null)
 {
     /// <summary>The keys this record does not name, kept for <see cref="CaseLoader"/> to check.</summary>
     [JsonExtensionData]

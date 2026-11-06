@@ -48,7 +48,7 @@ U5 has no history: she has never used the wallet.
 | `{"wait": "expire"}` | the user does nothing until the card timer ends. `expire_if_card` is the same but a card is only allowed, not required (GAP-08). |
 
 A step may carry `expect`, checked right after that step: `card` (unchanged, cancelled, reissued), `card_outcome` (done, cancelled, expired, failed, not_done, closed),
-`reply` (a reason code, see below), `moved` 0 (no money left the wallet), `alias_offer` (the alias text offered, or null for no offer),
+`reply` (a reason code, see below; with `amount` beside it, the figure that reply carries, such as the balance in a balance reply), `moved` 0 (no money left the wallet), `alias_offer` (the alias text offered, or null for no offer),
 `status_sequence` (what the user sees during a fault), `executions`, `pin_attempts_left`, `then_reply` and `no_card_N` for the parts of a compound request.
 
 `fault` names the fault the switch injects for this case (`settings.json` lists the six codes) and when: on the model call (`request`), on the first `confirm`, or while the card waits (`external_debit` with an amount).

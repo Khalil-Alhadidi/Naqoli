@@ -241,6 +241,27 @@ public static partial class ReportWriter
         foreach (var r in unsupported)
             Line("- " + r.Id + ": " + r.Unsupported);
 
+        Line();
+        Line("## Not read from the set file");
+        Line();
+        var partly = results.Where(r => r.NotRead is { Count: > 0 }).ToList();
+        if (partly.Count == 0)
+        {
+            Line("None.");
+        }
+        else
+        {
+            Line("The loader could not read " + Number(partly.Sum(r => r.NotRead!.Count)) + " part(s) of the answer keys of " + Number(partly.Count)
+                + " case(s): a key or a value written in a form the runner does not know. Those parts are not graded. The cases are graded on everything else, so a pass among them is a pass on the parts that were read.");
+            Line();
+            ScoreTable(md, [Score("Keys read in full", [.. results.Where(r => r.NotRead is not { Count: > 0 })]), Score("Keys read in part", [.. partly])], "Group");
+            Line();
+            Line("| Id | Passed | Not read, not graded |");
+            Line("|---|---|---|");
+            foreach (var r in partly)
+                Line("| " + r.Id + " | " + (r.Passed ? "yes" : "no") + " | " + Cell(string.Join(", ", r.NotRead!)) + " |");
+        }
+
         return md.ToString();
     }
 
@@ -300,6 +321,7 @@ public static partial class ReportWriter
                 r.Verdicts,
             }).ToList(),
             Unsupported = results.Where(r => r.Unsupported is not null).Select(r => new { r.Id, r.Unsupported }).ToList(),
+            NotRead = results.Where(r => r.NotRead is { Count: > 0 }).Select(r => new { r.Id, r.Passed, r.NotRead }).ToList(),
         };
     }
 

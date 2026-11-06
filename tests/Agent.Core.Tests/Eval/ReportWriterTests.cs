@@ -50,6 +50,28 @@ public sealed class ReportWriterTests : IDisposable
     }
 
     [Fact]
+    public void PartsNotReadAreListedWithTheirCases()
+    {
+        var results = Summary().Results.ToList();
+        results[0] = results[0] with { NotRead = ["final.alias_saved", "steps[1].queue"] };
+
+        var paths = ReportWriter.Write(Summary() with { Results = results }, directory.FullName);
+        var markdown = File.ReadAllText(paths.MarkdownPath);
+        var json = File.ReadAllText(paths.JsonPath);
+
+        Assert.Contains("## Not read from the set file", markdown, StringComparison.Ordinal);
+        Assert.Contains("could not read 2 part(s) of the answer keys of 1 case(s)", markdown, StringComparison.Ordinal);
+        Assert.Contains("| " + results[0].Id + " | " + (results[0].Passed ? "yes" : "no") + " | final.alias_saved, steps[1].queue |", markdown, StringComparison.Ordinal);
+        Assert.Contains("| Keys read in part | 1 |", markdown, StringComparison.Ordinal);
+        Assert.Contains("| Keys read in full | " + (results.Count - 1).ToString(System.Globalization.CultureInfo.InvariantCulture) + " |", markdown, StringComparison.Ordinal);
+        Assert.Contains("\"not_read\": [", json, StringComparison.Ordinal);
+        Assert.Contains("\"steps[1].queue\"", json, StringComparison.Ordinal);
+
+        var clean = File.ReadAllText(ReportWriter.Write(Summary() with { Label = "clean" }, directory.FullName).MarkdownPath);
+        Assert.EndsWith("## Not read from the set file\n\nNone.\n", clean, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void TheReportHasEverySectionAndNoCaseText()
     {
         var summary = Summary();

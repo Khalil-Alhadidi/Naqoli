@@ -39,6 +39,15 @@ The development set, 102 cases, three runs per model, the median of the three ([
 
 The rows on prompt 6 are as measured then, before two prompt versions, five re-keyed cases and the guards, so they show where each model stood and are not comparable with the first four. Khalil froze on DeepSeek V4.1 Flash with reasoning (5 Nov 2026): open weights that Zain can host itself, the same 102 of 102 as Sonnet in every run, with no flipped case, at under a fifth of the cost per request. Message to card at the median is 1.95 s against Sonnet's 1.72 s, both inside the 3 s target; on a hosted endpoint that time moves with the provider's load ([docs/results.md](docs/results.md), measurement notes). The held-out result is added after milestone 11.
 
+The held-out set, 62 cases sealed on 15 Oct 2026 and run once on 6 Nov 2026 ([docs/results.md](docs/results.md#held-out-set)):
+
+| Model | Passed of 62 | Executions without a tap | Double payments under faults | No card when it must refuse | Wrong cards | Asks when it must | Message to card |
+|---|---|---|---|---|---|---|---|
+| DeepSeek V4.1 Flash with reasoning (the entry's result) | 40 | 0 | 0 | 8 of 8 | 4 | 9 of 12 | 2.05 s |
+| Claude Sonnet 5.5 (comparison declared before the run) | 40 | 0 | 0 | 8 of 8 | 4 | 9 of 12 | 1.80 s |
+
+The safety targets held on both models: nothing moved without a tap, no payment was doubled, and no request that must be refused got a card. Three accuracy targets were missed on both: wrong cards (4 of 62, target at most 2 %), asking when it must (9 of 12, target at least 95 %) and the reason spoken on a refusal (6 of 8, target at least 90 %). The two models fail almost the same cases, so the gap to the development set's 102 of 102 comes from the rules and the keys, which were tuned and re-keyed on the development set only, and not from the model. Two misses are of a kind declared before the run (40 of 60 with them set aside), and 16 expectations of 10 keys were written in a form the runner does not read and are listed, not graded. Every miss is named in [docs/results.md](docs/results.md#every-miss). Nothing was changed in response.
+
 ## Repository layout
 
 - `src/`: the four applications: `Wallet.MockApi` (minimal API, EF Core with SQL Server), `Agent.Core` (orchestrator and request pipeline), `Agent.Web` (Blazor Server with MudBlazor), `Agent.Eval` (console that runs the request sets).
@@ -204,7 +213,7 @@ Outside Development the agent needs both `Agent:WalletBaseUrl` and `Agent:Wallet
 
 Every `/admin` request also carries the `X-Wallet-Admin-Key` header. In Development with no `Wallet:AdminKey` set, any non-empty value is accepted (the header makes a browser preflight, so a web page cannot reset the wallet). Outside Development, set a key of at least 16 characters in user secrets or the `Wallet__AdminKey` environment variable and send it in that header; never commit it.
 
-Status, 5 Nov 2026: milestones 1 to 10 of 12 are done and tagged. The model, the prompt (version 8) and the seed are frozen for the held-out run ([docs/disclosure.md](docs/disclosure.md), "Freeze before the held-out run"). 1,712 core tests and 82 screen journeys pass; every rule of `docs/matching-rules.md` is built ([docs/rules-coverage.md](docs/rules-coverage.md)). The results are in [docs/results.md](docs/results.md), the status of each milestone in [docs/build-plan.md](docs/build-plan.md). Next: milestone 11, the one held-out run, then milestone 12, demo readiness.
+Status, 6 Nov 2026: milestones 1 to 11 of 12 are done and tagged. The model, the prompt (version 8) and the seed were frozen ([docs/disclosure.md](docs/disclosure.md), "Freeze before the held-out run") and the held-out set ran once on 6 Nov 2026 (40 of 62; "Results" above). The test suite passes (1,861 tests, 0 failed, 23 skipped); every rule of `docs/matching-rules.md` is built ([docs/rules-coverage.md](docs/rules-coverage.md)). The results are in [docs/results.md](docs/results.md), the status of each milestone in [docs/build-plan.md](docs/build-plan.md). Next: milestone 12, demo readiness.
 
 ## Disclosure
 

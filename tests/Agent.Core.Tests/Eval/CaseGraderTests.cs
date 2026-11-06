@@ -746,6 +746,54 @@ public class CaseGraderTests
     }
 
     [Fact]
+    public void APartOfTheKeyThatWasNotReadIsListedAndNotGraded()
+    {
+        // The loader dropped final.balance: without the mark the grader would compare against a value the key never said.
+        var evalCase = Case(new Expectation(Asks: [], Cards: [], Final: new ExpectedFinal(Balance - 1)));
+        var seen = Observed();
+
+        var strict = Grader.Grade(evalCase, seen);
+        var tolerant = Grader.Grade(evalCase with { NotRead = ["final.balance", "refusal.bill"] }, seen);
+
+        Assert.False(strict.Passed);
+        Assert.Equal("final.balance", strict.FirstFailing!.Field);
+        Assert.Null(strict.NotRead);
+        Assert.True(tolerant.Passed);
+        Assert.Equal(["final.balance", "refusal.bill"], tolerant.NotRead!);
+        Assert.All(tolerant.Verdicts.Where(v => v.Field == "final.balance"), v => Assert.False(v.Graded));
+        var listed = Assert.Single(tolerant.Verdicts, v => v.Field == "refusal.bill");
+        Assert.Equal((CaseGrader.NotReadExpected, false), (listed.Expected, listed.Graded));
+        Assert.True(Assert.Single(tolerant.Verdicts, v => v.Field == "final.codes_issued").Graded);
+    }
+
+    [Fact]
+    public void AStepReplyWithAnAmountIsGradedOnTheCodeAndTheFigure()
+    {
+        var evalCase = Case(new Expectation(), Say(), Confirm(new StepExpect(Reply: ReasonCodes.Balance, Amount: Balance)));
+
+        FieldVerdict Graded(params ConversationMessage[] replies)
+            => StepVerdict(Grader.Grade(evalCase, Observed(steps: [Step(0, "say", "live"), ConfirmStep("done", "done", replies)])), "reply");
+
+        var right = Graded(Agent(ConversationKind.Outcome, OutcomeCodes.Done), Agent(ConversationKind.Balance, amount: Balance));
+        Assert.True(right.Ok);
+        Assert.True(right.Graded);
+        var wrongFigure = Graded(Agent(ConversationKind.Balance, amount: Balance - 1));
+        Assert.False(wrongFigure.Ok);
+        Assert.Contains((Balance - 1).ToString(System.Globalization.CultureInfo.InvariantCulture), wrongFigure.Observed, StringComparison.Ordinal);
+        Assert.False(Graded(Agent(ConversationKind.Refusal, ReasonCodes.NotUnderstood)).Ok);
+        Assert.False(Graded().Ok);
+    }
+
+    [Fact]
+    public void AStepReplyWithoutAnAmountIsGradedOnTheCodeAlone()
+    {
+        var evalCase = Case(new Expectation(), Say(), Confirm(new StepExpect(Reply: ReasonCodes.Balance)));
+        var seen = Observed(steps: [Step(0, "say", "live"), ConfirmStep("done", "done", Agent(ConversationKind.Balance, amount: Balance - 1))]);
+
+        Assert.True(StepVerdict(Grader.Grade(evalCase, seen), "reply").Ok);
+    }
+
+    [Fact]
     public void NoCardFourPassesWithThreeCards()
     {
         var expect = new StepExpect(CardOutcome: "done") { NoCard = new Dictionary<int, bool> { [4] = true } };
