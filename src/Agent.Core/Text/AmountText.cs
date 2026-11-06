@@ -18,7 +18,13 @@ namespace Agent.Core.Text;
 /// (<c>AmountRule</c>); a bare number with the word for dinar is (number, <see cref="AmountUnit.Dinars"/>). A unit
 /// written just before the word for one hundred multiplies it; a unit before a tens word adds to it. Two or more scale
 /// groups add up in dinars (one million and five hundred thousand is (1,500,000, <see cref="AmountUnit.Dinars"/>)).
-/// Words are compared after <see cref="ArabicText.Normalize"/> on both sides.
+/// Fraction words (5 Nov 2026), read as the parse prompt reads them: "and" with the word for a quarter or a half after
+/// one group adds it (three thousand and a quarter is (3.25, <see cref="AmountUnit.Thousand"/>)); the word for "less"
+/// with a fraction takes it away (a million less a quarter is (0.75, <see cref="AmountUnit.Million"/>)); a fraction
+/// just before the singular scale word is that fraction of it (a quarter of a million is
+/// (0.25, <see cref="AmountUnit.Million"/>)); a fraction alone is (0.25 or 0.5, <see cref="AmountUnit.None"/>), which
+/// the checks refuse below the minimum. A fraction with two or more scale groups, or followed by anything but the word
+/// for dinar, does not read. Words are compared after <see cref="ArabicText.Normalize"/> on both sides.
 /// </remarks>
 public static partial class AmountText
 {
@@ -33,14 +39,43 @@ public static partial class AmountText
             return false;
 
         var reader = new Reader(tokens);
+
+        // A fraction first: alone, or that fraction of the singular scale word after it.
+        if (reader.Fraction() is { } leading)
+        {
+            var leadingScale = reader.SingularScale();
+            var leadingDinars = reader.Take(AmountWordKind.Dinar);
+            if (!reader.AtEnd)
+                return false;
+            value = leading;
+            unit = Unit(leadingScale, leadingDinars);
+            return true;
+        }
+
         var groups = new List<(decimal Count, int Scale)>();
+        decimal fraction = 0;
         while (true)
         {
             if (reader.Group() is not { } group)
                 return false;
             groups.Add(group);
+
+            // "less" and a fraction takes it away; "and" and a fraction adds it. Either ends the amount.
+            if (reader.Take(AmountWordKind.Less))
+            {
+                if (reader.Fraction() is not { } less)
+                    return false;
+                fraction = -less;
+                break;
+            }
+
             if (!reader.Take(AmountWordKind.And))
                 break;
+            if (reader.Fraction() is { } more)
+            {
+                fraction = more;
+                break;
+            }
         }
 
         var dinars = reader.Take(AmountWordKind.Dinar);
@@ -57,17 +92,17 @@ public static partial class AmountText
         if (groups.Count == 1)
         {
             var (count, scale) = groups[0];
+            count += fraction;
             if (count <= 0)
                 return false;
             value = count;
-            unit = scale switch
-            {
-                ScaleMillion => AmountUnit.Million,
-                ScaleThousand => AmountUnit.Thousand,
-                _ => dinars ? AmountUnit.Dinars : AmountUnit.None,
-            };
+            unit = Unit(scale, dinars);
             return true;
         }
+
+        // A fraction is read with one group only; with more, the text goes to the model.
+        if (fraction != 0)
+            return false;
 
         decimal total;
         try
@@ -89,6 +124,13 @@ public static partial class AmountText
     private const int ScaleNone = 0;
     private const int ScaleThousand = 1;
     private const int ScaleMillion = 2;
+
+    private static AmountUnit Unit(int scale, bool dinars) => scale switch
+    {
+        ScaleMillion => AmountUnit.Million,
+        ScaleThousand => AmountUnit.Thousand,
+        _ => dinars ? AmountUnit.Dinars : AmountUnit.None,
+    };
 
     private static decimal Multiplier(int scale) => scale switch
     {
@@ -128,7 +170,7 @@ public static partial class AmountText
             else if (word.Length > and.Length
                 && word.StartsWith(and, StringComparison.Ordinal)
                 && words.TryGetValue(word[and.Length..], out var joined)
-                && joined.Kind is not AmountWordKind.And and not AmountWordKind.Dinar)
+                && joined.Kind is not AmountWordKind.And and not AmountWordKind.Dinar and not AmountWordKind.Less)
             {
                 tokens.Add(new Token(AmountWordKind.And, 0));
                 tokens.Add(new Token(joined.Kind, joined.Value));
@@ -159,6 +201,30 @@ public static partial class AmountText
             }
 
             return false;
+        }
+
+        /// <summary>Takes the next token when it is a fraction word, and gives the fraction (0.25 or 0.5).</summary>
+        public decimal? Fraction()
+        {
+            if (Peek(0) is { Digits: null, Kind: AmountWordKind.Fraction } token)
+            {
+                position++;
+                return token.Value / 100m;
+            }
+
+            return null;
+        }
+
+        /// <summary>Takes the next token when it is the singular word for thousand or million; scale none otherwise.</summary>
+        public int SingularScale()
+        {
+            if (Peek(0) is { Digits: null, Value: 1 } token && token.Kind is AmountWordKind.Thousand or AmountWordKind.Million)
+            {
+                position++;
+                return token.Kind == AmountWordKind.Million ? ScaleMillion : ScaleThousand;
+            }
+
+            return ScaleNone;
         }
 
         /// <summary>A count with its scale word (thousand or million), or a bare count (scale none); null when neither.</summary>

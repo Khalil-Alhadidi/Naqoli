@@ -7,7 +7,9 @@ namespace Agent.Core.Tests.Text;
 
 /// <summary>
 /// The code reader of a typed amount (17 Oct 2026) over <c>amount-text-examples.json</c>: Khalil's three examples
-/// (<c>source: khalil</c>) and the ones composed from his number words for him to check (<c>source: composed</c>).
+/// (<c>source: khalil</c>), the ones composed from his number words for him to check (<c>source: composed</c>), and the
+/// fraction forms (5 Nov 2026): the parse prompt's own examples (<c>source: prompt</c>) and the typed answer of ADD-30
+/// (<c>source: dev</c>).
 /// </summary>
 public class AmountTextTests
 {

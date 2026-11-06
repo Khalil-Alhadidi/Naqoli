@@ -60,6 +60,19 @@ public class AmountTextWordsTests
     }
 
     [Fact]
+    public void TheFractionListsHoldOneWordEach()
+    {
+        // The fraction forms (5 Nov 2026) are Khalil's, from the parse prompt; the card never writes a fraction, so
+        // there is no resource key to compare with. One word each: another spelling is his to add.
+        using var words = Words();
+        var root = words.RootElement;
+
+        Assert.Single(root.GetProperty("quarter").EnumerateArray());
+        Assert.Single(root.GetProperty("half").EnumerateArray());
+        Assert.Single(root.GetProperty("less").EnumerateArray());
+    }
+
+    [Fact]
     public void TheFileHoldsNoNumberTheCardDoesNotHave()
     {
         var resx = Resx();

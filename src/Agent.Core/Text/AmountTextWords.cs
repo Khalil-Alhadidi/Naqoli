@@ -5,8 +5,8 @@ namespace Agent.Core.Text;
 
 /// <summary>
 /// Khalil's number words for reading a typed amount (<c>amount-words.json</c>, an embedded resource): the same words as
-/// the <c>Words_*</c> keys of the phone's resource file (17 Oct 2026), plus his spelling of millions and the word for
-/// dinar. Read once; every word is kept in the form <see cref="ArabicText.Normalize"/> gives, so it compares with
+/// the <c>Words_*</c> keys of the phone's resource file (17 Oct 2026), plus his spelling of millions, the word for
+/// dinar, and his fraction forms from the parse prompt (a quarter, a half, and the word for "less"; 5 Nov 2026). Read once; every word is kept in the form <see cref="ArabicText.Normalize"/> gives, so it compares with
 /// normalised input.
 /// </summary>
 internal static class AmountTextWords
@@ -67,6 +67,9 @@ internal static class AmountTextWords
         AddList("two_million", AmountWordKind.Million, 2);
         AddList("millions", AmountWordKind.Million, 0);
         AddList("dinar", AmountWordKind.Dinar, 0);
+        AddList("quarter", AmountWordKind.Fraction, 25);
+        AddList("half", AmountWordKind.Fraction, 50);
+        AddList("less", AmountWordKind.Less, 0);
         Add(document.RootElement.GetProperty("and").GetString(), new AmountWord(AmountWordKind.And, 0));
         return words;
     }
@@ -98,6 +101,12 @@ internal enum AmountWordKind
 
     /// <summary>The joiner "and".</summary>
     And,
+
+    /// <summary>A fraction word: a quarter (value 25) or a half (value 50), in hundredths.</summary>
+    Fraction,
+
+    /// <summary>The word for "less", before a fraction that is taken away.</summary>
+    Less,
 }
 
 /// <summary>One word of <see cref="AmountTextWords"/>: its kind and its value.</summary>
