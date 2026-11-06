@@ -6,27 +6,45 @@ Author: Khalil Ahmed Ibrahim (GitHub: Khalil-Alhadidi)
 
 Licence: all rights reserved ([LICENSE](LICENSE)). The repository is public so the judges can read it; that is not permission to use, copy or redistribute the code, the documents or the data. Third-party components keep their own licences, listed in [docs/disclosure.md](docs/disclosure.md).
 
-The agent reads one sentence in Iraqi Arabic (a transfer, a bill, a store purchase, or a balance question) and answers with one confirmation card built by code, which moves money only when the user taps Confirm; the model parses the sentence and nothing else, every reply is a template written by an Iraqi, and phone and account numbers are masked before the model sees the text. To run it on Windows with the .NET 10 SDK and a local SQL Server (other database routes under [Database](#database)): `dotnet tool restore`, then `dotnet run --project src/Wallet.MockApi -- migrate` and `dotnet run --project src/Agent.Web -- migrate`, then start the wallet (`dotnet run --project src/Wallet.MockApi`) and, in a second terminal, the console (`dotnet run --project src/Agent.Web`) and open http://localhost:5089. It runs on the scripted parser with no model key; [The model](#the-model-claude-parser) explains how to switch to Claude. The held-out set (`data/requests.heldout.jsonl`, 62 cases) was committed in `462187f` on 14 Oct 2026 and sealed on 15 Oct 2026 with SHA-256 `3e396362fd6cea5fa81e26ad9e4c17e9c4de2066ee186e963690a14c195ca1c1` ([docs/HELDOUT_SEAL.md](docs/HELDOUT_SEAL.md)); only `Agent.Eval` reads it, once, in milestone 11 (rule 7 in [CLAUDE.md](CLAUDE.md)).
+The agent reads one sentence in Iraqi Arabic (a transfer, a bill, a store purchase, or a balance question) and answers with one confirmation card built by code, which moves money only when the user taps Confirm; the model parses the sentence and nothing else, every reply is a template written by an Iraqi, and phone and account numbers are masked before the model sees the text. To run it on Windows with the .NET 10 SDK and a local SQL Server (other database routes under [Database](#database)): `dotnet tool restore`, then `dotnet run --project src/Wallet.MockApi -- migrate` and `dotnet run --project src/Agent.Web -- migrate`, then start the wallet (`dotnet run --project src/Wallet.MockApi`) and, in a second terminal, the console (`dotnet run --project src/Agent.Web`) and open http://localhost:5089. It runs on the scripted parser with no model key; [The model](#the-model) explains how to switch to a live model. The held-out set (`data/requests.heldout.jsonl`, 62 cases) was committed in `462187f` on 14 Oct 2026 and sealed on 15 Oct 2026 with SHA-256 `3e396362fd6cea5fa81e26ad9e4c17e9c4de2066ee186e963690a14c195ca1c1` ([docs/HELDOUT_SEAL.md](docs/HELDOUT_SEAL.md)); only `Agent.Eval` reads it, once, in milestone 11 (rule 7 in [CLAUDE.md](CLAUDE.md)).
 
 Reading guide, in order:
 
 1. [docs/architecture.md](docs/architecture.md): the design, decisions D1 to D22, and the decisions log.
-2. [docs/failure-modes.md](docs/failure-modes.md): every way the system can fail that we found, and how each is handled.
-3. [docs/known-gaps.md](docs/known-gaps.md): every known limit of the agent as built, and what would close it.
-4. [docs/reports/dev-claude-sonnet-m9c-repeat3-2026-10-19-2055.md](docs/reports/dev-claude-sonnet-m9c-repeat3-2026-10-19-2055.md): the latest Sonnet result on the development set, three runs, every target passed on the median.
-5. [docs/targets.md](docs/targets.md): the targets from the brief that every report grades against.
-6. [docs/disclosure.md](docs/disclosure.md): every library, tool, model and data source used, Claude Code included.
+2. [docs/results.md](docs/results.md): what the agent scores on the development set, on each model, and how the model was chosen.
+3. [docs/failure-modes.md](docs/failure-modes.md): every way the system can fail that we found, and how each is handled.
+4. [docs/known-gaps.md](docs/known-gaps.md): every known limit of the agent as built, and what would close it.
+5. [docs/disclosure.md](docs/disclosure.md): every library, tool, model and data source used, Claude Code included.
 
-An agent that turns one sentence in Iraqi Arabic into one confirmation card and one tap, against a mock wallet API, for transfers, bills, store purchases and the read-only balance question. It is an entry for the ZainCash Agentic AI Challenge Iraq, topic 04, and its design is in [docs/architecture.md](docs/architecture.md).
+Every other document is listed in [docs/README.md](docs/README.md).
+
+It is an entry for the ZainCash Agentic AI Challenge Iraq, topic 04.
 
 Rules: the nine rules that are never broken are listed in [CLAUDE.md](CLAUDE.md).
+
+## Results
+
+The development set, 102 cases, three runs per model, the median of the three ([docs/results.md](docs/results.md), where every figure links to its report; targets in [docs/targets.md](docs/targets.md)).
+
+| Model | Passed of 102 (median) | Wrong cards (three runs) | Every target met | Cost per completed request | Open weights | Prompt version of the run |
+|---|---|---|---|---|---|---|
+| DeepSeek V4.1 Flash with reasoning (the frozen model) | 102 | 0 | Yes | 0.00035 USD | Yes | 8, frozen code |
+| Claude Sonnet 5.5 | 102 | 0 | Yes | 0.0019 USD | No | 8, frozen code |
+| DeepSeek V4.1 Flash | 98 | 0 | Yes | 0.000098 USD | Yes | 8, before the reason guard |
+| Claude Haiku 5.5 | 97 | 0 | Yes | 0.00012 USD | No | 8, before the reason guard |
+| DeepSeek V4 Pro | 92 | 0 | No | 0.00096 USD | Yes | 6, older prompt and keys |
+| Qwen3.8 27B | 90 | 1 of 306 | No | 0.00034 USD | Yes | 6, older prompt and keys |
+| Gemini 3.5 Flash-Lite | 81 | 0 | No | 0 (free tier) | No | 6, older prompt and keys |
+| Gemma 4 | 66 | 1 of 306 | No | 0 (free tier) | Yes | 6, older prompt and keys |
+
+The rows on prompt 6 are as measured then, before two prompt versions, five re-keyed cases and the guards, so they show where each model stood and are not comparable with the first four. Khalil froze on DeepSeek V4.1 Flash with reasoning (5 Nov 2026): open weights that Zain can host itself, the same 102 of 102 as Sonnet in every run, with no flipped case, at under a fifth of the cost per request. Message to card at the median is 1.95 s against Sonnet's 1.72 s, both inside the 3 s target; on a hosted endpoint that time moves with the provider's load ([docs/results.md](docs/results.md), measurement notes). The held-out result is added after milestone 11.
 
 ## Repository layout
 
 - `src/`: the four applications: `Wallet.MockApi` (minimal API, EF Core with SQL Server), `Agent.Core` (orchestrator and request pipeline), `Agent.Web` (Blazor Server with MudBlazor), `Agent.Eval` (console that runs the request sets).
 - `tests/`: `Agent.Core.Tests` (xunit.v3 unit and API tests) and `Agent.Web.Journeys` (Playwright screen journeys).
 - `data/`: Khalil's exported test-set files: the wallet seed (`data/seed/*.json`, see `data/seed/README.md`) and the request sets.
-- `docs/`: architecture, build plan, failure modes and disclosure. The agent's write path as built (structured request, resolvers, checks, pending states, Confirm and Checking, audit log) is in [docs/agent-core.md](docs/agent-core.md).
+- `docs/`: the design, the results, the failure modes, the known gaps and the disclosure, with the reference documents, the eval reports (`docs/reports/`) and the plans and reviews of each milestone (`docs/history/`). The index is [docs/README.md](docs/README.md).
 
 ## Prerequisites
 
@@ -137,18 +155,25 @@ Notes:
 - Install the Playwright browser once, after the first build: `pwsh tests/Agent.Web.Journeys/bin/Debug/net10.0/playwright.ps1 install chromium`.
 - The screen journeys (`tests/Agent.Web.Journeys`, collection `journeys`, fixture `JourneyHost`) host the mock wallet and the web console in process on Kestrel, on dynamic loopback ports, and drive them with headless Chromium through the scripted parser (never a live model). The wallet uses `ZainCashWalletJourneys_<pid>_<n>_Test` (stem and server from `ConnectionStrings__WalletJourneysTest`, default `ZainCashWalletJourneys_Test`) and the console `ZainCashAgent_Journeys_<pid>_<n>_Test` (`ConnectionStrings__AgentJourneysTest`, default `ZainCashAgent_Journeys_Test`), where `<pid>` is the test process and `<n>` the host's number in it, so two runs on one server never collide; both are created at the start of a run and dropped at its end, and the configured names must end in `_Test`. A run that is killed can leave its two `_<pid>_<n>_Test` databases behind; drop them by hand. Five consoles run: two for U1 (the default card timer, and a 4-second timer for the timer journeys), and one each for U2, U3 and U5 (`Agent:DemoUserId`). The journeys type development-set messages by case id (`DevSet`), and the reset before each one also turns the kill switch off and clears saved settings. The journeys skip when SQL Server does not answer the 3-second probe, or when Chromium is not installed (the skip message gives the install command). The 80 journeys, with the host test and the screenshot helper (82 tests, the helper skipped unless `ZAINCASH_SCREENSHOTS` is `1`), take about two and a half minutes.
 
-## The model (Claude parser)
+## The model
 
-The parse call is the scripted parser by default (`Agent:Parser` = `scripted`): no model, no key. The Claude parser (milestone 6) calls a candidate of the `Model` section (`sonnet`, the default since milestone 10; `haiku`; `opus`) through `Microsoft.Extensions.AI`. It needs an Anthropic API key, kept in user secrets or the environment, never in a file:
+The parse call is the scripted parser by default (`Agent:Parser` = `scripted`): no model, no key. The model parser (milestone 6) calls the selected candidate of the `Model` section through `Microsoft.Extensions.AI`. The default candidate, since the freeze of 5 Nov 2026, is `deepseek-reasoning`: DeepSeek V4.1 Flash (open weights) through OpenRouter, reasoning at low effort, temperature 0, served only by 8-bit providers that do not collect data, Venice first and DeepInfra second. It needs an OpenRouter API key, kept in user secrets, never in a file:
+
+```powershell
+dotnet user-secrets set "OpenRouter:ApiKey" "<your key>" --project src/Agent.Web
+dotnet user-secrets set "Agent:Parser" "model" --project src/Agent.Web
+```
+
+Claude Sonnet 5.5 (`sonnet`, the default from milestone 10 to 5 Nov 2026) stays one setting away, with an Anthropic API key (`haiku` and `opus` likewise):
 
 ```powershell
 dotnet user-secrets set "Anthropic:ApiKey" "<your key>" --project src/Agent.Web
-dotnet user-secrets set "Agent:Parser" "claude" --project src/Agent.Web
+dotnet user-secrets set "Model:Candidate" "sonnet" --project src/Agent.Web
 ```
 
-The first command stores the key for both the console and the runner (`Agent.Eval` reads only `Anthropic:ApiKey` from the console's store). The second switches the console to the model; remove it (`dotnet user-secrets remove "Agent:Parser" --project src/Agent.Web`) to go back to the scripted parser. `ANTHROPIC_API_KEY` works instead of the first command. With `Agent:Parser` = `claude` and no key, the console and the runner refuse to start with a message naming both settings (never a value). Another candidate: `dotnet user-secrets set "Model:Candidate" "haiku" --project src/Agent.Web`. The committed default stays `scripted`; the demo laptop runs Sonnet, switched on with the two commands above. The screen journeys always use the scripted parser.
+A key command stores the key for both the console and the runner (`Agent.Eval` reads the keys from the console's store). The second switches the console to the model; remove it (`dotnet user-secrets remove "Agent:Parser" --project src/Agent.Web`) to go back to the scripted parser. `ANTHROPIC_API_KEY` works instead of the Anthropic key command. With `Agent:Parser` = `model` (or its synonym `claude`) and no key for the selected candidate, the console and the runner refuse to start with a message naming both settings (never a value). Another candidate: `dotnet user-secrets set "Model:Candidate" "haiku" --project src/Agent.Web`. The committed parser stays `scripted`; the model is switched on with the commands above. The screen journeys always use the scripted parser.
 
-A baseline run on the development set (wallet running): `dotnet run --project src/Agent.Eval -- dev --parser claude:haiku` (or `sonnet`, `opus`). It prints the estimated cost first and the real cost at the end. Expect cents on Haiku and about one to three USD per development run on Sonnet or Opus (72 cases; questions and taps make several calls per case, and thinking is billed as output). How the parse call works, its settings and its faults: [docs/agent-model.md](docs/agent-model.md).
+A baseline run on the development set (wallet running): `dotnet run --project src/Agent.Eval -- dev --parser compatible:deepseek-reasoning` for the default candidate, or `--parser claude:sonnet` (or `haiku`, `opus`). It prints the estimated cost first and the real cost at the end. Expect cents on Haiku and about one to three USD per development run on Sonnet or Opus (72 cases; questions and taps make several calls per case, and thinking is billed as output). How the parse call works, its settings and its faults: [docs/agent-model.md](docs/agent-model.md).
 
 The live model test is skipped unless asked for: `$env:ZAINCASH_MODEL_TESTS='1'; dotnet test tests/Agent.Core.Tests -- --filter-class "Agent.Core.Tests.Parsing.LiveModelTests"` (clear it afterwards with `Remove-Item Env:ZAINCASH_MODEL_TESTS`). It sends each candidate three prompt examples and the development set's clean balance questions, and prints the tokens and the cost of each call.
 
@@ -179,14 +204,14 @@ Outside Development the agent needs both `Agent:WalletBaseUrl` and `Agent:Wallet
 
 Every `/admin` request also carries the `X-Wallet-Admin-Key` header. In Development with no `Wallet:AdminKey` set, any non-empty value is accepted (the header makes a browser preflight, so a web page cannot reset the wallet). Outside Development, set a key of at least 16 characters in user secrets or the `Wallet__AdminKey` environment variable and send it in that header; never commit it.
 
-Status, 21 Oct 2026: milestones 1 to 9 of 12 are done and tagged (`milestone-1` to `milestone-9c`; 9a aliases, 9b store purchases, 9c compound requests), followed on 20 Oct 2026 by the person-or-bill question and the consent screen's No button. The parse prompt is at version 5. 1,418 core tests (8 skipped by gate: the live model tests and the link tests), 70 screen journeys, and every rule of `docs/matching-rules.md` built (50 of 50, [docs/rules-coverage.md](docs/rules-coverage.md)). On the development set (96 cases), the oracle passes 95 (`docs/reports/dev-scripted-person-or-bill-2026-10-20-1250`) and Sonnet 93 on the median of three runs on 19 Oct 2026, before the 20 Oct changes (`docs/reports/dev-claude-sonnet-m9c-repeat3-2026-10-19-2055`); 0 executions without a tap, 0 double payments and 0 masking failures in every committed report. The slide 2 targets are in [docs/targets.md](docs/targets.md) and every runner report prints pass or miss against them. The status of each milestone is in [docs/build-plan.md](docs/build-plan.md); the failure modes are in [docs/failure-modes.md](docs/failure-modes.md). Next: milestone 10, model choice and freeze.
+Status, 5 Nov 2026: milestones 1 to 10 of 12 are done and tagged. The model, the prompt (version 8) and the seed are frozen for the held-out run ([docs/disclosure.md](docs/disclosure.md), "Freeze before the held-out run"). 1,712 core tests and 82 screen journeys pass; every rule of `docs/matching-rules.md` is built ([docs/rules-coverage.md](docs/rules-coverage.md)). The results are in [docs/results.md](docs/results.md), the status of each milestone in [docs/build-plan.md](docs/build-plan.md). Next: milestone 11, the one held-out run, then milestone 12, demo readiness.
 
 ## Disclosure
 
 Every model, provider, library, data source and AI coding assistant used in this entry, in short. The full list, one line per item and added in the same commit as the thing it names, is [docs/disclosure.md](docs/disclosure.md).
 
 - AI coding assistant: Claude Code (Anthropic), with the Claude Fable 5.1, Opus and Haiku models, for planning, implementation and review. Claude drafted each test case and its answer key (architecture D14); Khalil rewrote every sentence in his own Iraqi Arabic. The phone strings and the matching rules are Khalil's.
-- Models and provider: Claude Sonnet 5.5 (`claude-sonnet-5-5`, the default candidate, chosen under D13 on 3 Nov 2026), Claude Haiku 5.5 (`claude-haiku-5-5`) and Claude Opus 5.5 (`claude-opus-5-5`), all through the Anthropic API, each used for one read-only structured parse call per message. The key is read from user secrets (`Anthropic:ApiKey`) or `ANTHROPIC_API_KEY` and is never committed.
+- Models and providers: DeepSeek V4.1 Flash (`deepseek/deepseek-v4.1-flash`, open weights under MIT) with reasoning at low effort, the default candidate `deepseek-reasoning` from the freeze of 5 Nov 2026, through OpenRouter, pinned to 8-bit endpoints that do not collect data (Venice first, then DeepInfra, from 6 Nov 2026); Claude Sonnet 5.5 (`claude-sonnet-5-5`, chosen under D13 on 3 Nov 2026 and the default until 5 Nov 2026), Claude Haiku 5.5 (`claude-haiku-5-5`) and Claude Opus 5.5 (`claude-opus-5-5`) through the Anthropic API; the other candidates measured (DeepSeek V4 Pro, Qwen3.8 27B, Gemini, Gemma 4) are in [docs/disclosure.md](docs/disclosure.md). Each is used for one read-only structured parse call per message. The keys are read from user secrets (`OpenRouter:ApiKey`, `Anthropic:ApiKey`) or `ANTHROPIC_API_KEY` and are never committed.
 - Runtime and libraries: .NET 10 SDK and ASP.NET Core 10; Anthropic 12.56.0 (official C# SDK) and Microsoft.Extensions.AI 10.11.0 (the `IChatClient` abstraction); MudBlazor 9.11.0; Microsoft.EntityFrameworkCore.SqlServer and .Design 10.0.13 with the dotnet-ef 10.0.13 tool; Microsoft.AspNetCore.OpenApi 10.0.13; Scalar.AspNetCore 2.18.2; Microsoft.Extensions.Http, Hosting, Options and Configuration 10.0.13; System.Security.Cryptography.Pkcs 10.0.13; SQL Server (local instance, LocalDB or container).
 - Tests: xunit.v3 4.0.2 on Microsoft Testing Platform, xunit.runner.visualstudio 4.0.1, Microsoft.NET.Test.Sdk 18.11.0, Microsoft.AspNetCore.Mvc.Testing 10.0.13, Microsoft.Playwright 1.63.0 with Chrome Headless Shell 153.
 - Data: the test-set workbook v0.15 (Khalil, 14 Oct 2026), exported as `data/seed/*.json`, `data/requests.dev.jsonl`, `data/requests.heldout.jsonl` and `docs/matching-rules.md`. All synthetic. The held-out file is sealed ([docs/HELDOUT_SEAL.md](docs/HELDOUT_SEAL.md)).

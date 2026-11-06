@@ -3,7 +3,7 @@ using Agent.Core.Parsing;
 namespace Agent.Core.Tests.Parsing;
 
 /// <summary>
-/// The start-time validation of the <c>Model</c> section for both providers (docs/plans/model-providers.md, "Validation at
+/// The start-time validation of the <c>Model</c> section for both providers (docs/history/plans/model-providers.md, "Validation at
 /// start"): the <c>compatible</c> fields, the pacing on either provider, the checks that apply to <c>anthropic</c> only,
 /// the label each provider gives, and the shape of a vendor key setting.
 /// </summary>

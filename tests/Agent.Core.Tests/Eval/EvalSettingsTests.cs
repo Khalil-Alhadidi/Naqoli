@@ -49,12 +49,13 @@ public class EvalSettingsTests
     }
 
     [Fact]
-    public void TheDefaultCandidateIsSonnetInBothProjects()
+    public void TheDefaultCandidateIsDeepseekReasoningInBothProjects()
     {
+        // The freeze before the held-out run (Khalil, 5 Nov 2026): DeepSeek V4.1 Flash with reasoning at low effort.
         using var eval = JsonDocument.Parse(File.ReadAllText(Path.Combine(Root, "src", "Agent.Eval", "appsettings.json")));
         using var web = JsonDocument.Parse(File.ReadAllText(Path.Combine(Root, "src", "Agent.Web", "appsettings.json")));
-        Assert.Equal("sonnet", web.RootElement.GetProperty("Model").GetProperty("Candidate").GetString());
-        Assert.Equal("sonnet", eval.RootElement.GetProperty("Model").GetProperty("Candidate").GetString());
+        Assert.Equal("deepseek-reasoning", web.RootElement.GetProperty("Model").GetProperty("Candidate").GetString());
+        Assert.Equal("deepseek-reasoning", eval.RootElement.GetProperty("Model").GetProperty("Candidate").GetString());
     }
 
     [Fact]
@@ -82,6 +83,10 @@ public class EvalSettingsTests
         }
     }
 
+    /// <summary>The frozen candidate's request fields (5 Nov 2026; the provider order of 6 Nov 2026): reasoning at low effort and the pinned provider routing.</summary>
+    private const string PinnedRequestFields =
+        """{"reasoning":{"effort":"low"},"provider":{"data_collection":"deny","quantizations":["fp8"],"order":["venice/fp8","deepinfra/fp8"],"allow_fallbacks":true}}""";
+
     [Theory]
     [InlineData("Agent.Web")]
     [InlineData("Agent.Eval")]
@@ -89,6 +94,9 @@ public class EvalSettingsTests
     {
         // The prompt version 7 round's stability experiment (4 Nov 2026): Flash with reasoning on at low effort, a copy of
         // deepseek except the request fields, a longer timeout and room for the reasoning tokens in the output budget.
+        // The freeze of 5 Nov 2026 pins the provider (fp8 only, no data collection, DeepInfra's fp8 endpoint first, then
+        // Morph's) and sets the prices to DeepInfra's published fp8 prices. Since 6 Nov 2026 Venice's fp8 endpoint is first
+        // and DeepInfra's second (DeepInfra's went over the 3 s target under load), and the prices are Venice's.
         using var document = JsonDocument.Parse(File.ReadAllText(Path.Combine(Root, "src", project, "appsettings.json")));
         var candidates = document.RootElement.GetProperty("Model").GetProperty("Candidates");
         var names = candidates.EnumerateObject().Select(c => c.Name).ToList();
@@ -98,9 +106,12 @@ public class EvalSettingsTests
         var changed = new Dictionary<string, string>(StringComparer.Ordinal)
         {
             // The raw JSON text of the string: its quotes escaped with a backslash, as written in the file.
-            ["RequestFields"] = "\"" + """{"reasoning":{"effort":"low"},"provider":{"data_collection":"deny"}}""".Replace("\"", "\\\"", StringComparison.Ordinal) + "\"",
+            ["RequestFields"] = "\"" + PinnedRequestFields.Replace("\"", "\\\"", StringComparison.Ordinal) + "\"",
             ["TimeoutSeconds"] = "90",
             ["MaxOutputTokens"] = "4000",
+            ["InputPricePerMTok"] = "0.30",
+            ["OutputPricePerMTok"] = "1.20",
+            ["CacheReadPricePerMTok"] = "0.0075",
         };
 
         Assert.Equal(deepseek.EnumerateObject().Select(p => p.Name), reasoning.EnumerateObject().Select(p => p.Name));
@@ -117,7 +128,7 @@ public class EvalSettingsTests
         var options = configuration.GetSection(ModelOptions.SectionName).Get<ModelOptions>()!;
         Assert.Empty(options.Problems());
         var selected = options.Selected!;
-        Assert.Equal("""{"reasoning":{"effort":"low"},"provider":{"data_collection":"deny"}}""", selected.RequestFieldsText());
+        Assert.Equal(PinnedRequestFields, selected.RequestFieldsText());
         Assert.Equal((0f, 90, 4000), (selected.Temperature, selected.TimeoutSeconds, selected.MaxOutputTokens));
     }
 

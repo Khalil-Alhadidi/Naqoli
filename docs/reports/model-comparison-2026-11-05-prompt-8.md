@@ -1,6 +1,6 @@
 # Model comparison, 5 Nov 2026: prompt version 8, with Haiku, Sonnet, Flash and Flash with reasoning
 
-After the prompt version 7 round ([model-comparison-2026-11-04-prompt-7.md](model-comparison-2026-11-04-prompt-7.md)), Khalil asked for more prompt fixes on the same branch, with the typed quarter (ADD-30) left for later. The round is designed in `docs/plans/prompt-8-round.md`, and every change is listed in [disclosure.md](../disclosure.md) under "Fixes after the freeze". What changed:
+After the prompt version 7 round ([model-comparison-2026-11-04-prompt-7.md](model-comparison-2026-11-04-prompt-7.md)), Khalil asked for more prompt fixes on the same branch, with the typed quarter (ADD-30) left for later. The round is designed in `docs/history/plans/prompt-8-round.md`, and every change is listed in [disclosure.md](../disclosure.md) under "Fixes after the freeze". What changed:
 
 1. **Prompt version 8.** Three edits, no example added or changed, and every Arabic phrase taken from one of Khalil's dev-set sentences:
    - The `bill_label_text` line: the possessive word is never copied into the label (MAL-07). When the words after it name the biller or the service, the whole phrase is `biller_text` (CLN-09-v1, CLN-23-v1).
