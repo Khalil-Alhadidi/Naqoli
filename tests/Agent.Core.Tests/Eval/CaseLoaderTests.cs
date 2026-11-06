@@ -205,6 +205,69 @@ public sealed class CaseLoaderTests : IDisposable
     }
 
     [Fact]
+    public void ATolerantLoadDropsWhatItCannotReadAndNamesIt()
+    {
+        var line = FixtureLine(0)
+            .Replace("\"consent_screen\": false", "\"consent_screen\": false, \"surprise\": 1", StringComparison.Ordinal)
+            .Replace("\"executions\": 1", "\"executions\": 1, \"exections\": 1", StringComparison.Ordinal)
+            .Replace("\"alias_saved\": null", "\"alias_saved\": {\"S01\": \"x\"}", StringComparison.Ordinal)
+            .Replace("\"warning\": null", "\"warning\": null, \"reissued\": true", StringComparison.Ordinal)
+            .Replace("\"amount\": 750000}", "\"amount\": 750000, \"part\": 2}", StringComparison.Ordinal)
+            .Replace("\"then_reply\": \"max_three_requests\"", "\"then_reply\": \"max_three_requests\", \"amount\": 5", StringComparison.Ordinal)
+            .Replace("\"alias_offer\": \"Hammoudi\"", "\"alias_offer\": 7", StringComparison.Ordinal);
+        var path = Write(line, FixtureLine(1));
+
+        Assert.Throws<CaseFileException>(() => CaseLoader.Load(path));
+        var cases = CaseLoader.Load(path, tolerant: true);
+
+        string[] expected =
+        [
+            "cards[0].reissued", "replies[0].part", "surprise", "final.alias_saved",
+            "steps[5].exections", "steps[6].amount", "steps[8].alias_offer",
+        ];
+        Assert.Equal(expected.Order(StringComparer.Ordinal), cases[0].NotRead.Order(StringComparer.Ordinal));
+        Assert.Empty(cases[1].NotRead);
+
+        // Everything else of the case is read as written.
+        var first = cases[0];
+        Assert.Null(first.Expect.Final!.AliasSaved);
+        Assert.Equal(50000, first.Expect.Cards![0].Amount);
+        Assert.Equal(750000, first.Expect.Replies![0].Amount);
+        Assert.Equal(1, first.Steps[5].Expect!.Executions);
+        Assert.Equal(("max_three_requests", (long?)null), (first.Steps[6].Expect!.ThenReply, first.Steps[6].Expect!.Amount));
+        Assert.False(first.Steps[8].Expect!.AliasOfferSet);
+        Assert.Null(first.Steps[5].Expect!.Extra);
+    }
+
+    [Fact]
+    public void ATolerantLoadOfACleanFileReadsEverything()
+    {
+        var strict = CaseLoader.Load(Fixture);
+        var tolerant = CaseLoader.Load(Fixture, tolerant: true);
+
+        Assert.Equal(strict.Select(c => c.Id), tolerant.Select(c => c.Id));
+        Assert.All(tolerant, c => Assert.Empty(c.NotRead));
+        Assert.Equal(strict[0].Expect.Cards![0], tolerant[0].Expect.Cards![0]);
+        Assert.Equal(strict[0].Steps.Count, tolerant[0].Steps.Count);
+    }
+
+    [Theory]
+    [InlineData("{\"tap\": \"cancel\",", "{\"tap\": \"jump\",")]
+    [InlineData("\"code\": \"wallet_error\"", "\"code\": \"wallet_melted\"")]
+    [InlineData("\"refusal\": null", "\"refusal\": \"no\"")]
+    [InlineData("\"final\": {\"balance\": 699000,", "\"final\": {\"balance\": \"lots\",")]
+    [InlineData("\"cards\": [{\"kind\": \"transfer\",", "\"cards\": [{")]
+    [InlineData("\"set\": \"dev\", ", "")]
+    public void ATolerantLoadStillRefusesWhatDecidesTheCase(string from, string to)
+    {
+        var line = FixtureLine(0);
+        Assert.Contains(from, line, StringComparison.Ordinal);
+        var path = Write(line.Replace(from, to, StringComparison.Ordinal));
+
+        Assert.Equal(1, Assert.Throws<CaseFileException>(() => CaseLoader.Load(path, tolerant: true)).Line);
+    }
+
+    [Fact]
     public void EveryBadLineIsNamedInOneRefusal()
     {
         var first = FixtureLine(0).Replace("\"executions\": 1", "\"executions\": 1, \"exections\": 1", StringComparison.Ordinal);

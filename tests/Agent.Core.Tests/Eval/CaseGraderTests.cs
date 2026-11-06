@@ -746,6 +746,27 @@ public class CaseGraderTests
     }
 
     [Fact]
+    public void APartOfTheKeyThatWasNotReadIsListedAndNotGraded()
+    {
+        // The loader dropped final.balance: without the mark the grader would compare against a value the key never said.
+        var evalCase = Case(new Expectation(Asks: [], Cards: [], Final: new ExpectedFinal(Balance - 1)));
+        var seen = Observed();
+
+        var strict = Grader.Grade(evalCase, seen);
+        var tolerant = Grader.Grade(evalCase with { NotRead = ["final.balance", "refusal.bill"] }, seen);
+
+        Assert.False(strict.Passed);
+        Assert.Equal("final.balance", strict.FirstFailing!.Field);
+        Assert.Null(strict.NotRead);
+        Assert.True(tolerant.Passed);
+        Assert.Equal(["final.balance", "refusal.bill"], tolerant.NotRead!);
+        Assert.All(tolerant.Verdicts.Where(v => v.Field == "final.balance"), v => Assert.False(v.Graded));
+        var listed = Assert.Single(tolerant.Verdicts, v => v.Field == "refusal.bill");
+        Assert.Equal((CaseGrader.NotReadExpected, false), (listed.Expected, listed.Graded));
+        Assert.True(Assert.Single(tolerant.Verdicts, v => v.Field == "final.codes_issued").Graded);
+    }
+
+    [Fact]
     public void AStepReplyWithAnAmountIsGradedOnTheCodeAndTheFigure()
     {
         var evalCase = Case(new Expectation(), Say(), Confirm(new StepExpect(Reply: ReasonCodes.Balance, Amount: Balance)));

@@ -44,6 +44,10 @@ public sealed record FieldVerdict(string Field, string Expected, string Observed
 /// <c>done</c> audit row names. One execution for one record is never counted; an <c>externalDebit</c> row never counts.
 /// The double-payments target sums it over the fault cases.
 /// </param>
+/// <param name="NotRead">
+/// The parts of the answer key a tolerant load could not read (<c>EvalCase.NotRead</c>), each listed among the verdicts
+/// as not graded; null when the key was read in full.
+/// </param>
 public sealed record CaseResult(
     string Id,
     string Category,
@@ -62,7 +66,8 @@ public sealed record CaseResult(
     int AsksObserved = 0,
     int CardsIssued = 0,
     long? TimeToFirstCardMs = null,
-    int DoublePayments = 0)
+    int DoublePayments = 0,
+    IReadOnlyList<string>? NotRead = null)
 {
     /// <summary>The card fields whose failing verdict makes a wrong card: recipient, amount, or biller and product.</summary>
     public static readonly IReadOnlyList<string> WrongCardFields = ["to_number", "display", "registered_name", "amount", "bill", "product"];

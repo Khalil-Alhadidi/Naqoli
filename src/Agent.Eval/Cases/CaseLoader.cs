@@ -1,6 +1,8 @@
 using System.Globalization;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
+using System.Text.Json.Serialization.Metadata;
 
 namespace Agent.Eval.Cases;
 
@@ -75,6 +77,7 @@ public static class CaseLoader
 
     private const string NoCardPrefix = "no_card_";
     private const string AliasOfferKey = "alias_offer";
+    private const string ExpectKey = "expect";
 
     /// <summary>The options every case file is read with.</summary>
     public static JsonSerializerOptions Json { get; } = new()
@@ -86,11 +89,22 @@ public static class CaseLoader
         RespectRequiredConstructorParameters = true,
         ReadCommentHandling = JsonCommentHandling.Disallow,
         AllowTrailingCommas = false,
+        TypeInfoResolver = new DefaultJsonTypeInfoResolver(),
     };
 
-    /// <summary>Every case of the file at <paramref name="path"/>, in file order.</summary>
+    /// <summary>Every case of the file at <paramref name="path"/>, in file order, read strictly.</summary>
     /// <exception cref="CaseFileException">The file is missing, or one or more lines are not valid cases or repeat an id.</exception>
-    public static IReadOnlyList<EvalCase> Load(string path)
+    public static IReadOnlyList<EvalCase> Load(string path) => Load(path, tolerant: false);
+
+    /// <summary>
+    /// Every case of the file at <paramref name="path"/>, in file order. With <paramref name="tolerant"/> (the held-out
+    /// set, which nobody may open or correct; Khalil, 6 Nov 2026) a part of the answer key the runner cannot read is
+    /// dropped and named in <see cref="EvalCase.NotRead"/> instead of refusing the file: a member the format does not
+    /// know, a single value of the wrong kind, an unknown step expectation. What decides how the case is played or what
+    /// it is at all still refuses the file: a step form, a fault, a missing required field, a block of the wrong shape.
+    /// </summary>
+    /// <exception cref="CaseFileException">The file is missing, or one or more lines are not valid cases or repeat an id.</exception>
+    public static IReadOnlyList<EvalCase> Load(string path, bool tolerant)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
         if (!File.Exists(path))
@@ -108,7 +122,7 @@ public static class CaseLoader
 
             try
             {
-                cases.Add(ReadLine(path, number, line, ids));
+                cases.Add(ReadLine(path, number, line, ids, tolerant));
             }
             catch (CaseFileException ex)
             {
@@ -126,13 +140,14 @@ public static class CaseLoader
     }
 
     /// <summary>The case on one line, checked; <paramref name="ids"/> gains its id.</summary>
-    private static EvalCase ReadLine(string path, int number, string line, HashSet<string> ids)
+    private static EvalCase ReadLine(string path, int number, string line, HashSet<string> ids, bool tolerant)
     {
         var id = TryReadId(line);
+        List<string>? notRead = tolerant ? [] : null;
         EvalCase? read;
         try
         {
-            read = JsonSerializer.Deserialize<EvalCase>(line, Json);
+            read = notRead is null ? JsonSerializer.Deserialize<EvalCase>(line, Json) : ReadTolerant(line, notRead);
         }
         catch (JsonException ex)
         {
@@ -143,12 +158,99 @@ public static class CaseLoader
         if (read is null)
             throw new CaseFileException(path, number, id, "the line is null.");
 
-        var problem = Validate(read, out var checkedCase);
+        var problem = Validate(read, notRead, out var checkedCase);
         if (problem is not null)
             throw new CaseFileException(path, number, read.Id, problem);
         if (!ids.Add(checkedCase.Id))
             throw new CaseFileException(path, number, checkedCase.Id, "the id is used twice.");
-        return checkedCase;
+        return notRead is { Count: > 0 } ? checkedCase with { NotRead = notRead } : checkedCase;
+    }
+
+    /// <summary>The case on <paramref name="line"/> after <see cref="Strip"/>, read with the strict options.</summary>
+    private static EvalCase? ReadTolerant(string line, List<string> notRead)
+    {
+        try
+        {
+            var node = JsonNode.Parse(line);
+            Strip(node, typeof(EvalCase), string.Empty, notRead);
+            return node.Deserialize<EvalCase>(Json);
+        }
+        catch (ArgumentException ex)
+        {
+            // A member written twice in one object: the node tree refuses it when the object is walked.
+            throw new JsonException("a member is written twice in one object.", ex);
+        }
+    }
+
+    /// <summary>
+    /// Removes from <paramref name="node"/> what <paramref name="type"/> cannot hold, and names each removal in
+    /// <paramref name="notRead"/>: a member the record does not have (unless the record keeps unknown members itself,
+    /// as <see cref="StepExpect"/> does), and a member whose single value does not read as its type. Records and lists
+    /// of records are walked; a record or a list of the wrong shape is left in place for the strict read to refuse.
+    /// Names follow the grader's fields: the <c>expect</c> level is not written, list items carry their index.
+    /// </summary>
+    private static void Strip(JsonNode? node, Type type, string path, List<string> notRead)
+    {
+        var info = Json.GetTypeInfo(type);
+        if (info.Kind == JsonTypeInfoKind.Enumerable)
+        {
+            if (node is JsonArray array && info.ElementType is { } element && IsRecord(element))
+            {
+                for (var i = 0; i < array.Count; i++)
+                    Strip(array[i], element, path + "[" + i.ToString(CultureInfo.InvariantCulture) + "]", notRead);
+            }
+
+            return;
+        }
+
+        if (info.Kind != JsonTypeInfoKind.Object || node is not JsonObject members)
+            return;
+
+        var keepsUnknown = info.Properties.Any(p => p.IsExtensionData);
+        foreach (var (name, child) in members.ToList())
+        {
+            var named = path.Length == 0 ? name : path + "." + name;
+            var property = info.Properties.FirstOrDefault(p => !p.IsExtensionData && string.Equals(p.Name, name, StringComparison.Ordinal));
+            if (property is null)
+            {
+                if (!keepsUnknown)
+                {
+                    members.Remove(name);
+                    notRead.Add(named);
+                }
+
+                continue;
+            }
+
+            if (IsRecord(property.PropertyType) || IsRecordList(property.PropertyType))
+            {
+                Strip(child, property.PropertyType, name == ExpectKey ? path : named, notRead);
+            }
+            else if (!Reads(child, property.PropertyType))
+            {
+                members.Remove(name);
+                notRead.Add(named);
+            }
+        }
+    }
+
+    private static bool IsRecord(Type type) => Json.GetTypeInfo(type).Kind == JsonTypeInfoKind.Object;
+
+    private static bool IsRecordList(Type type)
+        => Json.GetTypeInfo(type) is { Kind: JsonTypeInfoKind.Enumerable, ElementType: { } element } && IsRecord(element);
+
+    /// <summary>True when <paramref name="value"/> alone reads as <paramref name="type"/>.</summary>
+    private static bool Reads(JsonNode? value, Type type)
+    {
+        try
+        {
+            _ = JsonSerializer.Deserialize(value?.ToJsonString() ?? "null", type, Json);
+            return true;
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
     }
 
     /// <summary>The case id of a line, when the line is a JSON object with a string <c>id</c>.</summary>
@@ -169,8 +271,12 @@ public static class CaseLoader
         }
     }
 
-    /// <summary>The first problem of <paramref name="evalCase"/>, or null; <paramref name="checkedCase"/> has the <c>no_card_N</c> keys parsed.</summary>
-    private static string? Validate(EvalCase evalCase, out EvalCase checkedCase)
+    /// <summary>
+    /// The first problem of <paramref name="evalCase"/>, or null; <paramref name="checkedCase"/> has the <c>no_card_N</c>
+    /// keys parsed. With <paramref name="notRead"/> (a tolerant load) a step expectation that cannot be read is dropped
+    /// and named there instead of being a problem.
+    /// </summary>
+    private static string? Validate(EvalCase evalCase, List<string>? notRead, out EvalCase checkedCase)
     {
         checkedCase = evalCase;
         if (string.IsNullOrWhiteSpace(evalCase.Id))
@@ -184,7 +290,7 @@ public static class CaseLoader
         for (var i = 0; i < evalCase.Steps.Count; i++)
         {
             var step = evalCase.Steps[i];
-            var problem = ValidateStep(step, out var checkedStep);
+            var problem = ValidateStep(step, string.Create(CultureInfo.InvariantCulture, $"steps[{i}]"), notRead, out var checkedStep);
             if (problem is not null)
                 return string.Create(CultureInfo.InvariantCulture, $"step {i + 1}: {problem}");
             steps.Add(checkedStep);
@@ -217,7 +323,7 @@ public static class CaseLoader
         return null;
     }
 
-    private static string? ValidateStep(CaseStep step, out CaseStep checkedStep)
+    private static string? ValidateStep(CaseStep step, string name, List<string>? notRead, out CaseStep checkedStep)
     {
         checkedStep = step;
         var forms = (step.Say is null ? 0 : 1) + (step.Tap is null ? 0 : 1) + (step.Wait is null ? 0 : 1);
@@ -236,8 +342,14 @@ public static class CaseLoader
         if (step.Twice && step.Tap != "confirm")
             return "twice is for a confirm tap only.";
 
-        if (step.Expect is { Amount: not null, Reply: null })
-            return "an expect amount is the figure of a reply; the step names no reply.";
+        if (step.Expect is { Amount: not null, Reply: null } lone)
+        {
+            if (notRead is null)
+                return "an expect amount is the figure of a reply; the step names no reply.";
+            notRead.Add(name + ".amount");
+            step = step with { Expect = lone with { Amount = null } };
+            checkedStep = step;
+        }
 
         if (step.Expect is not { Extra: { Count: > 0 } extra } expect)
             return null;
@@ -251,7 +363,13 @@ public static class CaseLoader
             if (key == AliasOfferKey)
             {
                 if (value.ValueKind is not (JsonValueKind.String or JsonValueKind.Null))
-                    return "alias_offer is a text or null.";
+                {
+                    if (notRead is null)
+                        return "alias_offer is a text or null.";
+                    notRead.Add(name + "." + key);
+                    continue;
+                }
+
                 aliasOfferSet = true;
                 aliasOffer = value.ValueKind == JsonValueKind.String ? value.GetString() : null;
                 continue;
@@ -261,7 +379,10 @@ public static class CaseLoader
                 || !int.TryParse(key.AsSpan(NoCardPrefix.Length), NumberStyles.None, CultureInfo.InvariantCulture, out var part)
                 || value.ValueKind is not (JsonValueKind.True or JsonValueKind.False))
             {
-                return "unknown expect key '" + key + "'.";
+                if (notRead is null)
+                    return "unknown expect key '" + key + "'.";
+                notRead.Add(name + "." + key);
+                continue;
             }
 
             noCard[part] = value.GetBoolean();

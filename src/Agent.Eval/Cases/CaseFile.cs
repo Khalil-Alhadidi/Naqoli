@@ -36,7 +36,16 @@ public sealed record EvalCase(
     string? Parent = null,
     bool PendingWordingRecheck = false,
     string? Meaning = null,
-    string? Notes = null);
+    string? Notes = null)
+{
+    /// <summary>
+    /// The parts of the line a tolerant load could not read and dropped (<see cref="CaseLoader.Load(string, bool)"/>),
+    /// named as the grader names its fields (<c>final.alias_saved</c>, <c>cards[0].reissued</c>, <c>steps[1].queue</c>).
+    /// Empty on a strict load. The grader lists each one as not graded.
+    /// </summary>
+    [JsonIgnore]
+    public IReadOnlyList<string> NotRead { get; init; } = [];
+}
 
 /// <summary>
 /// One step. Exactly one of <see cref="Say"/>, <see cref="Tap"/> and <see cref="Wait"/> is set (<see cref="CaseLoader"/>

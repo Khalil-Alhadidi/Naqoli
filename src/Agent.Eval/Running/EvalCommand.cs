@@ -233,12 +233,24 @@ public static class EvalCommand
         try
         {
             setHash = decision.FileHash ?? HeldOutGuard.FileHash(setPath);
-            cases = CaseLoader.Load(setPath);
+            // The held-out file cannot be opened or corrected, so what the runner cannot read of its keys is listed and
+            // not graded (Khalil, 6 Nov 2026); the development set stays strict, where a typo must be an error.
+            cases = CaseLoader.Load(setPath, tolerant: parsed.Set == HeldOutGuard.HeldOutSet);
         }
         catch (CaseFileException ex)
         {
             await errors.WriteLineAsync(ex.Message);
             return Unavailable;
+        }
+
+        var partly = cases.Where(c => c.NotRead.Count > 0).ToList();
+        if (partly.Count > 0)
+        {
+            await output.WriteLineAsync(string.Create(
+                CultureInfo.InvariantCulture,
+                $"Not read from the set file, and not graded: {partly.Sum(c => c.NotRead.Count)} part(s) of {partly.Count} case(s)."));
+            foreach (var partlyRead in partly)
+                await output.WriteLineAsync("  " + partlyRead.Id + ": " + string.Join(", ", partlyRead.NotRead));
         }
 
         if (parsed.Only is { } only)
