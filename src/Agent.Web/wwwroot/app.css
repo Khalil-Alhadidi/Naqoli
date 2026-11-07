@@ -489,6 +489,24 @@ a:focus-visible,
     color: var(--color-text-muted);
 }
 
+/* The settings panel's value box (7 Nov 2026): a plain input that MudBlazor's reset left without a border, so the
+   box could not be seen. Same border, radius and focus ring as the phone's input, sized for a figure. */
+.setting-input {
+    width: 9em;
+    margin-inline-end: var(--space-2);
+    padding: var(--space-1) var(--space-2);
+    border: 1px solid var(--color-text-muted);
+    border-radius: var(--radius-sm);
+    background: var(--color-surface, transparent);
+    color: inherit;
+    font: inherit;
+}
+
+.setting-input:focus-visible {
+    outline: var(--focus-ring);
+    outline-offset: var(--focus-ring-offset);
+}
+
 /* Empty and loading states (UI pass task 8). */
 .empty-state {
     display: flex;

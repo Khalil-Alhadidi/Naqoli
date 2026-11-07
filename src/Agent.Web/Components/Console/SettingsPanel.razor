@@ -137,7 +137,7 @@
             </td>
             <td data-testid="setting-value" data-name="@name">@Number(value)</td>
             <td>
-                <input data-testid="setting-input" data-name="@name" type="text" inputmode="numeric" aria-label="@about.Label"
+                <input class="setting-input" data-testid="setting-input" data-name="@name" type="text" inputmode="numeric" aria-label="@about.Label"
                        aria-describedby="@describedBy"
                        value="@Draft(name)" @oninput="e => drafts[name] = e.Value?.ToString() ?? string.Empty" />
                 <MudButton data-testid="setting-save" data-name="@name" Size="Size.Small" Variant="Variant.Outlined"
