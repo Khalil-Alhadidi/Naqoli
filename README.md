@@ -46,14 +46,14 @@ On Windows with the .NET 10 SDK and the local default SQL Server instance with W
 
 3. Run the tests: `dotnet test`. No key is needed: the tests use the scripted parser and the mock wallet, on synthetic data only. The screen journeys need Chromium, installed once after the build with `pwsh tests/Agent.Web.Journeys/bin/Debug/net10.0/playwright.ps1 install chromium`; until then they report Skipped.
 
-4. Start the wallet, then the console in a second terminal, and open http://localhost:5089:
+4. Start the two apps in this order: the mock wallet API first (`Wallet.MockApi`, http://localhost:5276), then the console (`Agent.Web`), which reads the wallet. From the command line, one terminal each:
 
    ```powershell
    dotnet run --project src/Wallet.MockApi
    dotnet run --project src/Agent.Web
    ```
 
-   From Visual Studio, start `Wallet.MockApi` and `Agent.Web` as the two startup projects, the wallet first. In the phone, type a development-set message exactly as written in `data/requests.dev.jsonl` (for example the one of case `CLN-01`): the default parser is scripted and answers only those sentences, which is enough to see every screen.
+   From Visual Studio: right-click the solution, Configure Startup Projects, choose Multiple startup projects, set `Wallet.MockApi` and `Agent.Web` to Start with the wallet above the console, then F5. Open http://localhost:5089. In the phone, type a development-set message exactly as written in `data/requests.dev.jsonl` (for example the one of case `CLN-01`): the default parser is scripted and answers only those sentences, which is enough to see every screen.
 
 5. Optional, a live model. The parser, the model, its provider and the name of its key are settings; switching needs a key in user secrets, never in a file. For the frozen model (DeepSeek V4.1 Flash with reasoning through OpenRouter):
 
