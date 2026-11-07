@@ -64,6 +64,30 @@ On Windows with the .NET 10 SDK and the local default SQL Server instance with W
 
    Then any sentence can be typed. Another provider or candidate (Claude Sonnet 5.5 with an Anthropic key, for example) is the same two commands with its key name and `Model:Candidate`: see [The model](#the-model).
 
+6. Users, PINs and the PIN threshold. The phone belongs to one seed user, `Agent:DemoUserId` (default 1, shown read only in Settings); the Wallet data, Aliases, Log and fault panels follow the same user. To be another user, set the id and restart the console (the wallet keeps running):
+
+   ```powershell
+   dotnet user-secrets set "Agent:DemoUserId" "3" --project src/Agent.Web
+   ```
+
+   (`dotnet user-secrets remove "Agent:DemoUserId" --project src/Agent.Web` goes back to user 1.) The seed's five users and their PINs, from `data/seed/users.json`, all synthetic:
+
+   | User | PIN | Balance (IQD) | Notes |
+   |---|---|---|---|
+   | 1 | 2580 | 750,000 | The demo user: the development-set sentences name this user's contacts and bills |
+   | 2 | 1473 | 18,500 | |
+   | 3 | 9036 | 12,500,000 | The one user who can send more than 1,000,000 and so meet the PIN screen at the default threshold |
+   | 4 | 6152 | 400,000 | |
+   | 5 | 3719 | 200,000 | Not consented in the seed, so the consent screen comes first, even after a Reset |
+
+   A development-set sentence typed as user 2 to 5 may ask who the contact is or be refused, because that user has no such contact; that is the agent working, not a fault. A PIN is asked when the amount before the fee is above the wallet's `Wallet:PinRequiredAboveIqd`, 1,000,000 IQD by default, which user 1 cannot reach. To see the PIN screen as user 1, lower the threshold on the wallet and restart it (never edit `appsettings.json`; a test holds its values to the seed's):
+
+   ```powershell
+   dotnet user-secrets set "Wallet:PinRequiredAboveIqd" "150000" --project src/Wallet.MockApi
+   ```
+
+   Three wrong PINs lock the user (`Wallet:MaxPinAttempts`, 3); nothing unlocks it but the Reset button above the fault panel, which restores the whole seed. The PIN is never shown on the console, in the trace or in the log.
+
 ## Results
 
 The development set, 102 cases, three runs per model, the median of the three ([docs/results.md](docs/results.md), where every figure links to its report; targets in [docs/targets.md](docs/targets.md)).
