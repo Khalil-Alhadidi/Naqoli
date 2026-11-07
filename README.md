@@ -6,7 +6,7 @@ Author: Khalil Ahmed Ibrahim (GitHub: Khalil-Alhadidi)
 
 Licence: all rights reserved ([LICENSE](LICENSE)). The repository is public so the judges can read it; that is not permission to use, copy or redistribute the code, the documents or the data. Third-party components keep their own licences, listed in [docs/disclosure.md](docs/disclosure.md).
 
-The agent reads one sentence in Iraqi Arabic (a transfer, a bill, a store purchase, or a balance question) and answers with one confirmation card built by code, which moves money only when the user taps Confirm; the model parses the sentence and nothing else, every reply is a template written by an Iraqi, and phone and account numbers are masked before the model sees the text. To run it on Windows with the .NET 10 SDK and a local SQL Server (other database routes under [Database](#database)): `dotnet tool restore`, then `dotnet run --project src/Wallet.MockApi -- migrate` and `dotnet run --project src/Agent.Web -- migrate`, then start the wallet (`dotnet run --project src/Wallet.MockApi`) and, in a second terminal, the console (`dotnet run --project src/Agent.Web`) and open http://localhost:5089. It runs on the scripted parser with no model key; [The model](#the-model) explains how to switch to a live model. The held-out set (`data/requests.heldout.jsonl`, 62 cases) was committed in `462187f` on 14 Oct 2026 and sealed on 15 Oct 2026 with SHA-256 `3e396362fd6cea5fa81e26ad9e4c17e9c4de2066ee186e963690a14c195ca1c1` ([docs/HELDOUT_SEAL.md](docs/HELDOUT_SEAL.md)); only `Agent.Eval` reads it, once, in milestone 11 (rule 7 in [CLAUDE.md](CLAUDE.md)).
+The agent reads one sentence in Iraqi Arabic (a transfer, a bill, a store purchase, or a balance question) and answers with one confirmation card built by code, which moves money only when the user taps Confirm; the model parses the sentence and nothing else, every reply is a template written by an Iraqi, and phone and account numbers are masked before the model sees the text. To run it, follow [Quick start](#quick-start) below: five commands, no model key. The held-out set (`data/requests.heldout.jsonl`, 62 cases) was committed in `462187f` on 14 Oct 2026 and sealed on 15 Oct 2026 with SHA-256 `3e396362fd6cea5fa81e26ad9e4c17e9c4de2066ee186e963690a14c195ca1c1` ([docs/HELDOUT_SEAL.md](docs/HELDOUT_SEAL.md)); only `Agent.Eval` reads it, once, in milestone 11 (rule 7 in [CLAUDE.md](CLAUDE.md)).
 
 Reading guide, in order:
 
@@ -21,6 +21,72 @@ Every other document is listed in [docs/README.md](docs/README.md).
 It is an entry for the ZainCash Agentic AI Challenge Iraq, topic 04.
 
 Rules: the nine rules that are never broken are listed in [CLAUDE.md](CLAUDE.md).
+
+## Quick start
+
+On Windows with the .NET 10 SDK and the local default SQL Server instance with Windows authentication (LocalDB or a container: see [Database](#database) first). Every command runs from the repository root, in PowerShell.
+
+1. Clone and build:
+
+   ```powershell
+   git clone https://github.com/Khalil-Alhadidi/Naqoli
+   cd Naqoli
+   dotnet tool restore
+   dotnet build
+   ```
+
+2. Create and seed the two databases. Nothing else creates them: pressing F5 in Visual Studio before this step starts an app with no database, and it fails.
+
+   ```powershell
+   dotnet run --project src/Wallet.MockApi -- migrate
+   dotnet run --project src/Agent.Web -- migrate
+   ```
+
+   The first prints `Database ready: 5 users, 42 accounts, 34 contacts, 86 transactions`, the second `Agent database ready`. Both are safe to run again.
+
+3. Run the tests: `dotnet test`. No key is needed: the tests use the scripted parser and the mock wallet, on synthetic data only. The screen journeys need Chromium, installed once after the build with `pwsh tests/Agent.Web.Journeys/bin/Debug/net10.0/playwright.ps1 install chromium`; until then they report Skipped.
+
+4. Start the two apps in this order: the mock wallet API first (`Wallet.MockApi`, http://localhost:5276), then the console (`Agent.Web`), which reads the wallet. From the command line, one terminal each:
+
+   ```powershell
+   dotnet run --project src/Wallet.MockApi
+   dotnet run --project src/Agent.Web
+   ```
+
+   From Visual Studio: right-click the solution, Configure Startup Projects, choose Multiple startup projects, set `Wallet.MockApi` and `Agent.Web` to Start with the wallet above the console, then F5. Open http://localhost:5089. In the phone, type a development-set message exactly as written in `data/requests.dev.jsonl` (for example the one of case `CLN-01`): the default parser is scripted and answers only those sentences, which is enough to see every screen.
+
+5. Optional, a live model. The parser, the model, its provider and the name of its key are settings; switching needs a key in user secrets, never in a file. For the frozen model (DeepSeek V4.1 Flash with reasoning through OpenRouter):
+
+   ```powershell
+   dotnet user-secrets set "OpenRouter:ApiKey" "<your key>" --project src/Agent.Web
+   dotnet user-secrets set "Agent:Parser" "model" --project src/Agent.Web
+   ```
+
+   Then any sentence can be typed. Another provider or candidate (Claude Sonnet 5.5 with an Anthropic key, for example) is the same two commands with its key name and `Model:Candidate`: see [The model](#the-model).
+
+6. Users, PINs and the PIN threshold. The phone belongs to one seed user, `Agent:DemoUserId` (default 1, shown read only in Settings); the Wallet data, Aliases, Log and fault panels follow the same user. To be another user, set the id and restart the console (the wallet keeps running):
+
+   ```powershell
+   dotnet user-secrets set "Agent:DemoUserId" "3" --project src/Agent.Web
+   ```
+
+   (`dotnet user-secrets remove "Agent:DemoUserId" --project src/Agent.Web` goes back to user 1.) The seed's five users and their PINs, from `data/seed/users.json`, all synthetic:
+
+   | User | PIN | Balance (IQD) | Notes |
+   |---|---|---|---|
+   | 1 | 2580 | 750,000 | The demo user: the development-set sentences name this user's contacts and bills |
+   | 2 | 1473 | 18,500 | |
+   | 3 | 9036 | 12,500,000 | The one user who can send more than 1,000,000 and so meet the PIN screen at the default threshold |
+   | 4 | 6152 | 400,000 | |
+   | 5 | 3719 | 200,000 | Not consented in the seed, so the consent screen comes first, even after a Reset |
+
+   A development-set sentence typed as user 2 to 5 may ask who the contact is or be refused, because that user has no such contact; that is the agent working, not a fault. A PIN is asked when the amount before the fee is above the wallet's `Wallet:PinRequiredAboveIqd`, 1,000,000 IQD by default, which user 1 cannot reach. To see the PIN screen as user 1, lower the threshold on the wallet and restart it (never edit `appsettings.json`; a test holds its values to the seed's):
+
+   ```powershell
+   dotnet user-secrets set "Wallet:PinRequiredAboveIqd" "150000" --project src/Wallet.MockApi
+   ```
+
+   Three wrong PINs lock the user (`Wallet:MaxPinAttempts`, 3); nothing unlocks it but the Reset button above the fault panel, which restores the whole seed. The PIN is never shown on the console, in the trace or in the log.
 
 ## Results
 
