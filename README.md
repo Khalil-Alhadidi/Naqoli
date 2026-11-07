@@ -80,11 +80,13 @@ On Windows with the .NET 10 SDK and the local default SQL Server instance with W
    | 4 | 6152 | 400,000 | |
    | 5 | 3719 | 200,000 | Not consented in the seed, so the consent screen comes first, even after a Reset |
 
-   A development-set sentence typed as user 2 to 5 may ask who the contact is or be refused, because that user has no such contact; that is the agent working, not a fault. A PIN is asked when the amount before the fee is above the wallet's `Wallet:PinRequiredAboveIqd`, 1,000,000 IQD by default, which user 1 cannot reach. To see the PIN screen as user 1, lower the threshold on the wallet and restart it (never edit `appsettings.json`; a test holds its values to the seed's):
+   A development-set sentence typed as user 2 to 5 may ask who the contact is or be refused, because that user has no such contact; that is the agent working, not a fault. A PIN is asked when the amount before the fee is above the wallet's `Wallet:PinRequiredAboveIqd`, 1,000,000 IQD by default, which user 1 cannot reach. To see the PIN screen as user 1, lower the threshold in the terminal that starts the wallet, so it applies to that wallet only:
 
    ```powershell
-   dotnet user-secrets set "Wallet:PinRequiredAboveIqd" "150000" --project src/Wallet.MockApi
+   $env:Wallet__PinRequiredAboveIqd = '150000'; dotnet run --project src/Wallet.MockApi
    ```
+
+   Do not put it in user secrets or `appsettings.json`: the tests host the wallet in process and read both, so two PIN tests would fail (and a test holds the file's values to the seed's).
 
    Three wrong PINs lock the user (`Wallet:MaxPinAttempts`, 3); nothing unlocks it but the Reset button above the fault panel, which restores the whole seed. The PIN is never shown on the console, in the trace or in the log.
 
