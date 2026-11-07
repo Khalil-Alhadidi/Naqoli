@@ -543,6 +543,8 @@ The biller alias stays the later item below.
 - The Playwright suite has 10 to 15 journeys and passes.
 - The rehearsal has been done once and its surprises are fixed or written under known gaps.
 
+**Status, 7 Nov 2026:** the fresh-clone check was done by Khalil on a second machine. The clone built and the console ran, but only after the two `migrate` commands, which the README stated in one long paragraph and the Commands table, not as a first step; starting from Visual Studio (F5) before them failed on the missing databases. Fixed in the README: a "Quick start" section (clone and build, the two `migrate` commands with what they print, the tests, the wallet and the console, and the optional model key last, as the way to use another provider). The demo script is Khalil's and is kept outside the repository, by his decision of 6 Nov 2026; nothing in the agent changes before the submission.
+
 **UI pass before milestone 10 (21 to 22 Oct 2026):** a pass on the look of `Agent.Web` before milestone 10, with no change of behaviour. Nothing changed under `src/Agent.Core`, `src/Wallet.MockApi` or `data/`, and no package was added.
 
 What was built:
